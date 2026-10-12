@@ -64,7 +64,13 @@ function ref(value) {
 
 function time(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/u.test(value)) return NaN;
-  return Date.parse(value);
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return NaN;
+  // Date.parse can roll impossible dates and 24:00 into the next calendar day.
+  // Compare exact UTC fields while preserving the supported fractional precision.
+  const normalized = value.replace(/(?:\.(\d{1,3}))?Z$/u,
+    (_suffix, fraction = '') => `.${fraction.padEnd(3, '0')}Z`);
+  return new Date(parsed).toISOString() === normalized ? parsed : NaN;
 }
 
 function signal(value) {
