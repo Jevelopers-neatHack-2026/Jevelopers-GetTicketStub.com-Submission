@@ -7,6 +7,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { APPROVAL_FAILURES, APPROVAL_PURPOSES, NOT_AUTHORIZED, bindStub, verifyApproval } from "../src/server/approval-token.ts";
 import { changesSince, printedLines } from "../src/customer/studio/approval/printed.ts";
 import { consumerInputs, runFixture, verifyApproval as refVerify } from "../fixtures/approval/verify.mjs";
@@ -208,7 +209,7 @@ async function main() {
   check("issue: membershipRevision, expiry (seven days) and notAuthorizes are in the record", ap1.membershipRevision === ctxA.membershipRevision && Date.parse(ap1.expiresAt) - Date.parse(ap1.issuedAt) === 7 * 24 * 3600_000 && ["purchase", "payment", "order", "asset_rights"].every((x) => ap1.notAuthorizes.includes(x)));
   check("issue: the mode is sandbox, never fixture or live, in this runtime", ap1.mode === "sandbox", ap1.mode);
   const again = await approve(A, S1);
-  check("issue: the same request twice is idempotent (same id, created false)", again.json.approval.id === ap1.id && again.json.created === false && again.json.token === r1.json.token);
+  check("issue: the same request twice preserves the whole approval and token payload, created false", again.status === 200 && isDeepStrictEqual(again.json.approval, ap1) && again.json.created === false && again.json.token.split(".")[1] === r1.json.token.split(".")[1]);
   const dl = await approve(A, S1, { purpose: "artifact.download" });
   check("issue: another purpose is a separate approval", dl.status === 200 && dl.json.approval.id !== ap1.id && dl.json.approval.purpose === "artifact.download");
   const stale1 = await approve(A, S1, { expectedVersionId: `${S1}-v2` });
@@ -241,6 +242,8 @@ async function main() {
   const want = (over = {}) => ({ tenant: ap1.tenant.id, project: `stub:${S1}`, purpose: "print.compose", content: full(ap1.binding), ...over });
   const ok1 = await verify(r1.json.token, want());
   check("verify: the exact scope and the exact bytes verify, with the record back", ok1.status === 200 && ok1.json.ok === true && ok1.json.approval.id === ap1.id && Date.parse(ok1.json.checkedAt) > 0, ok1.text.slice(0, 160));
+  const againVerified = await verify(again.json.token, want());
+  check("verify: original and re-signed idempotent tokens authenticate the unchanged whole approval", ok1.json.ok === true && againVerified.json.ok === true && isDeepStrictEqual(ok1.json.approval, ap1) && isDeepStrictEqual(againVerified.json.approval, ap1));
   check("verify: it needs no cookie and no Origin (a consumer is not a browser)", ok1.status === 200);
   const reasonOf = (r) => r.json?.reason;
   check("verify: wrong tenant is wrong_scope", reasonOf(await verify(r1.json.token, want({ tenant: bOwn.json.approval.tenant.id }))) === "wrong_scope");
@@ -259,6 +262,8 @@ async function main() {
   const dlAp = await A.api("POST", "/api/approvals", { stubId: S1, purpose: "artifact.download", expectedVersionId: `${S1}-v1` });
   check("verify: artifact.download with only the art hash is ok, and with no art hash is content_missing", dlAp.status === 200 && (await verify(dlAp.json.token, want({ purpose: "artifact.download", content: { artHash } }))).json?.ok === true && reasonOf(await verify(dlAp.json.token, want({ purpose: "artifact.download", content: without("artHash") }))) === "content_missing" && reasonOf(await verify(dlAp.json.token, want({ purpose: "artifact.download", content: { artHash: sha(Buffer.from("other")) } }))) === "content_mismatch");
   const [h, p, s] = r1.json.token.split(".");
+  const changedTime = { ...JSON.parse(Buffer.from(h, "base64url").toString()), signedAt: new Date(Date.parse(ap1.issuedAt) - 1).toISOString() };
+  check("verify: changing only signedAt without signing is forged", reasonOf(await verify(`${Buffer.from(JSON.stringify(changedTime)).toString("base64url")}.${p}.${s}`, want())) === "forged");
   const flip = (x) => x.slice(0, -2) + (x.slice(-2) === "AA" ? "BB" : "AA");
   check("verify: a flipped signature is forged", reasonOf(await verify(`${h}.${p}.${flip(s)}`, want())) === "forged");
   const edited = JSON.parse(Buffer.from(p, "base64url").toString());
@@ -371,7 +376,11 @@ async function main() {
   const bodies = tokens.map((tk) => JSON.parse(Buffer.from(tk.split(".")[1], "base64url").toString()));
   check("secrets: an approval token body holds only the record (no session reference, no email, no art url)", tokens.length > 0 && bodies.every((b) => Object.keys(b).join() === "approval" && !/"sid"|@|\/api\/files|data:/.test(JSON.stringify(b))));
   const heads = tokens.map((tk) => JSON.parse(Buffer.from(tk.split(".")[0], "base64url").toString()));
-  check("keys: every approval token names its kid, and with no APPROVAL_SIGNING_KEYS in demo mode it is the per-process sandbox key", heads.length > 0 && heads.every((h) => Object.keys(h).sort().join() === "alg,kid,typ" && h.kid === "sandbox"), JSON.stringify(heads[0]));
+  check("keys: every approval token names its sandbox kid and canonical actual signing time", heads.length > 0 && heads.every((h) => {
+    const signedAt = typeof h.signedAt === "string" ? Date.parse(h.signedAt) : NaN;
+    return Object.keys(h).sort().join() === "alg,kid,signedAt,typ" && h.alg === "HS256" && h.typ === "ticketstub.approval" && h.kid === "sandbox"
+      && Number.isFinite(signedAt) && signedAt > 0 && new Date(signedAt).toISOString() === h.signedAt;
+  }), JSON.stringify(heads[0]));
   const emails = [emailA, emailB];
   check("secrets: no approval response carries an account email", !emails.some((e) => [r1.text, ls.text, ok1.text, rv.text].some((x) => x.includes(e))));
 

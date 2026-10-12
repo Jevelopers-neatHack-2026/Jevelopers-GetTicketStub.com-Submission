@@ -10,6 +10,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { CAPABILITY_VERSION, quoteIdFor } from "../src/customer/pages/capabilities.ts";
 import { ORDER_AUTH_FAILURES, ORDER_AUTH_NOT_AUTHORIZED, actionIdOf, canonicalJson, commandHash, consumerSignature, signOrderAuthorization, verifyOrderAuthorization } from "../src/server/order-auth-token.ts";
 import { ReferenceIssuer, fixtureNow, matchesOutcome, runFixture, runScenario } from "../fixtures/order-authorization/verify.mjs";
@@ -279,16 +280,21 @@ async function main() {
   check("issue: it references the approval id and copies its binding hashes (art is the SHA-256 of the stored bytes)", au1.approval.id === S.approval.id && au1.approval.purpose === "print.compose" && au1.terms.approvalId === S.approval.id && au1.terms.design.versionId === `${S.id}-v1` && au1.terms.design.artHash === artHash && ["designHash", "artHash", "factsHash", "compositionHash"].every((k) => au1.terms.design[k] === S.approval.binding[k]));
   check("issue: capability version, membership revision, idempotency key and the command hash are in the record", au1.terms.capabilityVersion === CAPABILITY_VERSION && au1.membershipRevision === ctxA.membershipRevision && au1.idempotencyKey === `issue_${run}_${S.id}` && au1.command.hash === commandHash(au1.action, au1.provider, au1.terms) && /^act_[a-f0-9]{32}$/.test(au1.actionId));
   check("issue: fifteen minutes, mode sandbox, and what it never authorizes", Date.parse(au1.expiresAt) - Date.parse(au1.issuedAt) === 15 * 60_000 && au1.mode === "sandbox" && ORDER_AUTH_NOT_AUTHORIZED.every((x) => au1.notAuthorizes.includes(x)));
-  check("issue: the token header names the active ORDER_AUTH_SIGNING_KEYS kid", (() => { const h = JSON.parse(Buffer.from(i1.json.token.split(".")[0], "base64url").toString()); return Object.keys(h).sort().join() === "alg,kid,typ" && h.kid === SERVER_SIGNER.kid; })());
+  check("issue: the token header names the active ORDER_AUTH_SIGNING_KEYS kid and canonical signing time", (() => {
+    const h = JSON.parse(Buffer.from(i1.json.token.split(".")[0], "base64url").toString());
+    const signedAt = typeof h.signedAt === "string" ? Date.parse(h.signedAt) : NaN;
+    return Object.keys(h).sort().join() === "alg,kid,signedAt,typ" && h.alg === "HS256" && h.typ === "ticketstub.order-authorization" && h.kid === SERVER_SIGNER.kid
+      && Number.isFinite(signedAt) && signedAt > 0 && new Date(signedAt).toISOString() === h.signedAt;
+  })());
   check("issue: no address, phone or email anywhere in the record", !/@|street/i.test(JSON.stringify(au1)) && !/"(address|email|phone|street|line1|postcode|guestName)"/i.test(JSON.stringify(au1)));
   const again = await issue(A, body(S));
-  check("issue: the same request and key is idempotent (same id and token, created false)", again.status === 200 && again.json.authorization.id === au1.id && again.json.created === false && again.json.token === i1.json.token);
+  check("issue: the same request and key preserves the whole authorization and token payload, created false", again.status === 200 && isDeepStrictEqual(again.json.authorization, au1) && again.json.created === false && again.json.token.split(".")[1] === i1.json.token.split(".")[1]);
   const reuse = await issue(A, body(S, { quote: { id: quoteIdFor("print", "matte", "classic", 1), amountMinor: 9900, currency: "USD" } }));
   check("issue: the same key with a different amount is 409 authorization_conflict, nothing issued", reuse.status === 409 && reuse.json.error.code === "authorization_conflict" && (await list(A, S.id)).json.authorizations.length === 1);
   const forgedBody = await issue(A, { ...body(S), tenant: "acc_other", terms: { quote: { amountMinor: 1 } }, status: "claimed", expiresAt: "2099-01-01T00:00:00Z", sku: "FAKE", provider: "sandbox" });
   check("issue: tenant, terms, status, expiry and SKU in the body change nothing (the server builds the record)", forgedBody.status === 200 && forgedBody.json.authorization.id === au1.id && forgedBody.json.authorization.terms.sku === null);
   const ls = await list(A, S.id);
-  check("issue/list: the owner sees it, newest first, with status active and the token", ls.status === 200 && ls.json.authorizations.length === 1 && ls.json.authorizations[0].status === "active" && ls.json.authorizations[0].token === i1.json.token);
+  check("issue/list: the owner sees the unchanged whole record and token payload with status active", ls.status === 200 && ls.json.authorizations.length === 1 && ls.json.authorizations[0].status === "active" && isDeepStrictEqual(ls.json.authorizations[0].authorization, au1) && ls.json.authorizations[0].token.split(".")[1] === i1.json.token.split(".")[1]);
   check("list: ?project must name a stub, anything else is 404", (await list(A, "")).status === 404 && (await A.api("GET", "/api/order-authorizations")).status === 404 && (await A.api("GET", `/api/order-authorizations?project=event:${S.id}`)).status === 404);
 
   // --- A versus B
@@ -318,6 +324,11 @@ async function main() {
   // --- verify (read only)
   const ok1 = await verify(i1.json.token, want);
   check("verify: the exact scope and terms verify, with the record back", ok1.status === 200 && ok1.json.ok === true && ok1.json.authorization.id === au1.id && Date.parse(ok1.json.checkedAt) > 0, ok1.text.slice(0, 160));
+  const renewed = await Promise.all([again.json.token, ls.json.authorizations[0].token].map((token) => verify(token, want)));
+  check("verify: original, retried and listed tokens authenticate the unchanged whole authorization", ok1.json.ok === true && isDeepStrictEqual(ok1.json.authorization, au1) && renewed.every((r) => r.status === 200 && r.json.ok === true && isDeepStrictEqual(r.json.authorization, au1)));
+  const [timeHead, timePayload, timeSignature] = i1.json.token.split(".");
+  const changedTime = { ...JSON.parse(Buffer.from(timeHead, "base64url").toString()), signedAt: new Date(Date.parse(au1.issuedAt) - 1).toISOString() };
+  check("verify: changing only signedAt without signing is forged", (await verify(`${Buffer.from(JSON.stringify(changedTime)).toString("base64url")}.${timePayload}.${timeSignature}`, want)).json?.reason === "forged");
   const reasonOf = (r) => r.json?.reason;
   const changed = async (path, value) => {
     const r = await verify(i1.json.token, expectOf(au1, { terms: set(au1.terms, path, value) }));
