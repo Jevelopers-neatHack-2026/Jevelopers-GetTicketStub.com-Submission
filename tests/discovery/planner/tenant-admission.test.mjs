@@ -8,6 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createDiscoveryFrontierStore, DiscoveryFrontierError } from '../../../src/discovery/planner/frontier.mjs';
+import { withPrivilegedFrontierFixtureMutation } from './frontier-fixture-mutation.mjs';
 
 const MIB = 1024 * 1024;
 const REPO = fileURLToPath(new URL('../../../', import.meta.url));
@@ -442,7 +443,7 @@ for (const matches of [true, false]) {
 
 function storedRows(database) {
   const tables = database.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'
-    AND name != 'frontier_tenant_policy' ORDER BY name`).all();
+    AND name NOT IN ('frontier_tenant_policy', 'frontier_write_fence') ORDER BY name`).all();
   return Object.fromEntries(tables.map(({ name }) => {
     assert.match(name, /^frontier_[a-z_]+$/);
     const rows = database.prepare(`SELECT * FROM ${name}`).all().map((row) => JSON.stringify(row)).sort();
@@ -450,7 +451,7 @@ function storedRows(database) {
   }));
 }
 
-test('actual v3 migration retains over-limit history and old writers cannot bypass schema4', async (t) => {
+test('actual v3 migration retains over-limit history and old writers cannot bypass schema5', async (t) => {
   const h = await fixture(t);
   const legacyModule = await pinnedV3(t);
   const legacy = legacyModule.createDiscoveryFrontierStore({ directory: h.directory, resolveTenant: () => 'tenant-a', now: () => 1000 });
@@ -477,7 +478,7 @@ test('actual v3 migration retains over-limit history and old writers cannot bypa
   assert.equal(progress.availableInFlightLeases, 0);
   assert.equal(progress.availableReservedBytes, 0);
   database = new DatabaseSync(databasePath(h.directory));
-  assert.equal(database.prepare('PRAGMA user_version').get().user_version, 4);
+  assert.equal(database.prepare('PRAGMA user_version').get().user_version, 5);
   assert.deepEqual(storedRows(database), before, 'migration must retain every old row byte-for-byte in its existing columns');
   database.close();
   await assert.rejects(legacy.getSnapshot(scope, 'legacy-0'), (error) => error.code === 'FRONTIER_VERSION');
@@ -489,20 +490,22 @@ test('actual v3 migration retains over-limit history and old writers cannot bypa
 });
 
 for (const corruption of ['missing-policy-row', 'missing-policy-table', 'invalid-policy-hash']) {
-  test(`schema4 ${corruption} fails closed without rebinding or refunding`, async (t) => {
+  test(`schema5 ${corruption} fails closed without rebinding or refunding`, async (t) => {
     const h = await fixture(t);
     const claim = await claimRun(h.store, h.scope, 'corrupt-policy');
     await h.store.admitTransportHop(h.scope, 'corrupt-policy', attempt(claim));
     const database = new DatabaseSync(databasePath(h.directory));
     const before = storedRows(database);
-    if (corruption === 'missing-policy-row') database.exec('DELETE FROM frontier_tenant_policy');
-    if (corruption === 'missing-policy-table') database.exec('DROP TABLE frontier_tenant_policy');
-    if (corruption === 'invalid-policy-hash') database.exec("UPDATE frontier_tenant_policy SET policy_hash = 'invalid'");
+    withPrivilegedFrontierFixtureMutation(database, () => {
+      if (corruption === 'missing-policy-row') database.exec('DELETE FROM frontier_tenant_policy');
+      if (corruption === 'missing-policy-table') database.exec('DROP TABLE frontier_tenant_policy');
+      if (corruption === 'invalid-policy-hash') database.exec("UPDATE frontier_tenant_policy SET policy_hash = 'invalid'");
+    });
     database.close();
     await assert.rejects(h.store.getTenantProgress(h.scope), codeIs('FRONTIER_VERSION'));
     const after = new DatabaseSync(databasePath(h.directory));
     assert.deepEqual(storedRows(after), before);
-    assert.equal(after.prepare('PRAGMA user_version').get().user_version, 4);
+    assert.equal(after.prepare('PRAGMA user_version').get().user_version, 5);
     after.close();
   });
 }

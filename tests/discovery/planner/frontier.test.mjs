@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { withPrivilegedFrontierFixtureMutation } from './frontier-fixture-mutation.mjs';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -413,23 +414,25 @@ for (const tamper of ['missing-pointer', 'mixed-legacy-marker', 'unknown-version
     const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${h.tenantId}`).digest('hex');
     const database = new DatabaseSync(path.join(h.directory, tenantHash, 'frontier.sqlite'));
     try {
-      if (tamper === 'missing-pointer') {
-        database.prepare(`UPDATE frontier_claims SET claim_observation_sequence = NULL
-          WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).run(tenantHash, runId, 'claim-prefix');
-      } else if (tamper === 'mixed-legacy-marker') {
-        database.prepare(`UPDATE frontier_claims SET claim_binding_version = 0
-          WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).run(tenantHash, runId, 'claim-prefix');
-      } else if (tamper === 'unknown-version') {
-        database.exec('PRAGMA ignore_check_constraints = ON');
-        database.prepare(`UPDATE frontier_claims SET claim_binding_version = 9
-          WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).run(tenantHash, runId, 'claim-prefix');
-      } else if (tamper === 'missing-prefix') {
-        database.prepare(`DELETE FROM frontier_observations WHERE tenant_hash = ? AND run_id = ? AND sequence = 1`)
-          .run(tenantHash, runId);
-      } else {
-        database.prepare(`UPDATE frontier_observations SET source_refs_json = '{malformed'
-          WHERE tenant_hash = ? AND run_id = ? AND sequence = 1`).run(tenantHash, runId);
-      }
+      withPrivilegedFrontierFixtureMutation(database, () => {
+        if (tamper === 'missing-pointer') {
+          database.prepare(`UPDATE frontier_claims SET claim_observation_sequence = NULL
+            WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).run(tenantHash, runId, 'claim-prefix');
+        } else if (tamper === 'mixed-legacy-marker') {
+          database.prepare(`UPDATE frontier_claims SET claim_binding_version = 0
+            WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).run(tenantHash, runId, 'claim-prefix');
+        } else if (tamper === 'unknown-version') {
+          database.exec('PRAGMA ignore_check_constraints = ON');
+          database.prepare(`UPDATE frontier_claims SET claim_binding_version = 9
+            WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).run(tenantHash, runId, 'claim-prefix');
+        } else if (tamper === 'missing-prefix') {
+          database.prepare(`DELETE FROM frontier_observations WHERE tenant_hash = ? AND run_id = ? AND sequence = 1`)
+            .run(tenantHash, runId);
+        } else {
+          database.prepare(`UPDATE frontier_observations SET source_refs_json = '{malformed'
+            WHERE tenant_hash = ? AND run_id = ? AND sequence = 1`).run(tenantHash, runId);
+        }
+      });
     } finally {
       database.close();
     }

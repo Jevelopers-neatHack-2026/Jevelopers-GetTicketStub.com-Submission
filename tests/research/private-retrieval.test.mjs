@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { withPrivilegedFrontierFixtureMutation } from '../discovery/planner/frontier-fixture-mutation.mjs';
 import { spawn } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -318,10 +319,12 @@ async function legacyOvercapWorkspace(t, requestCounter, fixtureName = 'private-
     path.join(frontierDirectory, fixture.tenantHash, 'frontier.sqlite'));
   const frontierDatabase = new DatabaseSync(path.join(frontierDirectory, fixture.tenantHash, 'frontier.sqlite'));
   try {
-    const refreshed = frontierDatabase.prepare(`UPDATE frontier_runs SET deadline_at_ms = ?
-      WHERE tenant_hash = ? AND run_id = ?`)
-      .run(Date.now() + fixture.limits.durationMs, fixture.tenantHash, fixture.runId);
-    assert.equal(refreshed.changes, 1, 'the test copy receives a fresh bounded restart window');
+    withPrivilegedFrontierFixtureMutation(frontierDatabase, () => {
+      const refreshed = frontierDatabase.prepare(`UPDATE frontier_runs SET deadline_at_ms = ?
+        WHERE tenant_hash = ? AND run_id = ?`)
+        .run(Date.now() + fixture.limits.durationMs, fixture.tenantHash, fixture.runId);
+      assert.equal(refreshed.changes, 1, 'the test copy receives a fresh bounded restart window');
+    });
   } finally {
     frontierDatabase.close();
   }
@@ -432,28 +435,30 @@ async function legacyOvercapWorkspace(t, requestCounter, fixtureName = 'private-
 function insertContradictoryLinkObservation({ databasePath, tenantHash, runId, parentCandidateId, outcome }) {
   const database = new DatabaseSync(databasePath);
   try {
-    const row = database.prepare(`SELECT tenant_hash, run_id, kind, parent_candidate_id, target_candidate_id,
-      supplied_url, canonical_url, depth, label, source_refs_json, disposition
-      FROM frontier_observations
-      WHERE tenant_hash = ? AND run_id = ? AND parent_candidate_id = ? AND kind = 'link'
-      ORDER BY sequence LIMIT 1`).get(tenantHash, runId, parentCandidateId);
-    assert.ok(row, 'the completed parent has an original link observation');
-    const sequence = database.prepare(`SELECT MAX(sequence) AS sequence FROM frontier_observations
-      WHERE tenant_hash = ? AND run_id = ?`).get(tenantHash, runId).sequence;
-    const sourceRefs = JSON.parse(row.source_refs_json);
-    assert.ok(sourceRefs.length > 0);
-    sourceRefs[0].field = 'conflicting.extra.source';
-    database.prepare(`INSERT INTO frontier_observations
-      (tenant_hash, run_id, sequence, kind, parent_candidate_id, target_candidate_id,
-        supplied_url, canonical_url, depth, label, source_refs_json, disposition, outcome)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(row.tenant_hash, row.run_id, sequence + 1, row.kind, row.parent_candidate_id,
-        row.target_candidate_id, row.supplied_url, row.canonical_url, row.depth, row.label,
-        JSON.stringify(sourceRefs), row.disposition, outcome);
-    const updated = database.prepare(`UPDATE frontier_runs SET next_observation_sequence = ?
-      WHERE tenant_hash = ? AND run_id = ? AND next_observation_sequence = ?`)
-      .run(sequence + 2, tenantHash, runId, sequence + 1);
-    assert.equal(updated.changes, 1, 'the synthetic observation advances the persisted append sequence');
+    withPrivilegedFrontierFixtureMutation(database, () => {
+      const row = database.prepare(`SELECT tenant_hash, run_id, kind, parent_candidate_id, target_candidate_id,
+        supplied_url, canonical_url, depth, label, source_refs_json, disposition
+        FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ? AND parent_candidate_id = ? AND kind = 'link'
+        ORDER BY sequence LIMIT 1`).get(tenantHash, runId, parentCandidateId);
+      assert.ok(row, 'the completed parent has an original link observation');
+      const sequence = database.prepare(`SELECT MAX(sequence) AS sequence FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ?`).get(tenantHash, runId).sequence;
+      const sourceRefs = JSON.parse(row.source_refs_json);
+      assert.ok(sourceRefs.length > 0);
+      sourceRefs[0].field = 'conflicting.extra.source';
+      database.prepare(`INSERT INTO frontier_observations
+        (tenant_hash, run_id, sequence, kind, parent_candidate_id, target_candidate_id,
+          supplied_url, canonical_url, depth, label, source_refs_json, disposition, outcome)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(row.tenant_hash, row.run_id, sequence + 1, row.kind, row.parent_candidate_id,
+          row.target_candidate_id, row.supplied_url, row.canonical_url, row.depth, row.label,
+          JSON.stringify(sourceRefs), row.disposition, outcome);
+      const updated = database.prepare(`UPDATE frontier_runs SET next_observation_sequence = ?
+        WHERE tenant_hash = ? AND run_id = ? AND next_observation_sequence = ?`)
+        .run(sequence + 2, tenantHash, runId, sequence + 1);
+      assert.equal(updated.changes, 1, 'the synthetic observation advances the persisted append sequence');
+    });
   } finally {
     database.close();
   }
@@ -462,28 +467,30 @@ function insertContradictoryLinkObservation({ databasePath, tenantHash, runId, p
 function insertUnverifiedQueuedParentLinkObservation({ databasePath, tenantHash, runId, queuedCandidateId, field }) {
   const database = new DatabaseSync(databasePath);
   try {
-    const row = database.prepare(`SELECT tenant_hash, run_id, kind, target_candidate_id,
-      supplied_url, canonical_url, depth, label, source_refs_json, disposition, outcome
-      FROM frontier_observations
-      WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ? AND kind = 'link'
-      ORDER BY sequence LIMIT 1`).get(tenantHash, runId, queuedCandidateId);
-    assert.ok(row, 'the queued child already has a legitimate link observation');
-    const sequence = database.prepare(`SELECT MAX(sequence) AS sequence FROM frontier_observations
-      WHERE tenant_hash = ? AND run_id = ?`).get(tenantHash, runId).sequence;
-    const sourceRefs = JSON.parse(row.source_refs_json);
-    assert.ok(sourceRefs.length > 0);
-    sourceRefs[0].field = field;
-    database.prepare(`INSERT INTO frontier_observations
-      (tenant_hash, run_id, sequence, kind, parent_candidate_id, target_candidate_id,
-        supplied_url, canonical_url, depth, label, source_refs_json, disposition, outcome)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      row.tenant_hash, row.run_id, sequence + 1, row.kind, queuedCandidateId, row.target_candidate_id,
-      row.supplied_url, row.canonical_url, row.depth, row.label, JSON.stringify(sourceRefs), row.disposition, row.outcome,
-    );
-    const updated = database.prepare(`UPDATE frontier_runs SET next_observation_sequence = ?
-      WHERE tenant_hash = ? AND run_id = ? AND next_observation_sequence = ?`)
-      .run(sequence + 2, tenantHash, runId, sequence + 1);
-    assert.equal(updated.changes, 1, 'the synthetic observation advances the persisted append sequence');
+    withPrivilegedFrontierFixtureMutation(database, () => {
+      const row = database.prepare(`SELECT tenant_hash, run_id, kind, target_candidate_id,
+        supplied_url, canonical_url, depth, label, source_refs_json, disposition, outcome
+        FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ? AND kind = 'link'
+        ORDER BY sequence LIMIT 1`).get(tenantHash, runId, queuedCandidateId);
+      assert.ok(row, 'the queued child already has a legitimate link observation');
+      const sequence = database.prepare(`SELECT MAX(sequence) AS sequence FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ?`).get(tenantHash, runId).sequence;
+      const sourceRefs = JSON.parse(row.source_refs_json);
+      assert.ok(sourceRefs.length > 0);
+      sourceRefs[0].field = field;
+      database.prepare(`INSERT INTO frontier_observations
+        (tenant_hash, run_id, sequence, kind, parent_candidate_id, target_candidate_id,
+          supplied_url, canonical_url, depth, label, source_refs_json, disposition, outcome)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        row.tenant_hash, row.run_id, sequence + 1, row.kind, queuedCandidateId, row.target_candidate_id,
+        row.supplied_url, row.canonical_url, row.depth, row.label, JSON.stringify(sourceRefs), row.disposition, row.outcome,
+      );
+      const updated = database.prepare(`UPDATE frontier_runs SET next_observation_sequence = ?
+        WHERE tenant_hash = ? AND run_id = ? AND next_observation_sequence = ?`)
+        .run(sequence + 2, tenantHash, runId, sequence + 1);
+      assert.equal(updated.changes, 1, 'the synthetic observation advances the persisted append sequence');
+    });
   } finally {
     database.close();
   }
@@ -493,23 +500,25 @@ function reassignLinkObservationTarget({ databasePath, tenantHash, runId, canoni
   const database = new DatabaseSync(databasePath);
   try {
     database.exec('PRAGMA foreign_keys=ON');
-    const observation = database.prepare(`SELECT sequence, target_candidate_id, canonical_url
-      FROM frontier_observations WHERE tenant_hash = ? AND run_id = ? AND kind = 'link' AND canonical_url = ?
-      ORDER BY sequence LIMIT 1`).get(tenantHash, runId, canonicalUrl);
-    assert.ok(observation, 'the selected parent link observation exists');
-    assert.notEqual(targetCandidateId, observation.target_candidate_id,
-      'the replacement target differs from the observation target');
-    assert.ok(database.prepare(`SELECT 1 AS found FROM frontier_candidates
-      WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).get(tenantHash, runId, targetCandidateId),
-    'the replacement target is a real candidate in this run');
-    const updated = database.prepare(`UPDATE frontier_observations SET target_candidate_id = ?
-      WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`).run(
-      targetCandidateId, tenantHash, runId, observation.sequence,
-    );
-    assert.equal(updated.changes, 1);
-    assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [],
-      'the reassigned target remains a valid same-run foreign key');
-    return observation;
+    return withPrivilegedFrontierFixtureMutation(database, () => {
+      const observation = database.prepare(`SELECT sequence, target_candidate_id, canonical_url
+        FROM frontier_observations WHERE tenant_hash = ? AND run_id = ? AND kind = 'link' AND canonical_url = ?
+        ORDER BY sequence LIMIT 1`).get(tenantHash, runId, canonicalUrl);
+      assert.ok(observation, 'the selected parent link observation exists');
+      assert.notEqual(targetCandidateId, observation.target_candidate_id,
+        'the replacement target differs from the observation target');
+      assert.ok(database.prepare(`SELECT 1 AS found FROM frontier_candidates
+        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).get(tenantHash, runId, targetCandidateId),
+      'the replacement target is a real candidate in this run');
+      const updated = database.prepare(`UPDATE frontier_observations SET target_candidate_id = ?
+        WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`).run(
+        targetCandidateId, tenantHash, runId, observation.sequence,
+      );
+      assert.equal(updated.changes, 1);
+      assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [],
+        'the reassigned target remains a valid same-run foreign key');
+      return observation;
+    });
   } finally {
     database.close();
   }
@@ -518,13 +527,15 @@ function reassignLinkObservationTarget({ databasePath, tenantHash, runId, canoni
 function reassignCandidateDepth({ databasePath, tenantHash, runId, candidateId, depth }) {
   const database = new DatabaseSync(databasePath);
   try {
-    const candidate = database.prepare(`SELECT best_depth FROM frontier_candidates
-      WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).get(tenantHash, runId, candidateId);
-    assert.ok(candidate, 'the selected candidate exists in this run');
-    const updated = database.prepare(`UPDATE frontier_candidates SET best_depth = ?
-      WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).run(depth, tenantHash, runId, candidateId);
-    assert.equal(updated.changes, 1);
-    return candidate.best_depth;
+    return withPrivilegedFrontierFixtureMutation(database, () => {
+      const candidate = database.prepare(`SELECT best_depth FROM frontier_candidates
+        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).get(tenantHash, runId, candidateId);
+      assert.ok(candidate, 'the selected candidate exists in this run');
+      const updated = database.prepare(`UPDATE frontier_candidates SET best_depth = ?
+        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).run(depth, tenantHash, runId, candidateId);
+      assert.equal(updated.changes, 1);
+      return candidate.best_depth;
+    });
   } finally {
     database.close();
   }
@@ -535,28 +546,30 @@ function reassignCandidateAndIncomingLinkDepth({
 }) {
   const database = new DatabaseSync(databasePath);
   try {
-    const candidate = database.prepare(`SELECT best_depth FROM frontier_candidates
-      WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).get(tenantHash, runId, candidateId);
-    assert.ok(candidate, 'the selected candidate exists in this run');
-    const changedCandidate = candidateState === undefined
-      ? database.prepare(`UPDATE frontier_candidates SET best_depth = ?
-        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-        .run(depth, tenantHash, runId, candidateId)
-      : database.prepare(`UPDATE frontier_candidates SET best_depth = ?, state = ?
-        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-        .run(depth, candidateState, tenantHash, runId, candidateId);
-    assert.equal(changedCandidate.changes, 1);
-    const changedObservations = disposition === undefined
-      ? database.prepare(`UPDATE frontier_observations SET depth = ?
-        WHERE tenant_hash = ? AND run_id = ? AND kind = 'link' AND target_candidate_id = ?`)
-        .run(depth, tenantHash, runId, candidateId)
-      : database.prepare(`UPDATE frontier_observations SET depth = ?, disposition = ?
-        WHERE tenant_hash = ? AND run_id = ? AND kind = 'link' AND target_candidate_id = ?`)
-        .run(depth, disposition, tenantHash, runId, candidateId);
-    assert.ok(changedObservations.changes > 0, 'the selected candidate has an incoming link observation');
-    assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [],
-      'the coordinated depth mutation preserves same-run foreign keys');
-    return candidate.best_depth;
+    return withPrivilegedFrontierFixtureMutation(database, () => {
+      const candidate = database.prepare(`SELECT best_depth FROM frontier_candidates
+        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).get(tenantHash, runId, candidateId);
+      assert.ok(candidate, 'the selected candidate exists in this run');
+      const changedCandidate = candidateState === undefined
+        ? database.prepare(`UPDATE frontier_candidates SET best_depth = ?
+          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+          .run(depth, tenantHash, runId, candidateId)
+        : database.prepare(`UPDATE frontier_candidates SET best_depth = ?, state = ?
+          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+          .run(depth, candidateState, tenantHash, runId, candidateId);
+      assert.equal(changedCandidate.changes, 1);
+      const changedObservations = disposition === undefined
+        ? database.prepare(`UPDATE frontier_observations SET depth = ?
+          WHERE tenant_hash = ? AND run_id = ? AND kind = 'link' AND target_candidate_id = ?`)
+          .run(depth, tenantHash, runId, candidateId)
+        : database.prepare(`UPDATE frontier_observations SET depth = ?, disposition = ?
+          WHERE tenant_hash = ? AND run_id = ? AND kind = 'link' AND target_candidate_id = ?`)
+          .run(depth, disposition, tenantHash, runId, candidateId);
+      assert.ok(changedObservations.changes > 0, 'the selected candidate has an incoming link observation');
+      assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [],
+        'the coordinated depth mutation preserves same-run foreign keys');
+      return candidate.best_depth;
+    });
   } finally {
     database.close();
   }
@@ -569,17 +582,19 @@ function insertUnobservedCandidate({ databasePath, tenantHash, runId, canonicalU
   const database = new DatabaseSync(databasePath);
   try {
     database.exec('PRAGMA foreign_keys=ON');
-    const run = database.prepare(`SELECT max_depth FROM frontier_runs WHERE tenant_hash = ? AND run_id = ?`)
-      .get(tenantHash, runId);
-    assert.ok(run, 'the candidate belongs to a persisted frontier run');
-    assert.ok(depth <= run.max_depth, 'the orphan control is otherwise eligible for the projection');
-    database.prepare(`INSERT INTO frontier_candidates
-      (tenant_hash, run_id, candidate_id, canonical_url, best_depth, state, is_seed)
-      VALUES (?, ?, ?, ?, ?, 'queued', 0)`)
-      .run(tenantHash, runId, candidateId, canonicalUrl, depth);
-    assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [],
-      'the unsupported candidate still has valid foreign keys');
-    return candidateId;
+    return withPrivilegedFrontierFixtureMutation(database, () => {
+      const run = database.prepare(`SELECT max_depth FROM frontier_runs WHERE tenant_hash = ? AND run_id = ?`)
+        .get(tenantHash, runId);
+      assert.ok(run, 'the candidate belongs to a persisted frontier run');
+      assert.ok(depth <= run.max_depth, 'the orphan control is otherwise eligible for the projection');
+      database.prepare(`INSERT INTO frontier_candidates
+        (tenant_hash, run_id, candidate_id, canonical_url, best_depth, state, is_seed)
+        VALUES (?, ?, ?, ?, ?, 'queued', 0)`)
+        .run(tenantHash, runId, candidateId, canonicalUrl, depth);
+      assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [],
+        'the unsupported candidate still has valid foreign keys');
+      return candidateId;
+    });
   } finally {
     database.close();
   }
@@ -1925,54 +1940,54 @@ for (const tamper of ['provenance', 'candidate', 'supplied-url', 'claim-key', 'c
     const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
     const database = new DatabaseSync(path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite'));
     try {
-      if (tamper === 'provenance') {
-        database.prepare(`UPDATE frontier_observations SET source_refs_json = '[]'
-          WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ? AND kind = 'link'`)
-          .run(tenantHash, runId, candidate.candidateId);
-      } else if (tamper === 'supplied-url') {
-        const suppliedUrl = 'http://fixture.example.org:80/target';
-        const observations = database.prepare(`SELECT sequence, source_refs_json FROM frontier_observations
-          WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ? AND kind = 'link'`)
-          .all(tenantHash, runId, candidate.candidateId);
-        assert.equal(observations.length, 1);
-        for (const observation of observations) {
-          const sourceRefs = JSON.parse(observation.source_refs_json);
-          for (const reference of sourceRefs) reference.value = suppliedUrl;
-          database.prepare(`UPDATE frontier_observations SET supplied_url = ?, source_refs_json = ?
-            WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`)
-            .run(suppliedUrl, JSON.stringify(sourceRefs), tenantHash, runId, observation.sequence);
+      withPrivilegedFrontierFixtureMutation(database, () => {
+        if (tamper === 'provenance') {
+          database.prepare(`UPDATE frontier_observations SET source_refs_json = '[]'
+            WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ? AND kind = 'link'`)
+            .run(tenantHash, runId, candidate.candidateId);
+        } else if (tamper === 'supplied-url') {
+          const suppliedUrl = 'http://fixture.example.org:80/target';
+          const observations = database.prepare(`SELECT sequence, source_refs_json FROM frontier_observations
+            WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ? AND kind = 'link'`)
+            .all(tenantHash, runId, candidate.candidateId);
+          assert.equal(observations.length, 1);
+          for (const observation of observations) {
+            const sourceRefs = JSON.parse(observation.source_refs_json);
+            for (const reference of sourceRefs) reference.value = suppliedUrl;
+            database.prepare(`UPDATE frontier_observations SET supplied_url = ?, source_refs_json = ?
+              WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`)
+              .run(suppliedUrl, JSON.stringify(sourceRefs), tenantHash, runId, observation.sequence);
+          }
+        } else if (tamper === 'candidate') {
+          database.prepare(`UPDATE frontier_candidates SET canonical_url = 'https://fixture.example.org/tampered-candidate'
+            WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+            .run(tenantHash, runId, candidate.candidateId);
+        } else if (tamper === 'claim-key') {
+          database.exec('PRAGMA defer_foreign_keys = ON');
+          database.prepare(`UPDATE frontier_attempts SET claim_key = 'tampered-claim-key'
+            WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+            .run(tenantHash, runId, candidate.candidateId);
+          database.prepare(`UPDATE frontier_claims SET claim_key = 'tampered-claim-key'
+            WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+            .run(tenantHash, runId, candidate.candidateId);
+        } else if (tamper === 'claim-worker') {
+          database.prepare(`UPDATE frontier_claims SET worker_id = 'tampered-worker'
+            WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+            .run(tenantHash, runId, candidate.candidateId);
+        } else if (tamper === 'claim-lease') {
+          database.prepare(`UPDATE frontier_claims SET lease_token = '123e4567-e89b-42d3-a456-426614174001'
+            WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+            .run(tenantHash, runId, candidate.candidateId);
+        } else if (tamper === 'completion-key') {
+          database.prepare(`UPDATE frontier_completions SET completion_key = 'tampered-completion'
+            WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+            .run(tenantHash, runId, candidate.candidateId);
+        } else {
+          database.prepare(`UPDATE frontier_completions SET outcome = 'failed'
+            WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+            .run(tenantHash, runId, candidate.candidateId);
         }
-      } else if (tamper === 'candidate') {
-        database.prepare(`UPDATE frontier_candidates SET canonical_url = 'https://fixture.example.org/tampered-candidate'
-          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-          .run(tenantHash, runId, candidate.candidateId);
-      } else if (tamper === 'claim-key') {
-        database.exec('BEGIN IMMEDIATE');
-        database.exec('PRAGMA defer_foreign_keys = ON');
-        database.prepare(`UPDATE frontier_attempts SET claim_key = 'tampered-claim-key'
-          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-          .run(tenantHash, runId, candidate.candidateId);
-        database.prepare(`UPDATE frontier_claims SET claim_key = 'tampered-claim-key'
-          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-          .run(tenantHash, runId, candidate.candidateId);
-        database.exec('COMMIT');
-      } else if (tamper === 'claim-worker') {
-        database.prepare(`UPDATE frontier_claims SET worker_id = 'tampered-worker'
-          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-          .run(tenantHash, runId, candidate.candidateId);
-      } else if (tamper === 'claim-lease') {
-        database.prepare(`UPDATE frontier_claims SET lease_token = '123e4567-e89b-42d3-a456-426614174001'
-          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-          .run(tenantHash, runId, candidate.candidateId);
-      } else if (tamper === 'completion-key') {
-        database.prepare(`UPDATE frontier_completions SET completion_key = 'tampered-completion'
-          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-          .run(tenantHash, runId, candidate.candidateId);
-      } else {
-        database.prepare(`UPDATE frontier_completions SET outcome = 'failed'
-          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-          .run(tenantHash, runId, candidate.candidateId);
-      }
+      });
     } finally {
       database.close();
     }
@@ -2924,11 +2939,13 @@ test('duplicate seed observations bind to the configured seed multiset and refer
   const frontierPath = path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite');
   const database = new DatabaseSync(frontierPath);
   try {
-    const row = database.prepare(`SELECT sequence FROM frontier_observations
-      WHERE tenant_hash = ? AND run_id = ? AND kind = 'seed' ORDER BY sequence LIMIT 1`).get(tenantHash, runId);
-    assert.ok(row);
-    database.prepare(`UPDATE frontier_observations SET source_refs_json = '[]'
-      WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`).run(tenantHash, runId, row.sequence);
+    withPrivilegedFrontierFixtureMutation(database, () => {
+      const row = database.prepare(`SELECT sequence FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ? AND kind = 'seed' ORDER BY sequence LIMIT 1`).get(tenantHash, runId);
+      assert.ok(row);
+      database.prepare(`UPDATE frontier_observations SET source_refs_json = '[]'
+        WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`).run(tenantHash, runId, row.sequence);
+    });
   } finally {
     database.close();
   }
@@ -3611,13 +3628,15 @@ test('legacy overcap recovery refuses missing or conflicting observations and a 
     missingObservation.fixture.tenantHash, 'frontier.sqlite');
   const database = new DatabaseSync(databasePath);
   try {
-    const observationCount = database.prepare(`SELECT COUNT(*) AS count FROM frontier_observations
-      WHERE tenant_hash = ? AND run_id = ? AND parent_candidate_id = ? AND kind = 'link'`)
-      .get(missingObservation.fixture.tenantHash, missingObservation.runId, parent.candidateId).count;
-    assert.equal(observationCount, 1);
-    database.prepare(`DELETE FROM frontier_observations
-      WHERE tenant_hash = ? AND run_id = ? AND parent_candidate_id = ? AND kind = 'link'`)
-      .run(missingObservation.fixture.tenantHash, missingObservation.runId, parent.candidateId);
+    withPrivilegedFrontierFixtureMutation(database, () => {
+      const observationCount = database.prepare(`SELECT COUNT(*) AS count FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ? AND parent_candidate_id = ? AND kind = 'link'`)
+        .get(missingObservation.fixture.tenantHash, missingObservation.runId, parent.candidateId).count;
+      assert.equal(observationCount, 1);
+      database.prepare(`DELETE FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ? AND parent_candidate_id = ? AND kind = 'link'`)
+        .run(missingObservation.fixture.tenantHash, missingObservation.runId, parent.candidateId);
+    });
   } finally {
     database.close();
   }
@@ -3642,17 +3661,19 @@ test('legacy overcap recovery refuses missing or conflicting observations and a 
     conflictingObservation.fixture.tenantHash, 'frontier.sqlite');
   const conflictDatabase = new DatabaseSync(conflictDatabasePath);
   try {
-    const observation = conflictDatabase.prepare(`SELECT sequence, source_refs_json FROM frontier_observations
-      WHERE tenant_hash = ? AND run_id = ? AND parent_candidate_id = ? AND kind = 'link' ORDER BY sequence LIMIT 1`)
-      .get(conflictingObservation.fixture.tenantHash, conflictingObservation.runId, conflictParent.candidateId);
-    assert.ok(observation);
-    const sourceRefs = JSON.parse(observation.source_refs_json);
-    assert.equal(sourceRefs.length, 1);
-    sourceRefs[0].value = 'https://links.example.org/conflicting-observation';
-    conflictDatabase.prepare(`UPDATE frontier_observations SET source_refs_json = ?
-      WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`)
-      .run(JSON.stringify(sourceRefs), conflictingObservation.fixture.tenantHash,
-        conflictingObservation.runId, observation.sequence);
+    withPrivilegedFrontierFixtureMutation(conflictDatabase, () => {
+      const observation = conflictDatabase.prepare(`SELECT sequence, source_refs_json FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ? AND parent_candidate_id = ? AND kind = 'link' ORDER BY sequence LIMIT 1`)
+        .get(conflictingObservation.fixture.tenantHash, conflictingObservation.runId, conflictParent.candidateId);
+      assert.ok(observation);
+      const sourceRefs = JSON.parse(observation.source_refs_json);
+      assert.equal(sourceRefs.length, 1);
+      sourceRefs[0].value = 'https://links.example.org/conflicting-observation';
+      conflictDatabase.prepare(`UPDATE frontier_observations SET source_refs_json = ?
+        WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`)
+        .run(JSON.stringify(sourceRefs), conflictingObservation.fixture.tenantHash,
+          conflictingObservation.runId, observation.sequence);
+    });
   } finally {
     conflictDatabase.close();
   }
@@ -3702,8 +3723,10 @@ test('legacy overcap recovery refuses missing or conflicting observations and a 
   const hashDatabasePath = path.join(changedHash.frontierDirectory, changedHash.fixture.tenantHash, 'frontier.sqlite');
   const hashDatabase = new DatabaseSync(hashDatabasePath);
   try {
-    hashDatabase.prepare(`UPDATE frontier_completions SET payload_hash = ?
-      WHERE tenant_hash = ? AND run_id = ?`).run('0'.repeat(64), changedHash.fixture.tenantHash, changedHash.runId);
+    withPrivilegedFrontierFixtureMutation(hashDatabase, () => {
+      hashDatabase.prepare(`UPDATE frontier_completions SET payload_hash = ?
+        WHERE tenant_hash = ? AND run_id = ?`).run('0'.repeat(64), changedHash.fixture.tenantHash, changedHash.runId);
+    });
   } finally {
     hashDatabase.close();
   }
