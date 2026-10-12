@@ -767,3 +767,26 @@ test('dispatch reads each enumerable input property once, and a target the host 
   uncloneable.target.hook = () => {};
   await assert.rejects(adapter.prepare(uncloneable), (error) => error.code === 'unsupported_image_configuration');
 });
+
+test('a target.model getter that answers evil on exactly the k-th read never binds or reaches the host', async () => {
+  const FAIL_CLOSED = new Set(['unsupported_image_configuration', 'credential_unavailable']);
+  for (let k = 1; k <= 14; k += 1) {
+    const calls = [];
+    const hostModels = [];
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort({ calls }), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async prepare(args) { hostModels.push(args.target.model); return {}; },
+      async dispatch(args) { hostModels.push(args.target.model); return {}; } } });
+    const input = billable();
+    const real = input.target.model;
+    let reads = 0;
+    Object.defineProperty(input.target, 'model', { enumerable: true, configurable: true, get() { reads += 1; return reads === k ? EVIL_MODEL : real; } });
+    try {
+      const prepared = await adapter.prepare(input);
+      await adapter.dispatch({ ...input, prepared });
+    } catch (error) {
+      assert.ok(FAIL_CLOSED.has(error.code), `k=${k}: unexpected ${error.code ?? error}`);
+    }
+    for (const call of calls) assert.equal(call.target_binding.model, real, `k=${k}: credential binding`);
+    for (const model of hostModels) assert.equal(model, real, `k=${k}: host args`);
+  }
+});
