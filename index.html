@@ -47,6 +47,9 @@ p { margin: 0; max-width: 62ch; }
 .wrap { max-width: 1240px; margin-inline: auto; }
 .num { font-variant-numeric: tabular-nums; }
 code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .9em; }
+.review-note { border: 1px solid var(--fg); padding: 14px 18px; margin-top: 20px; max-width: none; font-size: .95rem; }
+.review-note a { color: inherit; text-underline-offset: .15em; }
+.example-label { margin-block: 12px; color: var(--fg); font-size: .9rem; font-weight: 600; }
 
 /* top bar */
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 20px; border-bottom: 1px solid var(--line); }
@@ -74,6 +77,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 
 /* sections */
 section { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 24px 48px; padding-block: 56px; border-top: 1px solid var(--line); }
+section > * { min-width: 0; }
 section > header h2 { font-size: var(--s3); }
 section > header p { margin-top: 10px; color: var(--muted); font-size: .95rem; }
 .why { color: var(--muted); font-size: .92rem; }
@@ -136,7 +140,7 @@ section > header p { margin-top: 10px; color: var(--muted); font-size: .95rem; }
 .band { background: var(--band); margin-inline: calc(-1 * clamp(16px, 4vw, 56px)); padding-inline: clamp(16px, 4vw, 56px); }
 .band section { border-top: 0; }
 .mocks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 24px; align-items: start; }
-.mock { display: grid; gap: 12px; justify-items: center; }
+.mock { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; justify-items: center; margin: 0; min-width: 0; width: 100%; }
 .mock figcaption { font-size: .88rem; color: var(--muted); text-align: center; max-width: 30ch; }
 .mock figcaption b { color: var(--fg); font-weight: 600; display: block; }
 .phone { width: 100%; max-width: 260px; aspect-ratio: 9 / 19.5; border-radius: 36px; background: #0B0A08; padding: 9px; box-shadow: 0 30px 60px -30px rgb(0 0 0 / .6); }
@@ -242,7 +246,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
 
 @media (max-width: 860px) {
   .logos, .swatches, .refs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mocks, .rules { grid-template-columns: 1fr; }
+  .mocks, .rules { grid-template-columns: minmax(0, 1fr); }
   .hero { grid-template-columns: 1fr; padding-block: 36px 48px; }
   section { grid-template-columns: 1fr; padding-block: 40px; }
 }
@@ -263,11 +267,14 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
     </nav>
   </div>
 
+  <p class="review-note" id="review-status"><strong>Draft identity and illustrative product examples.</strong> Capability, price, automation and shipping copy on this board describes planned experiences. No release or public claim is approved here. Reference artwork has unknown rights and is excluded from reuse. See the <a href="docs/identity-decision-packet.md">identity decisions</a>, <a href="docs/claims-register.md">claim register</a> and <a href="docs/usage.md">channel usage guide</a>.</p>
+
   <div class="hero">
     <div>
-      <p class="label">Brand board · v1 · neatHack 2026</p>
+      <p class="label">Draft brand board · neatHack 2026</p>
       <h1 style="margin-top:14px">Turn your ticket into a stub <em>worth keeping.</em></h1>
-      <p class="pos">For people who want to keep the night, TicketStub is the keepsake studio that turns any ticket into a stub worth framing. No forms: drop your ticket and it's done.</p>
+      <p class="example-label">Illustrative positioning; capability evidence pending.</p>
+      <p class="pos" data-claim="BK-CLAIM-01">For people who want to keep the night, TicketStub is the keepsake studio that turns any ticket into a stub worth framing. No forms: drop your ticket and it's done.</p>
       <div class="attrs" aria-label="Brand attributes"><span class="attr">Tactile</span><span class="attr">Premium</span><span class="attr">Playful</span></div>
     </div>
     <div class="stage" id="stage">
@@ -280,18 +287,18 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
   </div>
 
   <section id="directions">
-    <header><h2>Direction</h2><p>Paper by day, foil by night.</p></header>
+    <header><h2>Direction</h2><p>Existing A+B baseline; ratification pending. <a href="docs/identity-decision-packet.md#pr-3-reconciliation">Paper-only proposal and scope decision</a>.</p></header>
     <div>
       <div class="dirs">
         <article class="dir"><div class="look look-a" aria-hidden="true"></div><div class="body"><span class="tag pick">Base</span><h3>A. Paper Desk</h3><p class="why">Cream stock, warm raking light, a serif you could letterpress. <b>It makes the everyday studio feel like handling a real stub.</b></p></div></article>
-        <article class="dir"><div class="look look-b" aria-hidden="true"></div><div class="body"><span class="tag pick">Moments</span><h3>B. Night Stage</h3><p class="why">Ink and moss with copper-to-cyan light leaks. <b>We switch to it for printing, reveal, finishes and the tear, because foil only glows on dark.</b></p></div></article>
+        <article class="dir"><div class="look look-b" aria-hidden="true"></div><div class="body"><span class="tag pick">Proposed moments</span><h3>B. Night Stage</h3><p class="why">Ink and moss with copper-to-cyan light leaks. <b>The existing design proposes it for printing, reveal, finishes and the tear.</b> This preserves the original dark-foil rationale; it does not describe verified app behavior.</p></div></article>
         <article class="dir"><div class="look look-c" aria-hidden="true"></div><div class="body"><span class="tag">Edition only</span><h3>C. Box Office</h3><p class="why">Thermal mono and security waves. <b>Rejected as the master brand because it reads as a ticketing vendor; it lives on as the Classic stub edition.</b></p></div></article>
       </div>
     </div>
   </section>
 
   <section id="logo">
-    <header><h2>Logo</h2><p>A postage stamp: kept, sent, collected. The perforation is the same edge you tear in the app.</p></header>
+    <header><h2>Logo</h2><p>A postage stamp: kept, sent, collected. The perforation echoes the planned tear interaction. <a href="docs/logo.md">Canonical rules</a> and <a href="docs/usage-examples.html">measured source examples</a>.</p></header>
     <div class="logos">
       <div class="tile"><div class="art on-cream"><img src="logo/ts-stamp.svg" alt="Ts stamp, full colour"></div><div class="cap"><b>Primary stamp</b><span>Foil gradient, Night Ink letters.</span></div></div>
       <div class="tile"><div class="art on-ink"><img src="logo/ts-stamp.svg" alt="Ts stamp on ink"></div><div class="cap"><b>On night</b><span>The same file; foil reads on ink.</span></div></div>
@@ -313,11 +320,11 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
     <div>
       <div class="swatches">
         <div class="sw"><div class="chip" style="background:#E4572E;color:#17140F"><span>Primary</span><span>Aa 5.0</span></div><div class="meta"><b>Ticket Orange</b><button class="copybtn hex" data-hex="#E4572E">#E4572E</button><span>CTAs, the stamp, the one accent in generated art.</span><span class="ratio">Ink label 5.0:1 · large text only on cream (3.1:1)</span></div></div>
-        <div class="sw"><div class="chip" style="background:#B4693E;color:#17140F"><span>Secondary</span><span>Aa 4.4</span></div><div class="meta"><b>Copper</b><button class="copybtn hex" data-hex="#B4693E">#B4693E</button><span>Foil gradient start, print and frame tiers.</span><span class="ratio">Large text only on cream (3.6:1)</span></div></div>
+        <div class="sw"><div class="chip" style="background:#B4693E;color:#17140F;font-size:24px;flex-wrap:wrap;gap:8px"><span>Secondary</span><span>Aa 4.4</span></div><div class="meta"><b>Copper</b><button class="copybtn hex" data-hex="#B4693E">#B4693E</button><span>Foil gradient start, illustrative print and frame tiers.</span><span class="ratio">Large text only on cream (3.6:1) or ink (4.4:1)</span></div></div>
         <div class="sw"><div class="chip" style="background:#26302A;color:#F4ECDD"><span>Secondary dark</span><span>Aa 11.6</span></div><div class="meta"><b>Stage Moss</b><button class="copybtn hex" data-hex="#26302A">#26302A</button><span>Raised surfaces at night: sheets, panels, printing.</span><span class="ratio">Cream on moss 11.6:1</span></div></div>
         <div class="sw"><div class="chip" style="background:#7CC6D2;color:#17140F"><span>Accent</span><span>Aa 9.5</span></div><div class="meta"><b>Holo Cyan</b><button class="copybtn hex" data-hex="#7CC6D2">#7CC6D2</button><span>Foil gradient end, focus and selection on dark.</span><span class="ratio">9.5:1 on ink · never text on cream</span></div></div>
         <div class="sw"><div class="chip" style="background:#F4ECDD;color:#17140F;box-shadow:inset 0 -1px 0 rgb(23 20 15 / .1)"><span>Neutral light</span><span>Aa 15.6</span></div><div class="meta"><b>Stub Cream</b><button class="copybtn hex" data-hex="#F4ECDD">#F4ECDD</button><span>Paper and the day background.</span><span class="ratio">Ink on cream 15.6:1</span></div></div>
-        <div class="sw"><div class="chip" style="background:#17140F;color:#F4ECDD"><span>Neutral dark</span><span>Aa 15.6</span></div><div class="meta"><b>Night Ink</b><button class="copybtn hex" data-hex="#17140F">#17140F</button><span>Body text and the night background.</span><span class="ratio">Muted text = 66% opacity (5.6:1)</span></div></div>
+        <div class="sw"><div class="chip" style="background:#17140F;color:#F4ECDD"><span>Neutral dark</span><span>Aa 15.6</span></div><div class="meta"><b>Night Ink</b><button class="copybtn hex" data-hex="#17140F">#17140F</button><span>Body text and the night background.</span><span class="ratio">66% ink on cream: 5.5:1; cream on ink: 7.3:1</span></div></div>
       </div>
       <div class="foilbar"><span>Brand foil</span><span class="num">copper 0 · orange 45 · cyan 100 · 135°</span></div>
       <div class="holobar">Holo spectrum · holographic stock and spot holo only</div>
@@ -325,7 +332,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
   </section>
 
   <section id="type">
-    <header><h2>Type</h2><p>Two families, both SIL Open Font License. Major-third scale from 16&nbsp;px.</p></header>
+    <header><h2>Type</h2><p>Two families, bundled SIL Open Font License notices. Major-third scale from 16&nbsp;px. Copy, event data, formats and prices here are illustrative.</p></header>
     <div>
       <div class="typepair">
         <div class="spec"><p class="label">Display · Fraunces</p><p class="big">Night 2 of 3</p><p class="why">opsz 144, wght 560, SOFT 30. <b>Its bracketed serifs match the stamped "Ts"</b>, and the WONK axis gives us a playful italic for handwritten-style notes.</p></div>
@@ -337,8 +344,8 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
         <div><span>39 · 4</span><p style="font-size:var(--s4)">Rosewood Hall, Glasgow</p></div>
         <div><span>31.25 · 3</span><p style="font-size:var(--s3)">Your stub is ready</p></div>
         <div><span>25 · 2</span><p style="font-size:var(--s2)">Pick a finish</p></div>
-        <div><span>20 · 1</span><p style="font-size:var(--s1);font-family:var(--ui);font-weight:600">Print it for $49</p></div>
-        <div><span>16 · 0</span><p style="font-size:var(--s0);font-family:var(--ui);font-weight:400">Drop a screenshot, email or PDF.</p></div>
+        <div><span>20 · 1</span><p style="font-size:var(--s1);font-family:var(--ui);font-weight:600" data-claim="BK-CLAIM-03">Print it for $49 (illustrative price)</p></div>
+        <div><span>16 · 0</span><p style="font-size:var(--s0);font-family:var(--ui);font-weight:400" data-claim="BK-CLAIM-04">Illustrative formats: screenshot, email or PDF.</p></div>
         <div><span>12.8 · −1</span><p style="font-size:var(--s-1);font-family:var(--ui);font-weight:500;letter-spacing:.08em;text-transform:uppercase">Night 2 of 3 · 7°C · Rain</p></div>
       </div>
     </div>
@@ -348,7 +355,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
 <div class="band" id="mockups">
   <div class="wrap">
     <section>
-      <header><h2>Mockups</h2><p>The master brand in use. The stub itself is a Researched edition, so it carries its own palette.</p></header>
+      <header><h2>Mockups</h2><p>Illustrative design concepts with unverified sample event data and sample prices. No checkout, shipping, QR destination or product availability is demonstrated. The reference artwork is excluded from reuse.</p></header>
       <div class="mocks">
         <figure class="mock">
           <div class="phone"><div class="screen splash">
@@ -357,7 +364,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
             <p>Turn your ticket into a stub worth keeping.</p>
           </div></div>
           <div class="homescreen"><img src="logo/app-icon.svg" alt="TicketStub app icon"><span>App icon, 1024 px<br>foil stamp on Night Ink</span></div>
-          <figcaption><b>App icon and splash</b>Night stage: the first thing you see glows.</figcaption>
+          <figcaption><b>App icon and splash concept</b>Illustrative night-stage treatment; app-direction decision pending.</figcaption>
         </figure>
 
         <figure class="mock">
@@ -369,10 +376,10 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
               <span class="chip-low num">12 Oct? Tap to fix</span>
             </div>
             <p class="hint">Swipe for another style</p>
-            <div class="materials num"><span>Digital<b>$9</b></span><span>Card<b>$29</b></span><span class="on">Print<b>$49</b></span><span>Framed<b>$89</b></span></div>
-            <div class="cta">Print it for $49</div>
+            <div class="materials num" data-claim="BK-CLAIM-03"><span>Digital<b>$9</b></span><span>Card<b>$29</b></span><span class="on">Print<b>$49</b></span><span>Framed<b>$89</b></span></div>
+            <div class="cta">Example: print for $49</div>
           </div></div>
-          <figcaption><b>Studio</b>Paper desk. One stub, one floating toolbar, one primary action.</figcaption>
+          <figcaption><b>Studio — illustrative prices</b>Paper-desk composition. Formats, prices and checkout are planned examples requiring product and commerce evidence.</figcaption>
         </figure>
 
         <figure class="mock">
@@ -381,10 +388,10 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
             <div class="back-wrap"><div class="back">
               <h4>Setlist</h4>
               <ol><li>Lamplight</li><li>Kelvin Way</li><li class="star">Rain on Sauchiehall</li><li>Second Night</li><li>Low Tide Choir</li><li>Encore: Northern Lines</li></ol>
-              <div class="foot"><div><p class="note">you sang every word</p></div><div style="display:grid;gap:4px;justify-items:end"><span class="qr" aria-label="QR code to the memory page"></span><img src="logo/ts-stamp-mono-ink.svg" alt="Ts stamp"></div></div>
+              <div class="foot"><div><p class="note">you sang every word</p></div><div style="display:grid;gap:4px;justify-items:end"><span class="qr" role="img" aria-label="Decorative QR-like pattern with no destination"></span><img src="logo/ts-stamp-mono-ink.svg" alt="Ts stamp"></div></div>
             </div></div>
           </div>
-          <figcaption><b>Stub back and print sleeve</b>Setlist, note, QR to the memory page, and the Ts stamp. Ships in a moss sleeve.</figcaption>
+          <figcaption data-claim="BK-CLAIM-07"><b>Planned stub back and sleeve</b>Unverified sample setlist, note, decorative QR-like pattern and Ts stamp. The moss sleeve is an illustrative packaging concept; shipping is unverified.</figcaption>
         </figure>
 
         <figure class="mock">
@@ -395,7 +402,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
               <div class="made"><img src="logo/favicon.svg" alt="">Make yours at ticketstub</div>
             </div>
           </div>
-          <figcaption><b>Share card</b>1200 × 630. The stub leads; the brand signs off small.</figcaption>
+          <figcaption data-claim="BK-CLAIM-08"><b>Illustrative share card</b>1200 × 630 composition target. Sharing/export behavior and reusable artwork rights remain unverified.</figcaption>
         </figure>
       </div>
     </section>
@@ -404,7 +411,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
 
 <div class="wrap">
   <section id="imagery">
-    <header><h2>Imagery</h2><p>Paper in warm light by day. Objects on velvet with light leaks by night.</p></header>
+    <header><h2>Imagery</h2><p>Paper in warm light by day. Objects on velvet with light leaks by night. All images shown are reference-only, with unknown rights; board inclusion grants no reuse permission.</p></header>
     <div>
       <div class="refs">
         <figure><img src="references/ts-stamp-vertical-velvet.webp" alt="Copper-to-cyan Ts stamp on dark velvet" loading="lazy"><figcaption>Stamp on velvet</figcaption></figure>
@@ -412,7 +419,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
         <figure><img src="references/ts-stamp-emboss-lightleak.webp" alt="Blind-embossed TS stamp on paper" loading="lazy"><figcaption>Emboss</figcaption></figure>
         <figure><img src="references/mood-stub-back-golden-hour.webp" alt="Back of a stub with setlist and note in golden-hour light" loading="lazy"><figcaption>Paper, golden hour</figcaption></figure>
         <figure><img src="references/mood-holo-light.webp" alt="Holographic ticket catching rainbow light" loading="lazy"><figcaption>Holo finish</figcaption></figure>
-        <figure><img src="references/mockup-art-glasgow.webp" alt="Rainy Glasgow night with a figure under an orange umbrella" loading="lazy"><figcaption>Generated art, one orange accent</figcaption></figure>
+        <figure><img src="references/mockup-art-glasgow.webp" alt="Rainy Glasgow reference scene with a figure under an orange umbrella; origin and rights unknown" loading="lazy"><figcaption>Glasgow reference; origin and rights unknown</figcaption></figure>
       </div>
       <div class="rules">
         <p class="rule"><b>No text in generated art</b>The type engine sets every letter.</p>
@@ -424,10 +431,10 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
   </section>
 
   <section id="voice">
-    <header><h2>Voice</h2><p>Clarity over cleverness. Say what they get, then what to do.</p></header>
+    <header><h2>Voice</h2><p>Clarity over cleverness. All wording below is illustrative; features, prices and email delivery require <a href="docs/claims-register.md">claim approval</a>.</p></header>
     <div class="tablewrap">
       <table class="voice">
-        <thead><tr><th>Moment</th><th>Write</th><th>Not</th></tr></thead>
+        <thead><tr><th>Moment</th><th>Illustrative candidate wording</th><th>Avoid this style</th></tr></thead>
         <tbody>
           <tr><td>First screen</td><td>Turn your ticket into a stub worth keeping.</td><td>Unleash your concert memories!</td></tr>
           <tr><td>Printing</td><td>Building your stub…</td><td>Our AI is working its magic</td></tr>
@@ -442,7 +449,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
   </section>
 
   <section id="motion">
-    <header><h2>Motion, sound, haptics</h2><p>Everything should feel like handling paper. Sound is on by default, with mute always visible.</p></header>
+    <header><h2>Motion, sound, haptics</h2><p>Planned interaction guidance. The existing sound/motion baseline remains pending review; PR #3's alternative cues are not adopted. This board demonstrates only its local foil/tilt and CSS samples.</p></header>
     <div class="motion">
       <div class="m"><h3>Timing</h3><dl class="num"><dt>80</dt><dd>track pointer or gyro</dd><dt>160</dt><dd>chips, toolbar</dd><dt>240</dt><dd>sheets, style swap</dd><dt>380</dt><dd>settle, flip</dd><dt>600</dt><dd>reveal, pin</dd><dt>2600</dt><dd>print sweep</dd></dl><div class="track" aria-hidden="true"><i></i></div></div>
       <div class="m"><h3>Sound</h3><dl><dt>Drop</dt><dd>paper slide</dd><dt>Print</dt><dd>thermal whirr loop</dd><dt>Done</dt><dd>paper snap</dd><dt>Tear</dt><dd>rip, then pin thunk</dd><dt>Buy</dt><dd>rubber stamp</dd></dl><p class="why">Source: cuelume.dev, under 600 ms, quiet mix.</p></div>
@@ -452,7 +459,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
   </section>
 
   <section id="donts">
-    <header><h2>Don'ts</h2></header>
+    <header><h2>Don'ts</h2><p>Intentionally invalid design examples. Text and prices remain illustrative; <a href="docs/usage-examples.html">paired alternatives</a> use canonical source SVGs.</p></header>
     <div class="donts">
       <div class="dont"><div class="ex on-cream"><p style="color:#E4572E;font-size:.85rem;max-width:22ch;padding:12px">Drop a screenshot, email or PDF to start your stub.</p></div><p><b>No body text in orange, copper or cyan on cream.</b> They fail 4.5:1. Use ink.</p></div>
       <div class="dont"><div class="ex on-art"><img src="logo/ts-stamp.svg" alt="" style="height:80px"></div><p><b>No bare stamp on busy art.</b> Use the mono stamp on a cream or ink plate.</p></div>

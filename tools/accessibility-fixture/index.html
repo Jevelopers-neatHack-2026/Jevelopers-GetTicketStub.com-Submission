@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TicketStub local accessibility fixture</title>
+  <link rel="stylesheet" href="../../tokens/tokens.css">
+  <link rel="stylesheet" href="fixture.css">
+  <script src="fixture.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Local source review · synthetic content</p>
+      <h1>Keep the details readable.</h1>
+      <p>This fixture measures the existing token contract. It is not a product page or an approved identity release. It loads no external fonts, images, audio or services.</p>
+      <div class="controls">
+        <label for="theme">Document theme
+          <select id="theme"><option value="auto">Follow operating system</option><option value="light">Explicit light</option><option value="dark">Explicit dark</option></select>
+        </label>
+        <label><input id="fallback" type="checkbox"> Force generic font fallbacks</label>
+      </div>
+      <p class="muted">Use browser zoom at 200%, a narrow viewport, Tab, and your reduced-motion setting. The automation separately labels its 200% CSS layout-zoom proxy.</p>
+    </header>
+    <div class="grid">
+      <section class="sample" id="root-sample" aria-labelledby="root-title">
+        <p class="eyebrow">Current document theme</p>
+        <h2 id="root-title">Sample event details</h2>
+        <p>Festival of Small Details — an intentionally long, fictional title for wrapping and fallback-font inspection.</p>
+        <p class="muted">Muted text remains readable over the actual background.</p>
+        <div class="surface">
+          <h3>Essential sample information</h3>
+          <dl><div><dt>Date</dt><dd>18 October · 19:30</dd></div><div><dt>Seat</dt><dd>Block A · Row 12 · Seat 104</dd></div><div><dt>Amount</dt><dd>Illustrative only: $12.34</dd></div></dl>
+          <p class="muted">Muted text also uses the composited raised surface.</p>
+          <label for="note">Sample note<textarea id="note" rows="3" autocomplete="off">A memorable evening with friends</textarea></label>
+          <button type="button" class="cta" id="sample-action">Show sample confirmation</button>
+          <p id="sample-status" role="status">Ready — this is a local demonstration.</p>
+        </div>
+        <p><a href="#restrictions">Read pairing restrictions</a></p>
+      </section>
+      <section class="sample ts-night" id="night-sample" aria-labelledby="night-title">
+        <p class="eyebrow">Explicit night subtree</p>
+        <h2 id="night-title">Same tokens. Different surface.</h2>
+        <p>This section stays on the night theme, including inside an explicitly light document.</p>
+        <div class="surface">
+          <p class="muted">Cream at 66% over moss is about 5.99:1. Body text remains cream; orange is reserved for fills or measured large text.</p>
+          <button type="button" class="cta">Sample night control</button>
+          <label for="night-note">Night sample note<textarea id="night-note" rows="3" autocomplete="off">No real customer information</textarea></label>
+        </div>
+        <p><a href="#restrictions">Focus uses a visible gap around controls</a></p>
+      </section>
+    </div>
+    <section class="sample" aria-labelledby="motion-title">
+      <h2 id="motion-title">Motion has a static alternative</h2>
+      <p class="muted">The decorative sweep is hidden from assistive technology. Completion is expressed in text.</p>
+      <div class="motion-card" id="motion-card" aria-hidden="true"><span class="sweep"></span><span>Illustrative print preview</span></div>
+      <p id="motion-state">Static status is available in every motion mode.</p>
+      <button type="button" id="motion-toggle">Pause decorative motion</button>
+    </section>
+    <section id="restrictions" class="sample" aria-labelledby="restriction-title">
+      <h2 id="restriction-title">Pairing restrictions</h2>
+      <ul>
+        <li>Use ink labels on orange controls. Cream labels on orange fail normal-text contrast.</li>
+        <li>Orange, copper and cyan are prohibited for body text on cream. Copper on ink also fails normal-text contrast.</li>
+        <li>Keep the cyan focus outline separated from orange by the surrounding background. Cyan directly on orange fails 3:1.</li>
+        <li>Tint and moss alone do not establish meaningful input boundaries. These samples add measured text-color borders.</li>
+        <li>Place essential text on an opaque measured plate, not directly on gradients or busy artwork.</li>
+        <li>Use text, shape and an accessible name as well as color to communicate status.</li>
+      </ul>
+      <p>Logotype and decorative exceptions do not excuse inaccessible functional labels. Application owners remain responsible for their actual layouts, keyboard flows, imagery and runtime motion.</p>
+    </section>
+  </main>
+</body>
+</html>

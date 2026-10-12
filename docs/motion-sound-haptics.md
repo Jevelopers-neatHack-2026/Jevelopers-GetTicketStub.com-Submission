@@ -20,6 +20,17 @@ Every interaction should feel like handling paper. Tokens are in `tokens/tokens.
 - **Signature move: the tear.** Drag along the perforation. The stub follows with slight resistance; past 60% it rips free, flies to the wall, rotates to a random angle between -4° and 4°, and pins.
 - **Reduced motion:** no tilt, spin or glitch. Foil holds a still sheen (`glow` 0.45), and transitions become instant cross-fades.
 
+### Reduced-motion implementation evidence
+
+The generated CSS and Tailwind adapter set all seven duration variables, including
+shutter and print-sweep, to `0ms` under `prefers-reduced-motion: reduce`. Consumers
+must also stop nonessential JavaScript loops and input-driven tilt/foil/reveal
+effects; zero CSS durations alone do not unsubscribe gyro input or cancel runtime
+work. Use an explicit static animation state and keep completion/status available
+as text. The [local accessibility fixture and evidence](accessibility.md) exercise
+this separation. Audio, haptics and actual product behavior remain consumer-owned;
+the source guidance above is not a report of their deployment or approval.
+
 ## Sound
 
 Sound is **on by default**, with a mute toggle always visible in the top bar. Source all sounds from **[cuelume.dev](https://cuelume.dev/)** and keep each one under 600 ms (the printer loop is the exception), mixed quietly at -18 LUFS or below.

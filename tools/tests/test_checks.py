@@ -242,7 +242,7 @@ class GovernanceTests(unittest.TestCase):
         self.original = (check_governance.GOV, check_governance.TPL, check_governance.SIM)
         sources = self.original + tuple(ROOT / p for p in (
             "SPEC.md", "tools/check_governance.py", "docs/architecture/OWNERSHIP.md",
-            "docs/architecture/ACCEPTANCE.md"))
+            "docs/architecture/ACCEPTANCE.md", "docs/identity-decision-packet.md"))
         for source in sources:
             target = self.tmp / source.relative_to(ROOT)
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -261,7 +261,8 @@ class GovernanceTests(unittest.TestCase):
         return status, output.getvalue()
 
     def test_valid_governance_documents_pass(self):
-        self.assertEqual(self.run_checker()[0], 0)
+        status, output = self.run_checker()
+        self.assertEqual(status, 0, output)
 
     def test_release_eligibility_rejects_contradictory_trailing_text(self):
         sim = check_governance.SIM.read_text()

@@ -2,11 +2,15 @@
 
 The compact reference. The visual version is [`index.html`](index.html) (the brand board).
 
+**Review status:** existing A+B design baseline, pending ratification. The [identity decision packet](docs/identity-decision-packet.md) lists exact source hashes, required reviewers and unresolved choices. Product features and prices below are illustrative design intent; the [claim register](docs/claims-register.md) controls their evidence handoff. No approved export version exists yet.
+
 ## Positioning
+
+**Illustrative copy for review; no product capability is verified by this sentence:**
 
 > **For people who want to keep the night, TicketStub is the keepsake studio that turns any ticket into a stub worth framing. No forms: drop your ticket and it's done.**
 
-Organizer line: *Upload your guest list. Every guest gets their own stub.*
+Illustrative organizer line (planned workflow): *Upload your guest list. Every guest gets their own stub.*
 
 Every design decision below has to serve that sentence. "Keep the night" asks for a physical object, "worth framing" asks for premium craft, and "no forms" asks for direct, playful interaction.
 
@@ -15,7 +19,7 @@ Every design decision below has to serve that sentence. "Keep the night" asks fo
 | Attribute | What it means in practice |
 |---|---|
 | **Tactile** | Paper grain, perforations, raking light, things you tear, flip and pin. The app should feel like handling an object rather than filling out a page. |
-| **Premium** | Foil and holo, collector-grade printing, restraint in the UI so the stub is the richest thing on screen. It should look worth $89 framed. |
+| **Premium** | Foil and holo as design references, restrained UI so the stub is the richest thing on screen. The original $89 framed example is an illustrative price anchor, pending approved pricing and fulfillment evidence. |
 | **Playful** | Shuffle, remix, tear-off, sound and haptics. The interactions should surprise you, while the copy stays plain. |
 
 ## Design directions
@@ -27,6 +31,8 @@ Every design decision below has to serve that sentence. "Keep the night" asks fo
 | C. Box Office | Thermal mono, Swiss grid, security wave | Rejected as the master brand, because it feels transactional (it's what a ticketing vendor looks like). It survives as the Classic stub edition. |
 
 **Recommended: A + B, "paper by day, foil by night".** The everyday studio is paper, so it feels like handling a real stub. The moments that sell the product switch to the dark stage, because foil only glows against dark.
+
+This is the preserved design rationale, not a verified description of the deployed app. [PR #3](https://github.com/Jevelopers-neatHack-2026/brand-kit/pull/3) proposes paper-only app styling with dark treatments reserved for marketing/print. Its direction, foil and sound changes remain pending; [PR #22](https://github.com/Jevelopers-neatHack-2026/brand-kit/pull/22) adopted only source-link repairs. The accountable decision must state the app-versus-marketing/print scope before the spec, board and token/motion guidance change together.
 
 ## Two tiers
 
@@ -44,7 +50,7 @@ Every design decision below has to serve that sentence. "Keep the night" asks fo
 | Stub Cream | `#F4ECDD` | Neutral light. Paper, day background | |
 | Night Ink | `#17140F` | Neutral dark. Body text, night background | 15.6:1 on cream |
 
-- **Muted text** is ink or cream at 66% opacity: 5.6:1 on cream, 7.3:1 on ink. It is not a seventh colour.
+- **Muted text** is ink or cream at 66% opacity: 5.5:1 on cream, 7.3:1 on ink. It is not a seventh colour. The cream value is rounded from 5.53248256415345 after alpha compositing; no palette value changed. See the [accessibility report](docs/accessibility/contrast-report.md) for unrounded thresholds and pairing restrictions.
 - **Foil** is `linear-gradient(135deg, copper 0%, orange 45%, cyan 100%)`.
 
 ## Typography
@@ -63,18 +69,18 @@ Every design decision below has to serve that sentence. "Keep the night" asks fo
 | Asset | Use | Rationale |
 |---|---|---|
 | `ts-stamp.svg` | Primary symbol: app, social, stub back | A postage stamp says "kept, sent, collected". The perforated edge is the same edge the user tears in the app. |
-| `ts-stamp-mono-*.svg`, `ts-stamp-currentcolor.svg` | One colour, letters knocked out | Works on any background and on foil or emboss print without a second ink. |
+| `ts-stamp-mono-*.svg`, `ts-stamp-currentcolor.svg` | One colour, letters knocked out | The background shows through the letters. Use a qualified flat background or plate; foil/emboss process acceptance remains with print-production. |
 | `favicon.svg` | 16–32 px | A square stamp with 4 bites per side and heavier letters, so it stays legible at 16 px. |
 | `wordmark.svg` | Ticket┊Stub | The dotted tear line between the words is the product's signature moment set in type. |
 | `wordmark-compact.svg` | Under 120 px wide | The dots disappear at small sizes, so this version drops them. |
 | `lockup-horizontal*.svg`, `lockup-stacked.svg` | Headers, packaging | The stamp is 1.9× cap height (horizontal) or 2.6× (stacked). |
 | `app-icon.svg` | iOS and Android, 1024 px | A foil stamp on Night Ink, which reads on both light and dark home screens. |
 
-Usage rules are in [`docs/logo.md`](docs/logo.md).
+Usage rules are in [`docs/logo.md`](docs/logo.md). The [channel matrix](docs/usage.md) maps those existing rules to product, landing, marketing, social/demo and print contexts, with [local positive and negative examples](docs/usage-examples.html). The files remain candidates awaiting rights and identity approval.
 
 ## Don'ts
 
-1. **Don't set body text in orange, copper or cyan on cream.** They fail 4.5:1. Use ink, and keep the colours for large type and fills.
+1. **Don't set body text in orange, copper or cyan on cream.** They fail 4.5:1. Use ink for body copy; colored large type and fills need an allowed pairing from the accessibility report. Cyan on cream remains prohibited at every text size.
 2. **Don't put the stamp straight onto busy art.** Use the mono version on a cream or ink plate, or the full-colour version on a flat field.
 3. **Don't redraw, rotate, outline or re-gradient the stamp.** The foil gradient is always copper → orange → cyan at 135°.
 

@@ -1,0 +1,7 @@
+<!doctype html><html lang="en" data-theme="light"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TicketStub local Tailwind import fixture</title>
+<link rel="stylesheet" href="brand-kit/tokens/tokens.css"><link rel="stylesheet" href="compiled.css">
+<body class="m-0 bg-bg font-ui text-fg">
+<main class="mx-auto max-w-3xl p-6 text-fg"><h1 class="font-display">Synthetic Tailwind consumer</h1>
+<button type="button" class="bg-orange text-ink rounded-control transition-[background-color] duration-base border-2 border-solid border-fg px-4 py-3 font-ui text-base focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-4 focus-visible:outline-focus">Review draft</button>
+<p>Unapproved local fixture; no font-provider request, product adoption or release acceptance.</p></main></body></html>

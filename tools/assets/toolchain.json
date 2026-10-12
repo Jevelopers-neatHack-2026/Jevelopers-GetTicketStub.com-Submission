@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "python_version": "3.12.14",
+  "platform": "linux-x86_64",
+  "python_packages": {
+    "fonttools": "4.66.1",
+    "uharfbuzz": "0.56.3",
+    "Pillow": "12.3.0"
+  },
+  "renderer_version": "Inkscape 1.2.2 (b0a8486541, 2022-12-01)",
+  "font": {
+    "path": "fonts/Fraunces[SOFT,WONK,opsz,wght].ttf",
+    "sha256": "177ff6c0f14e5550a3c624247cd1189611d4eb65d000b14944c63d967958abbb",
+    "license_path": "fonts/Fraunces-OFL.txt",
+    "use": "Existing source font for outlines only; no runtime font distribution"
+  }
+}
