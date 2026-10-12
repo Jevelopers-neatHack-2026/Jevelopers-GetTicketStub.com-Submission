@@ -342,6 +342,15 @@ staging, network-filter descriptor, read closure and cleanup behavior. The print
 test hook remains explicit and default-off, rejects the retrieval-private-IP
 policy before dispatch, and records its requested deny policy separately from
 the original producer container profile. This is no generic runtime promotion.
+The `fad073b` dispatch still passed thirty-two of thirty-three cases. Its active
+samples established no unfinished attempt at the observed instants; the filtered
+expected-operation count was zero, which is not a global operation count. Source
+inspection confirms the original positive command retains the fixture key and
+uses the observed DB route; no key/path mismatch or stalled CPU is established.
+The successor records capped global operation/attempt counts, exports no row
+values, and binds the actual database path to the pinned command, request digest,
+and original protocol/host/positive-source hashes. The original acceptance oracle,
+5 ms requested quantum and deadline remain unchanged.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,

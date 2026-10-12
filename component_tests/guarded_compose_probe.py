@@ -43,6 +43,14 @@ def pending_attempt(connection: sqlite3.Connection, key: str) -> dict[str, str |
     rows = cast("list[tuple[str, str, int, str]]", connection.execute(query).fetchall())
     if not rows:
         # Diagnose only: bounded readonly rows never establish an unfinished compose.
+        totals: dict[str, str | int | bool | None] = {
+            "operations_total_capped2": len(
+                connection.execute("SELECT 1 FROM operations LIMIT 2").fetchall()
+            ),
+            "attempts_total_capped2": len(
+                connection.execute("SELECT 1 FROM attempts LIMIT 2").fetchall()
+            ),
+        }
         operations = cast(
             "list[tuple[str]]",
             connection.execute(
@@ -51,6 +59,7 @@ def pending_attempt(connection: sqlite3.Connection, key: str) -> dict[str, str |
         )
         if not operations:
             return {
+                **totals,
                 "pending": False,
                 "phase": "operation-not-registered",
                 "expected_operation_rows": 0,
@@ -61,6 +70,7 @@ def pending_attempt(connection: sqlite3.Connection, key: str) -> dict[str, str |
             "SELECT outcome FROM attempts WHERE operation=? LIMIT 2", (operations[0][0],)
         ).fetchall()
         return {
+            **totals,
             "pending": False,
             "phase": "attempt-not-pending" if attempts else "operation-not-admitted",
             "expected_operation_rows": len(operations),

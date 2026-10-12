@@ -113,6 +113,33 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
     key, key_source = positive_key(docker, binding)
     artifact = home / "artifacts" / f"pp-{namespace}"
     database = artifact / "state.sqlite"
+    pre_dispatch = TypeAdapter(dict[str, JsonValue]).validate_json(
+        read_bytes(
+            docker.configuration.directory / "pre-dispatch.json",
+            max_bytes=65536,
+            deadline=docker.deadline,
+        )
+    )
+    sources = TypeAdapter(dict[str, str]).validate_python(pre_dispatch["source_files"])
+    _ = (docker.configuration.directory / "database-binding.json").write_text(
+        json.dumps(
+            {
+                "database_path": str(database),
+                "command": binding.command,
+                "owner_script_sha256": pre_dispatch["owner_script_sha256"],
+                "request_sha256": pre_dispatch["request_sha256"],
+                "key_source": key_source,
+                "route_sources": {
+                    name: sources[name]
+                    for name in (
+                        "scripts/integration-evals/protocol.ts",
+                        "tests/fixtures/integration-evals/host.ts",
+                        "tests/fixtures/integration-evals/positive-control.ts",
+                    )
+                },
+            }
+        )
+    )
     info = read_bytes(
         Path(f"/proc/self/fdinfo/{descriptor}"), max_bytes=65536, deadline=docker.deadline
     )
@@ -160,6 +187,8 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
                         "phase": attempt.get("phase"),
                         "expected_operation_rows": attempt.get("expected_operation_rows"),
                         "attempt_rows": attempt.get("attempt_rows"),
+                        "operations_total_capped2": attempt.get("operations_total_capped2"),
+                        "attempts_total_capped2": attempt.get("attempts_total_capped2"),
                         "database_inode": attempt.get("database_inode"),
                         "wal_inode": attempt.get("wal_inode"),
                         "shm_inode": attempt.get("shm_inode"),

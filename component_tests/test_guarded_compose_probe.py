@@ -80,7 +80,18 @@ def test_no_pending_diagnostics_distinguish_registration_admission_and_completio
             "phase": "operation-not-registered",
             "expected_operation_rows": 0,
             "attempt_rows": 0,
+            "operations_total_capped2": 0,
+            "attempts_total_capped2": 0,
         }
+        _ = connection.execute("INSERT INTO operations VALUES (?,?)", ("unrelated", "other-key"))
+        _ = connection.execute(
+            "INSERT INTO attempts VALUES (?,?,?,?)",
+            ("unrelated-attempt", "unrelated", 123, "failed"),
+        )
+        result = pending_attempt(connection, "original-key")
+        assert result["expected_operation_rows"] == 0
+        assert result["operations_total_capped2"] == result["attempts_total_capped2"] == 1
+        assert result["pending"] is False
         _ = connection.execute("INSERT INTO operations VALUES (?,?)", ("operation", expected))
         result = pending_attempt(connection, "original-key")
         assert result == {
@@ -88,6 +99,8 @@ def test_no_pending_diagnostics_distinguish_registration_admission_and_completio
             "phase": "operation-not-admitted",
             "expected_operation_rows": 1,
             "attempt_rows": 0,
+            "operations_total_capped2": 2,
+            "attempts_total_capped2": 1,
         }
         _ = connection.execute(
             "INSERT INTO attempts VALUES (?,?,?,?)", ("attempt", "operation", 123, "succeeded")
@@ -98,7 +111,16 @@ def test_no_pending_diagnostics_distinguish_registration_admission_and_completio
             "phase": "attempt-not-pending",
             "expected_operation_rows": 1,
             "attempt_rows": 1,
+            "operations_total_capped2": 2,
+            "attempts_total_capped2": 2,
         }
+        _ = connection.execute("INSERT INTO operations VALUES (?,?)", ("third", "third-key"))
+        _ = connection.execute(
+            "INSERT INTO attempts VALUES (?,?,?,?)", ("third-attempt", "third", 123, "succeeded")
+        )
+        result = pending_attempt(connection, "original-key")
+        assert result["operations_total_capped2"] == result["attempts_total_capped2"] == 2
+        assert result["pending"] is False
 
 
 @pytest.mark.parametrize("replacement", ["original-size", "oversized", "fifo", "symlink"])
