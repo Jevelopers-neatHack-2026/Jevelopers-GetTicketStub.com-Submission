@@ -1,6 +1,6 @@
 # Tombstone fingerprint key management
 
-**Status:** implemented as a private package helper with synthetic offline fixtures. No secret manager is connected and no key has been provisioned. Provisioning the key set in the host's approved server-side secret manager is an owner action ([getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27)).
+**Status:** implemented as a private package helper with synthetic offline fixtures. No secret manager is connected and no key has been provisioned. The retention value, key source and binding are decided (see [owner decisions](#owner-decisions-2026-10-12)). Provisioning the key set in the host's approved server-side secret manager is an owner action ([getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27)).
 
 [Security](security.md) requires a stable, server-held tombstone fingerprint key. The key must be separate from supplier API credentials, and every key version must stay available until all tombstones created with it expire. `createTombstoneFingerprintKeyring` in `src/security.ts` implements that key. It plugs into `purgeSensitiveRecord` as the existing `TombstoneFingerprinter` port.
 
@@ -21,7 +21,20 @@ The package reads no environment variables and defines no configuration name for
 - a `policy` with the approved `retiredKeyRetentionMs`;
 - optionally `minActiveGeneration`, the persisted `highWaterGeneration` (see [rebuilds and restores](#key-versions-and-the-rotation-chain)).
 
-A multi-version binary key set does not fit one environment variable, so no `.env` binding is proposed. If the owner wants one, its name and encoding are an owner decision to add to `.env.example`.
+A multi-version binary key set does not fit one environment variable, so this package proposes no `.env` binding. The owner has since decided on a host-side binding (see [owner decisions](#owner-decisions-2026-10-12)).
+
+## Owner decisions (2026-10-12)
+
+The owner delegated these decisions on 2026-10-12. Rows K1-K3 of [integration-evals decision 0003](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/decisions/0003-owner-delegated-decisions-2026-10-12.md) ([PR #39](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/39)) record them with rationale. They configure the **host**. This package still reads no environment variables, and its defaults and limits are unchanged.
+
+| Decision | Value |
+| --- | --- |
+| Tombstone retention | At most 7 years (2,555 days) after creation. **No approved legal or product tombstone retention policy existed** in fulfillment-connectors, shared-contracts or getticketstub.com, so the decision record picks and justifies this value. |
+| `retiredKeyRetentionMs` | `220838400000` (2,556 days: 7 years + 1 day, so that `maxRetainUntil = now + retention - maxClockSkewMs` still covers a full 7-year `retainUntil`). Other policy values stay at their defaults. Capacity: `ceil((2556 d + 5 min) / 90 d) + 2 = 31 <= 64`. |
+| Key source | GoDaddy Plus Launch environment secrets, separate for Preview and Publish. No external secret manager for launch: one would still need a bootstrap credential in the same environment. |
+| `.env` binding | `FULFILLMENT_TOMBSTONE_KEYSET`, reference `fulfillment/tombstone-fingerprint/keyset`. Versioned JSON `{"v":1,"keys":[{"keyVersion","state","activatedAt","retiredAt?","key":"<base64url, >=32 bytes>"}]}`. The host decodes each key to raw bytes before `load`, persists `highWaterGeneration` in its app DB, and adds the name to its own `.env.example`. |
+
+Generating the first key and entering it in GoDaddy secrets remain owner actions.
 
 ## Policy
 
