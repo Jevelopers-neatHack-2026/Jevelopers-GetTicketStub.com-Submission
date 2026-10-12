@@ -1,6 +1,9 @@
 import "server-only";
 import { lookup } from "node:dns/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
+import { Readable } from "node:stream";
 
 // URL-first intake boundary. Numbers here are defensive app-side ceilings, not an agreed product
 // contract: the research service (event-intelligence #9) still owns safe retrieval, and the support
@@ -125,6 +128,7 @@ export function parseIntakeUrl(input: string): UrlCheck {
 /** The checks that apply to the first URL and to every redirect target alike. */
 export function checkUrl(url: URL): UrlCheck {
   if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, reason: "unsupported_scheme" };
+  if (url.href.length > INTAKE_LIMITS.urlChars) return { ok: false, reason: "url_too_long" };
   if (url.username || url.password) return { ok: false, reason: "url_credentials" };
   if (url.port && url.port !== "80" && url.port !== "443") return { ok: false, reason: "unsupported_port" };
   if (!url.hostname || url.hostname.length > 253) return { ok: false, reason: "url_malformed" };
@@ -148,38 +152,96 @@ export class BlockedDestinationError extends Error {
   }
 }
 
-/** Every address the name resolves to must be public; a name with no answers or any private answer is refused. */
-async function assertPublicHost(url: URL): Promise<void> {
-  if (isIP(url.hostname.replace(/^\[|\]$/g, ""))) return; // literals were judged by checkUrl
-  let addresses: string[];
-  try {
-    addresses = await resolver(url.hostname);
-  } catch {
-    throw new BlockedDestinationError("dns_failed");
-  }
-  if (addresses.length === 0 || addresses.some(isBlockedIp)) throw new BlockedDestinationError("blocked_destination");
+type LookupCallback = (err: Error | null, address: string | { address: string; family: number }[], family?: number) => void;
+
+/**
+ * The socket's own DNS lookup. It resolves once, refuses the whole name if any answer is private or
+ * reserved, and hands the socket only validated addresses, so the address that is checked is the
+ * address that is connected to. There is no separate preflight lookup to race against.
+ */
+export function createPinnedLookup(resolve: () => HostResolver, allowed: (address: string) => boolean = (a) => !isBlockedIp(a)) {
+  return (hostname: string, options: { all?: boolean; family?: number | string } | number | undefined, callback: LookupCallback): void => {
+    const opts = typeof options === "object" && options ? options : {};
+    const want = Number(typeof options === "number" ? options : opts.family) || 0;
+    resolve()(hostname).then(
+      (addresses) => {
+        if (addresses.length === 0 || addresses.some((a) => !isIP(a) || !allowed(a))) return callback(new BlockedDestinationError("blocked_destination"), "", 0);
+        const usable = addresses.filter((a) => !want || isIP(a) === want);
+        if (usable.length === 0) return callback(new BlockedDestinationError("dns_failed"), "", 0);
+        if (opts.all) return callback(null, usable.map((address) => ({ address, family: isIP(address) })));
+        callback(null, usable[0], isIP(usable[0]));
+      },
+      () => callback(new BlockedDestinationError("dns_failed"), "", 0),
+    );
+  };
+}
+
+/** One request, no redirects. */
+export type Transport = (url: URL, init: RequestInit) => Promise<Response>;
+
+/**
+ * Default transport: node's http/https with the pinned lookup. The URL's hostname stays the TLS
+ * servername and Host header, so certificate validation is against the name the person gave, while
+ * the TCP connection can only go to an address that passed the check. Redirects are not followed.
+ */
+export function createPinnedTransport(opts: { resolver?: () => HostResolver; allowed?: (address: string) => boolean; ca?: string } = {}): Transport {
+  const lookupFn = createPinnedLookup(opts.resolver ?? (() => resolver), opts.allowed);
+  return (url, init) =>
+    new Promise<Response>((resolveResponse, reject) => {
+      const secure = url.protocol === "https:";
+      const headers: Record<string, string> = {};
+      new Headers(init.headers).forEach((v, k) => (headers[k] = v));
+      const req = (secure ? httpsRequest : httpRequest)(
+        {
+          protocol: url.protocol,
+          hostname: url.hostname.replace(/^\[|\]$/g, ""),
+          port: url.port || (secure ? 443 : 80),
+          path: `${url.pathname}${url.search}`,
+          method: "GET",
+          headers,
+          lookup: lookupFn as never,
+          agent: false, // a fresh, validated connection per request; no pooled socket carried across a DNS change
+          signal: init.signal ?? undefined,
+          ...(secure ? { rejectUnauthorized: true, ...(opts.ca ? { ca: opts.ca } : {}), servername: isIP(url.hostname.replace(/^\[|\]$/g, "")) ? undefined : url.hostname } : {}),
+        },
+        (res) => {
+          const out = new Headers();
+          for (const [k, v] of Object.entries(res.headers)) for (const x of Array.isArray(v) ? v : v === undefined ? [] : [v]) out.append(k, x);
+          const status = res.statusCode ?? 502;
+          const nullBody = status === 204 || status === 205 || status === 304;
+          if (nullBody) res.resume();
+          resolveResponse(new Response(nullBody ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>), { status, headers: out }));
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+}
+
+let transport: Transport = createPinnedTransport();
+
+/** Offline tests replace the transport (for example with a stub of globalThis.fetch); pass nothing to restore the pinned one. */
+export function setTransport(next?: Transport): void {
+  transport = next ?? createPinnedTransport();
 }
 
 /**
  * The one outbound fetch for user-supplied links. Redirects are followed by hand so each hop is
- * re-validated (scheme, credentials, port, literal and resolved addresses) before it is requested.
- *
- * Known limit: the name is resolved here and again by fetch, so a hostile DNS server could answer
- * differently the second time (rebinding). Closing that needs a connection-level pin in the research
- * service (event-intelligence #9); this check narrows the window, it does not remove it.
+ * re-validated (scheme, credentials, port, length, literal host) and then connected through the
+ * pinned transport, which validates the resolved address at connect time.
  */
 export async function fetchPublic(start: string | URL, init: RequestInit = {}): Promise<Response> {
   let url = typeof start === "string" ? new URL(start) : start;
   for (let hop = 0; ; hop++) {
     const check = checkUrl(url);
     if (!check.ok) throw new BlockedDestinationError(check.reason);
-    await assertPublicHost(check.url);
-    const res = await fetch(check.url.href, { ...init, redirect: "manual" });
+    const res = await transport(check.url, init);
     if (res.status < 300 || res.status >= 400 || res.status === 304) return res;
     const location = res.headers.get("location");
     await res.body?.cancel().catch(() => undefined);
     if (!location) return res;
     if (hop >= INTAKE_LIMITS.redirects) throw new BlockedDestinationError("too_many_redirects");
+    if (location.length > INTAKE_LIMITS.urlChars) throw new BlockedDestinationError("url_too_long");
     try {
       url = new URL(location, check.url);
     } catch {

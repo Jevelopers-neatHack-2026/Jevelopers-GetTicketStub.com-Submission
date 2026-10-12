@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { recordEvent } from "@/server/event-log";
-import { errorJson, route } from "@/server/http";
+import { errorJson, HttpError, readJson, route } from "@/server/http";
 import { generateText, ProviderError, providerFailure } from "@/server/ai/providers";
 import { HARBOUR_GAME, NEATHACK, PALE_HOURS } from "@/customer/studio/fixtures";
 import type { EventData, EventType, Fact } from "@/customer/studio/types";
@@ -27,7 +27,14 @@ const FIXTURES: { keys: string[]; event: EventData }[] = [
 ];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-const norm = (s: string) => decodeURIComponent(s).toLowerCase().replace(/[-_+.\/]+/g, " ");
+const safeDecode = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s; // malformed %-escapes must not throw out of the handler
+  }
+};
+const norm = (s: string) => safeDecode(s).toLowerCase().replace(/[-_+.\/]+/g, " ");
 
 function matchFixture(input: string): EventData | undefined {
   const n = norm(input);
@@ -59,25 +66,44 @@ function searchFixtures(query: string): EventData[] {
 // ---------- Page fetch + parse ----------
 
 async function fetchPage(url: string): Promise<string> {
-  const done = sourceTimer("event_page");
-  try {
-    // The only page fetch for user links: every hop is checked for scheme, credentials, port and public addresses.
-    const res = await fetchPublic(url, {
-      headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
-      signal: AbortSignal.timeout(8000),
-      cache: "no-store",
-    });
+  // Event sites sometimes reset a connection or return a transient 5xx. Retry once so a brief
+  // upstream wobble does not turn into an unreadable-link response; timeouts and 4xx stay final.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const done = sourceTimer("event_page");
+    let res: Response;
+    try {
+      // The only page fetch for user links: each hop is checked and the socket is pinned to a validated address.
+      res = await fetchPublic(url, {
+        headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
+        signal: AbortSignal.timeout(8000),
+        cache: "no-store",
+      });
+    } catch (error) {
+      const outcome = fetchFailure(error);
+      done(outcome);
+      if (error instanceof BlockedDestinationError) throw error; // a refused destination is never retried
+      if (attempt === 0 && outcome === "network_error") continue;
+      throw error;
+    }
     if (!res.ok) {
       done("http_error", res.status);
+      // Release the unused body so the discarded connection is not left open.
+      await res.body?.cancel().catch(() => {});
+      if (attempt === 0 && res.status >= 500) continue;
       throw new Error(`HTTP ${res.status}`);
     }
-    const text = await readCapped(res, INTAKE_LIMITS.pageBytes);
-    done("ok", res.status);
-    return text;
-  } catch (error) {
-    done(fetchFailure(error));
-    throw error;
+    try {
+      const text = await readCapped(res, INTAKE_LIMITS.pageBytes);
+      done("ok", res.status);
+      return text;
+    } catch (error) {
+      const outcome = fetchFailure(error);
+      done(outcome);
+      if (attempt === 0 && outcome === "network_error") continue;
+      throw error;
+    }
   }
+  throw new Error("Event page request did not complete.");
 }
 
 /** Fetches a source API response as JSON, measuring how the fetch ended. Undefined when it was not usable. */
@@ -446,17 +472,14 @@ const URL_REFUSAL: Record<IntakeRejection, string> = {
 };
 
 export const POST = route(observeRoute("research", async (req: Request) => {
-  const declared = Number(req.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > INTAKE_LIMITS.bodyBytes) return intakeRefusal(req, 413, "too_large", "That request is too big. Send one link or a short search.");
-  let text: string;
   let body: Record<string, unknown>;
   try {
-    text = await req.text();
-    if (text.length > INTAKE_LIMITS.bodyBytes) return intakeRefusal(req, 413, "too_large", "That request is too big. Send one link or a short search.");
-    const parsed: unknown = JSON.parse(text);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+    // readJson counts real bytes, cancels the stream at the cap and never parses an oversize body.
+    const parsed = await readJson(req, INTAKE_LIMITS.bodyBytes);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new HttpError(400, "bad_json", "Send a JSON body.");
     body = parsed as Record<string, unknown>;
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 413) return intakeRefusal(req, 413, "too_large", "That request is too big. Send one link or a short search.");
     annotate({ code: "bad_request" });
     await recordEvent(req, "intake_rejected", { code: "bad_request" });
     return errorJson(400, "bad_request", "Send a link or a search.");
@@ -481,15 +504,18 @@ export const POST = route(observeRoute("research", async (req: Request) => {
   const raw = typeof body.url === "string" ? body.url.trim() : "";
   if (!raw) return readError(req);
 
-  // A bare demo keyword ("neathack") is not a link; anything link-shaped must pass the full boundary.
-  const linkShaped = /^https?:\/\//i.test(raw) || /^[a-z][a-z0-9+.-]*:(?!\d+(?:[/?#]|$))/i.test(raw) || raw.startsWith("//") || /[./@]/.test(raw);
+  // Control characters are never valid in a link or a keyword. A link-shaped value must pass the full boundary
+  // on its own: a demo keyword inside a malformed link ("https://neat hack.example/") does not rescue it.
+  if (/[\x00-\x08\x0b-\x1f\x7f-\x9f]/.test(raw)) return intakeRefusal(req, 422, "unreadable_link", READ_ERROR);
+  const linkShaped = /^https?:\/\//i.test(raw) || /^[a-z][a-z0-9+.-]*:(?!\d+(?:[/?#]|$))/i.test(raw) || raw.startsWith("//") || /[./@\\]/.test(raw);
   let url: URL | undefined;
   if (linkShaped) {
     const checked = parseIntakeUrl(raw);
-    if (checked.ok) url = checked.url;
-    else if (checked.reason !== "url_malformed" || raw.length > INTAKE_LIMITS.urlChars) {
+    if (!checked.ok) {
+      if (checked.reason === "url_malformed") return intakeRefusal(req, 422, "unreadable_link", READ_ERROR);
       return intakeRefusal(req, 422, checked.reason === "url_too_long" ? "too_large" : "unsupported_url", URL_REFUSAL[checked.reason]);
     }
+    url = checked.url;
   }
 
   // Ticketmaster / Live Nation links go to the Discovery API first. Without a key, or on any API failure

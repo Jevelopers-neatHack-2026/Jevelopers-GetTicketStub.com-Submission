@@ -5,6 +5,10 @@ import { readFileSync, existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createServer as httpServer } from "node:http";
+import { createServer as httpsServer } from "node:https";
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import ts from "typescript";
 
 // Offline negative tests for the URL-first intake boundary: nothing here may reach the network.
@@ -41,13 +45,12 @@ const research = await import("../src/app/api/research/route.ts");
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 let fetched = [];
-const PUBLIC = "93.184.216.34";
-afterEach(() => { globalThis.fetch = originalFetch; process.env = { ...originalEnv }; intake.setHostResolver(); fetched = []; });
-function offline(resolve = async () => [PUBLIC], handler) {
+afterEach(() => { globalThis.fetch = originalFetch; process.env = { ...originalEnv }; intake.setTransport(); intake.setHostResolver(); fetched = []; });
+/** Offline: no sockets and no DNS. `handler` plays the remote site for every hop fetchPublic makes. */
+function offline(handler) {
   fetched = [];
   process.env.TICKETSTUB_RUNTIME_MODE = "live";
-  intake.setHostResolver(resolve);
-  globalThis.fetch = async (url, init) => { fetched.push(String(url)); return handler ? handler(String(url), init) : assert.fail(`unexpected fetch ${url}`); };
+  intake.setTransport(async (url) => { fetched.push(url.href); return handler ? handler(url.href) : assert.fail(`unexpected fetch ${url.href}`); });
 }
 const post = (body, raw) => research.POST(new Request("http://localhost/api/research", { method: "POST", headers: { "content-type": "application/json" }, body: raw ?? JSON.stringify(body) }));
 const codeOf = async (res) => (await res.json()).error?.code;
@@ -61,7 +64,11 @@ test("parseIntakeUrl rejects schemes, credentials, ports, controls and length", 
   assert.equal(reason(`https://example.com/${"a".repeat(2048)}`), "url_too_long");
   assert.equal(reason("example.com/e/1"), "ok");
   assert.equal(reason("https://example.com:443/e"), "ok");
-  assert.equal(reason(`https://example.com/${"a".repeat(2000)}`), "ok"); // boundary: under the cap
+  assert.equal(reason(`https://example.com/${"a".repeat(2000)}`), "ok");
+  // Boundary on the normalized URL: exactly 2048 passes, one more does not.
+  const pad = (n) => `https://example.com/${"a".repeat(n - "https://example.com/".length)}`;
+  assert.equal(reason(pad(2048)), "ok");
+  assert.equal(reason(pad(2049)), "url_too_long");
 });
 
 test("private, loopback, link-local, reserved and local-name hosts are blocked without DNS", () => {
@@ -78,8 +85,8 @@ test("private, loopback, link-local, reserved and local-name hosts are blocked w
   for (const h of ["93.184.216.34", "172.32.0.1", "[2606:2800:220:1:248:1893:25c8:1946]", "example.com"]) assert.equal(intake.parseIntakeUrl(`https://${h}/x`).ok, true, h);
 });
 
-test("route refuses unsupported schemes and credentials before any lookup or fetch", async () => {
-  offline(async () => assert.fail("resolved a rejected link"));
+test("route refuses unsupported schemes and credentials before any fetch", async () => {
+  offline();
   for (const [url, code] of [["javascript:alert(1)", "unsupported_url"], ["https://u:p@example.com/", "unsupported_url"], ["http://169.254.169.254/latest/meta-data", "unsupported_url"], ["http://localhost/admin", "unsupported_url"], ["http://example.com:6379/", "unsupported_url"], [`https://example.com/${"a".repeat(3000)}`, "too_large"]]) {
     const res = await post({ url });
     assert.equal(res.status, 422, url.slice(0, 40));
@@ -88,6 +95,17 @@ test("route refuses unsupported schemes and credentials before any lookup or fet
     assert.ok(!JSON.stringify(body).includes("169.254"), "the input is not echoed");
   }
   assert.deepEqual(fetched, []);
+});
+
+test("a demo keyword inside a malformed or control-character link never rescues it", async () => {
+  offline();
+  for (const url of ["neathack\u0000.example.com", "https://neathack\u0000.example.com/", "https://neat hack.example.com/", "https://neathack .example.com/x", "neathack.example.com/\u0001", "https://neathack.com\\@evil.example/", "neathack\u0000", "neathack\u0007"]) {
+    const res = await post({ url });
+    assert.equal(res.status, 422, JSON.stringify(url));
+    assert.equal(await codeOf(res), "unreadable_link", JSON.stringify(url));
+  }
+  assert.deepEqual(fetched, []);
+  assert.equal((await post({ url: "neathack%zz" })).status, 200); // a bad %-escape in a bare keyword must not crash the handler
 });
 
 test("unsupported inputs are refused explicitly, never accepted and ignored", async () => {
@@ -100,7 +118,7 @@ test("unsupported inputs are refused explicitly, never accepted and ignored", as
   assert.deepEqual(fetched, []);
 });
 
-test("malformed, oversize and wrongly typed bodies are rejected before dispatch", async () => {
+test("malformed and wrongly typed bodies are rejected before dispatch", async () => {
   offline();
   assert.equal((await post(null, "null")).status, 400);
   assert.equal((await post(null, "[1]")).status, 400);
@@ -108,30 +126,52 @@ test("malformed, oversize and wrongly typed bodies are rejected before dispatch"
   assert.equal((await post({ url: ["https://example.com"] })).status, 400);
   assert.equal((await post({ url: 42 })).status, 400);
   assert.equal((await post({ query: { $ne: 1 } })).status, 400);
-  const big = await post({ url: "https://example.com/e", pad: "x".repeat(9000) });
-  assert.equal(big.status, 413);
   assert.equal((await post({ query: "q".repeat(201) })).status, 422);
-  assert.equal((await post({ query: "q".repeat(200) })).status, 200); // boundary
+  assert.equal((await post({ query: "q".repeat(200) })).status, 200);
   assert.deepEqual(fetched, []);
 });
 
-test("a hostname that resolves to a private address is refused before fetch", async () => {
-  for (const addr of ["127.0.0.1", "10.1.2.3", "::1", "::ffff:192.168.0.1", "169.254.169.254"]) {
-    offline(async () => [PUBLIC, addr]); // one bad answer among good ones is enough
-    const res = await post({ url: "https://rebind.example.com/e" });
-    assert.equal(res.status, 422, addr);
-    assert.equal(await codeOf(res), "unsupported_url");
-    assert.deepEqual(fetched, [], addr);
-  }
-  offline(async () => []);
-  assert.deepEqual(fetched, []);
-  assert.notEqual((await post({ url: "https://nxdomain.example.com/e" })).status, 200);
+test("the body cap counts bytes, not characters, at exact boundaries", async () => {
+  offline();
+  const cap = intake.INTAKE_LIMITS.bodyBytes;
+  // 8192 bytes exactly: accepted (a query that parses and is searched).
+  const shell = JSON.stringify({ query: "", pad: "" });
+  const exact = JSON.stringify({ query: "q", pad: "x".repeat(cap - Buffer.byteLength(JSON.stringify({ query: "q", pad: "" }))) });
+  assert.equal(Buffer.byteLength(exact), cap);
+  assert.equal((await post(null, exact)).status, 200);
+  assert.ok(shell.length < cap);
+  assert.equal((await post(null, exact.replace('"x', '"xx'))).status, 413); // one byte over
+  // UTF-8: 4429 two-byte characters is 8858 bytes but only 4429 JS chars; it must be refused.
+  const multi = JSON.stringify({ query: "q", pad: "é".repeat(4429) });
+  assert.ok(multi.length < cap && Buffer.byteLength(multi) > cap);
+  const res = await post(null, multi);
+  assert.equal(res.status, 413);
+  assert.equal(await codeOf(res), "too_large");
+  // Just under in bytes with multi-byte characters is still accepted.
+  const fits = JSON.stringify({ query: "q", pad: "é".repeat(Math.floor((cap - Buffer.byteLength(JSON.stringify({ query: "q", pad: "" }))) / 2)) });
+  assert.ok(Buffer.byteLength(fits) <= cap);
+  assert.equal((await post(null, fits)).status, 200);
+});
+
+test("a chunked oversize body is cancelled at the cap, not read to the end", async () => {
+  offline();
+  let pulled = 0;
+  let cancelled = false;
+  const chunk = new TextEncoder().encode("x".repeat(1024));
+  const stream = new ReadableStream({
+    pull(c) { if (pulled >= 20) return c.close(); pulled++; c.enqueue(chunk); },
+    cancel() { cancelled = true; },
+  });
+  const res = await research.POST(new Request("http://localhost/api/research", { method: "POST", headers: { "content-type": "application/json" }, body: stream, duplex: "half" }));
+  assert.equal(res.status, 413);
+  assert.equal(cancelled, true, "the request stream was cancelled");
+  assert.ok(pulled < 20, `pulled ${pulled} of 20 chunks`);
   assert.deepEqual(fetched, []);
 });
 
 test("redirects to private or non-http destinations are refused and never requested", async () => {
-  for (const target of ["http://169.254.169.254/latest/meta-data/", "http://127.0.0.1:8080/", "http://10.0.0.1/", "ftp://example.com/x", "https://user:pw@example.com/x", "http://localhost/"]) {
-    offline(undefined, (url) => url === "https://example.com/start" ? new Response(null, { status: 302, headers: { location: target } }) : assert.fail(`followed redirect to ${url}`));
+  for (const target of ["http://169.254.169.254/latest/meta-data/", "http://127.0.0.1:8080/", "http://10.0.0.1/", "ftp://example.com/x", "https://user:pw@example.com/x", "http://localhost/", "http://[::ffff:7f00:1]/"]) {
+    offline((url) => url === "https://example.com/start" ? new Response(null, { status: 302, headers: { location: target } }) : assert.fail(`followed redirect to ${url}`));
     const res = await post({ url: "https://example.com/start" });
     assert.equal(res.status, 422, target);
     assert.equal(await codeOf(res), "unsupported_url", target);
@@ -139,20 +179,24 @@ test("redirects to private or non-http destinations are refused and never reques
   }
 });
 
-test("a redirect to a hostname that resolves privately is refused", async () => {
-  offline(async (host) => host === "inner.example.net" ? ["10.9.9.9"] : [PUBLIC], () => new Response(null, { status: 301, headers: { location: "https://inner.example.net/x" } }));
-  const res = await post({ url: "https://example.com/start" });
-  assert.equal(res.status, 422);
-  assert.deepEqual(fetched, ["https://example.com/start"]);
+test("a redirect Location over the length cap is refused, including a long relative one", async () => {
+  for (const location of [`https://example.com/${"a".repeat(2100)}`, `/${"b".repeat(2100)}`, `/${"b".repeat(2040)}`]) {
+    offline((url) => url === "https://example.com/start" ? new Response(null, { status: 302, headers: { location } }) : new Response("<title>t</title>"));
+    const res = await post({ url: "https://example.com/start" });
+    assert.equal(res.status, 422, location.length);
+    assert.deepEqual(fetched, ["https://example.com/start"], String(location.length));
+  }
+  // A 3020-character absolute target resolved from a short relative base is also refused.
+  offline((url) => url === "https://example.com/start" ? new Response(null, { status: 302, headers: { location: `/${"c".repeat(3019)}` } }) : assert.fail("followed"));
+  assert.equal((await post({ url: "https://example.com/start" })).status, 422);
 });
 
 test("redirect chains are capped, and a public redirect is still followed", async () => {
-  offline(undefined, (url) => new Response(null, { status: 302, headers: { location: `${url}x` } }));
+  offline((url) => new Response(null, { status: 302, headers: { location: `${url}x` } }));
   await assert.rejects(intake.fetchPublic("https://example.com/a"), (e) => e.reason === "too_many_redirects");
   assert.equal(fetched.length, intake.INTAKE_LIMITS.redirects + 1);
 
-  fetched = [];
-  offline(undefined, (url) => url.endsWith("/a") ? new Response(null, { status: 302, headers: { location: "/b" } }) : new Response("<title>ok</title>"));
+  offline((url) => url.endsWith("/a") ? new Response(null, { status: 302, headers: { location: "/b" } }) : new Response("<title>ok</title>"));
   const res = await intake.fetchPublic("https://example.com/a");
   assert.equal(await res.text(), "<title>ok</title>");
   assert.deepEqual(fetched, ["https://example.com/a", "https://example.com/b"]);
@@ -160,13 +204,82 @@ test("redirect chains are capped, and a public redirect is still followed", asyn
 
 test("readCapped stops at the byte cap", async () => {
   const stream = new ReadableStream({ pull(c) { c.enqueue(new TextEncoder().encode("a".repeat(1000))); } });
-  const text = await intake.readCapped(new Response(stream), 2500);
-  assert.equal(text.length, 2500);
+  assert.equal((await intake.readCapped(new Response(stream), 2500)).length, 2500);
 });
 
 test("demo keywords still work and make no outbound request", async () => {
   offline();
-  const res = await post({ url: "neathack" });
-  assert.equal(res.status, 200);
+  assert.equal((await post({ url: "neathack" })).status, 200);
   assert.deepEqual(fetched, []);
+});
+
+// ---- Socket-bound pinning: real loopback sockets, no external network ----
+
+const LOOPBACK = (a) => a === "127.0.0.1";
+function listen(server) { return new Promise((res) => server.listen(0, "127.0.0.1", () => res(server.address().port))); }
+const close = (server) => new Promise((res) => server.close(() => res()));
+
+test("the pinned transport refuses a name with any private answer before a connection is made", async () => {
+  let hits = 0;
+  const server = httpServer((req, res) => { hits++; res.end("secret"); });
+  const port = await listen(server);
+  try {
+    for (const answers of [["127.0.0.1"], ["93.184.216.34", "127.0.0.1"], ["::1"], ["::ffff:127.0.0.1"], ["10.0.0.1"], []]) {
+      const t = intake.createPinnedTransport({ resolver: () => async () => answers });
+      await assert.rejects(t(new URL(`http://rebind.example.com:${port}/`), {}), (e) => e instanceof intake.BlockedDestinationError, JSON.stringify(answers));
+    }
+    const failing = intake.createPinnedTransport({ resolver: () => async () => { throw new Error("nxdomain"); } });
+    await assert.rejects(failing(new URL(`http://gone.example.com:${port}/`), {}), (e) => e.reason === "dns_failed");
+    assert.equal(hits, 0, "no request reached the server");
+  } finally { await close(server); }
+});
+
+test("the pinned transport connects only to the address it validated, resolving exactly once", async () => {
+  const seen = [];
+  const server = httpServer((req, res) => { seen.push({ host: req.headers.host, ua: req.headers["user-agent"], path: req.url }); res.end("<title>pinned</title>"); });
+  const port = await listen(server);
+  let resolutions = 0;
+  try {
+    const t = intake.createPinnedTransport({ resolver: () => async (h) => { resolutions++; return h === "pin.example.com" ? ["127.0.0.1"] : ["10.0.0.9"]; }, allowed: LOOPBACK });
+    const res = await t(new URL(`http://pin.example.com:${port}/p?q=1`), { headers: { "user-agent": "t" } });
+    assert.equal(await res.text(), "<title>pinned</title>");
+    assert.equal(resolutions, 1, "a single lookup serves the connection; there is no second, separate resolution to rebind");
+    assert.deepEqual(seen, [{ host: `pin.example.com:${port}`, ua: "t", path: "/p?q=1" }]);
+    // A second name is judged on its own answer.
+    await assert.rejects(t(new URL(`http://other.example.com:${port}/`), {}), (e) => e instanceof intake.BlockedDestinationError);
+    assert.equal(seen.length, 1);
+  } finally { await close(server); }
+});
+
+test("a rebinding resolver cannot redirect a validated connection: the answer used is the answer checked", async () => {
+  const server = httpServer((req, res) => res.end("ok"));
+  const port = await listen(server);
+  const answers = [["127.0.0.1"], ["10.0.0.9"]];
+  let call = 0;
+  try {
+    const t = intake.createPinnedTransport({ resolver: () => async () => answers[Math.min(call++, 1)], allowed: LOOPBACK });
+    assert.equal(await (await t(new URL(`http://flip.example.com:${port}/`), {})).text(), "ok");
+    await assert.rejects(t(new URL(`http://flip.example.com:${port}/`), {}), (e) => e instanceof intake.BlockedDestinationError);
+  } finally { await close(server); }
+});
+
+test("HTTPS keeps hostname TLS semantics under pinning", { skip: (() => { try { execFileSync("openssl", ["version"]); return false; } catch { return "openssl is required to mint a throwaway test certificate"; } })() }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ticketstub-tls-"));
+  const key = join(dir, "k.pem"), cert = join(dir, "c.pem");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", cert, "-days", "1", "-subj", "/CN=tls.example.com", "-addext", "subjectAltName=DNS:tls.example.com"], { stdio: "ignore" });
+  let sni;
+  const server = httpsServer({ key: readFileSync(key), cert: readFileSync(cert), SNICallback: (name, cb) => { sni = name; cb(null, undefined); } }, (req, res) => res.end("secure"));
+  const port = await listen(server);
+  const resolver = () => async () => ["127.0.0.1"];
+  const ca = readFileSync(cert, "utf8");
+  try {
+    const trusted = intake.createPinnedTransport({ resolver, allowed: LOOPBACK, ca });
+    assert.equal(await (await trusted(new URL(`https://tls.example.com:${port}/`), {})).text(), "secure");
+    assert.equal(sni, "tls.example.com", "SNI is the requested hostname, not the pinned IP");
+    // Same pinned address, different requested name: the certificate does not cover it.
+    await assert.rejects(trusted(new URL(`https://evil.example.com:${port}/`), {}), (e) => /altnames|hostname|does not match/i.test(`${e.code} ${e.message}`));
+    // No trust anchor for the certificate: verification stays on.
+    const untrusted = intake.createPinnedTransport({ resolver, allowed: LOOPBACK });
+    await assert.rejects(untrusted(new URL(`https://tls.example.com:${port}/`), {}), (e) => /self.signed|unable to verify|CERT/i.test(`${e.code} ${e.message}`));
+  } finally { await close(server); }
 });
