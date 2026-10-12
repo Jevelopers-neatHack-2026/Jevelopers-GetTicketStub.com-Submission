@@ -4,7 +4,7 @@ export default defineConfig({
   use: { browserName: 'chromium', headless: true, trace: 'retain-on-failure' },
   projects: [
     { name: 'foundation', testMatch: 'roundtrip.spec.mjs', use: { baseURL: 'http://127.0.0.1:4318' } },
-    { name: 'actual-api', testMatch: ['integrated.spec.mjs', 'inspection-presentation.spec.mjs', 'actual-inspection.spec.mjs', 'composition.spec.mjs'], use: { baseURL: 'http://127.0.0.1:4317' } },
+    { name: 'actual-api', testMatch: ['integrated.spec.mjs', 'inspection-presentation.spec.mjs', 'actual-inspection.spec.mjs', 'composition.spec.mjs', 'host-lifecycle.spec.mjs'], use: { baseURL: 'http://127.0.0.1:4317' } },
   ],
   webServer: [
     { command: 'CONTROLS_FIXTURE_PORT=4318 node foundation-server.mjs', url: 'http://127.0.0.1:4318', reuseExistingServer: false },

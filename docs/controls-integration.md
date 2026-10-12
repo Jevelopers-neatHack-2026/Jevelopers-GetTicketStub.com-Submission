@@ -1,4 +1,4 @@
-Current staged composition details and remaining full original-scope dependencies are in [composition controls integration](controls/composition-integration.md). Final qualification waits corrected coherent backend integration and exact-head checks/review.
+The bounded local composition consumer, source-reported post-merge checks, and remaining full original-scope dependencies are in [composition controls integration](controls/composition-integration.md). Full qualification still depends on the original typed composition/compound bridge and its owner-controlled integration and acceptance evidence.
 
 Current actual Apply→CE09 consumer details and boundaries are in [actual saved-artwork inspection](controls/actual-inspection.md). Earlier checkpoint statements below retain their historical scope; they do not describe current inspection as unimplemented.
 
@@ -11,8 +11,7 @@ immutable version store and usage outbox. The
 browser's default fixture uses **MOCK trusted host authority and intercepted
 provider/Finance transport**. It authenticates no real membership and makes no
 network provider calls. Local API execution and persisted bytes, hashes, jobs,
-selection, replay and cancellation are real. Composition and correction
-consumers remain required local work; they are explicitly unavailable.
+selection, replay and cancellation are real. A separately versioned local composition controls consumer and durable artwork-action recovery now exist; see [composition controls integration](controls/composition-integration.md) and [reviewed artwork action recovery](controls/artwork-recovery.md). These offline mock/local consumers do not supply the original CE-05 `creative.composition.consume/1` ControlOperation bridge, compound routing or factual-correction workflow, nor do they establish app-runtime integration or external acceptance. The original composition/compound bridge remains typed-unavailable below; research correction remains pending.
 
 This contributes to CON-01/02/03 (Agent and research), ART-01 (Creative and
 fulfillment), ART-02/EVAL-03 (Product and frontend), and EVAL-04 (Finance and
@@ -45,8 +44,125 @@ foundation project retains the original mocked brief/version projection on
 loopback port 4318. The actual API project runs on loopback port 4317; `npm start`
 in the example opens that fixture. `/__fixture/*` routes declare test authority,
 reset state and create deterministic wait barriers. They are not an application
-issuer. Temporary databases are deleted only on orderly fixture shutdown.
-Separate-process tests preserve their explicit database/object paths across exit.
+issuer. Each admitted HTTP operation retains its own host until its handler
+finishes, including counters read after awaited work. Reset and evidence capture
+wait for that host's active requests before closing SQLite or removing files.
+Ordinary new requests wait for the replacement; release-only fixture requests
+and API cancellation can still drain held work on the retiring host. These
+fixtures do not serialize the entire HTTP API.
+
+Reset constructs a replacement before finalizing the previous host. Failed
+initialization preserves the previous usable host. Temporary directories are
+removed after their partial host closes successfully; failed initialization
+cleanup retains its close handle and directory until a later reset or stop. A capture failure returns failure and retains the original directory for
+a later capture attempt; unique capture directories preserve earlier evidence.
+A failed component close remains retryable, blocks ordinary admission, and
+cannot produce a successful capture or removal. The test client checks reset
+and capture responses. The locked-logo case chooses
+its lock before the first navigation, and context teardown stops new browser
+requests and releases any explicit MOCK latch before final capture. Temporary databases are removed after successful
+reset or orderly shutdown. Separate-process tests preserve their explicit
+database/object paths across exit.
+
+The deterministic lifecycle checks run real loopback HTTP, local API and SQLite
+with a fixture-controlled current-read latch and a genuine held composition
+Apply. They verify reset/capture waits, release/cancel progress, original-host
+response counters, replacement schema/current health and captured store hashes
+and terminal job rows. Run the focused checks with either required Node pin:
+
+```sh
+node --test tests/controls/host-lifecycle.test.mjs tests/controls/host-lifecycle-http.test.mjs
+```
+
+`CONTROLS_BROWSER_EVIDENCE_DIR` retains exact closed stores with manifests and
+receipts. `CONTROLS_LIFECYCLE_EVIDENCE_DIR` retains the HTTP regression captures;
+its destination must already exist. These are synthetic fixture receipts, not
+application authority or acceptance evidence.
+
+### Capture publication and incomplete attempts
+
+A capture is certified only when the shared `readCertifiedCapture` validator
+accepts its completed staging directory and that directory is atomically
+renamed to a `session-NNNN-SUFFIX` child of the evidence root. Its existing
+`store-root/`, `manifest.json` and `receipt.json` format is unchanged. The manifest
+pins every regular file's path, byte length and SHA-256. Store directories must
+match the parent paths implied by those files plus the fixture object's retained
+`objects/staging` directory; copied links or special
+files cannot become certified captures.
+
+The evidence root also contains an explicitly inventoried `attempts/` directory.
+A failed staging directory remains there as `attempt-NNNN-SUFFIX`, with every raw
+copied file and partially written manifest or receipt untouched. Its separate
+`attempt-NNNN-SUFFIX.json` record uses
+`format: controls-fixture-capture-attempt/1` and `status: incomplete`. The record
+contains `attempt`, `stage`, `reason`, `started_at`, `node`, `node_executable`,
+`cwd`, `mode`, `live_calls`, `files`, `record_failures` and `fragments`.
+
+`stage` identifies `copy`, `walk`, `manifest`, `receipt` or `publish` failure.
+`files` inventories complete raw membership: directory entries have `path` and
+`kind: directory`; regular files have `kind: file`, `bytes` and `sha256`; symbolic
+links have `kind: symlink` with length/hash of the link text, without following
+the target; other filesystem entries have `kind: special` and their mode. These
+last two kinds describe failed evidence, never a certified store or verified
+stream content. Partial JSON inside a failed directory is opaque raw evidence,
+not a certificate.
+
+Failed inventory writes are themselves preserved as regular
+`attempt-NNNN-SUFFIX.record-UUID` fragments. Each fragment's name, byte length
+and hash appears in the completed attempt record's `fragments` array;
+`record_failures` counts failed record write/publication operations. A partial
+fragment's path is owned before any read; readable fragments are hashed
+immediately. A failed read retains the owned path and blocks certification until
+its bytes can be measured. Pending record
+ownership remains with the session and blocks any later certification until the
+record is complete. A retry does not overwrite failed directories or fragments.
+
+`readCaptureInventory` in the example's `host-capture-inventory.mjs` checks every
+root and attempts member, validates certified manifests and receipts, and
+verifies failed-attempt and fragment membership/hashes. Unpaired directories,
+unknown files, truncated record JSON and altered bytes fail validation. Counting
+certified sessions alone or recursively treating failed receipts as certificates
+is insufficient. The HTTP checks require one certified retired-host capture;
+failed-attempt recovery checks separately require their preserved inventories.
+
+The regular-file copy/walk/metadata/publication failure fixtures retain their
+failed bytes, provenance and one successful retry beneath
+`CONTROLS_LIFECYCLE_EVIDENCE_DIR` when enabled. Negative inventory mutations use
+disposable copies outside that retained corpus. Existing Controls artifact
+uploads cover both certified sessions and the attempts namespace.
+
+### Directory-preserving capture transport
+
+GitHub artifact upload omits empty directories. Controls CI therefore runs
+`node fixtures/controls/package-capture-custody.mjs` after browser execution,
+including when a test fails, before the existing unconditional artifact upload.
+This CI-only tool requires GNU tar on the Ubuntu runner; it adds no public package
+runtime dependency. The uncompressed deterministic
+`build/controls-package-evidence/capture-custody.tar` contains exactly the two
+repository-relative roots `build/controls-package-evidence/lifecycle-stores`
+and `examples/frontend-action-roundtrip/test-results/browser-stores`. It retains
+directory entries, including empty `attempts/` and `objects/staging`, file modes,
+regular bytes and symbolic-link text without following link targets. Regular hard
+links are emitted as independent file bytes. Modification times and numeric
+owner/group metadata are fixed to zero; entry order is sorted.
+
+The adjacent `capture-custody.receipt.json` uses
+`format: controls-capture-custody-transport/1`. Its `archive` gives the archive's
+repository-relative `path`, `bytes` and `sha256`; `roots` lists each expected
+`path` and `present` flag; `members` inventories every retained entry by `path`,
+`kind` and permission `mode`. Files and symbolic links additionally pin `bytes`
+and `sha256` (link text only). FIFO/character/block members, if present in failed
+attempts, have their explicit kind and device identifier; they never certify a
+store. The producer checks the complete source inventory before and after
+archiving. Existing transport outputs cannot be overwritten, and failed archive
+or receipt writes retain their `.incomplete` files.
+
+`complete` is true only when both required roots exist. Missing roots produce a
+receipt with `complete: false` and a failing packaging step, rather than a claim
+of complete custody. Raw directories remain in the outer artifact. An auditor
+must verify the inner archive hash, full archive membership/types/modes/bytes
+against its receipt, then validate the enclosed capture inventories. It must not
+synthesize omitted directories from the flattened outer ZIP.
 
 The existing controls CI workflow defines the controls/browser checks on both
 pinned runtimes. Codec setup, public controls export/build and the actual package
@@ -218,12 +334,14 @@ browser tests capture caught handler exceptions and verify both paths leave
 selection and attempt/reservation counters unchanged. Unknown history codes and
 backend messages render only fixed local recovery text.
 The trusted context policy declares optional `can_read`, with strict source
-consumers constructing both denied and omitted policies. Actual package-path
-publication and its consumer remain pending.
+consumers constructing both denied and omitted policies. The package remains
+private and unpublished to a registry; PR #57 adds a packed, installed local
+consumer for composition and artwork recovery. Application imports and externally
+accepted package consumers remain pending.
 
 ## Required backend bridges
 
-These are required local integrations, not scope waivers or external blockers:
+This table tracks the original CE-05 typed `ControlOperation` bridge and related follow-up consumers. It is distinct from the separately versioned local `CompositionControlsAdapter` documented above; the typed-unavailable bridge outcome does not mean that the separate local mock composition consumer is absent. These remain required local integrations, not scope waivers or external blockers:
 
 | Bridge | Required contract and result | Current outcome |
 | --- | --- | --- |
