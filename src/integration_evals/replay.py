@@ -10,6 +10,11 @@ from integration_evals.models import Mode, Outcome, Record, Run, Suite
 from integration_evals.report_validation import validate_run
 
 MAX_DIAGNOSTIC_RERUNS: Final = 2
+# Semantic guard for cases whose frozen `safety` flag is false but whose retry would repeat
+# an ambiguous supplier dispatch, an externally succeeded side effect or an authorization change.
+NO_AUTOMATIC_RERUN_CASES: Final = frozenset(
+    {"supplier-ambiguity", "restart-after-external-success", "authorization-mutation"}
+)
 
 
 class Flake(Record):
@@ -36,7 +41,11 @@ def authorize_rerun(prior: Run, suite: Suite, rationale: str) -> None:
         fail("rerun_limit_or_rationale", prior.id)
     if any(result.mode in {Mode.SANDBOX, Mode.LIVE} for result in prior.results):
         fail("real_provider_rerun_requires_owner_reconciliation", prior.id)
-    safety = {case.id for case in suite.cases if case.safety or "ambiguous" in case.id}
+    safety = {
+        case.id
+        for case in suite.cases
+        if case.safety or "ambiguous" in case.id or case.id in NO_AUTOMATIC_RERUN_CASES
+    }
     if any(
         result.case_id in safety and result.outcome in {Outcome.ERROR, Outcome.FAILED}
         for result in prior.results

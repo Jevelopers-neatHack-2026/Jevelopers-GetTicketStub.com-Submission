@@ -16,8 +16,10 @@ from integration_evals.models import (
     Mode,
     Origin,
     RequirementId,
+    Run,
 )
 from integration_evals.output_evidence import check_claim, retain
+from integration_evals.packaging import copy_artifacts
 
 
 def controlled_case() -> Case:
@@ -114,3 +116,55 @@ def test_evidence_retains_when_temporary_staging_is_removed(tmp_path: Path) -> N
     (staging / "output.json").unlink()
     staging.rmdir()
     assert (context.settings.artifacts / kept[0].path).read_bytes() == b'{"result":"controlled"}'
+
+
+LEAKY_JSON = (
+    b'{"api_key": "fictional-key-value-1234"}',
+    b'{"password": "fictional-password-1234"}',
+    b'{"Authorization": "Bearer fictional-token-1234"}',
+    b'{"nested": {"headers": {"authorization": "fictional-value-1234"}}}',
+    b'{"body": "{\\"api_key\\": \\"fictional-key-value-1234\\"}"}',
+    b'{"\\u0061pi_key": "fictional-key-value-1234"}',
+    b"Authorization: Bearer fictionaltoken1234",
+)
+
+
+@pytest.mark.parametrize("payload", LEAKY_JSON)
+def test_retain_rejects_quoted_or_bearer_credentials_without_echo(
+    tmp_path: Path, payload: bytes
+) -> None:
+    # Given staged output with a JSON or header credential and a matching digest.
+    case = controlled_case()
+    context = context_for(tmp_path, Mode.MOCK)
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    _ = (staging / "output.json").write_bytes(payload)
+    item = artifact(case, context).model_copy(update={"sha256": digest(payload)})
+    # When retaining it.
+    with pytest.raises(InvalidArtifactError, match="sensitive_content") as caught:
+        _ = retain(case, context, (item,), staging)
+    # Then it is rejected, nothing is retained, and the value is not in the diagnostic.
+    assert b"fictional" not in str(caught.value).encode()
+    assert not (context.settings.artifacts / context.run_id / case.id / "output.json").exists()
+
+
+@pytest.mark.parametrize("payload", LEAKY_JSON)
+def test_archive_copy_rejects_quoted_or_bearer_credentials_without_echo(
+    tmp_path: Path, payload: bytes
+) -> None:
+    # Given archived output with a credential and a matching digest.
+    case = controlled_case()
+    context = context_for(tmp_path, Mode.MOCK)
+    source = tmp_path / "source"
+    source.mkdir()
+    _ = (source / "output.json").write_bytes(payload)
+    item = artifact(case, context).model_copy(update={"sha256": digest(payload)})
+    run = Run.model_construct(evidence=(item,))
+    destination = tmp_path / "archive"
+    destination.mkdir()
+    # When copying it into a public archive.
+    with pytest.raises(InvalidArtifactError, match="sensitive_content") as caught:
+        copy_artifacts(run, source, destination)
+    # Then no bytes are published and the diagnostic omits the value.
+    assert b"fictional" not in str(caught.value).encode()
+    assert not (destination / "output.json").exists()

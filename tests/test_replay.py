@@ -101,3 +101,46 @@ def test_rerun_links_when_frozen_inputs_match() -> None:
     assert linked.selected_case_ids == prior.selected_case_ids
     with pytest.raises(InvalidArtifactError, match="rerun_identity_cycle"):
         _ = link_rerun(prior, prior, suite, "diagnostic reproduction")
+
+
+def _prior_with_failure(case_id: str, outcome: Outcome = Outcome.FAILED):  # noqa: ANN202
+    suite = load_record(REPOSITORY / "scenarios/suite.json", Suite)
+    catalog = load_record(REPOSITORY / "fixtures/catalog.json", Catalog)
+    prior = execute(suite, catalog, Settings(REPOSITORY, REPOSITORY.parent, None))
+    prior = prior.model_copy(
+        update={
+            "results": tuple(
+                result.model_copy(update={"outcome": outcome})
+                if result.case_id == case_id
+                else result
+                for result in prior.results
+            )
+        }
+    )
+    return suite, prior
+
+
+@pytest.mark.parametrize("outcome", [Outcome.FAILED, Outcome.ERROR])
+@pytest.mark.parametrize(
+    "case_id", ["supplier-ambiguity", "restart-after-external-success", "authorization-mutation"]
+)
+def test_rerun_rejects_semantically_unsafe_cases_despite_unflagged_safety(
+    case_id: str, outcome: Outcome
+) -> None:
+    # Given a failed case whose frozen safety flag is false but whose retry is unsafe.
+    suite, prior = _prior_with_failure(case_id, outcome)
+    assert not next(case for case in suite.cases if case.id == case_id).safety
+    assert len(suite.cases) == 42
+    # When requesting a diagnostic rerun.
+    with pytest.raises(InvalidArtifactError, match="safety_or_ambiguity_rerun_forbidden"):
+        authorize_rerun(prior, suite, "try again")
+    # Then the original failing history is preserved without automatic retry.
+
+
+def test_rerun_authorizes_ordinary_failed_case() -> None:
+    # Given an ordinary non-safety failure.
+    suite, prior = _prior_with_failure("happy-path")
+    # When requesting a bounded diagnostic rerun.
+    authorize_rerun(prior, suite, "diagnostic reproduction")
+    # Then it is allowed and the failed status is untouched.
+    assert any(r.case_id == "happy-path" and r.outcome is Outcome.FAILED for r in prior.results)
