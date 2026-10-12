@@ -46,7 +46,7 @@ test('foundation suites name nonempty real evidence and integration/release fail
   assert.deepEqual(integration.requiredDomainSuites, requiredDomainSuites);
   assert.deepEqual(integration.deferredDomainSuites, deferredDomainSuites);
   assert.deepEqual(integration.deferredDomainSuites, [{ suite: 'budgets', selector: 'nested-scopes', issue: 17, priority: 'P1', status: 'assigned_not_v1' }]);
-  assert.ok(integration.missingFiles.some(file => file.startsWith('tests/accounting/')));
+  assert.ok(integration.missingFiles.some(file => file.startsWith('tests/metering/')));
   assert.ok(release.missingFiles.some(file => file.startsWith('tests/recovery/')));
   assert.equal(suitePlan('release', new Set()).selectedFiles.length, 0);
   assert.ok(suitePlan('release', new Set()).missingFiles.length > 0);

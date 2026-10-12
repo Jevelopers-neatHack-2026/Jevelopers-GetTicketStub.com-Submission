@@ -34,6 +34,10 @@
       "types": "./dist/ledger/index.d.ts",
       "import": "./dist/ledger/index.js"
     },
+    "./accounting": {
+      "types": "./dist/accounting/index.d.ts",
+      "import": "./dist/accounting/index.js"
+    },
     "./integrations": {
       "types": "./dist/integrations/index.d.ts",
       "import": "./dist/integrations/index.js"
