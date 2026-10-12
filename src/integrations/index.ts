@@ -1,8 +1,9 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { errorEnvelope, failure, TrustedScopeSchema, validateRequest, blockedBoundary, type ApiResult, type RuntimePorts, type Validation } from '../shared/contracts.js';
+import { TrustedScopeSchema, validateRequest, type ApiResult, type Validation } from '../shared/contracts.js';
 import { validateFinancialSummaryPageBoundary, FinancialSummaryPageSchema, type FinancialSummaryPage } from '../reporting/index.js';
 import type { SharedFinancialSummary } from '../shared/canonical.js';
 import { encodeTextCell } from './csv.js';
+import { prepareExport, type ExportRuntimePorts } from './runtime.js';
 
 export const ExportRequestSchema = Type.Object({
   schemaVersion: Type.Literal('1.0.0'), requestId: Type.String({ minLength: 1 }), idempotencyKey: Type.String({ minLength: 1 }),
@@ -103,19 +104,11 @@ export function serializeSafeFinancialSummaryCsv(summary: SharedFinancialSummary
   return [headers, ...rows].map(row => row.map(safeCsvCell).join(',')).join('\r\n') + '\r\n';
 }
 
-export async function exportSummary(request: ExportRequest, ports: RuntimePorts): Promise<ApiResult<ExportManifest>> {
-  const validation = validateExportRequestBoundary(request);
-  if (!validation.ok) return failure(validation.error);
-  const parsed = validation.value as ExportRequest;
-  const snapshot = parsed.summarySnapshot;
-  const summary = snapshot.summary as SharedFinancialSummary;
-  if (snapshot.summaryContentHash !== parsed.summaryContentHash
-      || summary.tenant_id !== parsed.scope.tenantId || summary.project_id !== parsed.scope.projectId
-      || summary.included_environments.length !== 1 || summary.included_environments[0] !== parsed.scope.environment
-      || summary.included_billing_modes.length !== 1 || summary.included_billing_modes[0] !== parsed.scope.billingMode
-      || snapshot.filters.environments.length !== 1 || snapshot.filters.environments[0] !== parsed.scope.environment
-      || snapshot.filters.billingModes.length !== 1 || snapshot.filters.billingModes[0] !== parsed.scope.billingMode) {
-    return failure(errorEnvelope('integrations', 'exportSummary', 'FORBIDDEN_SCOPE', parsed.requestId, 'The summary does not match the authenticated export scope.'));
-  }
-  return blockedBoundary<ExportRequest, ExportManifest>({ module: 'integrations', operation: 'exportSummary', authorityOperation: 'integrations.exportSummary', schema: ExportRequestSchema, request: parsed, ports, unavailableCode: 'SOURCE_UNAVAILABLE', safeMessage: 'Export preparation is unavailable until a reviewed summary and export adapter are delivered.', retryable: true });
+export async function exportSummary(request: ExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<ExportManifest>> {
+  const prepared = await prepareExport(request, ports, true);
+  return prepared.ok ? { ok: true, value: prepared.value.manifest } : prepared;
 }
+
+export { exportSummaryV2, getPreparedExportArtifacts, hashExportCanonical, ExportArtifactManifestV2Schema } from './runtime.js';
+export type { ExportRuntimePorts, ExportSnapshotReaderPort, ExportArtifactStorePort, ExportArtifact, ExportArtifactManifestV2, PreparedExportArtifacts, StoredExportArtifacts } from './runtime.js';
+export { createFileExportArtifactStore } from './artifact-store.js';
