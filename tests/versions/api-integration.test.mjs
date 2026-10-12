@@ -4589,8 +4589,53 @@ process.stdout.write(JSON.stringify({ pid: process.pid, database_path: databaseP
       transaction_still_open: borrowedTransactionOpen, sentinel_rows: borrowedSentinel, after_rollback: borrowerAfter },
     closed_store_error: closedStoreError ?? null,
   };
-  if (evidenceRoot) await writeFile(join(root, "attempt-evidence.json"), `${JSON.stringify(evidence, null, 2)}\n`);
-  t.diagnostic(JSON.stringify(evidence));
+  const evidenceBytes = Buffer.from(`${JSON.stringify(evidence, null, 2)}\n`);
+  const evidencePath = evidenceRoot ? join(root, "attempt-evidence.json") : null;
+  // Keep TAP output below the inspection runner's default spawnSync buffer;
+  // the complete nested database evidence remains in the referenced file.
+  if (evidencePath) await writeFile(evidencePath, evidenceBytes);
+  const summarizeResponse = (response) => response ? {
+    ok: response.ok,
+    operation_id: response.operation_id,
+    replayed: response.replayed,
+    error: response.error ? { code: response.error.code, field: response.error.field,
+      retryable: response.error.retryable } : null,
+  } : null;
+  const summarizeSnapshot = (snapshot) => ({
+    table_count: snapshot.schema_and_rows.tables.length,
+    key_table_rows: Object.fromEntries(snapshot.schema_and_rows.tables
+      .filter((table) => ["creative_jobs", "design_versions", "creation_actions"].includes(table.name))
+      .map((table) => [table.name, table.rows.length])),
+    object_count: snapshot.objects.length,
+    is_transaction: snapshot.is_transaction,
+  });
+  const diagnostic = {
+    schema: "sqlite-busy-public-retry-diagnostic/1",
+    runtime: evidence.runtime,
+    pid: evidence.pid,
+    native_begin_errors: nativeBeginErrors,
+    lock_child: { pid: child.pid, exit: childExit },
+    blocked: { thrown: blockedThrow ?? null, response: summarizeResponse(blockedResponse), counters: blockedCounters },
+    retry: { response: summarizeResponse(retriedResponse), snapshot: summarizeSnapshot(afterRetry),
+      live_reader: { pid: retryLiveObservation.pid, table_count: retryLiveObservation.table_count },
+      reconstructed: { table_count: retryReconstruction.table_count, copied_files: retryReconstruction.copied_files.length },
+      effects: effectsAfterRetry },
+    replay: { response: summarizeResponse(duplicateResponse), snapshot: summarizeSnapshot(afterDuplicate),
+      live_reader: { pid: duplicateLiveObservation.pid, table_count: duplicateLiveObservation.table_count },
+      reconstructed: { table_count: duplicateReconstruction.table_count, copied_files: duplicateReconstruction.copied_files.length },
+      effects: effectsAfterDuplicate },
+    helper_processes: { count: helperProcesses.length, pids: helperProcesses.map((process) => process.pid),
+      all_exited: helperProcesses.every((process) => process.exit.code === 0 && process.exit.signal === null),
+      all_streams_reached_eof: helperProcesses.every((process) => process.stdout_eof && process.stderr_eof) },
+    extended_locked_error: lockedClassificationError ?? null,
+    unrelated_sqlite_error: evidence.unrelated_sqlite_error,
+    borrower: { error: borrowedError ?? null, transaction_still_open: borrowedTransactionOpen,
+      sentinel_rows: borrowedSentinel },
+    closed_store_error: closedStoreError ?? null,
+    evidence_reference: evidencePath ? { path: evidencePath, bytes: evidenceBytes.length,
+      sha256: createHash("sha256").update(evidenceBytes).digest("hex") } : null,
+  };
+  t.diagnostic(JSON.stringify(diagnostic));
 
   assert.equal(nativeBeginErrors.length, 1, "the public request reaches a real SQLite BEGIN IMMEDIATE failure");
   assert.ok([5, 6].includes(nativeBeginErrors[0].errcode & 0xff), JSON.stringify(nativeBeginErrors[0]));
