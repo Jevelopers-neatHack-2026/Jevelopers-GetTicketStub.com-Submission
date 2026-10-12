@@ -51,14 +51,14 @@ def test_canonical_cli_passes_when_catalog_is_complete(
     assert receipt.candidate_scope == candidate_scope
     assert receipt.missing_contracts == ()
     assert receipt.observation is not None
-    assert len(expected) == 45
+    assert len(expected) == 76
     assert receipt.observation.required_contracts == expected
     assert {row.contract for row in receipt.observation.results} == set(expected)
     assert receipt.observation.required_versions is not None
     assert tuple(item.key for item in receipt.observation.required_versions) == tuple(
         item.key for item in required_exports(producer)
     )
-    assert len(receipt.observation.results) == 54
+    assert len(receipt.observation.results) == 86
     historical = [row for row in receipt.observation.results if row.semantic_records]
     assert len(historical) == 9
     for row in historical:
@@ -129,7 +129,7 @@ def test_canonical_cli_blocks_when_one_catalog_export_is_missing(tmp_path: Path)
     assert receipt.execution == "passed", receipt.reason
     assert receipt.missing_contracts == ("ApprovalReceipt",)
     assert receipt.observation is not None
-    assert len(receipt.observation.results) == 53
+    assert len(receipt.observation.results) == 85
     assert all(row.failures == () for row in receipt.observation.results)
     assert (receipt.mode, receipt.origin) == ("mock-only", "synthetic")
     assert receipt.product_acceptance == "blocked"

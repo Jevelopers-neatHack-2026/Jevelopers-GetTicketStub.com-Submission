@@ -37,6 +37,10 @@ and policy, and authorized real evidence satisfy the required boundaries.
   entire.io mirror or Codex checkpoint is recorded, and the graph plugin version is unpinned.
 - CFO.ai revision 2 is accepted with hypothetical forecasts; the authoritative Finance
   summary export, actual cash, demo coverage and submission remain open.
+- The controlled private shared-contracts 0.9.7 consumer checks 86 versions across 76 names
+  and 1,641 frozen fixture cases, with separate source and installed SDK receipts.
+  [Private consumption instructions](docs/execution-protocol.md#canonical-candidate-conformance)
+  describe exact package pins, readonly callers and the remaining owner boundaries.
 - Local tooling and canonical contract checks do not establish complete integrated
   product acceptance. Missing assembly is reported as blocked.
 - The broader [draft PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23)

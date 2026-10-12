@@ -8,9 +8,20 @@ from pydantic import Field
 from integration_evals.models import Digest, Identifier, Record, Revision
 
 
+class PackagePin(Record):
+    """Exact privately authorized archive, independent of source conformance."""
+
+    version: str
+    archive_sha256: Digest
+    archive_sri: str = Field(pattern=r"^sha512-[A-Za-z0-9+/=]+$")
+    content_digest: Digest
+    npm_version: str
+
+
 class ContractPin(Record):
     """Reviewed source and manifest bytes required before loading producer code."""
 
+    package: PackagePin | None = None
     revision: Revision
     tree: Revision
     lockfile_digest: Digest
@@ -51,9 +62,17 @@ class ContractSlice(ContractIdentity):
     semantic_records: tuple[FixtureSemantics, ...] = ()
 
 
+class ContractInstallation(Record):
+    """Local private package paths, carried only in the runtime input."""
+
+    root: str = Field(min_length=1)
+    archive: str = Field(min_length=1)
+
+
 class ContractRuntime(Record):
     """Platform-specific reviewed executable path and exact binary bytes."""
 
+    installation: ContractInstallation | None = None
     path: str = Field(min_length=1)
     sha256: Digest
 
@@ -82,6 +101,7 @@ class ContractReceipt(Record):
     driver_digest: Digest
     mode: Literal["mock-only"] = "mock-only"
     origin: Literal["synthetic"] = "synthetic"
+    execution_surface: Literal["source", "installed-package"] = "source"
     candidate_scope: bool
     execution: Literal["passed", "failed", "error"]
     reason: str | None

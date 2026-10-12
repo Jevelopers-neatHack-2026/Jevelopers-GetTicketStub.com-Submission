@@ -20,6 +20,7 @@ from integration_evals.benchmarks import (
     summarize,
     validate_corpus,
 )
+from integration_evals.contract_package import InstalledPackage
 from integration_evals.contract_records import ContractPin, ContractReceipt, ContractRuntime
 from integration_evals.contracts import (
     ContractSettings,
@@ -210,6 +211,11 @@ def contracts(
 ) -> None:
     """Execute pinned canonical SDK fixtures; full missing scope exits blocked."""
     node = load_record(runtime, ContractRuntime)
+    installed = (
+        InstalledPackage(Path(node.installation.root), Path(node.installation.archive))
+        if node.installation is not None
+        else None
+    )
     receipt = execute_contracts(
         ContractSettings(
             repository=Path.cwd(),
@@ -218,6 +224,7 @@ def contracts(
             node_digest=node.sha256,
             pin=load_record(pin, ContractPin),
             candidate_scope=candidate_scope,
+            installed=installed,
         )
     )
     directory = save_contract_receipt(receipt, output)

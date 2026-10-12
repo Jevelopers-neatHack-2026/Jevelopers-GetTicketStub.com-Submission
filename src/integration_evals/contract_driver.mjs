@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 const request = JSON.parse(readFileSync(0, 'utf8'));
 if (process.versions.node !== request.node_version) throw new Error('Runtime version mismatch');
-const root = await realpath(resolve(request.producer));
+const root = await realpath(resolve(request.package_root ?? request.producer));
 const path = async name => {
   const target = await realpath(resolve(root, name));
   const displacement = relative(root, target);
@@ -13,8 +13,9 @@ const path = async name => {
   return target;
 };
 const read = async name => readFile(await path(name));
-const sdk = await import(pathToFileURL(await path('generated/index.mjs')).href);
-const { runCanonicalFixtures } = await import(pathToFileURL(await path('tooling/fixture-harness.mjs')).href);
+const installed = request.package_root && pathToFileURL(resolve(request.package_root, 'package.json')).href;
+const sdk = await import(installed ? import.meta.resolve('@jevelopers/shared-contracts', installed) : pathToFileURL(await path('generated/index.mjs')).href);
+const { runCanonicalFixtures } = await import(installed ? import.meta.resolve('@jevelopers/shared-contracts/fixture-harness', installed) : pathToFileURL(await path('tooling/fixture-harness.mjs')).href);
 const json = async path => JSON.parse(await read(path));
 const schemas = await json('generated/schema-manifest.json');
 const fixtures = await json('generated/fixture-manifest.json');

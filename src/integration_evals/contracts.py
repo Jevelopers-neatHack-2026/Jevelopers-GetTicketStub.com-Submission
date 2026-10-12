@@ -14,6 +14,7 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from integration_evals.artifacts import confined_path, digest, read_bytes, reject_leaks
+from integration_evals.contract_package import InstalledPackage, verify_installed_package
 from integration_evals.contract_records import ContractObservation, ContractPin, ContractReceipt
 from integration_evals.contract_sources import (
     bind_contract_observation,
@@ -49,6 +50,7 @@ class ContractSettings:
     node_digest: str
     pin: ContractPin
     candidate_scope: bool = False
+    installed: InstalledPackage | None = None
 
 
 def runtime_digest(path: Path) -> str:
@@ -62,6 +64,10 @@ def runtime_digest(path: Path) -> str:
 def validate_contract_pin(settings: ContractSettings) -> None:
     """Reject source, configuration or binary drift before executing any producer code."""
     pin, producer = settings.pin, settings.producer
+    if settings.installed is not None:
+        if pin.package is None:
+            fail("contract_package_pin_missing", "shared-contracts")
+        verify_installed_package(settings.installed, pin.package)
     if git_value(producer, "rev-parse", "HEAD") != pin.revision:
         fail("contract_revision_mismatch", "shared-contracts")
     if git_value(producer, "rev-parse", "HEAD^{tree}") != pin.tree:
@@ -125,7 +131,11 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
         try:
             with (staging / "stdout").open("w+b") as stdout:
                 exit_code = invoke(
-                    (str(settings.node.resolve()), str(driver.resolve())),
+                    (
+                        str(settings.node.resolve()),
+                        "--experimental-import-meta-resolve",
+                        str(driver.resolve()),
+                    ),
                     ProcessSettings(
                         checkout=settings.producer,
                         environment=environment,
@@ -133,6 +143,11 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
                             {
                                 "producer": str(settings.producer.resolve()),
                                 "node_version": settings.pin.node_version,
+                                "package_root": (
+                                    str(settings.installed.root.resolve())
+                                    if settings.installed is not None
+                                    else None
+                                ),
                             }
                         ).encode(),
                         stdout=stdout,
@@ -169,6 +184,7 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
         pin_digest=digest(settings.pin.model_dump_json().encode()),
         node_digest=settings.node_digest,
         driver_digest=driver_digest,
+        execution_surface="installed-package" if settings.installed else "source",
         candidate_scope=settings.candidate_scope,
         execution="error" if observation is None else ("failed" if failed else "passed"),
         reason=reason,
@@ -177,7 +193,11 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
         observation=observation,
         missing_contracts=missing_exports(required_exports(settings.producer), available),
         limitations=(
-            "Source SDK fixture execution; installed-package adoption remains unverified.",
+            (
+                "Installed public SDK fixtures; owner-boundary adoption remains unverified."
+                if settings.installed
+                else "Source SDK fixture execution; installed-package adoption remains unverified."
+            ),
             "Synthetic contexts and offline mode do not authenticate product or finance authority.",
             "Published contracts, owner acknowledgement and composed release remain required.",
         ),

@@ -115,7 +115,7 @@ def test_exact_version_fault_cannot_be_hidden_by_retained_v1(
             assert receipt.execution == "passed", receipt.reason
             assert receipt.missing_contracts == ("BudgetReservation@2.0.0",)
             assert receipt.observation is not None
-            assert len(receipt.observation.results) == 53
+            assert len(receipt.observation.results) == 85
             assert any(
                 row.key == ("BudgetReservation", "1.0.0") for row in receipt.observation.results
             )
@@ -133,7 +133,7 @@ def test_exact_version_fault_cannot_be_hidden_by_retained_v1(
 def test_historical_semantics_are_bound_to_the_owner_fixture(
     tmp_path: Path, mutation: Literal["omit", "forge"]
 ) -> None:
-    # Given a valid receipt from the actual 0.6 SDK, including its historical v1 labels.
+    # Given a valid receipt from the actual 0.9.7 SDK, including its historical v1 labels.
     producer = Path(os.environ["IE_CONTRACT_SOURCE"])
     output = tmp_path / "receipts"
     result = CliRunner().invoke(

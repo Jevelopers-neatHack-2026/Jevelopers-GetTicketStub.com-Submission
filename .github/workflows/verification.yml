@@ -24,12 +24,23 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/shared-contracts
-          ref: d969f68a13fc4c3e71d59b635ffd29b65d3205d5
+          ref: d432ad5c895a67155affeaa05cd8423c758d95c3
           path: .contract-producer
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.23.3'
+      - name: Reproduce and privately install the reviewed package
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/contract-packager" --ignore-scripts --no-audit --no-fund npm@10.9.8
+          export PATH="$RUNNER_TEMP/contract-packager/node_modules/.bin:$PATH"
+          mkdir -p reports
+          node integration_tests/prepare-package.mjs .contract-producer "$RUNNER_TEMP/contract-runtime" > reports/private-install.json
+          npm install --prefix "$RUNNER_TEMP/contract-types" --ignore-scripts --no-audit --no-fund typescript@5.9.3
+          cp integration_tests/installed-caller.mts integration_tests/installed-scenarios.mjs "$RUNNER_TEMP/contract-runtime/"
+          node "$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc" --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --verbatimModuleSyntax --noFallthroughCasesInSwitch --noPropertyAccessFromIndexSignature --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 "$RUNNER_TEMP/contract-runtime/installed-caller.mts"
+          node "$RUNNER_TEMP/contract-runtime/installed-scenarios.mjs" > reports/installed-caller.json
       - name: Install platform isolation tooling
         run: sudo apt-get update && sudo apt-get install --yes bubblewrap
       - name: Verify real Linux isolation and retained owner output
@@ -42,9 +53,11 @@ jobs:
         run: |
           uv run integration-evals contract-runtime --node "$(command -v node)" --output reports/node-runtime.json
           mkdir -p reports/runs/contracts
-          sudo -n env IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/node-runtime.json" .venv/bin/python -m pytest integration_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-canonical-cache" --junitxml=reports/canonical-junit.xml
+          sudo -n env IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/node-runtime.json" IE_CONTRACT_INSTALLED_RUNTIME="$RUNNER_TEMP/contract-runtime/installed-runtime.json" IE_CONTRACT_CALLER_ROOT="$RUNNER_TEMP/contract-runtime" IE_CONTRACT_TYPESCRIPT="$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc" IE_CONTRACT_EVIDENCE="$PWD/reports/installed-negatives" .venv/bin/python -m pytest integration_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-canonical-cache" --junitxml=reports/canonical-junit.xml
           sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/node-runtime.json --output reports/runs/contracts --candidate-scope
           sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/node-runtime.json --output reports/runs/contracts
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime "$RUNNER_TEMP/contract-runtime/installed-runtime.json" --output reports/runs/contracts --candidate-scope
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime "$RUNNER_TEMP/contract-runtime/installed-runtime.json" --output reports/runs/contracts
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/event-intelligence

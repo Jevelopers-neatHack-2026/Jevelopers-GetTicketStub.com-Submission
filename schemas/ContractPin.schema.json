@@ -1,7 +1,58 @@
 {
+  "$defs": {
+    "PackagePin": {
+      "additionalProperties": false,
+      "description": "Exact privately authorized archive, independent of source conformance.",
+      "properties": {
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "archive_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Archive Sha256",
+          "type": "string"
+        },
+        "archive_sri": {
+          "pattern": "^sha512-[A-Za-z0-9+/=]+$",
+          "title": "Archive Sri",
+          "type": "string"
+        },
+        "content_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Digest",
+          "type": "string"
+        },
+        "npm_version": {
+          "title": "Npm Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "archive_sha256",
+        "archive_sri",
+        "content_digest",
+        "npm_version"
+      ],
+      "title": "PackagePin",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "description": "Reviewed source and manifest bytes required before loading producer code.",
   "properties": {
+    "package": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PackagePin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "revision": {
       "pattern": "^[a-f0-9]{40}$",
       "title": "Revision",

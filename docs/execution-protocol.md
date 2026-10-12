@@ -202,7 +202,8 @@ in both JSON and Markdown. Neither issue closure nor model review updates accept
 The contracts command consumes the actual pinned shared-contracts ESM SDK and its
 golden fixtures. contracts/producer-pin.json fixes the reviewed producer commit/tree,
 lockfile, schema/fixture manifest and machine-catalog bytes. It currently selects the
-unreleased 0.6.0 candidate with 54 contract/version exports across 45 names. No copied
+privately authorized 0.9.7 candidate with 86 immutable contract versions across 76 distinct names
+and 1,641 declared fixture cases. No copied
 product validator or provider adapter is introduced.
 
 Stage a platform-specific executable identity with:
@@ -243,14 +244,14 @@ fields remain readable and bind against their own single-version source checkpoi
 They cannot serve as unversioned coverage claims against a multi-version producer,
 and their historical bytes are never rewritten or assigned new semantic labels.
 
-The actual 0.6 harness's v1 finance semantic records retain
+The 0.9.7 harness preserves the v1 finance semantic records introduced in 0.6:
 `historical_finance_characterization` and `operational_authority=false`. These labels
 must exactly match the owner-declared legacy profile and executed semantic cases;
 omission or invented current authority is rejected. Current operational helpers
-reject that retired v1 semantic profile. V2 remains unaccepted source-only
+reject that retired v1 semantic profile. V2 remains unaccepted
 representation checking, not permission, reservation, dispatch or ledger execution.
-Package installation, owner agreement, real consumer domain handoffs and composed
-release verification remain separate requirements. CI runs both scopes against exact
+Installed-package compatibility, owner agreement, real consumer domain handoffs and
+composed release verification remain separate requirements. CI runs both scopes against exact
 producer and Node pins; no provider credential or API budget is used.
 
 The separate integration_tests scenarios require
@@ -265,6 +266,47 @@ exits 1 and 2 respectively; invalid category coverage produces an error receipt.
 They change no producer-owned source.
 CI runs these tests under Linux isolation in addition to the default dependency-free
 tooling suite.
+
+The private package lane is authorized by the producer's
+[0.9.7 review receipt](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31#issuecomment-6115337714)
+and [development permission](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/30#issuecomment-6115346934).
+Source PR #31 remains draft/unmerged; this permission does not waive draft PR #23's
+maintainer hold, release requirements or external authority.
+
+With Node 22.23.3 and npm 10.9.8 on PATH, reproduce the package from the exact clean
+source revision and install it privately with lifecycle scripts disabled:
+
+```sh
+node integration_tests/prepare-package.mjs /pinned/shared-contracts /private/runtime /private/authorized.tgz
+integration-evals contracts --pin contracts/producer-pin.json --producer /pinned/shared-contracts \
+  --runtime /private/runtime/installed-runtime.json --output reports/runs/contracts
+```
+
+The archive argument is optional: CI packs the exact source with the pinned npm
+version, checks the authorized SHA256 and SHA512 SRI, then installs that archive.
+The private archive and installed package must never be committed or uploaded as
+public evidence. The generated local runtime input adds `installation.root` and
+`installation.archive`; paths remain out of output receipts. Source-only runtime
+inputs remain supported, including historical 0.5 receipts.
+
+Before and after installed execution, the evaluator checks the exact archive and
+all installed file bytes, rejects symlinks and extra files, then loads public package
+exports and installed fixtures. `execution_surface` distinguishes `source` from
+`installed-package`. Every output keeps `product_acceptance=blocked` and owner
+acknowledgement null. `installed-caller.mts` supplies consumer-authored strict readonly
+bindings; `installed-scenarios.mjs` exercises public scope, reference, value, facts,
+design, composition, row, preflight and finite byte/ZIP checks, with controlled
+negatives. These synthetic observations establish caller compatibility, not genuine
+owner-domain handoffs. Issuer, registry, Finance and provider authority remain external.
+Preview1/ArtifactFile2 eligibility remains `LEGACY_UNREPRESENTABLE`; CSV activation,
+public draft-row visibility and actual repair/derived-approval mappings remain unsupported.
+
+Installed integration scenarios additionally require `IE_CONTRACT_INSTALLED_RUNTIME`,
+`IE_CONTRACT_CALLER_ROOT` (the compiled consumer directory) and `IE_CONTRACT_TYPESCRIPT`
+(the TypeScript 5.9.3 compiler). CI compiles with strict options, runs both source and
+installed scopes, rejects archive/installed-byte substitution, and proves that a
+controlled public-validator corruption and an unsuppressed readonly mutation fail.
+The package lane does not alter source-retrieval probes or provider policy.
 
 ## Current unresolved obligations
 
