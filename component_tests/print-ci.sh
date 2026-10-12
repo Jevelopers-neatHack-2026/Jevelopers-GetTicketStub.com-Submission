@@ -20,7 +20,21 @@ stage=build
 PATH="$(dirname "$node"):$PATH" TZ=UTC LANG=C.UTF-8 LC_ALL=C.UTF-8 npm --prefix "$producer" run build
 stage=isolation-tool-install
 # Extract the Noble bwrap executable; do not install a privileged helper or alter host policy.
-docker run --rm --platform linux/amd64 --cap-drop ALL --security-opt no-new-privileges --security-opt apparmor=docker-default -v "$RUNNER_TEMP/print-tools:/tools" "$image" bash -c 'apt-get -o APT::Sandbox::User=root update >/dev/null && cd /tools && apt-get -o APT::Sandbox::User=root download bubblewrap && dpkg-deb -x ./*.deb extracted'
+mkdir -p "$RUNNER_TEMP/print-tools/extracted/usr/bin"
+docker run --rm --platform linux/amd64 --cap-drop ALL \
+  --security-opt no-new-privileges --security-opt apparmor=docker-default \
+  "$image" bash -euo pipefail -c '
+    apt-get -o APT::Sandbox::User=root update >&2
+    package_directory="$(mktemp -d)"
+    cd "$package_directory"
+    apt-get -o APT::Sandbox::User=root download bubblewrap >&2
+    dpkg-deb -x ./*.deb extracted >&2
+    cat extracted/usr/bin/bwrap
+  ' > "$RUNNER_TEMP/print-tools/extracted/usr/bin/bwrap"
+chmod 0755 "$RUNNER_TEMP/print-tools/extracted/usr/bin/bwrap"
+stat -c 'uid=%u gid=%g mode=%a bytes=%s' \
+  "$RUNNER_TEMP/print-tools/extracted/usr/bin/bwrap" \
+  > "$IE_PRINT_EVIDENCE/bubblewrap-preparation.txt"
 stage=runtime-receipts
 .venv/bin/python -c 'import json,os; from pathlib import Path; p=Path(os.environ["RUNNER_TEMP"])/"print-security/host-namespaces.json"; p.write_text(json.dumps({k:os.readlink("/proc/self/ns/"+k) for k in ("ipc","net")}))'
 .venv/bin/python -c 'import os; from pathlib import Path; from integration_evals.contract_records import ContractRuntime; from integration_evals.contracts import runtime_digest; p=Path(os.environ["IE_PRINT_SOURCE"])/"out/toolchain/node-v24.21.0-linux-x64/bin/node"; print(ContractRuntime(path=str(p),sha256=runtime_digest(p)).model_dump_json())' > "$IE_PRINT_EVIDENCE/node-runtime.json"
