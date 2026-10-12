@@ -88,12 +88,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/print-python
       UV_PYTHON_PREFERENCE: only-managed
-      IE_PRINT_SOURCE: ${{ runner.temp }}/print-production
-      IE_CONTRACT_SOURCE: ${{ runner.temp }}/print-contracts
-      IE_PRINT_EVIDENCE: ${{ runner.temp }}/print-evidence
     steps:
+      - name: Initialize print paths on the assigned runner
+        run: |
+          {
+            printf 'UV_PYTHON_INSTALL_DIR=%s/print-python\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_SOURCE=%s/print-production\n' "$RUNNER_TEMP"
+            printf 'IE_CONTRACT_SOURCE=%s/print-contracts\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_EVIDENCE=%s/print-evidence\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
