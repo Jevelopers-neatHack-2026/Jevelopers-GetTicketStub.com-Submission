@@ -780,11 +780,15 @@ async function runViewport(vp) {
   /* ================= entry points ================= */
 
   await hard("/");
+  // A hard load may finish before the landing page hydrates and sends its initial view. Establish that
+  // source-page boundary before marking the click, so it cannot be mistaken for the destination view.
+  ev = await waitEvents(0, (e) => named(e, "page_view").some((v) => v.p.route_template === "/"), 4000);
+  check(T("entry: one initial home page_view before the search action"), same(named(ev, "page_view").map((e) => pick(e.p, ["route_template", "page_location"])), [{ route_template: "/", page_location: `${base}/` }]), fmt(ev));
   from = await mark();
   check(T("entry: the landing page's search link"), await clickText("button", "No link? Search for your show"));
   check(T("entry: /search opens"), await at("/search"));
-  ev = await waitEvents(from, (e) => named(e, "page_view").length > 0, 4000);
-  check(T("entry: cta_select(search, home) on / before the /search page_view"), named(ev, "cta_select")[0]?.p.context === "home" && named(ev, "cta_select")[0]?.p.route_template === "/" && ev.findIndex((e) => e.name === "cta_select") < ev.findIndex((e) => e.name === "page_view"), fmt(ev));
+  ev = await waitEvents(from, (e) => named(e, "page_view").some((v) => v.p.route_template === "/search"), 4000);
+  check(T("entry: cta_select(search, home) on / before the /search page_view"), same(named(ev, "cta_select").map((e) => pick(e.p, ["cta", "context", "route_template"])), [{ cta: "search", context: "home", route_template: "/" }]) && same(named(ev, "page_view").map((e) => pick(e.p, ["route_template", "page_location"])), [{ route_template: "/search", page_location: `${base}/search` }]) && ev.findIndex((e) => e.name === "cta_select") < ev.findIndex((e) => e.name === "page_view"), fmt(ev));
   from = await mark();
   // the sidebar's Wall as a visible control: on the phone the menu is opened first; a folded desktop rail is opened too
   const wallRow = 'a[data-row-link][href="/wall"]';
