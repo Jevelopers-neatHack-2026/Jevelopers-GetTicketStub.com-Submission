@@ -6,7 +6,7 @@
   "release_eligible": false,
   "notes": "The base revision is the public pre-integration baseline. Source hashes identify the deliberately reviewed candidate bytes, including pinned build setup and exact product SVG parity wording. These hashes do not grant approval; the PR records the final candidate revision and independent review.",
   "sources": {
-    "README.md": "b949a4fff170d775028d9c5db2cb6ef2e32ce482708e1f7a2d69b021f5ceabeb",
+    "README.md": "d73634363f7d3053b5940aaea13ff08682d57e14c9b0d6f93d312d3cb28366d0",
     "SPEC.md": "0d9de5f012a3f3671a46b66f3d08910e9e61497df89320563c4488a25f189ade",
     "index.html": "ef7e1c8073736a8fdc2a2f3ba1d4e7029f89fe7f24e61a36d990ef463b5c8e77",
     "docs/voice.md": "82ce10f753dfd6f5693c0a70159950e91d0da6ba072b6868704849e58a0a7c9e"
