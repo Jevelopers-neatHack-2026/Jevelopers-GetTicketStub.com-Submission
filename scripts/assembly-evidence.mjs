@@ -122,14 +122,14 @@ function components(root, vendoredModules) {
   const map = JSON.parse(readFileSync(join(root, "integration/repository-map.json"), "utf8"));
   const rootRepo = map.repositories.find((repo) => repo.id === map.integration_root || repo.name === map.integration_root);
   if (!rootRepo) throw new Error("repository map has no integration root");
-  const byName = new Map(vendoredModules.map((module) => [module.name, module]));
+  const byName = new Map(vendoredModules.map((entry) => [entry.name, entry]));
   return {
     plannedInventorySha256: inventoryHash,
     note: "planned_inventory is not a tested dependency pin",
     required: rootRepo.planned_package_dependencies.map((name) => {
-      const module = byName.get(name);
-      return module
-        ? { name, status: "installed-vendored", commit: module.commit, source: `${VENDOR_DIR}/${name}/MANIFEST.json` }
+      const entry = byName.get(name);
+      return entry
+        ? { name, status: "installed-vendored", commit: entry.commit, source: `${VENDOR_DIR}/${name}/MANIFEST.json` }
         : { name, status: "pending", reason: "no installed or vendored revision in this checkout; planned inventory only" };
     }),
   };
@@ -195,7 +195,7 @@ export function verifyManifest(root, manifest, { allowDirty = false } = {}) {
   attempt("vendored", () => {
     const current = vendored(root);
     if (canonical(current) !== canonical(manifest.vendored)) fail("vendored module identities differ from checkout");
-    for (const module of manifest.vendored ?? []) if (module.status !== "installed-vendored") fail(`vendored ${module.name}: bad status ${module.status}`);
+    for (const entry of manifest.vendored ?? []) if (entry.status !== "installed-vendored") fail(`vendored ${entry.name}: bad status ${entry.status}`);
   });
   attempt("fixtures", () => {
     const current = fixtures(root);

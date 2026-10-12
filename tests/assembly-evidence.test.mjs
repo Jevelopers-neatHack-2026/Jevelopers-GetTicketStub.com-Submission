@@ -105,7 +105,8 @@ test("falsely accepted, executed or mislabelled manifests fail even with a recom
 }));
 
 function digestFor(manifest) {
-  const { manifestDigest, ...body } = manifest;
+  const body = { ...manifest };
+  delete body.manifestDigest;
   const canonical = (v) => Array.isArray(v) ? `[${v.map(canonical).join(",")}]`
     : v && typeof v === "object" ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`
     : JSON.stringify(v);
