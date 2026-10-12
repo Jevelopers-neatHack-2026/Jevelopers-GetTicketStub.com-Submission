@@ -3949,6 +3949,200 @@ test('remote cancellation bounds a never-resolving retention callback and ignore
   assert.equal(ingestCalls, 0, 'the late handle is not used to write private evidence after cancellation');
 });
 
+test('external cancellation bounds stalled stop persistence and keeps an admitted lease unknown across restart', { timeout: 8_000 }, async (t) => {
+  let retentionStarted;
+  const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });
+  const pendingRetention = new Promise(() => {});
+  let requestCount = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-external-cancel-stalled-stop';
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    stopRun: async () => new Promise(() => {}),
+  });
+  const cancellation = new AbortController();
+  const running = runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    signal: cancellation.signal,
+    seeds: [{ url: sourceUrl('/external-cancel-stalled-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs: 5_000 },
+    retentionHandleFor() {
+      retentionStarted();
+      return pendingRetention;
+    },
+  }));
+  await retentionCallbackStarted;
+  const cancelledAt = performance.now();
+  cancellation.abort();
+  const result = await running;
+  const cleanupElapsedMs = performance.now() - cancelledAt;
+  t.diagnostic(JSON.stringify({ cleanupElapsedMs, resultStatus: result.status, requestCount, stopPersistence: 'never-settles' }));
+  assert.ok(cleanupElapsedMs <= 850,
+    `external cancellation returns within the 750ms cleanup budget plus 100ms scheduling tolerance (${cleanupElapsedMs.toFixed(1)}ms)`);
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.draft, null);
+  assert.equal(requestCount, 1, 'the initial admitted response was the only HTTP request');
+
+  const interrupted = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(interrupted.candidates[0].state, 'unresolved');
+  assert.equal(interrupted.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(interrupted.candidates[0].admittedAttemptCount, 1);
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transport.reservedBytes, 0, 'the completed body keeps its settled accounting');
+  assert.ok(transport.spentBytes > 0);
+
+  const reopened = h.openFrontier();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+  const restarted = await runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier: reopened,
+    seeds: [{ url: sourceUrl('/external-cancel-stalled-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs: 5_000 },
+  }));
+  assert.equal(restarted.draft, null);
+  assert.equal(requestCount, 1, 'restart cannot redispatch the unresolved admission while stop persistence is stalled');
+  const afterRestart = await reopened.getSnapshot(reopenedScope, runId);
+  assert.equal(afterRestart.candidates[0].state, 'unresolved');
+  assert.equal(afterRestart.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal((await reopened.getTransportProgress(reopenedScope, runId)).spentBytes, transport.spentBytes);
+});
+
+test('external cancellation still resolves an admitted lease when stop persistence rejects', { timeout: 8_000 }, async (t) => {
+  let retentionStarted;
+  const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });
+  const pendingRetention = new Promise(() => {});
+  let requestCount = 0;
+  let stopCalls = 0;
+  let unresolvedCalls = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    stopRun: async () => {
+      stopCalls += 1;
+      throw new Error('simulated stop persistence failure');
+    },
+    markUnresolved: async (...args) => {
+      unresolvedCalls += 1;
+      return h.frontier.markUnresolved(...args);
+    },
+  });
+  const runId = 'private-external-cancel-stop-error';
+  const cancellation = new AbortController();
+  const running = runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    signal: cancellation.signal,
+    seeds: [{ url: sourceUrl('/external-cancel-stop-error') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs: 5_000 },
+    retentionHandleFor() {
+      retentionStarted();
+      return pendingRetention;
+    },
+  }));
+  await retentionCallbackStarted;
+  const cancelledAt = performance.now();
+  cancellation.abort();
+  const result = await running;
+  const cleanupElapsedMs = performance.now() - cancelledAt;
+  t.diagnostic(JSON.stringify({ cleanupElapsedMs, resultStatus: result.status, requestCount, stopCalls, unresolvedCalls }));
+  assert.ok(cleanupElapsedMs <= 850,
+    `a rejected stop write cannot exceed the 750ms cleanup budget plus 100ms scheduling tolerance (${cleanupElapsedMs.toFixed(1)}ms)`);
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.draft, null);
+  assert.equal(requestCount, 1);
+  assert.equal(stopCalls, 1);
+  assert.ok(unresolvedCalls >= 1 && unresolvedCalls <= 2,
+    'the run makes at most one uncertainty retry after its first bounded mark');
+  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshot.candidates[0].state, 'unresolved');
+  assert.equal(snapshot.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(snapshot.candidates[0].admittedAttemptCount, 1);
+});
+
+test('deadline returns with an unresolved admission when stop persistence never settles', { timeout: 8_000 }, async (t) => {
+  let retentionStarted;
+  let runAuthorizedAt;
+  const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });
+  const pendingRetention = new Promise(() => {});
+  let requestCount = 0;
+  let stopCalls = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    stopRun: async () => {
+      stopCalls += 1;
+      return new Promise(() => {});
+    },
+  });
+  const runId = 'private-deadline-never-stop';
+  const durationMs = 1_500;
+  const running = runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    seeds: [{ url: sourceUrl('/deadline-never-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+    authorizeCurrent() {
+      if (runAuthorizedAt === undefined) runAuthorizedAt = performance.now();
+      return true;
+    },
+    retentionHandleFor() {
+      retentionStarted();
+      return pendingRetention;
+    },
+  }));
+  await retentionCallbackStarted;
+  const result = await running;
+  const elapsedMs = performance.now() - runAuthorizedAt;
+  t.diagnostic(JSON.stringify({ elapsedMs, durationMs, resultStatus: result.status, requestCount, stopCalls }));
+  assert.ok(elapsedMs <= durationMs + 850,
+    `deadline cleanup returns within the original duration plus the 750ms budget and 100ms scheduling tolerance (${elapsedMs.toFixed(1)}ms)`);
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('deadline_exceeded'));
+  assert.equal(requestCount, 1);
+  assert.equal(stopCalls, 1);
+  const interrupted = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(interrupted.candidates[0].state, 'unresolved');
+  assert.equal(interrupted.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(interrupted.candidates[0].admittedAttemptCount, 1);
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transport.reservedBytes, 0);
+  assert.ok(transport.spentBytes > 0);
+
+  const reopened = h.openFrontier();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+  const restarted = await runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier: reopened,
+    seeds: [{ url: sourceUrl('/deadline-never-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+  }));
+  assert.equal(restarted.draft, null);
+  assert.equal(requestCount, 1, 'an expired restarted run cannot redispatch its unresolved admission');
+  const afterRestart = await reopened.getSnapshot(reopenedScope, runId);
+  assert.equal(afterRestart.candidates[0].state, 'unresolved');
+  assert.equal(afterRestart.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal((await reopened.getTransportProgress(reopenedScope, runId)).spentBytes, transport.spentBytes);
+});
+
 test('a stop before the first admission keeps the lease cancellation reason', { timeout: 8_000 }, async (t) => {
   let bindingStarted;
   const candidateBindingStarted = new Promise((resolve) => { bindingStarted = resolve; });
@@ -4456,27 +4650,31 @@ test('the whole-run deadline bounds a never-resolving final retention callback u
     },
     markUnresolved: async (...args) => {
       const reason = args[2]?.reason;
-      cleanupTrace.push({ method: 'markUnresolved', phase: 'start', reason, atPerfMs: performance.now() });
+      cleanupTrace.push({ method: 'markUnresolved', phase: 'start', reason,
+        sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
       try {
         const result = await h.frontier.markUnresolved(...args);
-        cleanupTrace.push({ method: 'markUnresolved', phase: 'success', reason, atPerfMs: performance.now() });
+        cleanupTrace.push({ method: 'markUnresolved', phase: 'success', reason,
+          sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
         return result;
       } catch (error) {
         cleanupTrace.push({ method: 'markUnresolved', phase: 'error', reason,
-          code: error?.code ?? null, atPerfMs: performance.now() });
+          code: error?.code ?? null, sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
         throw error;
       }
     },
     stopRun: async (...args) => {
       const reason = args[2];
-      cleanupTrace.push({ method: 'stopRun', phase: 'start', reason, atPerfMs: performance.now() });
+      cleanupTrace.push({ method: 'stopRun', phase: 'start', reason,
+        sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
       try {
         const result = await h.frontier.stopRun(...args);
-        cleanupTrace.push({ method: 'stopRun', phase: 'success', reason, atPerfMs: performance.now() });
+        cleanupTrace.push({ method: 'stopRun', phase: 'success', reason,
+          sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
         return result;
       } catch (error) {
         cleanupTrace.push({ method: 'stopRun', phase: 'error', reason,
-          code: error?.code ?? null, atPerfMs: performance.now() });
+          code: error?.code ?? null, sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
         throw error;
       }
     },
@@ -4618,8 +4816,9 @@ test('the whole-run deadline bounds a never-resolving final retention callback u
     'the whole-run deadline releases the stalled final retention callback promptly');
   assert.ok(runReturnedAtPerfMs >= effectiveDeadlineLowerPerfMs - 100,
     'the admitted run did not return before the conservative absolute deadline bound');
-  assert.ok(runReturnedAtPerfMs <= effectiveDeadlineUpperPerfMs + 2_000,
-    'cleanup returns within a bounded interval after the conservative absolute deadline bound');
+  const cleanupAfterDeadlineMs = runReturnedAtPerfMs - effectiveDeadlineUpperPerfMs;
+  assert.ok(cleanupAfterDeadlineMs <= 850,
+    `cleanup returns within the shared 750ms envelope plus 100ms SQLite/timer tolerance (${cleanupAfterDeadlineMs.toFixed(1)}ms)`);
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('deadline_exceeded'));
@@ -4637,6 +4836,15 @@ test('the whole-run deadline bounds a never-resolving final retention callback u
     'every cleanup attempt preserves the possible admission state');
   assert.ok(unresolvedAttempts.some((entry) => entry.phase === 'success'),
     'the repeated uncertainty resolution succeeds after the writer lock releases');
+  const firstResolutionFailure = cleanupTrace.findIndex((entry) => entry.method === 'markUnresolved'
+    && entry.phase === 'error');
+  const deadlineStopSuccess = cleanupTrace.findIndex((entry) => entry.method === 'stopRun'
+    && entry.phase === 'success');
+  const postStopResolution = cleanupTrace.findIndex((entry, index) => index > firstResolutionFailure
+    && entry.method === 'markUnresolved' && entry.phase === 'success');
+  assert.ok(firstResolutionFailure >= 0 && deadlineStopSuccess > firstResolutionFailure
+    && postStopResolution > deadlineStopSuccess,
+  'the recovery write waits until the bounded deadline stop releases its competing writer transaction');
   const snapshot = await h.frontier.getSnapshot(h.scope, runId);
   assert.equal(snapshot.deadlineAtMs, persistedDeadlineAtMs, 'the persisted absolute deadline remains unchanged');
   assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'attempt_limit'));

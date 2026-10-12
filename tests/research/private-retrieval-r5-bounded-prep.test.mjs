@@ -244,8 +244,22 @@ for (const mode of ['control', 'cancel-success', 'deadline-success', 'cancel-rej
    finalizeControlledAssetRelease:(...args)=>{counts.finalize++;return h.evidenceStore.finalizeControlledAssetRelease(...args);},
   };
   const policy={schemaVersion:1,policyVersion:'ei-private-svg-acquisition/1',policyId:'r4-bounded-final-prep',allowedOrigins:['http://fixture.example.org']};
-  const pending=runPrivateRetrieval(h.makeInput({runId:`r4-bounded-${mode}`,server,store,seeds:[{url:sourceUrl('/event')}],limits:{durationMs:1000},signal:abort.signal,assetAcquisitionPolicyFor:()=>policy}));
-  await enteredPromise;
+  let pending;
+  t.after(async()=>{
+   abort.abort();
+   gateRelease();
+   if(pending)await Promise.race([pending.then(()=>undefined,()=>undefined),new Promise(r=>setTimeout(r,2000))]);
+  });
+  const runStartedAt=performance.now();
+  t.diagnostic(JSON.stringify({stage:'run-start',mode,atPerfMs:runStartedAt}));
+  pending=runPrivateRetrieval(h.makeInput({runId:`r4-bounded-${mode}`,server,store,seeds:[{url:sourceUrl('/event')}],limits:{durationMs:1000},signal:abort.signal,assetAcquisitionPolicyFor:()=>policy}));
+  const entry=await Promise.race([
+   enteredPromise.then(()=>({kind:'entered',atPerfMs:performance.now()})),
+   pending.then(result=>({kind:'resolved-before-entry',status:result.status,atPerfMs:performance.now()}),error=>({kind:'rejected-before-entry',error:String(error),atPerfMs:performance.now()})),
+   new Promise(r=>setTimeout(()=>r({kind:'fixture-watchdog',atPerfMs:performance.now()}),2500)),
+  ]);
+  t.diagnostic(JSON.stringify({stage:'entry-race',mode,entry}));
+  assert.equal(entry.kind,'entered','run must reach the controlled-release preparation callback before its deadline or completion');
   if(mode.startsWith('cancel'))abort.abort();
   const waitMs=mode.startsWith('deadline')?1500:250;
   const measured=await Promise.race([pending.then(result=>({settled:true,result})),new Promise(r=>setTimeout(()=>r({settled:false}),waitMs))]);

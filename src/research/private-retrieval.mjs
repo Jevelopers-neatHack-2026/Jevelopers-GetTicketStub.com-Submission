@@ -24,6 +24,10 @@ import {
 
 const PRIVATE_DRAFT_SCHEMA = 'ei-private-retrieval-draft/v1';
 const MAX_ADMISSIONS = 8;
+const STOP_PERSIST_CLEANUP_MS = 500;
+const PRE_STOP_UNRESOLVED_CLEANUP_MS = 100;
+const ABORTABLE_CLEANUP_MS = 250;
+const STOP_RECOVERY_ENVELOPE_MS = STOP_PERSIST_CLEANUP_MS + ABORTABLE_CLEANUP_MS;
 const ASSET_ACQUISITION_POLICY_VERSION = 'ei-private-svg-acquisition/1';
 const SVG_SOURCE_MAX_BYTES = 128 * 1024;
 const MAX_SELECTED_EVIDENCE = 8;
@@ -462,17 +466,17 @@ async function awaitControlledAssetPreparation(operation, signal, abortError, on
 
 async function awaitBoundedCleanup(operation, timeoutMs = 250) {
   let timer;
-  const pending = Promise.resolve().then(operation).catch(() => {});
-  const timeout = new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs); });
-  try { await Promise.race([pending, timeout]); }
+  const pending = Promise.resolve().then(operation).then(() => true, () => true);
+  const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); });
+  try { return await Promise.race([pending, timeout]); }
   finally { clearTimeout(timer); }
 }
 
-async function awaitAbortableCleanup(operation, timeoutMs = 250) {
+async function awaitAbortableCleanup(operation, timeoutMs = 250, waitMs = timeoutMs + 25) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    await awaitBoundedCleanup(() => operation(controller.signal), timeoutMs + 25);
+    await awaitBoundedCleanup(() => operation(controller.signal), waitMs);
   } finally {
     clearTimeout(timer);
     if (!controller.signal.aborted) controller.abort();
@@ -1049,14 +1053,31 @@ export async function runPrivateRetrieval(value) {
   let externalAbort = false;
   let stopCause = null;
   let deadlineStopStarted = false;
+  let stopPersistenceStarted = false;
+  let cleanupEnvelopeDeadline = Number.NaN;
   let runFailure = null;
   let assetReleaseAuthorityRevoked = false;
   const discardedAssetReleaseChecks = new WeakSet();
   const abortError = () => new RetrievalError(stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : 'CANCELED');
+  const beginCleanupEnvelope = () => {
+    if (!Number.isFinite(cleanupEnvelopeDeadline)) {
+      cleanupEnvelopeDeadline = performance.now() + STOP_RECOVERY_ENVELOPE_MS;
+    }
+  };
+  const remainingCleanupMs = () => Number.isFinite(cleanupEnvelopeDeadline)
+    ? Math.max(0, cleanupEnvelopeDeadline - performance.now()) : 0;
+  const awaitRunCleanup = (operation, maximumWaitMs = ABORTABLE_CLEANUP_MS) => {
+    const remaining = remainingCleanupMs();
+    if (remaining <= 0) return Promise.resolve(false);
+    const timeoutMs = Math.min(maximumWaitMs, remaining);
+    const waitMs = Math.min(timeoutMs + 25, remaining);
+    return awaitAbortableCleanup(operation, timeoutMs, waitMs);
+  };
   const persistStop = (reason) => {
+    stopPersistenceStarted = true;
     if (!runCreated) return;
     const cleanup = new AbortController();
-    const timer = setTimeout(() => cleanup.abort(), 500);
+    const timer = setTimeout(() => cleanup.abort(), STOP_PERSIST_CLEANUP_MS);
     const pending = Promise.resolve().then(() => input.frontier.stopRun(scope, input.runId, reason, cleanup.signal))
       .catch(() => {}).finally(() => {
         clearTimeout(timer);
@@ -1089,11 +1110,13 @@ export async function runPrivateRetrieval(value) {
     discardAssetReleaseCheck(releaseCheckFromPreparation(value));
   const abortForStop = (reason) => {
     if (stopCause === null) stopCause = reason;
+    beginCleanupEnvelope();
     if (!controller.signal.aborted) controller.abort();
     revokeAssetReleaseAuthority(`run_stopped:${reason}`);
   };
   const triggerDeadline = () => {
     if (stopCause === null) stopCause = 'deadline';
+    beginCleanupEnvelope();
     if (!controller.signal.aborted) controller.abort();
     revokeAssetReleaseAuthority('run_deadline');
     if (!deadlineStopStarted) {
@@ -1310,6 +1333,7 @@ export async function runPrivateRetrieval(value) {
   const onExternalAbort = () => {
     externalAbort = true;
     if (stopCause === null) stopCause = 'cancelled';
+    beginCleanupEnvelope();
     if (!controller.signal.aborted) controller.abort();
     revokeAssetReleaseAuthority('run_cancelled');
     persistStop('cancelled');
@@ -1418,6 +1442,7 @@ export async function runPrivateRetrieval(value) {
         } catch {
           if (controller.signal.aborted) break;
           runFailure = 'frontier_unavailable';
+          beginCleanupEnvelope();
           if (!controller.signal.aborted) controller.abort();
           break;
         }
@@ -2320,7 +2345,7 @@ export async function runPrivateRetrieval(value) {
             if (record.state === 'reserved') {
               // The beforeHop hook did not complete, so no DNS/socket/body path began.
               if (controller.signal.aborted) {
-                await awaitAbortableCleanup((signal) => input.frontier.settleTransportHopKnownZero(scope, input.runId, {
+                await awaitRunCleanup((signal) => input.frontier.settleTransportHopKnownZero(scope, input.runId, {
                   leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
                 }, signal));
               } else {
@@ -2330,7 +2355,7 @@ export async function runPrivateRetrieval(value) {
               }
             } else if (record.state === 'dispatch_intent' || record.state === 'response_received') {
               if (controller.signal.aborted) {
-                await awaitAbortableCleanup((signal) => input.frontier.markTransportHopUnknown(scope, input.runId, {
+                await awaitRunCleanup((signal) => input.frontier.markTransportHopUnknown(scope, input.runId, {
                   leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
                 }, signal));
               } else {
@@ -2347,10 +2372,10 @@ export async function runPrivateRetrieval(value) {
       if (controller.signal.aborted) {
         const hasAdmissions = claimProgress.admissionMayHaveBeenPersisted
           || candidate.admittedAttemptCount > 0 || hopRecords.length > 0;
-        await awaitAbortableCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
+        await awaitRunCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
           leaseToken: claim.leaseToken,
           reason: hasAdmissions ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
-        }, signal));
+        }, signal), stopPersistenceStarted ? PRE_STOP_UNRESOLVED_CLEANUP_MS : ABORTABLE_CLEANUP_MS);
         throw abortError();
       }
 
@@ -2487,11 +2512,20 @@ export async function runPrivateRetrieval(value) {
           const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);
           limitations.add(limitationFor(code));
           if (code === 'CANCELED' || code === 'DEADLINE_EXCEEDED' || controller.signal.aborted) {
-            await awaitAbortableCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
-              leaseToken: claim.leaseToken,
-              reason: claimProgress.admissionMayHaveBeenPersisted
-                ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
-            }, signal));
+            // The deadline stop and a second unresolved write can contend for
+            // the same SQLite writer lock. Let the separately bounded stop
+            // attempt finish first, then spend only the remaining shared
+            // cleanup budget on one recovery write.
+            const remaining = remainingCleanupMs();
+            const stopSettled = remaining > 0
+              && await awaitBoundedCleanup(() => localStopPromise, remaining);
+            if (stopSettled) {
+              await awaitRunCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
+                leaseToken: claim.leaseToken,
+                reason: claimProgress.admissionMayHaveBeenPersisted
+                  ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
+              }, signal));
+            }
             break;
           }
           if (code === 'INVALID_INPUT') {
@@ -2747,7 +2781,8 @@ export async function runPrivateRetrieval(value) {
     limitations.add(limitationFor(code));
     if (code === 'DEADLINE_EXCEEDED') {
       triggerDeadline();
-      await awaitBoundedCleanup(() => localStopPromise);
+      const remaining = remainingCleanupMs();
+      if (remaining > 0) await awaitBoundedCleanup(() => localStopPromise, remaining);
       return incompleteResult(input.runId, 'incomplete', [...limitations, 'deadline_exceeded']);
     }
     if (code === 'CANCELED' || externalAbort) return incompleteResult(input.runId, 'cancelled', [...limitations, 'cancelled']);
