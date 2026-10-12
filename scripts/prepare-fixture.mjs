@@ -13,7 +13,7 @@ console.log(`Fixture consumes packed ${pkg.name}@${pkg.version}; ${files.length}
 
 await mkdir(`${destination}/node_modules/@jevelopers`, { recursive: true });
 await symlink(resolve(destination, 'package'), `${destination}/node_modules/@jevelopers/team-dashboard`, 'dir');
-await writeFile(`${destination}/consumer.ts`, `import { Dashboard, AmountText, MetricCard, StateBadge, FilterSelect, Pagination, DataTable, BreakdownChart, Tooltip, ScopeContext, EvidenceLink, ReturnToResults, FinancialSummaryView, refuseUnsupportedPacket, type FinancialSummaryViewProps, type FinancePacketReferences, type ProjectionResult, type SummaryProjection, type AmountDisplay, type EvidencePolicy, type DisplayColumn, type DisplayRow, type ChartItem, type TableSort, type HostAccess, type RouteProvider } from '@jevelopers/team-dashboard';
+await writeFile(`${destination}/consumer.ts`, `import { Dashboard, AmountText, MetricCard, StateBadge, FilterSelect, Pagination, DataTable, BreakdownChart, Tooltip, ScopeContext, EvidenceLink, ReturnToResults, FinancialSummaryView, evaluateFinancePacket, readFinancePage, type FinancialSummaryViewProps, type FinancePacketReferences, type TrustedPacketExpectation, type PacketOutcome, type FinanceWrapperMetadata, type FinancePageRequest, type FinancePageRead, type ProjectionResult, type SummaryProjection, type AmountDisplay, type EvidencePolicy, type DisplayColumn, type DisplayRow, type ChartItem, type TableSort, type HostAccess, type RouteProvider } from '@jevelopers/team-dashboard';
 import { createElement } from 'react';
 import { routeHref } from '@jevelopers/team-dashboard/integration';
 import { createDashboardAuthorizer, createGuardedRouteReader, toHostAccessProjection, type HostSessionVerifier } from '@jevelopers/team-dashboard/server';
@@ -31,8 +31,13 @@ const columns: readonly DisplayColumn[] = [{ key: 'record', label: 'Record', row
 const rows: readonly DisplayRow[] = [{ id: 'synthetic', cells: { record: { kind: 'amount', amount } } }];
 const items: readonly ChartItem[] = [{ status: 'visible', id: 'synthetic', label: 'Synthetic', amount, position: .5, note: 'Synthetic note' }];
 const sort: TableSort = { key: 'record', direction: 'ascending' };
-const refusal: ProjectionResult<SummaryProjection> | undefined = refuseUnsupportedPacket({ canonicalReferences: { packageVersion: '0.3.0' } satisfies FinancePacketReferences });
-const summaryProps: FinancialSummaryViewProps = { result: refusal ?? { status: 'missing', authority: 'read_only_projection' }, projectLabel: 'Synthetic' };
+const trusted: TrustedPacketExpectation = { schemaSha256: '0'.repeat(64), summaryDigest: 'synthetic', references: {} };
+const outcome: PacketOutcome = evaluateFinancePacket({ canonicalReferences: { schemaVersion: '1.0.0' } satisfies FinancePacketReferences }, trusted);
+const wrapper: FinanceWrapperMetadata = { asOf: 'synthetic' };
+const summaryProps: FinancialSummaryViewProps = { result: outcome.outcome === 'refused' ? outcome.result : { status: 'missing', authority: 'read_only_projection' }, projectLabel: 'Synthetic', packet: outcome, wrapper };
+const pageReader: (request: FinancePageRequest) => FinancePageRead = readFinancePage;
+const projected: ProjectionResult<SummaryProjection> = summaryProps.result;
+void pageReader; void projected;
 const elements = [
   createElement(FinancialSummaryView, summaryProps),
   createElement(AmountText, { amount }), createElement(MetricCard, { title: 'Synthetic', amount }),

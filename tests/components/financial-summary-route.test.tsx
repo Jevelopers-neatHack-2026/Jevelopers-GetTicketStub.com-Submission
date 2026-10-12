@@ -1,13 +1,13 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Dashboard } from '../../src';
-import { FinancialSummaryView, refuseUnsupportedPacket } from '../../src/views/financial-summary';
+import { FinancialSummaryView, evaluateFinancePacket } from '../../src/views/financial-summary';
 import { authorizedFixture, fixtureProvider, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type SummaryFixtureName } from '../../integration/fixture-host/host';
 
 /** Real client mount (effects run, provider resolves asynchronously) of the actual `Dashboard`; data is the synthetic fixture host's only. */
 function mount(name: SummaryFixtureName, pathname = '/admin/finance') {
   return render(<Dashboard basePath="/admin/finance" pathname={pathname} navigate={() => undefined} access={authorizedFixture} provider={fixtureProvider('ready')}
-    renderRoute={({ route }) => route.id === 'overview' ? <FinancialSummaryView result={summaryFixture(name, refuseUnsupportedPacket)} projectLabel={syntheticProjectLabel} /> : null} />);
+    renderRoute={({ route }) => route.id === 'overview' ? <FinancialSummaryView {...summaryFixture(name, evaluateFinancePacket)} projectLabel={syntheticProjectLabel} /> : null} />);
 }
 
 describe('FinancialSummaryView through the real Dashboard overview route (synthetic fixture mode)', () => {
@@ -32,7 +32,22 @@ describe('FinancialSummaryView through the real Dashboard overview route (synthe
     mount('unsupported');
     const alert = (await screen.findByText('Unsupported summary contract')).closest('[role="alert"]')!;
     expect(alert).toHaveTextContent('UNSUPPORTED_VERSION');
+    expect(alert).toHaveTextContent('/canonicalReferences/schemaVersion');
     expect(screen.queryByRole('heading', { name: /synthetic\.metric/u })).toBeNull();
+  });
+  it.each([['digest-mismatch', 'DIGEST_MISMATCH'], ['missing-references', 'REFERENCE_MISMATCH']] as const)('refuses the %s packet fixture as %s, not as an unsupported version', async (name, code) => {
+    mount(name);
+    const alert = (await screen.findByText('Summary refused')).closest('[role="alert"]')!;
+    expect(alert).toHaveTextContent(code);
+    expect(screen.queryByRole('heading', { name: /synthetic\.metric/u })).toBeNull();
+  });
+  it('keeps the synthetic Finance response metadata in its own section on the ready fixture only', async () => {
+    const ready = mount('ready');
+    expect(await screen.findByRole('region', { name: 'Finance response metadata' })).toHaveTextContent('synthetic-watermark');
+    ready.unmount();
+    mount('partial');
+    await screen.findByRole('region', { name: 'Financial summary' });
+    expect(screen.queryByRole('region', { name: 'Finance response metadata' })).toBeNull();
   });
   it('covers every fixture name without throwing', async () => {
     for (const name of summaryFixtureNames) {

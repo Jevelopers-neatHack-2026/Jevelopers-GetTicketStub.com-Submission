@@ -78,13 +78,29 @@ test('refused contract result renders an alert with its code and no amounts', as
   await scan(page, 'financial-summary-refused');
 });
 
-test('Finance 0.3.0 proposal packet is refused as unsupported, never relabelled', async ({ page }) => {
+test('a packet with an unsupported wire version is refused as unsupported, never relabelled', async ({ page }) => {
   await open(page, 'unsupported');
   const alert = page.getByRole('alert').filter({ hasText: 'Unsupported summary contract' });
   await expect(alert).toContainText('UNSUPPORTED_VERSION');
-  await expect(alert).toContainText('/canonicalReferences/packageVersion');
+  await expect(alert).toContainText('/canonicalReferences/schemaVersion');
   await expect(page.getByRole('heading', { level: 3, name: /synthetic\.metric/u })).toHaveCount(0);
   await scan(page, 'financial-summary-unsupported');
+});
+
+for (const [name, code, path] of [['digest-mismatch', 'DIGEST_MISMATCH', '/canonicalReferences/schemas/FinancialSummary/sha256'], ['missing-references', 'REFERENCE_MISMATCH', '/trusted/references']] as const) {
+  test(`a compatible-version packet with ${name.replace('-', ' ')} is refused by the gate, not by package version`, async ({ page }) => {
+    await open(page, name);
+    const alert = page.getByRole('alert').filter({ hasText: 'Summary refused' });
+    await expect(alert).toContainText(code);
+    await expect(alert).toContainText(path);
+    await expect(page.getByRole('heading', { level: 3, name: /synthetic\.metric/u })).toHaveCount(0);
+    await scan(page, `financial-summary-${name}`);
+  });
+}
+
+test('the Finance response metadata is shown apart from the summary on the synthetic ready fixture', async ({ page }) => {
+  await open(page, 'ready');
+  await expect(page.getByRole('region', { name: 'Finance response metadata' })).toContainText('synthetic-watermark');
 });
 
 test('without the explicit synthetic parameter the overview renders no summary', async ({ page }) => {

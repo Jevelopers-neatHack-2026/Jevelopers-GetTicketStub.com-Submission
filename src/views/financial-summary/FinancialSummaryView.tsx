@@ -4,13 +4,20 @@ import { StateBadge } from '../../components/StateBadge';
 import { ScopeContext } from '../../components/ScopeContext';
 import { TableScroll } from '../../components/TableScroll';
 import { SHARED_CONTRACTS_PIN, type ProjectionResult, type SummaryProjection } from '../../data/shared-contracts-adapter';
+import type { FinanceWrapperMetadata, PacketOutcome } from './packet';
 
 export type FinancialSummaryViewProps = Readonly<{
-  /** Output of `readFinancialSummary` (or `refuseUnsupportedPacket`). The view renders it and derives nothing from it. */
+  /** Output of `readFinancialSummary` (or the refusal from `evaluateFinancePacket`). The view renders it and derives nothing from it. */
   result: ProjectionResult<SummaryProjection>;
   /** Host-authorized label. The projection carries no project identity, so none is invented when this is absent. */
   projectLabel?: string;
+  /** Gate outcome for the handoff packet, when one was evaluated. Shown as adoption status only; it never changes the amounts. */
+  packet?: PacketOutcome;
+  /** Finance response-envelope metadata kept apart from the canonical summary. Shown verbatim; nothing is summed or derived. */
+  wrapper?: FinanceWrapperMetadata;
 }>;
+
+const wrapperText = (value: unknown) => typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
 
 const UNSUPPORTED = new Set(['UNSUPPORTED_VERSION', 'UNSUPPORTED_INTERFACE', 'UNKNOWN_CONTRACT', 'UNACCEPTED_INTERFACE', 'LEGACY_UNREPRESENTABLE']);
 
@@ -23,7 +30,7 @@ function Notice({ title, children, alert }: { title: string; children: string; a
  * Metric names, definition references and amount strings are shown exactly as delivered. There is no arithmetic, no
  * spent/earned/remaining/budget alias, and no balance: an absent metric reads "unavailable" and an unknown one "unknown".
  */
-export function FinancialSummaryView({ result, projectLabel }: FinancialSummaryViewProps) {
+export function FinancialSummaryView({ result, projectLabel, packet, wrapper }: FinancialSummaryViewProps) {
   const headingId = useId();
   const heading = <h2 id={headingId}>Financial summary</h2>;
   const wrap = (body: ReactNode) => <section className="td-component-stack" aria-labelledby={headingId}>{heading}{body}</section>;
@@ -91,7 +98,12 @@ export function FinancialSummaryView({ result, projectLabel }: FinancialSummaryV
         <div><dt>Producer revision</dt><dd>{data.producerRevision}</dd></div>
         <div><dt>Contract</dt><dd>{SHARED_CONTRACTS_PIN.package}@{SHARED_CONTRACTS_PIN.version}, FinancialSummary 1.0.0</dd></div>
         <div><dt>Authority</dt><dd>Read-only projection</dd></div>
+        {packet?.outcome === 'synthetic_development_only' && <div><dt>Contract adoption</dt><dd>Synthetic development only. Production adoption is not established{packet.ownerAcknowledgement === 'absent' ? ': no owner acknowledgement.' : ': the owner acknowledgement claimed in the packet is not verified.'}</dd></div>}
       </dl>
     </section>
+    {wrapper && Object.keys(wrapper).length > 0 && <section className="td-example-section" aria-label="Finance response metadata">
+      <h3>Finance response metadata</h3>
+      <dl>{Object.entries(wrapper).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{wrapperText(value)}</dd></div>)}</dl>
+    </section>}
   </>);
 }
