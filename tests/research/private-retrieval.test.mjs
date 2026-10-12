@@ -4398,7 +4398,7 @@ test('late deadline delivery cannot renew cleanup for a stalled stop write', { t
   assert.equal(phase, 'retention-entered', 'the admitted body completes before the deadline-delivery fault');
   const deadlineLowerAt = runEnteredAt + durationMs;
   const deadlineUpperAt = runAuthorizedAt + durationMs;
-  await waitUntilPerfAtOrAfter(deadlineLowerAt - 100);
+  // Start from the proven retention phase so a scheduled wake cannot race expiry.
   const blockStartedAt = performance.now();
   assert.ok(blockStartedAt < deadlineLowerAt, 'the controlled delay starts before the original deadline');
   assert.equal(stopCalls, 0, 'deadline cleanup has not started before the fault is injected');
@@ -4487,7 +4487,7 @@ for (const deadlineLagMs of [350, 900]) {
       },
       async retentionHandleFor() {
         const deadline = authorizedAt + durationMs;
-        await waitUntilPerfAtOrAfter(deadline - 500);
+        // Block on callback entry so a scheduled wake cannot race expiry.
         assert.ok(performance.now() < deadline, 'the fixture enters its blocking callback before expiry');
         // Deliberately prevent the deadline timer from running. This is a local
         // fixture, not a claim that JavaScript can interrupt synchronous work.

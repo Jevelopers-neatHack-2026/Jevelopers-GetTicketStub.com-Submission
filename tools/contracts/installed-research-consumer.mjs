@@ -123,8 +123,16 @@ async function main() {
     report.source_file_hashes = {};
     for (const relative of ['tools/contracts/installed-research-consumer.mjs',
       'tests/contracts/installed-research-consumer/pin.json', 'tests/contracts/installed-research-consumer/caller.mjs',
-      'tests/contracts/installed-research-consumer/consumer.mts', 'src/review/history/store.mjs',
-      'src/review/history/cache-binding-capability.mjs', 'src/private/boundary-guard.mjs']) {
+      'tests/contracts/installed-research-consumer/consumer.mts', 'tests/contracts/installed-research-consumer/decision-caller.mjs',
+      'src/review/history/store.mjs', 'src/review/history/cache-binding-capability.mjs', 'src/private/boundary-guard.mjs',
+      'src/evidence/store.mjs', 'src/discovery/identity/from-extraction.mjs',
+      'src/discovery/entities/identity.mjs', 'src/discovery/occurrences/identity.mjs',
+      'src/extraction/index.mjs', 'src/extraction/jsonld.mjs', 'src/extraction/source.mjs',
+      'src/decisions/questions/index.mjs', 'src/decisions/questions/index.d.mts',
+      'src/decisions/questions/from-source-identity.mjs', 'src/decisions/questions/from-source-identity.d.mts',
+      'src/decisions/questions/prepare.mjs', 'src/decisions/questions/registry.mjs',
+      'src/decisions/questions/sensitive-content.mjs', 'evals/policies/promotion-v1.json',
+      'evals/corpus/labels.jsonl', 'evals/corpus/manifest.json']) {
       report.source_file_hashes[relative] = digest(await readFile(path.join(root, relative)));
     }
     temporary = await mkdtemp(path.join(tmpdir(), 'ei-installed-research-'));
@@ -164,7 +172,8 @@ process.exitCode = result.counts.failed ? 1 : 0;
     }
     report.observations = await readJson(observationFile);
     const typeSource = (await readFile(new URL('consumer.mts', fixtureRoot), 'utf8'))
-      .replaceAll('__EI_HISTORY_MODULE__', path.join(root, 'src/review/history/store.mjs'));
+      .replaceAll('__EI_HISTORY_MODULE__', path.join(root, 'src/review/history/store.mjs'))
+      .replaceAll('__EI_QUESTIONS_MODULE__', path.join(root, 'src/decisions/questions/index.mjs'));
     await writeFile(path.join(temporary, 'consumer.mts'), typeSource);
     report.required_checks.installed_types = 'failed';
     report.environment.typescript = await run('06-type-version', process.execPath, [config.tsc, '--version'], temporary);
@@ -177,7 +186,10 @@ process.exitCode = result.counts.failed ? 1 : 0;
     delete report.installed_verification.schemaManifest;
     assert.equal(callerFailed, false, 'actual caller diagnostics failed; retained observations name each failure');
     assert.equal(report.observations.counts.skipped, 0);
-    assert.equal(report.observations.counts.scenarios, 38, 'all required local/bridge/control scenarios executed');
+    assert.equal(report.observations.counts.scenarios, 49, 'all 38 original and 11 DecisionPort diagnostic scenarios executed');
+    assert.equal(report.observations.observations.decisionPort.handler_calls, 0, 'no diagnostic handler dispatch');
+    assert.equal(report.observations.observations.decisionPort.coverage.actual_result_consumption.status, 'unsupported');
+    assert.equal(report.observations.observations.decisionPort.coverage.actual_result_consumption.executed, false);
     report.diagnostic_status = report.observations.diagnostic_status;
     report.counts = report.observations.counts;
   } catch (error) {

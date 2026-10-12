@@ -77,6 +77,9 @@ test('supported async rejections are observed and unsupported hooks stay inert i
   `;
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
     cwd,
+    // This classifier-only child makes no network requests. Avoid initializing
+    // Node's environment proxy agent while keeping policy diagnostics visible.
+    env: { ...process.env, NODE_USE_ENV_PROXY: '0' },
     encoding: 'utf8',
     timeout: 5_000,
   });
