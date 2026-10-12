@@ -138,7 +138,13 @@ test('switching to static art restores scene copy hidden by an interrupted 3D fr
   const h = browserDouble();
   const visibility = new Map([['--ia', '0.000']]);
   h.context.root = { classList: { add: value => h.calls.push({ className: value }) } };
-  h.context.sceneEls = [{ querySelector: () => ({ style: { removeProperty: name => visibility.delete(name) } }) }];
+  const info = { style: { removeProperty: name => visibility.delete(name) } };
+  h.context.document.querySelectorAll = selector => {
+    assert.equal(selector, '.scene .info');
+    return [info];
+  };
+  // sceneEls is local to build3D; it must not be invented as a module global.
+  assert.equal('sceneEls' in h.context, false);
   h.context.startStaticLoop = () => { h.context.staticStarts++; return { stop(){} }; };
   vm.runInContext(section('let staticLoop = null, dead3d = false;', 'function leaveStatic()'), h.context);
   h.context.useStatic();
