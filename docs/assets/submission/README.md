@@ -14,6 +14,8 @@ These assets use TicketStub's cream, ink, orange, moss, copper, and cyan palette
 
 The [original video kit](ticketstub_judges_cut_video_kit.zip) was supplied by the team on October 12. Its extracted [MP4](ticketstub_judges_cut_animatic.mp4) is a silent schematic storyboard, not filmed product evidence. `ffprobe` measured 170.04 seconds, 1280 × 720 pixels, and no audio stream. The source ZIP and extracted files passed a Gitleaks scan. The timeline was visually inspected. The original ZIP is unchanged; its production notes do not override the verified official rules.
 
+The [usage PDF](timothy-wayne-gregg-token-usage-2026-10-12.pdf) was supplied and attributed to Timothy Wayne Gregg (`completedottech`) on October 12. It is an unchanged copy of `jevelopers-neathack-2026-20261012-135232-designed-report.pdf`, renamed for clear attribution. It covers his local coding-agent usage, with API-price estimates rather than bills. [Scope and evidence limits](../../judges/USAGE.md) accompany the report; its team-branded title does not establish team-wide totals.
+
 Official sponsor asset sources, checked October 12: [Entire](https://neatlogs.com/hackathon/sponsors/entire.svg), [cfo.ai](https://neatlogs.com/hackathon/sponsors/cfo.svg). Their presence on the event page establishes the source, not a separate brand-license grant or sponsor approval of this submission.
 
 ## Image generation record

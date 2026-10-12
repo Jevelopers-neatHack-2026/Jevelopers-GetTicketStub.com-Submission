@@ -77,6 +77,8 @@ The reviewer workbook has four blank-safe formula corrections made through the C
 
 The posts prove public updates, not every product claim in their copy. Day 1’s printing language is not proof of physical fulfillment. Day 2’s usage and cost figures are owner reports, not audited metrics. We did not verify the linked stream or its recordings and do not count them as the final demo.
 
+**Timothy's usage report:** Timothy Wayne Gregg (`completedottech`) supplied a later October 12 report covering his local coding-agent usage. It records 28.28 billion tokens and 209,218 usage records; 97.19% of tokens were cached reads. Its $8,481.91 figure is an API-price estimate, not actual spend. Attribution to Timothy is owner-provided; these are not team-wide totals. [Read the short summary and original PDF](USAGE.md), including scope, counter mismatches, and pricing limits. It does not prove a completed live product task or independently audit the Day 2 post.
+
 The [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46), and [Entire graph Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) also expose work and discussion.
 
 **Still missing:** a verified final demo quote-post of the official launch post. The two build posts predate that launch and do not satisfy this step. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. No engagement or customer-demand score is claimed here.

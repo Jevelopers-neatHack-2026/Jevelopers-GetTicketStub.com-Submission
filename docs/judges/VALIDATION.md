@@ -14,6 +14,7 @@ Checked October 12, 2026. These are engineering checks, not organizer approval.
 - **Evidence integrity:** all four Entire graph checksums and all 20 cfo.ai revision-2 checksums passed. This does not rerun the original model calls or spreadsheet calculations.
 - **Public building:** Day 1 and Day 2 posts were opened directly in X. Their URLs and the official launch URL returned HTTP 200 without authentication. Post content was read in signed-in Chrome; full signed-out rendering was not tested. Their product and usage claims remain qualified.
 - **Placeholder:** `ffprobe` confirms a 170.04-second, 1280 × 720 silent video. The supplied ZIP and extracted material passed a Gitleaks scan. The inspected timeline is a concept storyboard, not a filmed demo.
+- **Timothy's usage report:** the supplied 198-page PDF was copied unchanged and added to the asset manifest. All extracted text passed Gitleaks with default rules and no ignore file. PDF metadata reports no JavaScript; attachment inspection found zero embedded files. The cover, token breakdown, counter exceptions, scope, and attribution pages were visually inspected. The four main token categories and the two tools' record counts reconcile to the reported totals. Original logs, companion CSV files, prices, identity, and actual charges were not independently audited. See the [attributed summary](USAGE.md).
 
 Run the local checks:
 
