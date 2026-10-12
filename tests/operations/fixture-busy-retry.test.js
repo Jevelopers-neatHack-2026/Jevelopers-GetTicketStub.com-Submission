@@ -310,8 +310,9 @@ test('invalid actual retryAfter, wait failure and clock rollback retain the refu
   const rollback = await runFixtureBusyRetry(options(mappedClaim(contender, primary), {
     clock: () => ++reads < 3 ? 20n : 10n
   }));
-  assert.equal(rollback.diagnostic.stopReason, 'error'); assert.equal(rollback.diagnostic.attempts.length, 1);
-  assert.equal(rollback.error.errors[0], primary);
+  assert.equal(rollback.diagnostic.stopReason, 'clock_after_call'); assert.equal(rollback.diagnostic.attempts.length, 1);
+  assert.equal(rollback.error, primary);
+  assert.equal(rollback.qualificationError instanceof TypeError, true);
 });
 
 test('closed bounded retry encoding retains complete failure history and rejects hostile or truncated frames', async t => {
@@ -373,9 +374,11 @@ test('C04 diagnostic keeps actual error phase, exit and incomplete capture disti
     flags: { complete: false, missingChildCapture: true, malformed: false, overflow: false,
       writeFailed: false, abruptExit: true, cleanupIncomplete: true },
     slots: [{ slot: 1, footer: true, writerComplete: true, records: [
-      { stage: 'runner_phase', phase: 'store_open' },
-      { stage: 'runner_error', phase: 'store_open', code: 'STORE_BUSY', primaryCode: 5 },
-      { stage: 'runner_phase', phase: 'store_close' }
+      { stage: 'runner_phase', phase: 'runner_start' },
+      { stage: 'store_open', ok: true },
+      { stage: 'controller_error', phase: 'completion', code: 'STORE_BUSY', primaryCode: 5 },
+      { stage: 'controller_result', status: 'stopped', reason: 'LOCAL_COMPLETION_BUSY', checkpointSequence: 19 },
+      { stage: 'store_close', ok: true }
     ] }],
     supervisor: [{ slot: 0, stage: 'child_exit', exitCode: null, signal: 'SIGKILL' },
       { slot: 1, stage: 'child_exit', exitCode: 2, signal: null },
@@ -392,10 +395,10 @@ test('C04 diagnostic keeps actual error phase, exit and incomplete capture disti
   assert.equal(value.capture.sessionCleanupIncomplete, true);
   assert.equal(value.capture.slots[0].childObserved, false);
   assert.equal(value.capture.slots[0].signal, 'SIGKILL');
-  assert.equal(value.capture.slots[1].errorPhase, 'store_open');
+  assert.equal(value.capture.slots[1].errors[0].phase, 'completion');
   assert.equal(value.capture.slots[1].lastPhase, 'store_close');
-  assert.equal(value.capture.slots[1].errorCode, 'STORE_BUSY');
-  assert.equal(value.capture.slots[1].sqlitePrimaryCode, 5);
+  assert.equal(value.capture.slots[1].errors[0].code, 'STORE_BUSY');
+  assert.equal(value.capture.slots[1].errors[0].sqlitePrimaryCode, 5);
   assert.equal(value.capture.slots[1].exitCode, 2);
   assert.equal(value.capture.slots[1].finishOutcome, 'stopped');
   assert.equal(value.capture.slots[1].finishSettled, true);

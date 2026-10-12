@@ -46,7 +46,8 @@ import {
 } from './failure-diagnostics.js';
 import { createAdmissionFailureDiagnostic } from './fixtures/admission-store-child.mjs';
 import { parseFixtureRetryDiagnostic } from './fixture-busy-retry.js';
-import { encodeC04CompletionDiagnostic, readC04FinalRow } from './fixture-recovery-diagnostics.js';
+import { cleanupC04Fixture, encodeC04CompletionDiagnostic, observeC04PreCleanup,
+  projectC04WorkPage, readC04FinalRow, throwC04CleanupErrors } from './fixture-recovery-diagnostics.js';
 import {
   classifyOps04ExitDisposition, createOps04FailureDetails, isOps04ExitDisposition,
   ops04FailureFields, ops04ReadErrorKind, parseOps04FailureDetails, throwAfterOps04FailureCapture,
@@ -2118,11 +2119,12 @@ async function killOwnedChildAndReap(child, closed) {
   return closeResult;
 }
 
-async function waitForStatus(worker, scope, jobId, expected, timeoutMs = 6_000) {
+async function waitForStatus(worker, scope, jobId, expected, timeoutMs = 6_000, onObservation) {
   const end = performance.now() + timeoutMs;
   while (performance.now() < end) {
     const page = worker.readScopedWorkPage({ trustedSyntheticScope: scope, limit: 100 });
     const item = page.items.find(row => row.jobId === jobId);
+    onObservation?.(item);
     if (item?.state === expected) return item;
     await new Promise(resolvePromise => setTimeout(resolvePromise, 10));
   }
@@ -7206,53 +7208,38 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
 
   await t.test('OPS07.C04 stop reports incomplete durable cleanup while a second SQLite writer lock spans child reap', async t => {
     const busyStop = tempDirectory('ah11-busy-stop-recovery-');
-    const diagnosticSession = createOperationsDiagnosticSession({ directory: busyStop.directory });
+    let diagnosticSession;
     let worker;
     let restart;
     let raw;
     let recovered;
+    let writerLock;
     let accepted;
     let c04Phase = 'worker_start';
     let c04PrimaryFailed = false;
     let c04PrimaryError;
+    let c04LastPage;
+    let c04PreCleanup = observeC04PreCleanup(null);
+    const c04CleanupErrors = [];
     let c04Row = readC04FinalRow(null, null);
     t.after(async () => {
-      const cleanupErrors = [];
-      let cleanupComplete = true;
-      for (const owned of [worker, restart]) {
-        if (!owned || owned.lifecycle === 'stopped') continue;
-        try {
-          const stopped = await owned.stop('test');
-          if (stopped.stopped !== true || stopped.childrenReaped !== true || stopped.storeClosed !== true) {
-            cleanupComplete = false;
-            cleanupErrors.push(new Error('C04 owned worker cleanup was not confirmed.'));
-          }
-        } catch (error) { cleanupComplete = false; cleanupErrors.push(error); }
-      }
-      let capture = null;
-      // Read actual FD3 records only after the owned runners have been reaped.
-      // Its two-job final-state oracle is inapplicable to this one-job restart.
-      if (cleanupComplete) {
-        try { capture = readOperationsDiagnosticSession(diagnosticSession, { finalState: { available: false } }); }
-        catch (error) { cleanupErrors.push(error); }
-      }
-      if (!disposeOperationsDiagnosticSession(diagnosticSession)) {
-        cleanupComplete = false;
-        cleanupErrors.push(new Error('C04 diagnostic descriptor cleanup was not confirmed.'));
-      }
-      for (const handle of [raw, recovered]) {
-        if (!handle) continue;
-        try { handle.close(); }
-        catch (error) { cleanupComplete = false; cleanupErrors.push(error); }
-      }
-      const diagnostic = encodeC04CompletionDiagnostic({ phase: c04Phase, row: c04Row, capture,
-        primaryFailed: c04PrimaryFailed, cleanupComplete });
-      if (diagnostic) t.diagnostic(diagnostic);
-      if (cleanupComplete) busyStop.cleanup();
-      if (cleanupErrors.length) throw new AggregateError(c04PrimaryFailed ? [c04PrimaryError, ...cleanupErrors] : cleanupErrors,
-        'C04 final diagnostic or native cleanup failed.', c04PrimaryFailed ? { cause: c04PrimaryError } : undefined);
+      const { cleanupComplete, capture, captureTiming, cleanupErrors } = await cleanupC04Fixture({
+        workers: [worker, restart], handles: [writerLock, raw, recovered], errors: c04CleanupErrors,
+        // The two-job final-state oracle is inapplicable to this one-job restart.
+        readCapture: diagnosticSession ? () => readOperationsDiagnosticSession(diagnosticSession, { finalState: { available: false } }) : null,
+        disposeCapture: diagnosticSession ? () => disposeOperationsDiagnosticSession(diagnosticSession) : null,
+        removeDirectory: () => busyStop.cleanup()
+      });
+      try {
+        const diagnostic = encodeC04CompletionDiagnostic({ phase: c04Phase, row: c04Row, preCleanup: c04PreCleanup,
+          capture, captureTiming, primaryFailed: c04PrimaryFailed, cleanupComplete });
+        if (diagnostic === null) throw new Error('C04 diagnostic exceeded its fixed publication bound.');
+        t.diagnostic(diagnostic);
+      } catch (error) { cleanupErrors.push(error); }
+      throwC04CleanupErrors({ primaryFailed: c04PrimaryFailed, primaryError: c04PrimaryError, cleanupErrors });
     });
     try {
+    diagnosticSession = createOperationsDiagnosticSession({ directory: busyStop.directory });
     const shutdownConfig = {
       workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1,
       shutdownTimeoutMs: 1_000, childKillGraceMs: 100, childReapReserveMs: 200,
@@ -7286,10 +7273,14 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
     }
     assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
     assert.equal(process.kill(runnerPid, 'SIGSTOP'), true);
-    const writerLock = new DatabaseSync(busyStop.databasePath, { timeout: 20 });
-    writerLock.exec('BEGIN IMMEDIATE');
+    writerLock = new DatabaseSync(busyStop.databasePath, { timeout: 20 });
+    let writerLockHeld = false;
+    let heldStopFailed = false;
+    let heldStopError;
     let firstStop;
     try {
+      writerLock.exec('BEGIN IMMEDIATE');
+      writerLockHeld = true;
       c04Phase = 'held_stop';
       firstStop = await worker.stop('test');
       assert.equal(firstStop.stopped, false);
@@ -7303,10 +7294,15 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
       assert.equal(retained.runner_pid, runnerPid);
       assert.throws(() => process.kill(runnerPid, 0), error => error.code === 'ESRCH');
       assert.equal(Number(raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 1);
-    } finally {
-      try { writerLock.exec('ROLLBACK'); } catch {}
-      writerLock.close();
+    } catch (error) { heldStopFailed = true; heldStopError = error; }
+    finally {
+      if (writerLockHeld) {
+        try { writerLock.exec('ROLLBACK'); } catch (error) { c04CleanupErrors.push(error); }
+      }
+      try { writerLock.close(); writerLock = null; } catch (error) { c04CleanupErrors.push(error); }
     }
+    if (heldStopFailed) throw heldStopError;
+    if (c04CleanupErrors.length) throw new AggregateError(c04CleanupErrors, 'C04 held writer cleanup failed.');
 
     c04Phase = 'recovered_stop';
     const recoveredStop = await worker.stop('test');
@@ -7330,9 +7326,14 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
     void restart.start();
     c04Phase = 'restart_wait';
     try {
-      const completed = await waitForStatus(restart, scope, accepted.jobId, 'completed', 8_000);
+      const completed = await waitForStatus(restart, scope, accepted.jobId, 'completed', 8_000,
+        item => { c04LastPage = projectC04WorkPage(item); });
       assert.equal(completed.state, 'completed');
-    } finally { c04Row = readC04FinalRow(raw, accepted.jobId); }
+    } finally {
+      c04PreCleanup = observeC04PreCleanup({ observed: true, page: c04LastPage, role: 'restart',
+        lifecycle: restart.lifecycle, activeChildCount: restart.activeChildCount });
+      c04Row = readC04FinalRow(raw, accepted.jobId);
+    }
     c04Phase = 'restart_stop';
     const restartStop = await restart.stop('test');
     assert.equal(restartStop.stopped, true);
@@ -7340,6 +7341,12 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
     c04Phase = 'done';
     } catch (error) {
       c04PrimaryFailed = true; c04PrimaryError = error;
+      if (c04PreCleanup.timing === 'not_observed') {
+        const observedWorker = restart ?? worker;
+        c04PreCleanup = observeC04PreCleanup({ observed: true, page: c04LastPage,
+          role: restart ? 'restart' : worker ? 'initial' : 'unobserved',
+          lifecycle: observedWorker?.lifecycle, activeChildCount: observedWorker?.activeChildCount });
+      }
       if (c04Row.status === 'not_observed') c04Row = readC04FinalRow(raw, accepted?.jobId);
       throw error;
     }

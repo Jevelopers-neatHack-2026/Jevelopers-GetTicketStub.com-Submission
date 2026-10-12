@@ -113,9 +113,17 @@ const CODES = new Set(['STORE_BUSY', 'STORE_WRITE_FAILED', 'STORE_CLOSED', 'STOR
   'LEASE_EXPIRED', 'CONCURRENT_MODIFICATION', 'CLOCK_ROLLBACK', 'INVALID_INPUT', 'OUTCOME_UNRESOLVED',
   'TERMINAL_STATE', 'OPS_BACKPRESSURE', 'OPS_UNAVAILABLE', 'OTHER', 'none']);
 const REASONS = new Set(['STORE_BUSY', 'STORE_UNAVAILABLE', 'WORKER_NOT_ACCEPTING', 'OTHER', 'none']);
-const STOPS = new Set(['success', 'refusal', 'error', 'deadline', 'attempt_limit', 'invalid_delay']);
+const STOPS = new Set(['success', 'refusal', 'error', 'deadline', 'deadline_after_call',
+  'clock_after_call', 'attempt_limit', 'invalid_delay']);
 const OUTCOMES = new Set(['claim', 'empty', 'accepted', 'refused', 'error']);
 const BOUNDARIES = new Set(['begin', 'commit', 'rollback', 'other', 'unproven']);
+
+function unqualifiedCall(observed, qualificationError) {
+  // Timing cannot undo a successful call or establish rollback. Retain its
+  // value and original primary, and expose qualification failure separately.
+  return { ...observed, failed: true,
+    error: observed.failed ? observed.error : qualificationError, qualificationError };
+}
 
 export async function runFixtureBusyRetry({ kind, invoke, deadlineNs, delayMs, busyTimeoutMs,
   clock = () => process.hrtime.bigint(), sleep = delay }) {
@@ -142,6 +150,15 @@ export async function runFixtureBusyRetry({ kind, invoke, deadlineNs, delayMs, b
     try { latest = observeFixtureTransaction(invoke); }
     catch (error) { latest = { failed: true, error, value: undefined,
       proof: { eligible: false, restored: false, boundary: 'unproven', nativePrimaryCode: null, beforeInactive: null, afterInactive: null } }; }
+    let finished;
+    let clockFailed = false;
+    let clockError;
+    try { finished = readClock(); }
+    catch (error) {
+      clockFailed = true;
+      clockError = utilTypes.isNativeError(error) ? error
+        : new AggregateError([error], 'The fixture clock could not qualify the observed call.');
+    }
     const result = latest.value;
     const busy = kind === 'claim' ? claimBusy(latest) : admissionBusy(latest);
     const code = latest.failed ? data(latest.error, 'code') : kind === 'admission' ? data(result, 'code') : undefined;
@@ -153,6 +170,17 @@ export async function runFixtureBusyRetry({ kind, invoke, deadlineNs, delayMs, b
       reasonCode: reasonCode === undefined ? 'none' : REASONS.has(reasonCode) ? reasonCode : 'OTHER',
       ...latest.proof, eligible: busy && latest.proof.eligible, retryScheduled: false, delayMs: 0 };
     attempts.push(record);
+    if (clockFailed) {
+      latest = unqualifiedCall(latest, clockError);
+      stopReason = 'clock_after_call';
+      break;
+    }
+    if (finished >= deadline) {
+      latest = unqualifiedCall(latest, new Error(
+        'The fixture call finished at or after its deadline; its observed outcome is retained without replay.'));
+      stopReason = 'deadline_after_call';
+      break;
+    }
     if (!busy || !latest.proof.eligible) { stopReason = latest.failed ? 'error' : outcome === 'refused' ? 'refusal' : 'success'; break; }
     if (attempts.length === MAX_ATTEMPTS) { stopReason = 'attempt_limit'; break; }
     const waitMs = kind === 'admission' ? data(result, 'retryAfterMs') : delayMs;
