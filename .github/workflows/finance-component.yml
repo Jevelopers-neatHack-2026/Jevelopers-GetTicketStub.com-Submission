@@ -1,0 +1,53 @@
+name: Finance public component DEVELOPMENT
+on:
+  pull_request:
+    paths:
+      - finance_component_tests/**
+      - contracts/finance-producer-pin.json
+      - docs/finance-component-development.md
+      - .github/workflows/finance-component.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-component:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/cost-intelligence
+          ref: 4f3ae9e5cf31f5bce295582db7c76f78cccb93f2
+          path: reports/runs/finance-source
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - name: Prepare exact npm in owned cache
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/finance-home" "$RUNNER_TEMP/finance-npm"
+          env -i PATH="$PATH" HOME="$RUNNER_TEMP/finance-home" npm_config_cache="$RUNNER_TEMP/finance-home/cache" \
+            npm install --prefix "$RUNNER_TEMP/finance-npm" --ignore-scripts --no-audit --no-fund npm@10.9.9
+      - name: Test fail-closed receipt validation
+        env:
+          FINANCE_SOURCE: reports/runs/finance-source
+        run: node --test finance_component_tests/receipt.test.mjs finance_component_tests/sanitization.test.mjs
+      - name: Execute real public APIs against owned PostgreSQL
+        shell: bash
+        run: |
+          env -i PATH="$RUNNER_TEMP/finance-npm/node_modules/.bin:$PATH" HOME="$RUNNER_TEMP/finance-home" \
+            node finance_component_tests/run.mjs "$PWD/reports/runs/finance-source" "$PWD/reports/runs/finance-component"
+      - name: Preserve sanitized case, source, role and cleanup receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: finance-component-development-${{ github.sha }}
+          path: |
+            reports/runs/finance-component/**
+            !reports/runs/finance-component/home/**
+          if-no-files-found: error
+          retention-days: 30
