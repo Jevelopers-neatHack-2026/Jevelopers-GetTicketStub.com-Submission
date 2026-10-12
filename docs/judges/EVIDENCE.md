@@ -83,7 +83,7 @@ The posts prove public updates, not every product claim in their copy. Day 1’s
 
 **Crystal's usage ledger:** the team supplied pasted ledger text and the credit **Crystal (lajefa)**. It reports 128,391,680 tokens and 1,137 calls across May 19–October 12, including pre-event work. [Read the attributed summary](CRYSTAL-USAGE.md). The $87.11 API-price estimate and $80 subscription claim are not audited spending. No original file, raw logs, or bills were provided. These figures are kept separate from Timothy's; no combined team total is claimed.
 
-**Zach's token counts:** a team-pasted message attributed to **Zach (zwright)** reports **3,859,621,041 tokens**, including cached input, fresh input, and output. The categories add correctly. [Read the supplied table and limits](ZACH-USAGE.md). The usage dates, source logs, and counting method were not supplied. This is a separate owner report, not a verified hackathon-only or team-wide total.
+**Zach's usage report:** the team attributes an 11-page PDF to **Zach (zwright)**. It reports **3,859,621,041 tokens** across **16,189 calls**, from October 10–12 through 2:31:50 p.m. Eastern. Its totals match his earlier pasted table. [Read the PDF, estimated value, and limits](ZACH-USAGE.md). The original logs were not supplied; identity and event eligibility remain unverified. This is a separate owner report, not a team-wide total.
 
 Timothy's [searchable report and complete CSV bundle](USAGE.md#explore-the-report) are now retained with the PDF. The event CSV and all 34 partition tables reconcile internally. That does not verify original log capture, actual charges, or overlap with other team members' reports.
 

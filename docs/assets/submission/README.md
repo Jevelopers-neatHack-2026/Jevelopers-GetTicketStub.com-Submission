@@ -20,6 +20,8 @@ Official sponsor asset sources, checked October 12: [Entire](https://neatlogs.co
 
 The [searchable usage HTML](timothy-wayne-gregg-usage-2026-10-12-143507.html) and [complete ZIP](timothy-wayne-gregg-usage-2026-10-12-143507.zip) are unchanged copies supplied for Timothy's same `143507` snapshot. The originals were `exhaustive/report.html` and `exhaustive-report.zip`. Download and extract the ZIP to keep the HTML's CSV links working; GitHub does not render uploaded HTML as a live page. All 50 bundled checksums passed, and all extracted files passed the secret scan. [Validation and scope](../../judges/USAGE.md#file-integrity) distinguish agreement within the exported data from an audit of original logs or charges.
 
+The [Zach usage PDF](zach-zwright-usage-2026-10-12.pdf) is an unchanged copy of `NeatHack2026-Jevelopers-usage-report (1).pdf`, supplied and attributed to Zach (`zwright`) by the team on October 12. It covers a reported October 10–12 Codex log selection. [Scope and evidence limits](../../judges/ZACH-USAGE.md) explain the estimated prices, missing underlying data, and team-supplied identity. Its checksum is in the asset manifest.
+
 ## Image generation record
 
 Generated October 12, 2026 through the built-in `image_gen.imagegen` tool. The official OpenAI model page identifies [GPT Image 2.5 Sunburst](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst) as the current target. The tool has no model selector and returned no model name. **The actual backend version is unverified.** We requested the latest model but do not label these images as proven GPT Image 2.5 output. No paid API fallback was used.
