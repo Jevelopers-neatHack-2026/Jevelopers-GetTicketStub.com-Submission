@@ -71,6 +71,16 @@ data and target URLs are omitted. Protocol, size, path, creation-time or uniquen
 unconfirmed and fail the pair. These startup metadata queries can affect timing; they do not establish pixel
 readiness. A generated session label alone is not isolation evidence.
 
+The runtime workflow first runs `node scripts/check-download-browser-identity.mjs --evidence-dir <directory>`
+before dependency installation and application checks. This single-session native preflight creates no application
+page and performs no capture; it does not qualify the six-pair matrix. Its JSON is retained by the workflow's
+existing always-run artifact step even on failure. Startup target evidence records at most 32 fixed type/URL/subtype
+classes, explicit omissions and precise rejection reasons; no target title, ID or URL is retained. Internal pages
+and workers are still rejected by the unchanged blank-target rule. A valid task profile can be retained privately
+for removal verification even when target validation fails; confirmed removal never converts that identity failure
+into a pass. The launcher already requests `about:blank`; these diagnostics do not infer which startup target caused
+a failure that omitted its inventory, and do not introduce a guessed allowlist or a new browser flag.
+
 Each session's collector starts before application navigation and remains attached through bounded browser
 shutdown. Its final snapshot is then retained and the listener detached. Process exit, profile removal and
 complete collector cleanup must be confirmed before a pair can qualify, even when both first images passed.

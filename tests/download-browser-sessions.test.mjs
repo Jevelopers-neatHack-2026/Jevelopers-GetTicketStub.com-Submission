@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DownloadBrowserSessions, browserSessionIdForPair, observeBrowserIdentity, profileArgument } from "../scripts/lib/download-browser-sessions.mjs";
 import { captureQualificationPlan } from "../scripts/lib/download-capture-qualification.mjs";
+import { runBrowserIdentityPreflight } from "../scripts/check-download-browser-identity.mjs";
 
 const plan = captureQualificationPlan([{ name: "390" }, { name: "1440" }]);
 const expected = [...new Set(plan.map(browserSessionIdForPair))];
@@ -73,7 +74,56 @@ test("nonblank or excessive targets, malformed command lines and ambiguous proce
     ];
     for (const [override, code] of cases) {
       const result = await observeBrowserIdentity(connection(path, override), start);
-      assert.deepEqual(result, { evidence: { status: "unavailable", code }, profilePath: null });
+      assert.equal(result.evidence.status, "unavailable");
+      assert.equal(result.evidence.code, code);
+      assert.equal(result.profilePath, override["Target.getTargets"] ? path : null);
+      assert.doesNotMatch(JSON.stringify(result.evidence), /SECRET_CANARY|private\.invalid/);
+    }
+  });
+});
+
+test("rejected startup targets retain bounded safe classes without accepting internal, worker or nonblank targets", async () => {
+  await withProfile(async (path, start) => {
+    const targets = [
+      { type: "page", url: "chrome://PRIVATE_CANARY/?SECRET_CANARY", title: "PRIVATE_TITLE_CANARY" },
+      { type: "service_worker", url: "chrome-extension://PRIVATE_EXTENSION_CANARY/worker.js" },
+      { type: "SECRET_TYPE_CANARY", url: `data:image/svg+xml,SECRET_CANARY${"x".repeat(4096)}`, subtype: "SECRET_SUBTYPE_CANARY" },
+      { type: "page", url: "https://private.invalid/SECRET_CANARY", subtype: "prerender" },
+    ];
+    const result = await observeBrowserIdentity(connection(path, { "Target.getTargets": { targetInfos: targets } }), start);
+    assert.equal(result.evidence.status, "unavailable");
+    assert.equal(result.profilePath, path, "a validated task profile remains available only for cleanup");
+    assert.equal(result.evidence.profileCleanupEvidence, "validated_independently_of_target_qualification");
+    assert.deepEqual(result.evidence.initialTargets, { status: "rejected", reasons: ["target_url_unaccepted", "target_type_unaccepted"],
+      observedCount: 4, recordedCount: 4, omittedCount: 0, limit: 32, targets: [
+        { typeClass: "page", urlClass: "chrome_internal", subtypeClass: "absent" },
+        { typeClass: "service_worker", urlClass: "chrome_extension", subtypeClass: "absent" },
+        { typeClass: "unrecognized", urlClass: "over_cap", subtypeClass: "unrecognized" },
+        { typeClass: "page", urlClass: "https", subtypeClass: "prerender" },
+      ] });
+    assert.doesNotMatch(JSON.stringify(result.evidence), /CANARY|private\.invalid|chrome:\/\/|chrome-extension:\/\/|data:image/);
+    assert.ok(!JSON.stringify(result.evidence).includes(path));
+  });
+});
+
+test("target response omissions, over-cap inventories and protocol failure remain distinguishable and fail closed", async () => {
+  await withProfile(async (path, start) => {
+    const invalid = await observeBrowserIdentity(connection(path, { "Target.getTargets": {} }), start);
+    assert.deepEqual(invalid.evidence.initialTargets.reasons, ["target_response_invalid"]);
+    const over = await observeBrowserIdentity(connection(path, { "Target.getTargets": {
+      targetInfos: Array.from({ length: 33 }, () => ({ type: "page", url: "about:blank" })),
+    } }), start);
+    assert.equal(over.evidence.status, "unavailable");
+    assert.deepEqual(over.evidence.initialTargets.reasons, ["target_count_over_cap"]);
+    assert.equal(over.evidence.initialTargets.recordedCount, 32);
+    assert.equal(over.evidence.initialTargets.omittedCount, 1);
+    const unsupported = await observeBrowserIdentity(connection(path, { "Target.getTargets": () => Promise.reject(new Error("SECRET_CANARY")) }), start);
+    assert.equal(unsupported.evidence.status, "unavailable");
+    assert.deepEqual(unsupported.evidence.initialTargets.reasons, ["target_protocol_unavailable"]);
+    for (const result of [invalid, over, unsupported]) {
+      assert.equal(result.profilePath, path);
+      assert.equal(result.evidence.profile.taskOwnedTemporaryDirectory, true);
+      assert.doesNotMatch(JSON.stringify(result.evidence), /SECRET_CANARY/);
     }
   });
 });
@@ -264,4 +314,60 @@ test("a never-attempted fixed session remains explicit and cannot be claimed com
     assert.equal(record.sessions.filter((session) => session.setup === "not_attempted").length, 4);
     assert.ok(record.sessions.slice(1).every((session) => session.faults.includes("browser_session_missing")));
   } finally { h.cleanup(); }
+});
+
+// Actual identity parsing, filesystem/profile removal and manager/preflight code; only
+// the browser protocol/collector are synthetic. No app navigation or native process occurs.
+function identityPreflightDependencies(nonblank) {
+  let profile;
+  return {
+    async launch() {
+      profile = mkdtempSync(join(tmpdir(), "ticketstub-chrome-"));
+      return { ...connection(profile, nonblank ? { "Target.getTargets": { targetInfos: [{ type: "page", url: "chrome://SECRET_CANARY" }] } } : {}),
+        newPage() { throw new Error("preflight must not create an application page"); },
+        async close() { rmSync(profile, { recursive: true, force: true }); } };
+    },
+    makeReceipts() { return { async start() {}, snapshot: empty, stop() {} }; },
+    async version() { return { status: "recorded", product: "SyntheticControl/1.0" }; },
+  };
+}
+
+test("known failed baseline identity stays failed after independently confirmed real profile removal", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ticketstub-identity-control-"));
+  try {
+    const sessions = new DownloadBrowserSessions(directory, [{ viewport: { name: "390" }, trial: 0 }], identityPreflightDependencies(true));
+    await sessions.open("baseline");
+    await sessions.closeAll();
+    const record = sessions.snapshot();
+    assert.equal(record.complete, true);
+    assert.equal(record.sessions[0].profileRemoval, "confirmed_absent");
+    assert.equal(record.sessions[0].identity.status, "unavailable");
+    assert.ok(record.sessions[0].faults.includes("browser_identity_failed"));
+    assert.equal(record.passed, false, "successful cleanup never rescues a rejected identity");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("identity-only preflight retains both the rejected target evidence and successful cleanup without application navigation", async () => {
+  for (const nonblank of [false, true]) {
+    const directory = mkdtempSync(join(tmpdir(), "ticketstub-identity-control-"));
+    try {
+      const result = await runBrowserIdentityPreflight(directory, identityPreflightDependencies(nonblank));
+      const saved = JSON.parse(readFileSync(join(directory, "browser-identity-preflight.json"), "utf8"));
+      assert.deepEqual(saved, result);
+      assert.equal(result.passed, !nonblank);
+      assert.equal(result.source.status, "recorded");
+      assert.equal(result.browserSessions.sessions.length, 1);
+      const session = result.browserSessions.sessions[0];
+      assert.equal(session.profileRemoval, "confirmed_absent");
+      assert.equal(session.shutdown, "confirmed_process_exit");
+      assert.equal(session.identity.status, nonblank ? "unavailable" : "established");
+      assert.equal(session.collectorSnapshot, "recorded_after_shutdown_attempt");
+      for (const key of ["actions", "producers", "downloads", "events"]) assert.equal(result.browserSessions.downloadReceipts[key].length, 0);
+      if (nonblank) {
+        assert.deepEqual(session.identity.initialTargets.reasons, ["target_url_unaccepted"]);
+        assert.ok(result.faults.includes("identity_preflight_setup_failed"));
+      }
+      assert.doesNotMatch(JSON.stringify(result), /SECRET_CANARY/);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }
 });

@@ -12,6 +12,8 @@ const digest = (value) => createHash("sha256").update(value).digest("hex");
 const LAUNCHER_SHA256 = digest(readFileSync(new URL("./cdp.mjs", import.meta.url)));
 const MAX_COMMAND_CHARS = 16_384;
 const CLOCK_RESOLUTION_MS = 1000; // filesystem birth-time precision, not a browser delay
+const MAX_INITIAL_TARGETS = 32;
+const MAX_TARGET_URL_CHARS = 4096;
 
 async function bounded(promise, ms) {
   let timer;
@@ -32,22 +34,46 @@ export function profileArgument(commandLine) {
   return path && path.length <= 1024 && isAbsolute(path) ? path : null;
 }
 
+// Fixed classes distinguish an unsupported target type from a nonblank page without
+// retaining titles, IDs, URLs, extension names, query strings or other target metadata.
+function initialTargetsEvidence(targets) {
+  if (!Array.isArray(targets?.targetInfos)) return { status: "rejected", reasons: ["target_response_invalid"],
+    observedCount: null, recordedCount: 0, omittedCount: null, limit: MAX_INITIAL_TARGETS, targets: [] };
+  const infos = targets.targetInfos, reasons = new Set();
+  if (infos.length > MAX_INITIAL_TARGETS) reasons.add("target_count_over_cap");
+  const knownTypes = ["page", "tab", "browser", "background_page", "service_worker", "worker", "shared_worker", "iframe", "webview", "other"];
+  const rows = infos.slice(0, MAX_INITIAL_TARGETS).map((target) => {
+    const type = target?.type, url = target?.url;
+    if (!["page", "tab", "browser"].includes(type)) reasons.add("target_type_unaccepted");
+    if (!["", "about:blank"].includes(url)) reasons.add("target_url_unaccepted");
+    let urlClass = "missing_or_invalid";
+    if (typeof url === "string") {
+      if (url.length > MAX_TARGET_URL_CHARS) urlClass = "over_cap";
+      else if (url === "") urlClass = "empty";
+      else if (url === "about:blank") urlClass = "about_blank";
+      else urlClass = [["https:", "https"], ["http:", "http"], ["chrome:", "chrome_internal"],
+        ["chrome-extension:", "chrome_extension"], ["devtools:", "devtools"], ["file:", "file"],
+        ["data:", "data"], ["blob:", "blob"]].find(([prefix]) => url.startsWith(prefix))?.[1] ?? "other";
+    }
+    return { typeClass: knownTypes.includes(type) ? type : "unrecognized", urlClass,
+      subtypeClass: target?.subtype === undefined ? "absent" : target.subtype === "prerender" ? "prerender" : "unrecognized" };
+  });
+  return { status: reasons.size ? "rejected" : "accepted", reasons: [...reasons], observedCount: infos.length,
+    recordedCount: rows.length, omittedCount: infos.length - rows.length, limit: MAX_INITIAL_TARGETS, targets: rows };
+}
+
 /** Experimental SystemInfo is evidence of the actual process/profile, never a compositor readiness condition. */
 export async function observeBrowserIdentity(browser, launchStartedAt, { timeoutMs = 2000, now = Date.now } = {}) {
   const unavailable = (code) => ({ evidence: { status: "unavailable", code }, profilePath: null });
   const calls = ["SystemInfo.getInfo", "SystemInfo.getProcessInfo", "Target.getTargets"];
   const results = await Promise.allSettled(calls.map((method) => bounded(Promise.resolve().then(() => browser.conn.send(method)), timeoutMs)));
-  if (results.some((result) => result.status !== "fulfilled")) return unavailable("identity_protocol_unavailable");
-  const [info, processInfo, targets] = results.map((result) => result.value);
+  if (results.slice(0, 2).some((result) => result.status !== "fulfilled")) return unavailable("identity_protocol_unavailable");
+  const [info, processInfo] = results.slice(0, 2).map((result) => result.value);
   const profilePath = profileArgument(info?.commandLine);
   if (!profilePath) return unavailable("identity_profile_argument_unavailable");
   if (!Array.isArray(processInfo?.processInfo) || processInfo.processInfo.length > 128) return unavailable("identity_process_unavailable");
   const browsers = processInfo.processInfo.filter((process) => process?.type === "browser");
   if (browsers.length !== 1 || !Number.isSafeInteger(browsers[0].id) || browsers[0].id <= 0) return unavailable("identity_process_unavailable");
-  if (!Array.isArray(targets?.targetInfos) || targets.targetInfos.length > 32
-    || targets.targetInfos.some((target) => !["page", "tab", "browser"].includes(target?.type) || !["", "about:blank"].includes(target?.url))) {
-    return unavailable("identity_initial_targets_not_blank");
-  }
   try {
     if (!/^ticketstub-chrome-[a-zA-Z0-9_-]{6}$/.test(basename(profilePath)) || realpathSync(dirname(profilePath)) !== realpathSync(tmpdir())) {
       return unavailable("identity_profile_not_task_owned");
@@ -56,12 +82,24 @@ export async function observeBrowserIdentity(browser, launchStartedAt, { timeout
     if (!stat.isDirectory() || stat.isSymbolicLink() || !Number.isFinite(stat.birthtimeMs) || stat.birthtimeMs <= 0
       || !Number.isFinite(launchStartedAt) || stat.birthtimeMs < launchStartedAt - CLOCK_RESOLUTION_MS
       || stat.birthtimeMs > observedAt + CLOCK_RESOLUTION_MS) return unavailable("identity_profile_creation_unconfirmed");
-    return { profilePath, evidence: { status: "established", method: "SystemInfo.getInfo/getProcessInfo+Target.getTargets+filesystem",
-      browserPid: browsers[0].id, initialTargetCount: targets.targetInfos.length, initialTargetsBlank: true,
+    const evidence = { method: "SystemInfo.getInfo/getProcessInfo+Target.getTargets+filesystem",
+      browserPid: browsers[0].id,
       observedBeforeApplicationNavigation: true, launchStartedAt, observedAt,
       profile: { pathSha256: digest(realpathSync(profilePath)), device: stat.dev, inode: stat.ino,
         birthtimeMs: stat.birthtimeMs, creationClockResolutionMs: CLOCK_RESOLUTION_MS, taskOwnedTemporaryDirectory: true },
-      launcher: { path: "scripts/lib/cdp.mjs", sha256: LAUNCHER_SHA256, contract: "one_mkdtemp_and_spawn_per_launchBrowser_call" } } };
+      launcher: { path: "scripts/lib/cdp.mjs", sha256: LAUNCHER_SHA256, contract: "one_mkdtemp_and_spawn_per_launchBrowser_call" } };
+    const initialTargets = results[2].status === "fulfilled" ? initialTargetsEvidence(results[2].value)
+      : { status: "unavailable", reasons: ["target_protocol_unavailable"], observedCount: null, recordedCount: 0,
+        omittedCount: null, limit: MAX_INITIAL_TARGETS, targets: [] };
+    if (initialTargets.status !== "accepted") {
+      // A rejected target never establishes isolation. The independently validated task
+      // profile is retained only so its removal can still be checked after browser exit.
+      return { profilePath, evidence: { ...evidence, status: "unavailable",
+        code: initialTargets.status === "unavailable" ? "identity_protocol_unavailable" : "identity_initial_targets_not_blank",
+        initialTargets, profileCleanupEvidence: "validated_independently_of_target_qualification" } };
+    }
+    return { profilePath, evidence: { ...evidence, status: "established", initialTargets,
+      initialTargetCount: initialTargets.observedCount, initialTargetsBlank: true } };
   } catch { return unavailable("identity_profile_stat_unavailable"); }
 }
 
@@ -123,6 +161,7 @@ export class DownloadBrowserSessions {
         }
         this.profiles.add(profile); this.processes.add(pid);
       } else if (record.mode === "cold_browser") throw new Error(stage);
+      else this.fault(sessionId, stage); // Known invalid baseline identity still fails, even if its profile cleanup succeeds.
       record.setup = "ready";
       return { browser: entry.browser, receipts: entry.receipts, sessionId, version: record.version };
     } catch {
