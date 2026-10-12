@@ -37,29 +37,61 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/contract-packager" --ignore-scripts --no-audit --no-fund npm@10.9.8
           export PATH="$RUNNER_TEMP/contract-packager/node_modules/.bin:$PATH"
-          mkdir -p reports
-          node integration_tests/prepare-package.mjs .contract-producer "$RUNNER_TEMP/contract-runtime" > reports/private-install.json
+          mkdir -p reports/runs/verification
+          node integration_tests/prepare-package.mjs .contract-producer "$RUNNER_TEMP/contract-runtime" > reports/runs/verification/private-install.json
           npm install --prefix "$RUNNER_TEMP/contract-types" --ignore-scripts --no-audit --no-fund typescript@5.9.3
           cp integration_tests/installed-caller.mts integration_tests/installed-scenarios.mjs "$RUNNER_TEMP/contract-runtime/"
           node "$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc" --strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes --verbatimModuleSyntax --noFallthroughCasesInSwitch --noPropertyAccessFromIndexSignature --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 "$RUNNER_TEMP/contract-runtime/installed-caller.mts"
-          node "$RUNNER_TEMP/contract-runtime/installed-scenarios.mjs" > reports/installed-caller.json
+          node "$RUNNER_TEMP/contract-runtime/installed-scenarios.mjs" > reports/runs/verification/installed-caller.json
       - name: Install platform isolation tooling
         run: sudo apt-get update && sudo apt-get install --yes bubblewrap
       - name: Verify real Linux isolation and retained owner output
         run: |
-          mkdir -p reports
-          sudo -n .venv/bin/python -m pytest tests/test_owner_output.py tests/test_processes.py tests/test_retrieval_capability.py tests/test_diagnostic_execution.py tests/test_diagnostic_denials.py tests/test_seeded_history.py -o cache_dir="${RUNNER_TEMP}/integration-evals-root-cache" --junitxml=reports/linux-owner-junit.xml
-      - run: uv run pytest --ignore=tests/test_owner_output.py --ignore=tests/test_processes.py --ignore=tests/test_retrieval_capability.py --ignore=tests/test_diagnostic_execution.py --ignore=tests/test_diagnostic_denials.py --ignore=tests/test_seeded_history.py --junitxml=reports/tooling-junit.xml
+          mkdir -p reports/runs/verification
+          sudo -n .venv/bin/python -m pytest tests/test_owner_output.py tests/test_processes.py tests/test_retrieval_capability.py tests/test_diagnostic_execution.py tests/test_diagnostic_denials.py tests/test_seeded_history.py -o cache_dir="${RUNNER_TEMP}/integration-evals-root-cache" --junitxml=reports/runs/verification/linux-owner-junit.xml
+      - run: uv run pytest --ignore=tests/test_owner_output.py --ignore=tests/test_processes.py --ignore=tests/test_retrieval_capability.py --ignore=tests/test_diagnostic_execution.py --ignore=tests/test_diagnostic_denials.py --ignore=tests/test_seeded_history.py --junitxml=reports/runs/verification/tooling-junit.xml
       - name: Verify complete canonical scope and controlled failures
         shell: bash
         run: |
-          uv run integration-evals contract-runtime --node "$(command -v node)" --output reports/node-runtime.json
-          mkdir -p reports/runs/contracts
-          sudo -n env IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/node-runtime.json" IE_CONTRACT_INSTALLED_RUNTIME="$RUNNER_TEMP/contract-runtime/installed-runtime.json" IE_CONTRACT_CALLER_ROOT="$RUNNER_TEMP/contract-runtime" IE_CONTRACT_TYPESCRIPT="$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc" IE_CONTRACT_EVIDENCE="$PWD/reports/installed-negatives" .venv/bin/python -m pytest integration_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-canonical-cache" --junitxml=reports/canonical-junit.xml
-          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/node-runtime.json --output reports/runs/contracts --candidate-scope
-          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/node-runtime.json --output reports/runs/contracts
-          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime "$RUNNER_TEMP/contract-runtime/installed-runtime.json" --output reports/runs/contracts --candidate-scope
-          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime "$RUNNER_TEMP/contract-runtime/installed-runtime.json" --output reports/runs/contracts
+          uv run integration-evals contract-runtime --node "$(command -v node)" --output reports/runs/verification/node-runtime.json
+          mkdir -p reports/runs/verification/contracts
+          sudo -n env IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/runs/verification/node-runtime.json" IE_CONTRACT_INSTALLED_RUNTIME="$RUNNER_TEMP/contract-runtime/installed-runtime.json" IE_CONTRACT_CALLER_ROOT="$RUNNER_TEMP/contract-runtime" IE_CONTRACT_TYPESCRIPT="$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc" IE_CONTRACT_EVIDENCE="$PWD/reports/runs/verification/installed-negatives" .venv/bin/python -m pytest integration_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-canonical-cache" --junitxml=reports/runs/verification/canonical-junit.xml
+          .venv/bin/python - <<'PYTHON'
+          from pathlib import Path
+          from integration_evals.validation import git_value, source_fingerprint
+
+          repository = Path.cwd()
+          if git_value(repository, "status", "--porcelain"):
+              raise SystemExit("Canonical verification requires a clean checkout")
+          identity = (git_value(repository, "rev-parse", "HEAD"), source_fingerprint(repository))
+          Path("reports/runs/verification/source-identity.txt").write_text("\n".join(identity) + "\n")
+          PYTHON
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/runs/verification/node-runtime.json --output reports/runs/verification/contracts --candidate-scope
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/runs/verification/node-runtime.json --output reports/runs/verification/contracts
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime "$RUNNER_TEMP/contract-runtime/installed-runtime.json" --output reports/runs/verification/contracts --candidate-scope
+          sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime "$RUNNER_TEMP/contract-runtime/installed-runtime.json" --output reports/runs/verification/contracts
+          .venv/bin/python - <<'PYTHON'
+          from pathlib import Path
+          from integration_evals.artifacts import load_record
+          from integration_evals.contract_records import ContractReceipt
+          from integration_evals.validation import git_value, source_fingerprint
+
+          repository = Path.cwd()
+          output = Path("reports/runs/verification")
+          expected = output.joinpath("source-identity.txt").read_text().splitlines()
+          current = [git_value(repository, "rev-parse", "HEAD"), source_fingerprint(repository)]
+          if git_value(repository, "status", "--porcelain") or current != expected:
+              raise SystemExit("Canonical verification changed the clean source identity")
+          receipts = tuple(load_record(path, ContractReceipt) for path in output.glob("contracts/*/contracts.json"))
+          if len(receipts) != 4 or {(item.execution_surface, item.candidate_scope) for item in receipts} != {
+              ("source", True), ("source", False), ("installed-package", True), ("installed-package", False)
+          }:
+              raise SystemExit("Canonical verification requires all four distinct receipts")
+          for receipt in receipts:
+              if receipt.integration_dirty or [receipt.integration_revision, receipt.integration_source_digest] != expected:
+                  raise SystemExit("Canonical receipt does not bind the clean source identity")
+          print("PASS: all four canonical receipts bind the unchanged clean source identity")
+          PYTHON
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/event-intelligence
@@ -68,12 +100,12 @@ jobs:
           persist-credentials: false
       - name: Verify source retrieval boundary in an isolated Linux component workspace
         run: |
-          sudo -n env IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/node-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/retrieval-component" .venv/bin/python -m pytest component_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-component-cache" --junitxml=reports/component-junit.xml
+          sudo -n env IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/runs/verification/node-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/runs/verification/retrieval-component" .venv/bin/python -m pytest component_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-component-cache" --junitxml=reports/runs/verification/component-junit.xml
       - name: Verify missing assembly is reported as blocked
         shell: bash
         run: |
           set +e
-          uv run integration-evals run --output reports/runs
+          uv run integration-evals run --output reports/runs/verification/product-runs
           status=$?
           set -e
           test "$status" -eq 2
@@ -82,5 +114,5 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: verification-tooling-${{ github.sha }}
-          path: reports/
+          path: reports/runs/verification/
           retention-days: 30
