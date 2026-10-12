@@ -15,8 +15,9 @@ const CLOCK_RESOLUTION_MS = 1000; // filesystem birth-time precision, not a brow
 const MAX_INITIAL_TARGETS = 32;
 const MAX_TARGET_URL_CHARS = 4096;
 const DOWNLOAD_LAUNCH_OPTIONS = Object.freeze({ downloadIsolation: true });
-// Exact constants at measured Chromium revision b510e9d7. Diagnostic classes
-// only: none of these URLs changes the strict startup target predicate below.
+// Exact constants at measured Chromium revision b510e9d7. Only the two observed
+// omnibox forms can qualify as browser-owned UI, bound to their type and absent subtype.
+// Tab search remains diagnostic-only; an internal URL alone never qualifies a target.
 const BROWSER_UI_URL_CLASSES = new Map([
   ["chrome://tab-search.top-chrome/", "tab_search"],
   ["chrome://omnibox-popup.top-chrome/", "omnibox_popup"],
@@ -46,14 +47,25 @@ export function profileArgument(commandLine) {
 // retaining titles, IDs, URLs, extension names, query strings or other target metadata.
 function initialTargetsEvidence(targets) {
   if (!Array.isArray(targets?.targetInfos)) return { status: "rejected", reasons: ["target_response_invalid"],
-    observedCount: null, recordedCount: 0, omittedCount: null, limit: MAX_INITIAL_TARGETS, targets: [] };
+    observedCount: null, recordedCount: 0, omittedCount: null, limit: MAX_INITIAL_TARGETS,
+    allTargetsBlank: null, recordedKinds: null, targets: [] };
   const infos = targets.targetInfos, reasons = new Set();
   if (infos.length > MAX_INITIAL_TARGETS) reasons.add("target_count_over_cap");
+  const recordedKinds = { blankApplication: 0, blankBrowser: 0, knownBrowserUi: 0, rejected: 0 };
   const knownTypes = ["page", "tab", "browser", "browser_ui", "background_page", "service_worker", "worker", "shared_worker", "iframe", "webview", "other"];
   const rows = infos.slice(0, MAX_INITIAL_TARGETS).map((target) => {
     const type = target?.type, url = target?.url;
-    if (!["page", "tab", "browser"].includes(type)) reasons.add("target_type_unaccepted");
-    if (!["", "about:blank"].includes(url)) reasons.add("target_url_unaccepted");
+    const browserUiUrlClass = type === "browser_ui" && typeof url === "string" && url.length <= MAX_TARGET_URL_CHARS
+      ? BROWSER_UI_URL_CLASSES.get(url) ?? "unrecognized" : "unrecognized";
+    const knownBrowserUi = type === "browser_ui" && ["omnibox_popup", "omnibox_popup_aim"].includes(browserUiUrlClass);
+    const blankType = ["page", "tab", "browser"].includes(type), blankUrl = ["", "about:blank"].includes(url);
+    const subtypeAbsent = target?.subtype === undefined;
+    if (!blankType && !knownBrowserUi) reasons.add("target_type_unaccepted");
+    if (!blankUrl && !knownBrowserUi) reasons.add("target_url_unaccepted");
+    if (!subtypeAbsent) reasons.add("target_subtype_unaccepted");
+    if (knownBrowserUi && subtypeAbsent) recordedKinds.knownBrowserUi++;
+    else if (blankType && blankUrl && subtypeAbsent) recordedKinds[type === "browser" ? "blankBrowser" : "blankApplication"]++;
+    else recordedKinds.rejected++;
     let urlClass = "missing_or_invalid";
     if (typeof url === "string") {
       if (url.length > MAX_TARGET_URL_CHARS) urlClass = "over_cap";
@@ -64,12 +76,14 @@ function initialTargetsEvidence(targets) {
         ["data:", "data"], ["blob:", "blob"]].find(([prefix]) => url.startsWith(prefix))?.[1] ?? "other";
     }
     return { typeClass: knownTypes.includes(type) ? type : "unrecognized", urlClass,
-      ...(type === "browser_ui" ? { browserUiUrlClass: typeof url === "string" && url.length <= MAX_TARGET_URL_CHARS
-        ? BROWSER_UI_URL_CLASSES.get(url) ?? "unrecognized" : "unrecognized" } : {}),
-      subtypeClass: target?.subtype === undefined ? "absent" : target.subtype === "prerender" ? "prerender" : "unrecognized" };
+      ...(type === "browser_ui" ? { browserUiUrlClass } : {}),
+      subtypeClass: subtypeAbsent ? "absent" : target.subtype === "prerender" ? "prerender" : "unrecognized" };
   });
+  if (!recordedKinds.blankApplication) reasons.add("blank_application_target_missing");
   return { status: reasons.size ? "rejected" : "accepted", reasons: [...reasons], observedCount: infos.length,
-    recordedCount: rows.length, omittedCount: infos.length - rows.length, limit: MAX_INITIAL_TARGETS, targets: rows };
+    recordedCount: rows.length, omittedCount: infos.length - rows.length, limit: MAX_INITIAL_TARGETS,
+    allTargetsBlank: infos.length > MAX_INITIAL_TARGETS ? null : rows.length > 0 && rows.every((row) => ["empty", "about_blank"].includes(row.urlClass)),
+    recordedKinds, targets: rows };
 }
 
 /** Experimental SystemInfo is evidence of the actual process/profile, never a compositor readiness condition. */
@@ -100,7 +114,7 @@ export async function observeBrowserIdentity(browser, launchStartedAt, { timeout
       launcher: { path: "scripts/lib/cdp.mjs", sha256: LAUNCHER_SHA256, contract: "one_mkdtemp_and_spawn_per_launchBrowser_call" } };
     const initialTargets = results[2].status === "fulfilled" ? initialTargetsEvidence(results[2].value)
       : { status: "unavailable", reasons: ["target_protocol_unavailable"], observedCount: null, recordedCount: 0,
-        omittedCount: null, limit: MAX_INITIAL_TARGETS, targets: [] };
+        omittedCount: null, limit: MAX_INITIAL_TARGETS, allTargetsBlank: null, recordedKinds: null, targets: [] };
     if (initialTargets.status !== "accepted") {
       // A rejected target never establishes isolation. The independently validated task
       // profile is retained only so its removal can still be checked after browser exit.
@@ -109,7 +123,9 @@ export async function observeBrowserIdentity(browser, launchStartedAt, { timeout
         initialTargets, profileCleanupEvidence: "validated_independently_of_target_qualification" } };
     }
     return { profilePath, evidence: { ...evidence, status: "established", initialTargets,
-      initialTargetCount: initialTargets.observedCount, initialTargetsBlank: true } };
+      initialTargetCount: initialTargets.observedCount, initialTargetsBlank: initialTargets.allTargetsBlank,
+      initialApplicationTargetsBlank: true, initialApplicationTargetCount: initialTargets.recordedKinds.blankApplication,
+      initialBrowserUiTargetCount: initialTargets.recordedKinds.knownBrowserUi } };
   } catch { return unavailable("identity_profile_stat_unavailable"); }
 }
 
