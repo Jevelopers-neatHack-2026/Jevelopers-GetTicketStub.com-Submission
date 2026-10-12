@@ -22,6 +22,7 @@ import { launchBrowser, chromePath } from "./lib/cdp.mjs";
 import { BEGIN_CAPTURE_PROVENANCE, browserProvenance, captureFailureFrames, readCaptureProvenance } from "./lib/download-capture-diagnostics.mjs";
 import { DownloadReceipts } from "./lib/download-receipts.mjs";
 import { checkDownloadReceiptControls } from "./lib/download-receipt-controls.mjs";
+import { MESSAGES } from "../src/customer/feedback-messages/messages.ts";
 
 const base = (process.argv[2] ?? "http://127.0.0.1:3000").replace(/\/$/, "");
 const evidenceDir = resolve(process.argv[3] ?? "out/gt-evidence");
@@ -458,8 +459,10 @@ try {
         await openStudio(c, `v.art = { kind: "image", src: "https://127.0.0.1:9/never.png", seed: 1, provenance: "simulated" };`);
         const failureAction = await receipts.arm(page, "front", `${label}: unreadable art`);
         await press("front");
-        const failed$ = await page.waitFor(`document.querySelector("[data-failure]")`, 20000);
-        check(`${label}: unreadable art ends in a message, not a broken file`, failed$ && await receipts.noDownload(page, failureAction, "failed"), failed$ ? "a file was saved" : "no message");
+        // "unknown" also renders data-failure and re-enables its button. Only the actual bad-image
+        // outcome in this armed control's root can prove that this operation ended without a file.
+        const failed$ = await receipts.waitForFailure(page, failureAction, MESSAGES.bad_image.message, 20000);
+        check(`${label}: unreadable art ends in a message, not a broken file`, failed$ && await receipts.noDownload(page, failureAction, "failed", { failureMessage: MESSAGES.bad_image.message }), failed$ ? "a file was saved" : "no completed bad-image message");
         await page.eval(`localStorage.removeItem("ticketstub.wall.v1")`); // the demo stubs come back as they were
         evidence.failureMessage = await page.eval(`document.querySelector("[data-failure]")?.innerText ?? null`);
         console.log(`note unreadable-art message: ${JSON.stringify(evidence.failureMessage)}`);

@@ -27,7 +27,9 @@ The `native-downloads-*` directory retains the GUID-named files. Each invocation
 download directory is cleared between actions or removed at teardown. An unknown, duplicate, incomplete or
 ambiguous delivery, a reused document, or a Blob/file mismatch fails the audit. Events remain observed through
 browser shutdown. Share, cancel, tab and unreadable-art cases must observe their path in the current document
-and its selected control leaving the busy state before recording a no-download terminal. A later producer
+and its selected control leaving the busy state before recording a no-download terminal. The unreadable-art
+case must match the actual `bad_image` catalog message in that exact control's download root; a timeout or a
+failure elsewhere in the document does not prove completion. A later producer
 contradicts that terminal and fails the final audit.
 
 ## Controls and limits
@@ -36,7 +38,9 @@ The `native-controls-*` directories contain deliberately synthetic producers in 
 receipts, actual native GUID files and browser versions are retained separately from the application journey.
 Controls cover a fresh B download; pending A completing while B is held; an unknown producer; two producers;
 two native GUIDs for one Blob URL; a second arm in the same document; intentional saved-file corruption; and
-a late producer after a claimed no-download terminal. Expected rejections qualify only when the corresponding
+a late producer after a claimed no-download terminal; and an enabled control with a timeout message and a held
+producer. The latter must refuse completion even with an unrelated bad-image message elsewhere, then collect
+the actual native output when the producer is released. Expected rejections qualify only when the corresponding
 native action actually occurred. The corruption control also preserves the original PNG before its deliberate edit.
 
 The original image checks still apply: dimensions, shape, content, screen parity, a different-stub negative,

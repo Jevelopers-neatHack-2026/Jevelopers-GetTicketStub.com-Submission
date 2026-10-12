@@ -4,12 +4,13 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { launchBrowser } from "./cdp.mjs";
 import { DownloadReceipts } from "./download-receipts.mjs";
+import { MESSAGES } from "../../src/customer/feedback-messages/messages.ts";
 
 const fixture = (url) => {
   const { searchParams } = new URL(url, "http://127.0.0.1");
   const colour = searchParams.get("colour") === "red" ? "red" : "blue";
   const copies = searchParams.get("duplicate") === "1" ? 2 : 1;
-  return `<!doctype html><html><body><button data-download="front" style="width:160px;height:60px">Download control</button><script>
+  return `<!doctype html><html><body><div data-download-root><button data-download="front" style="width:160px;height:60px">Download control</button><div id="status"></div></div><script>
     const state = window.fixture = { clicks: 0, deliveries: [], ready: false };
     const canvas = Object.assign(document.createElement('canvas'), { width: 32, height: 16 });
     const ctx = canvas.getContext('2d');
@@ -38,7 +39,7 @@ const fixture = (url) => {
 };
 
 /** Every negative has its own real browser and retained directory so it cannot contaminate the app journey. */
-export async function checkDownloadReceiptControls(check, directory) {
+export async function checkDownloadReceiptControls(check, directory, { kinds = ["fresh-b", "late-a-current-b", "unknown", "duplicate", "duplicate-native", "second-arm", "saved-file-mismatch", "late-after-no-download", "unknown-pending"], Collector = DownloadReceipts } = {}) {
   mkdirSync(directory, { recursive: true });
   const server = createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "text/html", "Cache-Control": "no-store" });
@@ -48,9 +49,9 @@ export async function checkDownloadReceiptControls(check, directory) {
   const base = `http://127.0.0.1:${server.address().port}`;
   const results = [];
   try {
-    for (const kind of ["fresh-b", "late-a-current-b", "unknown", "duplicate", "duplicate-native", "second-arm", "saved-file-mismatch", "late-after-no-download"]) {
+    for (const kind of kinds) {
       const folder = join(directory, kind), browser = await launchBrowser();
-      const tracker = new DownloadReceipts(browser, join(folder, "native"), { timeoutMs: 8000 });
+      const tracker = new Collector(browser, join(folder, "native"), { timeoutMs: 8000 });
       const rec = { kind, mode: "synthetic producer in real native browser", observations: {} };
       let ok = false;
       try {
@@ -103,7 +104,30 @@ export async function checkDownloadReceiptControls(check, directory) {
           const p = await page(kind === "duplicate" ? "?duplicate=1" : "?colour=blue");
           const action = await tracker.arm(p, "front", kind);
           await press(p);
-          if (kind === "late-after-no-download") {
+          if (kind === "unknown-pending") {
+            // Reproduce the UI ambiguity with a genuinely held producer. An unrelated completed
+            // bad-image message elsewhere must not qualify this selected control's timeout.
+            rec.observations.pending = await p.eval(`(() => {
+              const failure = document.createElement('div'); failure.dataset.failure = '';
+              failure.appendChild(document.createElement('p')).textContent = ${JSON.stringify(MESSAGES.timeout.message)};
+              document.getElementById('status').appendChild(failure);
+              const other = failure.cloneNode(true); other.querySelector('p').textContent = ${JSON.stringify(MESSAGES.bad_image.message)};
+              document.body.appendChild(other);
+              return { genericFailure: !!document.querySelector('[data-failure]'), enabled: !document.querySelector('button').disabled, deliveries: fixture.deliveries.length };
+            })()`);
+            rec.observations.rejection = await rejection(() => tracker.noDownload(p, action, "failed", { failureMessage: MESSAGES.bad_image.message }));
+            rec.observations.refusedTerminal = !action.settled && !action.noDownload;
+            await release(p);
+            await tracker.until(() => tracker.downloads.size === 1 && [...tracker.downloads.values()][0].state === "completed", "held unknown producer actually delivering after release");
+            rec.observations.afterRelease = await p.eval("fixture.deliveries");
+            // A rejected terminal must leave the actual single producer available for correct collection.
+            try { rec.observations.result = (await tracker.download(action)).receipt; }
+            catch (e) { rec.observations.collectionError = e.message; }
+            const expected = await p.eval("fixture.sha256");
+            ok = rec.observations.pending.genericFailure && rec.observations.pending.enabled && rec.observations.pending.deliveries === 0
+              && rec.observations.rejection?.includes("no_download_failure_not_terminal") && rec.observations.refusedTerminal
+              && rec.observations.afterRelease.length === 1 && rec.observations.result?.sha256 === expected;
+          } else if (kind === "late-after-no-download") {
             // Deliberately lie about a terminal outcome, then exercise an actual late native producer.
             // The collector must retain the contradiction even after the no-download action was settled.
             rec.observations.sealed = await tracker.noDownload(p, action, "synthetic-cancelled");
@@ -167,7 +191,7 @@ export async function checkDownloadReceiptControls(check, directory) {
         rec.receipts = tracker.snapshot();
         tracker.stop();
       }
-      if (kind === "fresh-b" || kind === "late-a-current-b") ok &&= rec.receipts.violations.length === 0;
+      if (kind === "fresh-b" || kind === "late-a-current-b" || kind === "unknown-pending") ok &&= rec.receipts.violations.length === 0;
       rec.passed = Boolean(ok);
       writeFileSync(join(folder, "control.json"), JSON.stringify(rec, null, 2));
       results.push(rec);

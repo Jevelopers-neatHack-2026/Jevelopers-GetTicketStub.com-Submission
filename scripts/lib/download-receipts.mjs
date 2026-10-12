@@ -58,6 +58,11 @@ function observeProducer(binding, slot) {
       }
     }
   };
+  const failureMatches = (id, message) => {
+    const root = action?.button.closest("[data-download-root]");
+    return action?.id === id && typeof message === "string" && message.length > 0
+      && root?.querySelector("[data-failure] p")?.textContent?.trim() === message;
+  };
   Object.defineProperty(globalThis, slot, { value: Object.freeze({
     arm(id, side) {
       if (action) { send("violation", { code: "document_reused" }); throw new Error("document_reused"); }
@@ -74,8 +79,10 @@ function observeProducer(binding, slot) {
     isIdle(id) {
       return action?.id === id && action.button.isConnected && !action.button.disabled;
     },
-    noDownload(id, outcome) {
+    failureMatches,
+    noDownload(id, outcome, failureMessage) {
       if (!action || action.id !== id || !action.button.isConnected || action.button.disabled || clicks !== 1 || producers !== 0 || terminal) throw new Error("no_download_receipt_invalid");
+      if (outcome === "failed" && !failureMatches(id, failureMessage)) throw new Error("no_download_failure_not_terminal");
       terminal = true;
       send("no_download", { outcome });
       return true;
@@ -225,14 +232,17 @@ export class DownloadReceipts {
     action.result = file.receipt;
     return file;
   }
-  async noDownload(page, action, outcome) {
+  waitForFailure(page, action, message, ms = this.timeoutMs) {
+    return page.waitFor(`${SLOT}.failureMatches(${JSON.stringify(action.id)}, ${JSON.stringify(message)})`, ms);
+  }
+  async noDownload(page, action, outcome, { failureMessage = null } = {}) {
     // The caller first observes the actual share/tab/cancel/failure path in this same document.
     // Also wait for the exact armed control to leave its busy state before sealing its terminal receipt.
     if (!await page.waitFor(`${SLOT}.isIdle(${JSON.stringify(action.id)})`, this.timeoutMs)) {
       this.fault("no_download_not_idle", { actionId: action.id });
       throw new Error("no_download_not_idle");
     }
-    await page.eval(`${SLOT}.noDownload(${JSON.stringify(action.id)}, ${JSON.stringify(outcome)})`);
+    await page.eval(`${SLOT}.noDownload(${JSON.stringify(action.id)}, ${JSON.stringify(outcome)}, ${JSON.stringify(failureMessage)})`);
     await this.until(() => action.noDownload === outcome, "current-document no-download terminal", action);
     if (action.controls !== 1 || action.producerIds.length) throw new Error("unexpected_download_producer");
     action.settled = true;
