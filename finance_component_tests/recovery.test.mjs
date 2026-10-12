@@ -50,7 +50,7 @@ test('public replay drains one actual durable retry after controlled ledger faul
     const again = value(await s.call('replayUsageOutbox', { ...command, requestId: randomUUID() }));
     assert.equal(again.scanned, 0);
     assert.equal(again.posted, 0);
-    const money = await s.pool.query('SELECT amount::text,currency FROM cost_intelligence.financial_ledger_events WHERE tenant_id=$1', [s.scope.tenantId]);
+    const money = await s.pool.query('SELECT trim_scale(amount)::text AS amount,currency FROM cost_intelligence.financial_ledger_events WHERE tenant_id=$1', [s.scope.tenantId]);
     s.record('observer exact amount and currency', money.rows);
     assert.deepEqual(money.rows, [{ amount: '0.000003', currency: 'USD' }]);
     assert.deepEqual(await s.rows(), { holds: 0, held: '0', inbox: 1, outbox: 1, ledger: 1, amount: '0.000003' });
