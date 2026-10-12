@@ -45,6 +45,8 @@ import {
   parseOps12RecoveryDiagnostics, parseOps12RecoveryFailure
 } from './failure-diagnostics.js';
 import { createAdmissionFailureDiagnostic } from './fixtures/admission-store-child.mjs';
+import { parseFixtureRetryDiagnostic } from './fixture-busy-retry.js';
+import { encodeC04CompletionDiagnostic, readC04FinalRow } from './fixture-recovery-diagnostics.js';
 import {
   classifyOps04ExitDisposition, createOps04FailureDetails, isOps04ExitDisposition,
   ops04FailureFields, ops04ReadErrorKind, parseOps04FailureDetails, throwAfterOps04FailureCapture,
@@ -5732,6 +5734,8 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
         }
       } finally {
         for (const [index, processInfo] of processes.entries()) {
+          t.diagnostic(`OPS05_C12_RETRY_V1 ${JSON.stringify({ race: 'expired', slot: index,
+            diagnostic: parseFixtureRetryDiagnostic(processInfo.stderr) })}`);
           recordClosedChild(processInfo.stderr, 'OPS05.C12', index, c12Phase, exits[index], validated[index]);
         }
       }
@@ -5850,6 +5854,8 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
         validated.fill(true);
       } finally {
         outcomes.forEach(({ supervisor, exit }, slot) => {
+          t.diagnostic(`OPS05_C12_RETRY_V1 ${JSON.stringify({ race: 'terminal', slot,
+            diagnostic: parseFixtureRetryDiagnostic(supervisor.stderr) })}`);
           recordClosedChild(supervisor.stderr, 'OPS05.C12', slot, 'terminal_child', exit, validated[slot]);
         });
       }
@@ -6199,7 +6205,8 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     const runnerPids = new Set();
     const fixtureObservations = [];
     const openFixture = (ownerId, idempotencyKey = 'worker-crash-recovery', slot = 0) => {
-      const child = spawn(process.execPath, [fixture, crashDir.databasePath, ownerId, idempotencyKey], {
+      const deadlineNs = process.hrtime.bigint() + 8_000_000_000n;
+      const child = spawn(process.execPath, [fixture, crashDir.databasePath, ownerId, idempotencyKey, String(deadlineNs)], {
         cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe']
       });
       METRICS.processRuns += 1;
@@ -6221,7 +6228,6 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
         }
       });
       child.stderr.on('data', chunk => {
-        output += chunk;
         if (Buffer.byteLength(diagnosticStderr + chunk, 'utf8') <= 8_192) diagnosticStderr += chunk;
         else METRICS.closedFixtureDiagnostics.diagnosticsComplete = false;
       });
@@ -6233,19 +6239,20 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
       });
       fixtureObservations.push(() => {
         const exit = observedExit ?? observation.snapshot();
+        t.diagnostic(`OPS05_C08_RETRY_V1 ${JSON.stringify({ slot,
+          diagnostic: parseFixtureRetryDiagnostic(diagnosticStderr) })}`);
         const detail = recordClosedChild(diagnosticStderr, 'OPS05.C08', slot,
           'worker_stop', exit, resultValidated);
         if (requiresClosedFixtureRetention(exit, detail?.nativeClose, detail?.cleanupFailed)) c08Retain = true;
       });
       const ready = (async () => {
-        const deadline = Date.now() + 8_000;
-        while (Date.now() < deadline) {
+        while (process.hrtime.bigint() < deadlineNs) {
           const record = records.find(item => item.event === 'ready');
           if (record) return record;
           if (child.exitCode !== null || child.signalCode !== null) break;
           await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
         }
-        throw new Error(`The owned supervisor did not publish its admission: ${output}`);
+        throw new Error(`The owned supervisor did not publish its admission: ${diagnosticStderr}`);
       })();
       return { child, closed, ready, records, markResultValidated: () => { resultValidated = true; } };
     };
@@ -7199,16 +7206,61 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
 
   await t.test('OPS07.C04 stop reports incomplete durable cleanup while a second SQLite writer lock spans child reap', async t => {
     const busyStop = tempDirectory('ah11-busy-stop-recovery-');
-    t.after(() => busyStop.cleanup());
+    const diagnosticSession = createOperationsDiagnosticSession({ directory: busyStop.directory });
+    let worker;
+    let restart;
+    let raw;
+    let recovered;
+    let accepted;
+    let c04Phase = 'worker_start';
+    let c04PrimaryFailed = false;
+    let c04PrimaryError;
+    let c04Row = readC04FinalRow(null, null);
+    t.after(async () => {
+      const cleanupErrors = [];
+      let cleanupComplete = true;
+      for (const owned of [worker, restart]) {
+        if (!owned || owned.lifecycle === 'stopped') continue;
+        try {
+          const stopped = await owned.stop('test');
+          if (stopped.stopped !== true || stopped.childrenReaped !== true || stopped.storeClosed !== true) {
+            cleanupComplete = false;
+            cleanupErrors.push(new Error('C04 owned worker cleanup was not confirmed.'));
+          }
+        } catch (error) { cleanupComplete = false; cleanupErrors.push(error); }
+      }
+      let capture = null;
+      // Read actual FD3 records only after the owned runners have been reaped.
+      // Its two-job final-state oracle is inapplicable to this one-job restart.
+      if (cleanupComplete) {
+        try { capture = readOperationsDiagnosticSession(diagnosticSession, { finalState: { available: false } }); }
+        catch (error) { cleanupErrors.push(error); }
+      }
+      if (!disposeOperationsDiagnosticSession(diagnosticSession)) {
+        cleanupComplete = false;
+        cleanupErrors.push(new Error('C04 diagnostic descriptor cleanup was not confirmed.'));
+      }
+      for (const handle of [raw, recovered]) {
+        if (!handle) continue;
+        try { handle.close(); }
+        catch (error) { cleanupComplete = false; cleanupErrors.push(error); }
+      }
+      const diagnostic = encodeC04CompletionDiagnostic({ phase: c04Phase, row: c04Row, capture,
+        primaryFailed: c04PrimaryFailed, cleanupComplete });
+      if (diagnostic) t.diagnostic(diagnostic);
+      if (cleanupComplete) busyStop.cleanup();
+      if (cleanupErrors.length) throw new AggregateError(c04PrimaryFailed ? [c04PrimaryError, ...cleanupErrors] : cleanupErrors,
+        'C04 final diagnostic or native cleanup failed.', c04PrimaryFailed ? { cause: c04PrimaryError } : undefined);
+    });
+    try {
     const shutdownConfig = {
       workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1,
       shutdownTimeoutMs: 1_000, childKillGraceMs: 100, childReapReserveMs: 200,
       busyTimeoutMs: 20, pollIntervalMs: 5
     };
-    const worker = createOperationsWorker({
-      databasePath: busyStop.databasePath, ownerId: 'busy-stop-worker', config: shutdownConfig
+    worker = createOperationsWorker({
+      databasePath: busyStop.databasePath, ownerId: 'busy-stop-worker', config: shutdownConfig, diagnosticSession
     });
-    t.after(async () => { if (worker.lifecycle !== 'stopped') await worker.stop('test'); });
     void worker.start();
     const scope = { tenantId: 'busy-stop-tenant', projectId: 'busy-stop-project' };
     const planJson = JSON.stringify({
@@ -7219,12 +7271,12 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
         args: { parts: index % 12 === 0 ? ['x'.repeat(512)] : [{ $result: `b${String(index - 1).padStart(2, '0')}` }, ''] }
       }))
     });
-    const accepted = worker.submitSyntheticWork({
+    accepted = worker.submitSyntheticWork({
       trustedSyntheticScope: scope, idempotencyKey: 'busy-stop-held-work', planJson
     });
     assert.equal(accepted.accepted, true);
-    const raw = new DatabaseSync(busyStop.databasePath, { readOnly: true });
-    t.after(() => { try { raw.close(); } catch {} });
+    raw = new DatabaseSync(busyStop.databasePath, { readOnly: true });
+    c04Phase = 'runner_wait';
     const runnerDeadline = Date.now() + 3_000;
     let runnerPid = null;
     while (Date.now() < runnerDeadline && runnerPid === null) {
@@ -7238,6 +7290,7 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
     writerLock.exec('BEGIN IMMEDIATE');
     let firstStop;
     try {
+      c04Phase = 'held_stop';
       firstStop = await worker.stop('test');
       assert.equal(firstStop.stopped, false);
       assert.equal(firstStop.childrenReaped, true);
@@ -7255,30 +7308,41 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
       writerLock.close();
     }
 
+    c04Phase = 'recovered_stop';
     const recoveredStop = await worker.stop('test');
     assert.equal(recoveredStop.stopped, true);
     assert.equal(recoveredStop.durableCleanupComplete, true);
     assert.equal(recoveredStop.pendingDurableCleanupCount, 0);
     assert.equal(recoveredStop.storeClosed, true);
-    const recovered = openStore(busyStop.databasePath);
+    recovered = openStore(busyStop.databasePath);
     const queuedRow = recovered._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
       tenantId: scope.tenantId, projectId: scope.projectId, jobId: accepted.jobId
     });
     assert.equal(queuedRow.state, 'queued');
     assert.equal(raw.prepare('SELECT runner_pid FROM operations_work WHERE job_id=?').get(accepted.jobId).runner_pid, null);
     assert.equal(Number(raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 0);
-    recovered.close();
+    recovered.close(); recovered = null;
 
-    const restart = createOperationsWorker({
-      databasePath: busyStop.databasePath, ownerId: 'busy-stop-restart', config: shutdownConfig
+    c04Phase = 'restart_start';
+    restart = createOperationsWorker({
+      databasePath: busyStop.databasePath, ownerId: 'busy-stop-restart', config: shutdownConfig, diagnosticSession
     });
-    t.after(async () => { if (restart.lifecycle !== 'stopped') await restart.stop('test'); });
     void restart.start();
-    const completed = await waitForStatus(restart, scope, accepted.jobId, 'completed', 8_000);
-    assert.equal(completed.state, 'completed');
+    c04Phase = 'restart_wait';
+    try {
+      const completed = await waitForStatus(restart, scope, accepted.jobId, 'completed', 8_000);
+      assert.equal(completed.state, 'completed');
+    } finally { c04Row = readC04FinalRow(raw, accepted.jobId); }
+    c04Phase = 'restart_stop';
     const restartStop = await restart.stop('test');
     assert.equal(restartStop.stopped, true);
-    raw.close();
+    raw.close(); raw = null;
+    c04Phase = 'done';
+    } catch (error) {
+      c04PrimaryFailed = true; c04PrimaryError = error;
+      if (c04Row.status === 'not_observed') c04Row = readC04FinalRow(raw, accepted?.jobId);
+      throw error;
+    }
   });
   await t.test('OPS07.C05 the CLI stays open after an incomplete stop and succeeds after a second signal', async t => {
     const cliStop = tempDirectory('ah11-cli-incomplete-stop-');
