@@ -1073,8 +1073,9 @@ test('a metering signal getter cannot replace the prepared identity before singl
 test('a prepared getter changing across reads cannot retain the authenticated identity', async () => {
   let dispatches = 0;
   let preparedReads = 0;
+  let hostPrepared;
   const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
-    async dispatch() { dispatches += 1; return {}; } } });
+    async dispatch(args) { dispatches += 1; hostPrepared = args.prepared; return {}; } } });
   const input = billable();
   const prepared = await adapter.prepare(input);
   const payload = { ...input, metering: meteringInput() };
@@ -1084,9 +1085,10 @@ test('a prepared getter changing across reads cannot retain the authenticated id
   } });
 
   await adapter.dispatch(payload);
-  assert.ok(preparedReads >= 2, 'the caller-owned prepared getter was read again while building host input');
+  assert.equal(preparedReads, 1, 'the caller-owned prepared getter is read once into the dispatch snapshot');
+  assert.equal(hostPrepared, undefined, 'the adapter passes only the host preparation result, not the caller identity');
   await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
-  assert.equal(dispatches, 1, 'the first authenticated identity was consumed even when later getter reads differ');
+  assert.equal(dispatches, 1, 'the captured authenticated identity is consumed once despite later getter values');
 });
 
 test('reentrant signal access allows exactly one dispatch of a prepared value', async () => {
@@ -1257,7 +1259,8 @@ test('prepare rejects each binding mutation during credential and host awaits, w
     }
 
     if (mutation) {
-      await assert.rejects(preparing, (error) => error.code === 'credential_unavailable', context);
+      const expectedCode = mutationName === 'target contents' ? 'unsupported_image_configuration' : 'credential_unavailable';
+      await assert.rejects(preparing, (error) => error.code === expectedCode, context);
       assert.equal(hostInputs.length, phase === 'credential' ? 0 : 1,
         `${context} has the expected host preparation boundary`);
       assert.equal(dispatchInputs.length, 0, `${context} never reaches host dispatch`);
@@ -1291,5 +1294,296 @@ test('prepare rejects each binding mutation during credential and host awaits, w
     for (const [name, mutate, omitConfiguration] of mutations) {
       await exercise(phase, { mutation: mutate, mutationName: name, omitConfiguration: Boolean(omitConfiguration) });
     }
+  }
+});
+
+test('a caller scope change during host preparation invalidates the attempt and host scope stays frozen', async () => {
+  let hostPreparations = 0;
+  let dispatches = 0;
+  let hostScope;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare(args) {
+      hostPreparations += 1;
+      hostScope = args.scope;
+      assert.ok(Object.isFrozen(args.scope), 'the host gets a frozen snapshot, not the caller object');
+      assert.notEqual(args.scope, input.scope);
+      assert.throws(() => { 'use strict'; args.scope.project_ref = 'project:host'; }, TypeError);
+      // The caller's live object cannot change the frozen host scope, and the pending prepare is rejected afterward.
+      input.scope.account_ref = 'account:host';
+      input.scope.project_ref = 'project:host';
+      return {};
+    },
+    async dispatch() { dispatches += 1; return {}; } } });
+  const input = billable('image_generation', { scope: { ...fixtureScope } });
+  const original = { ...fixtureScope };
+  await assert.rejects(adapter.prepare(input), (error) => error.code === 'credential_unavailable');
+  assert.deepEqual({ ...hostScope }, original, 'the host saw the original refs, not the mutated ones');
+  assert.equal(hostPreparations, 1);
+  assert.equal(dispatches, 0, 'a mutated pending scope cannot mint prepared state or reach host dispatch');
+});
+
+test('a host prepare that mutates the validated target fails closed, and replacing its own target property changes nothing', async () => {
+  let dispatches = 0;
+  const mutations = [
+    ['model field', (t) => { t.model = 'other-author/other-model'; }],
+    ['configuration field', (t) => { t.configuration.provider_tag = 'other-tag'; }],
+    ['target made invalid', (t) => { t.endpoint = 'https://example.invalid/'; }]];
+  for (const [name, mutate] of mutations) {
+    const input = billable();
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async prepare() { mutate(input.target); return {}; },
+      async dispatch() { dispatches += 1; return {}; } } });
+    await assert.rejects(adapter.prepare(input), (error) => error.code === 'unsupported_image_configuration', name);
+  }
+  assert.equal(dispatches, 0);
+  const input = billable();
+  const bound = input.target;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare(args) {
+      assert.ok(Object.isFrozen(args), 'the host receives a frozen authenticated preparation snapshot');
+      assert.throws(() => { 'use strict'; args.target = { ...args.target, model: 'other-author/other-model' }; }, TypeError);
+      assert.throws(() => { 'use strict'; args.grant_ref = 'grant:other'; }, TypeError);
+      return {};
+    },
+    async dispatch() { dispatches += 1; return {}; } } });
+  const prepared = await adapter.prepare(input);
+  await adapter.dispatch({ ...input, target: bound, prepared, metering: meteringInput() });
+  assert.equal(dispatches, 1, 'a host that rewrites its own copy of the input leaves the binding on the validated target and grant');
+});
+
+test('a caller mutating input.scope while credential resolution is awaiting invalidates preparation', async () => {
+  let dispatches = 0;
+  let hostPreparations = 0;
+  const inner = grantCredentialPort();
+  const input = billable('image_generation', { scope: { ...fixtureScope } });
+  const credentialSource = { evidence_mode: 'live', async resolveCredential(args) {
+    const result = inner.resolveCredential(args);
+    input.scope.project_ref = 'project:swapped';
+    return result;
+  } };
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialSource, fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare() { hostPreparations += 1; return {}; }, async dispatch() { dispatches += 1; return {}; } } });
+  await assert.rejects(adapter.prepare(input), (error) => error.code === 'credential_unavailable');
+  assert.equal(hostPreparations, 0, 'the token resolved for the original scope is not passed to host preparation');
+  assert.equal(dispatches, 0);
+});
+
+test('prepare fails closed with credential_unavailable when the scope is not a record of string refs', async () => {
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare() { throw new Error('host prepare must not run'); }, async dispatch() { return {}; } } });
+  for (const scope of [undefined, null, [], { account_ref: 1, project_ref: 'p' }, { account_ref: 'a' }]) {
+    await assert.rejects(adapter.prepare(billable('image_generation', { scope })), (error) => error.code === 'credential_unavailable');
+  }
+});
+
+test('a target mutated between prepare and dispatch is refused before the host dispatch, and consumes the prepared value', async () => {
+  for (const [name, mutate] of [
+    ['model', (t) => { t.model = 'evil-author/evil-model'; }],
+    ['nested configuration.provider_tag', (t) => { t.configuration.provider_tag = 'evil-tag'; }]]) {
+    let dispatches = 0;
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async dispatch() { dispatches += 1; return {}; } } });
+    const input = billable();
+    const prepared = await adapter.prepare(input);
+    mutate(input.target);
+    await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'unsupported_image_configuration', name);
+    assert.equal(dispatches, 0, name);
+    await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'credential_unavailable', `${name}: single use`);
+  }
+});
+
+test('caller changes to grant_ref, deadline_at, or cell_id during credential resolution stop before host preparation', async () => {
+  // The adapter freezes the credential binding before the resolver await. Any caller-side change while resolution
+  // is pending invalidates this attempt, so a token resolved for the original inputs cannot mint reusable state.
+  for (const [field, change, code] of [
+    ['grant_ref', 'grant:test:other', 'credential_unavailable'],
+    ['deadline_at', deadline(60_000), 'credential_unavailable'],
+    ['cell_id', 'image_edit', 'unsupported_image_configuration'],
+  ]) {
+    let hostPreparations = 0;
+    let dispatches = 0;
+    const inner = grantCredentialPort();
+    const input = billable();
+    const credentialSource = { evidence_mode: 'live', async resolveCredential(args) {
+      const result = inner.resolveCredential(args);
+      input[field] = change;
+      return result;
+    } };
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialSource,
+      fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+        async prepare() { hostPreparations += 1; return {}; },
+        async dispatch() { dispatches += 1; return {}; },
+      } });
+    await assert.rejects(adapter.prepare(input), (error) => error.code === code, field);
+    assert.equal(hostPreparations, 0, `${field}: no host preparation after a binding changes`);
+    assert.equal(dispatches, 0, `${field}: no host dispatch after a binding changes`);
+  }
+});
+
+test('a target mutated during the credential await fails closed before the host prepare', async () => {
+  const inner = grantCredentialPort();
+  const input = billable();
+  let hostCalls = 0;
+  const credentialSource = { evidence_mode: 'live', async resolveCredential(args) {
+    const result = inner.resolveCredential(args);
+    input.target.configuration.provider_tag = 'evil-tag';
+    return result;
+  } };
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialSource, fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare() { hostCalls += 1; return {}; }, async dispatch() { return {}; } } });
+  await assert.rejects(adapter.prepare(input), (error) => error.code === 'unsupported_image_configuration');
+  assert.equal(hostCalls, 0);
+});
+
+test('a throwing scope getter fails closed as credential_unavailable', async () => {
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare() { throw new Error('host prepare must not run'); }, async dispatch() { return {}; } } });
+  const scope = { account_ref: fixtureScope.account_ref, get project_ref() { throw new Error('boom'); } };
+  await assert.rejects(adapter.prepare(billable('image_generation', { scope })), (error) => error.code === 'credential_unavailable');
+});
+
+test('unread target annotations do not affect the binding, while dispatch configuration stays bound to prepare', async () => {
+  let dispatches = 0;
+  let hostConfiguration;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch(args) { dispatches += 1; hostConfiguration = args.configuration; return {}; } } });
+  const input = billable();
+  input.target.note = undefined;
+  input.target.when = new Date();
+  input.target.ratio = NaN;
+  const prepared = await adapter.prepare(input);
+  input.target.ratio = Infinity;
+  const mismatched = { ...input, configuration: { divergent: true }, prepared, metering: meteringInput() };
+  await assert.rejects(adapter.dispatch(mismatched), (error) => error.code === 'credential_unavailable',
+    'configuration presence and content remain bound to the credential resolved during prepare');
+  assert.equal(dispatches, 0);
+  await adapter.dispatch({ ...input, configuration: structuredClone(input.target.configuration), prepared, metering: meteringInput() });
+  assert.equal(dispatches, 1);
+  assert.deepEqual(hostConfiguration, input.target.configuration, 'a divergent top-level configuration never reaches the host');
+});
+
+test('a caller getter that mutates the target while dispatch reads its input is refused before the host dispatch', async () => {
+  for (const [name, install] of [
+    ['enumerable property spread into the host args', (din, evil) => Object.defineProperty(din, 'zz_late', { enumerable: true, get() { evil(); return 1; } })],
+    ['metering getter', (din, evil) => Object.defineProperty(din, 'metering', { enumerable: true, get() { evil(); return undefined; } })]]) {
+    let dispatches = 0;
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async dispatch() { dispatches += 1; return {}; } } });
+    const input = billable();
+    const prepared = await adapter.prepare(input);
+    const din = { ...input, prepared };
+    install(din, () => { input.target.model = 'evil-author/evil-model'; });
+    await assert.rejects(adapter.dispatch(din), (error) => error.code === 'unsupported_image_configuration', name);
+    assert.equal(dispatches, 0, name);
+  }
+});
+
+test('getters on the dispatch input that switch values after N reads never reach the host or the checks', async () => {
+  const seen = [];
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch(args) { seen.push(args); return {}; } } });
+  const input = billable('image_generation', { scope: { ...fixtureScope } });
+  const prepared = await adapter.prepare(input);
+  const evilTarget = structuredClone(input.target);
+  evilTarget.model = 'evil-author/evil-model';
+  const after = (count, real, evil) => { let reads = 0; return () => (++reads > count ? evil : real); };
+  const din = { run_id: input.run_id, prepared, deadline_at: input.deadline_at, configuration: input.configuration };
+  Object.defineProperty(din, 'cell_id', { enumerable: true, value: input.cell_id });
+  Object.defineProperty(din, 'target', { enumerable: true, get: after(1, input.target, evilTarget) });
+  Object.defineProperty(din, 'scope', { enumerable: true, get: after(1, input.scope, { ...input.scope, project_ref: 'project:evil' }) });
+  Object.defineProperty(din, 'grant_ref', { enumerable: true, get: after(1, input.grant_ref, 'grant:evil') });
+  din.metering = meteringInput();
+  await adapter.dispatch(din);
+  assert.equal(seen.length, 1);
+  assert.notEqual(seen[0].target, input.target, 'the host gets a frozen copy, not the live object');
+  assert.deepEqual(seen[0].target, input.target);
+  assert.equal(seen[0].target.model, input.target.model);
+  assert.equal(seen[0].scope.project_ref, input.scope.project_ref);
+  assert.ok(Object.isFrozen(seen[0].scope));
+  assert.equal(seen[0].grant_ref, input.grant_ref);
+  // A getter that throws, or an input that is not a record, fails closed.
+  const second = await adapter.prepare(input);
+  await assert.rejects(adapter.dispatch({ ...input, prepared: second, get run_id() { return 1; }, get zz() { throw new Error('boom'); } }),
+    (error) => error.code === 'credential_unavailable');
+  await assert.rejects(adapter.dispatch(null), (error) => error.code === 'credential_unavailable');
+});
+
+const deepFrozen = (value) => value === null || typeof value !== 'object'
+  || (Object.isFrozen(value) && Reflect.ownKeys(value).every((key) => deepFrozen(value[key])));
+const EVIL_MODEL = 'evil-author/evil-model';
+
+test('the host dispatch only ever sees the validated target, even when the caller flips and restores it while the host awaits', async () => {
+  const seen = [];
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch(args) {
+      await null;
+      seen.push({ model: args.target.model, provider_tag: args.configuration.provider_tag, frozen: deepFrozen(args.target) });
+      return {};
+    } } });
+  const input = billable();
+  const model = input.target.model;
+  const prepared = await adapter.prepare(input);
+  const pending = adapter.dispatch({ ...input, prepared, metering: meteringInput() });
+  input.target.model = EVIL_MODEL;
+  input.target.configuration.provider_tag = 'evil-tag';
+  await pending;
+  assert.deepEqual(seen, [{ model, provider_tag: target().configuration.provider_tag, frozen: true }]);
+});
+
+test('the host prepare only ever sees the validated target while the caller flips and restores it', async () => {
+  const seen = [];
+  const input = billable();
+  const model = input.target.model;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare(args) {
+      input.target.model = EVIL_MODEL;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      seen.push({ model: args.target.model, frozen: deepFrozen(args.target) });
+      input.target.model = model;
+      return {};
+    },
+    async dispatch() { return {}; } } });
+  await adapter.prepare(input);
+  assert.deepEqual(seen, [{ model, frozen: true }]);
+});
+
+test('dispatch reads each enumerable input property once, and a target the host cannot be given as a copy fails closed', async () => {
+  let reads = 0;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare() { throw new Error('host prepare must not run'); }, async dispatch() { return {}; } } });
+  const plain = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch() { return {}; } } });
+  const input = billable();
+  const prepared = await plain.prepare(input);
+  const din = { ...input, prepared };
+  Object.defineProperty(din, 'zz', { enumerable: true, get() { reads += 1; return 1; } });
+  din.metering = meteringInput();
+  await plain.dispatch(din);
+  assert.equal(reads, 1);
+  const uncloneable = billable();
+  uncloneable.target.hook = () => {};
+  await assert.rejects(adapter.prepare(uncloneable), (error) => error.code === 'unsupported_image_configuration');
+});
+
+test('a target.model getter that answers evil on exactly the k-th read never binds or reaches the host', async () => {
+  const FAIL_CLOSED = new Set(['unsupported_image_configuration', 'credential_unavailable']);
+  for (let k = 1; k <= 14; k += 1) {
+    const calls = [];
+    const hostModels = [];
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort({ calls }), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async prepare(args) { hostModels.push(args.target.model); return {}; },
+      async dispatch(args) { hostModels.push(args.target.model); return {}; } } });
+    const input = billable();
+    const real = input.target.model;
+    let reads = 0;
+    Object.defineProperty(input.target, 'model', { enumerable: true, configurable: true, get() { reads += 1; return reads === k ? EVIL_MODEL : real; } });
+    try {
+      const prepared = await adapter.prepare(input);
+      await adapter.dispatch({ ...input, prepared, metering: meteringInput() });
+    } catch (error) {
+      assert.ok(FAIL_CLOSED.has(error.code), `k=${k}: unexpected ${error.code ?? error}`);
+    }
+    for (const call of calls) assert.equal(call.target_binding.model, real, `k=${k}: credential binding`);
+    for (const model of hostModels) assert.equal(model, real, `k=${k}: host args`);
   }
 });
