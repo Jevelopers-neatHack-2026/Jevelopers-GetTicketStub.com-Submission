@@ -656,5 +656,11 @@
     "browserMissingMediaCheck": "PENDING",
     "limitations": "Suite rejects missing packaged files. It does not claim browser loading, screen-reader fallback, successful image decode, QR-decoder analysis or owner sanitization approval."
   },
-  "recheckBy": "2026-11-12"
+  "recheckBy": "2026-11-12",
+  "auditedSource": {
+    "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+    "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html"
+  },
+  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval."
 }

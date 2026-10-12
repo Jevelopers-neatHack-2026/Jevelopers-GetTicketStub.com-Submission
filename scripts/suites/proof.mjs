@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { resolve, relative } from 'node:path';
-import { digest } from './content.mjs';
+import { digest, validateAuditedSource, readAuditedFile } from './content.mjs';
 export const FORBIDDEN = /LP_PRIVATE_(?:BOOKING|EMAIL|ACCOUNT)_CANARY|sk-proj-[A-Za-z0-9]{12,}/;
 export function webpChunks(bytes) {
   if (bytes.toString('ascii',0,4) !== 'RIFF' || bytes.toString('ascii',8,12) !== 'WEBP') throw new Error('Invalid WebP asset');
@@ -13,11 +13,12 @@ export function webpChunks(bytes) {
   }
   return chunks;
 }
-export async function validateProof({root, manifest, html, mode = 'draft', assetRoot = root, now = new Date()}) {
+export async function validateProof({root, manifest, html, mode = 'draft', assetRoot = root, auditRoot = root, now = new Date()}) {
   if (!['draft','release'].includes(mode)) throw new Error('Unknown proof validation mode');
   if (manifest.schemaVersion !== 1 || manifest.assets?.length !== 10 || manifest.scenes?.length !== 8 || manifest.specimens?.length !== 3) throw new Error('Incomplete example manifest');
   if (Number.isNaN(Date.parse(manifest.recheckBy)) || Date.parse(manifest.recheckBy) <= now.getTime()) throw new Error('Stale example manifest');
   if (digest(html) !== manifest.pageSha256) throw new Error('Example source changed without manifest review');
+  validateAuditedSource(html, manifest.auditedSource, manifest.pageSha256, { root: auditRoot });
   if (FORBIDDEN.test(html) || FORBIDDEN.test(JSON.stringify(manifest))) throw new Error('Forbidden synthetic sensitive marker');
   const files = await readdir(resolve(root,'site/assets'));
   if (files.some(file => !manifest.assets.some(a => a.path === `site/assets/${file}`))) throw new Error('Unregistered distributed asset');
@@ -34,6 +35,7 @@ export async function validateProof({root, manifest, html, mode = 'draft', asset
     if (digest(bytes) !== asset.sha256) throw new Error(`${asset.path}: asset digest changed`);
     if (FORBIDDEN.test(bytes.toString('utf8'))) throw new Error('Forbidden synthetic sensitive marker');
     if (asset.path.endsWith('.webp') && webpChunks(bytes).some(chunk => ['EXIF','XMP '].includes(chunk))) throw new Error(`${asset.path}: embedded EXIF/XMP requires redaction`);
+    if (digest(readAuditedFile(auditRoot, manifest.auditedSource.revision, asset.path)) !== asset.sha256) throw new Error(`${asset.path}: audited source asset digest differs`);
   }
   for (const scene of manifest.scenes) {
     if (!paths.has(scene.asset) || !scene.alt || !scene.caption || !scene.story || scene.storyStatus !== 'FICTIONAL_NOT_TESTIMONIAL' || !html.includes(scene.story) || scene.evidenceClass !== 'illustrative' || !html.includes(scene.title)) throw new Error('Uncovered illustrative scene');

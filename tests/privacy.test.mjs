@@ -2,12 +2,42 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { buildSite, root } from '../scripts/build.mjs';
-import run, { digest, validatePrivacySource, exerciseJourney, validateReleaseReceipt, verifyReleaseEvidence } from '../scripts/suites/privacy.mjs';
+import run, { digest, validatePrivacySource, validatePrivacyAudit, inspectPrivacySource, exerciseJourney, validateReleaseReceipt, verifyReleaseEvidence } from '../scripts/suites/privacy.mjs';
 
 const html = await readFile(new URL('../site/index.html', import.meta.url), 'utf8');
 const inventory = JSON.parse(await readFile(new URL('../review/privacy-inventory.json', import.meta.url), 'utf8'));
 test('audited page has deferred analytics and two pinned executable scripts', () => {
   assert.deepEqual(validatePrivacySource(html, inventory), { scripts: 2, analytics: 'deferred' });
+});
+test('correct immutable privacy audit resolves actual current source with approvals pending', () => {
+  assert.deepEqual(validatePrivacyAudit(html, inventory, { root }), { scripts: 2, analytics: 'deferred' });
+  assert.equal(inventory.reviewStatus, 'PENDING');
+  assert.notEqual(inventory.auditedSourceRevision, inventory.historicalSourceReferences[0].revision);
+});
+test('preserved PR #29 header audit revision still resolves the same current page bytes', () => {
+  const priorHeaderAudit = structuredClone(inventory);
+  priorHeaderAudit.auditedSourceRevision = inventory.historicalSourceReferences[0].revision;
+  assert.deepEqual(validatePrivacySource(html, priorHeaderAudit, { root }), { scripts: 2, analytics: 'deferred' });
+});
+for (const [name, mutate, error] of [
+  ['missing revision', i => { delete i.auditedSourceRevision; }, /immutable audit/],
+  ['moving revision', i => { i.auditedSourceRevision = 'main'; }, /immutable audit/],
+  ['stale earlier executable revision', i => { i.auditedSourceRevision = i.historicalSourceReferences[1].revision; }, /Audited source bytes differ/],
+  ['stale pre-header worker revision', i => { i.auditedSourceRevision = 'e5bc742087bd5fe2fb9b24e13515116b78da5ea2'; }, /Audited source bytes differ/],
+  ['unavailable revision', i => { i.auditedSourceRevision = '0'.repeat(40); }, /Immutable audit source unavailable/],
+  ['missing page digest', i => { delete i.pageSha256; }, /Missing audited page digest/],
+  ['mismatched page digest', i => { i.pageSha256 = '0'.repeat(64); }, /Audited source bytes differ/],
+  ['mismatched executable audit', i => { i.executableScriptSha256[0] = '0'.repeat(64); }, /Executable source changed/],
+]) test(`privacy rejects ${name} audit pin`, () => {
+  const bad = structuredClone(inventory); mutate(bad);
+  assert.throws(() => validatePrivacyAudit(html, bad, { root }), error);
+  assert.throws(() => validatePrivacySource(html, bad, { root }), error);
+});
+test('metadata-only drift still requires a fresh complete-page audit pin', () => {
+  const changed = html.replace('</head>', '<meta name="description" content="synthetic audit drift"></head>');
+  assert.equal(inspectPrivacySource(changed, inventory).analytics, 'deferred');
+  assert.throws(() => validatePrivacyAudit(changed, inventory, { root }), /Audited source bytes differ/);
+  assert.throws(() => validatePrivacySource(changed, inventory, { root }), /Audited source bytes differ/);
 });
 const variants = [
   ['SDK script', '<script src="https://tracker.invalid/sdk.js"></script>', /script destination/],
@@ -48,7 +78,7 @@ test('external script handler cannot bypass pinned executable text', () => {
 });
 test('metadata URL declarations do not count as browser requests', () => {
   const metadata = '<link rel="canonical" href="https://public.example.org/"><meta property="og:url" content="https://public.example.org/"><script type="application/ld+json">{"@context":"https://schema.org","url":"https://public.example.org/"}</script>';
-  assert.equal(validatePrivacySource(html.replace('</head>', metadata + '</head>'), inventory).analytics, 'deferred');
+  assert.equal(inspectPrivacySource(html.replace('</head>', metadata + '</head>'), inventory).analytics, 'deferred');
 });
 for (const reduced of [true, false]) for (const failure of ['blocked', 'failed']) test(`real maker/navigation handlers with ${failure} collection surfaces, reduced motion ${reduced}`, () => {
   const result = exerciseJourney(html, { reduced, failure });

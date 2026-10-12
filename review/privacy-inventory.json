@@ -5,7 +5,7 @@
     "Product and frontend",
     "Finance and reliability"
   ],
-  "auditedSourceRevision": "096fe76f8f559ac504693168e3cd6068337d0bb3",
+  "auditedSourceRevision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
   "executableScriptSha256": [
     "2b01e1d0f5ba18ee57a1420149ce8f8b94e776195f29bfc76db93c245ead4320",
     "36a753a532ea32e936c8b602ba024799d8c395e8bd633d39fe4247eef0400490"
@@ -39,5 +39,16 @@
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   ],
-  "auditNote": "Author re-audit of link-only activation against immutable base. Product navigation-only decision exists in review/cta-navigation-decision.json; privacy/full-copy/clean-browser/publication approvals remain PENDING. No form, query or input handoff. CSS-only narrow header wrapping and hero/maker clearance re-audited against e5bc742 baseline; scripts, text and external data boundary unchanged."
+  "auditNote": "Author re-audit of link-only activation against immutable base. Product navigation-only decision exists in review/cta-navigation-decision.json; privacy/full-copy/clean-browser/publication approvals remain PENDING. No form, query or input handoff. CSS-only narrow header wrapping and hero/maker clearance re-audited against e5bc742 baseline; scripts, text and external data boundary unchanged. R1 current author audit resolves the complete page at auditedSourceRevision from local Git objects; historicalSourceReferences preserves both the valid PR #29 header audit revision and the earlier mismatched base reference without upgrading owner approval.",
+  "pageSha256": "a078774df18e59b884bdff968f2bec3e4a5b2a009458d30c8320242f595858f6",
+  "historicalSourceReferences": [
+    {
+      "revision": "096fe76f8f559ac504693168e3cd6068337d0bb3",
+      "relationship": "PR #29 header author audit; this immutable revision has the same page bytes as the current audit, without granting owner privacy approval."
+    },
+    {
+      "revision": "01d9b08d59bf65ea44fc19ede06701dc67363c63",
+      "relationship": "Earlier recorded audit base before the header repair; its executable bytes do not match the current inventory."
+    }
+  ]
 }
