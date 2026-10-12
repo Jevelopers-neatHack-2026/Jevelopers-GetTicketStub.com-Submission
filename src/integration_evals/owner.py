@@ -123,6 +123,7 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
                         offline=settings.mode in {Mode.MOCK, Mode.RECORDED},
                         writable_directory=Path(isolated),
                         network=inputs.network,
+                        test_invocation=settings.test_invocation,
                     ),
                 )
             output = read_bytes(Path(isolated) / "stdout")
@@ -155,6 +156,7 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
                             offline=settings.mode in {Mode.MOCK, Mode.RECORDED},
                             writable_directory=Path(isolated),
                             network=inputs.network,
+                            test_invocation=settings.test_invocation,
                         ),
                     )
                     if cleanup != 0:

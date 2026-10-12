@@ -43,7 +43,7 @@ def execute_captured(
         if git_value(settings.repository, "status", "--porcelain", "--untracked-files=all"):
             fail("dirty_integration_runner", "integration-evals")
     run_id = "run-" + uuid4().hex
-    clock = datetime(2026, 10, 10, tzinfo=UTC)
+    clock = settings.test_clock or datetime(2026, 10, 10, tzinfo=UTC)
     selected = (
         frozenset(assembly.selected_cases or (case.id for case in suite.cases))
         if assembly

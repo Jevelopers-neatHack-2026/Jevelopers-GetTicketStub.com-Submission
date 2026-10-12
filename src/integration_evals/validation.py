@@ -5,6 +5,7 @@ import subprocess
 import sys
 from datetime import timedelta
 from pathlib import Path
+from time import monotonic
 from typing import Final
 
 from integration_evals.artifacts import (
@@ -107,16 +108,19 @@ def validate_suite(
                 fail("unsupported_fixture_mode", case.id)
 
 
-def git_value(checkout: Path, *args: str) -> str:
+def git_value(checkout: Path, *args: str, deadline: float | None = None) -> str:
     """Read checkout identity with bounded Git execution and no shell expansion."""
     git_binary = shutil.which("git")
     if git_binary is None:
         fail("git_runtime_missing", "checkout")
+    remaining = 10.0 if deadline is None else min(10, deadline - monotonic())
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(args, 10)
     completed = subprocess.run(  # noqa: S603 - resolved Git binary and argument arrays
         [git_binary, "-C", str(checkout), *args],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=remaining,
         check=True,
     )
     return completed.stdout.strip()
