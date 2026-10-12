@@ -1,3 +1,4 @@
+import shutil
 import sys
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from integration_evals.owner import execute_owner
 from integration_evals.preflight import PreflightContext
 from integration_evals.reporting import Tracker, save_run
 from integration_evals.runner import execute, execute_case
+from tests.fixtures.owned_process import pin_process_fixture
 from tests.test_assembly import synthetic_workspace
 from tests.test_evidence_claims import context_for, controlled_case
 
@@ -28,7 +30,8 @@ def owner_context(tmp_path: Path) -> OwnerContext:
     context = context_for(tmp_path, Mode.MOCK)
     checkout = tmp_path / "agent-harness"
     checkout.mkdir()
-    fixture = Path(__file__).parent / "fixtures/owner_output.py"
+    fixture = checkout / "owner_output.py"
+    _ = shutil.copyfile(Path(__file__).parent / "fixtures/owner_output.py", fixture)
     component = context.assembly.components[0].model_copy(
         update={
             "command": (sys.executable, str(fixture)),
@@ -166,10 +169,15 @@ def test_component_scope_keeps_unrelated_case_pending_when_not_selected(tmp_path
 def test_later_owner_error_is_archived_when_evidence_id_collides(tmp_path: Path) -> None:
     # Given two real owner invocations that emit the same evidence ID in a pinned inert workspace.
     assembly = synthetic_workspace(tmp_path)
-    fixture = Path(__file__).parent / "fixtures/owner_output.py"
+    pinned = pin_process_fixture(
+        tmp_path / "agent-harness", Path(__file__).parent / "fixtures/owner_output.py"
+    )
+    fixture = pinned.path
     components = tuple(
         component.model_copy(
             update={
+                "revision": pinned.revision,
+                "tree": pinned.tree,
                 "command": (sys.executable, str(fixture)),
                 "cleanup_command": (sys.executable, "-c", "import sys; sys.exit(0)"),
             }

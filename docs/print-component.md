@@ -337,6 +337,11 @@ this is requested scheduling time, not measured owner CPU progress. The successo
 requests 5 ms per pulse within the same deadline and records bounded readonly
 registration/admission/completion counts when no attempt is pending. Those
 diagnostics are never phase acceptance; a completed or missed window still fails.
+The current-main offline-read composition preserves its ordinary owner input
+staging, network-filter descriptor, read closure and cleanup behavior. The print
+test hook remains explicit and default-off, rejects the retrieval-private-IP
+policy before dispatch, and records its requested deny policy separately from
+the original producer container profile. This is no generic runtime promotion.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,

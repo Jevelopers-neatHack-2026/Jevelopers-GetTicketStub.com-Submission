@@ -41,6 +41,7 @@ from integration_evals.artifacts import digest, read_bytes
 from integration_evals.contracts import runtime_digest
 from integration_evals.errors import InvalidArtifactError, fail
 from integration_evals.print_setup import PrintProfile, verify_source
+from integration_evals.process_network import OfflineNetwork
 from integration_evals.processes import ProcessSettings
 
 
@@ -361,6 +362,8 @@ class GuardedPrint:
     def prepare(
         self, command: tuple[str, ...], settings: ProcessSettings, deadline: float
     ) -> tuple[PrintDocker, dict[str, str], PrintProfile]:
+        if settings.network is not OfflineNetwork.DENY:
+            return fail("guarded_print_network_policy_unsupported", "development-only")
         if not __debug__ or sys.platform != "linux" or os.getuid() != 0:
             return fail("guarded_print_host_unavailable", "development-only")
         home = settings.writable_directory
@@ -424,6 +427,7 @@ class GuardedPrint:
             json.dumps(
                 {
                     "request_sha256": digest(settings.payload),
+                    "requested_network_policy": settings.network.value,
                     "logical_scenario_clock": request.get("clock"),
                     "configuration_sha256": digest(configuration_bytes),
                     "owner_script_sha256": digest(
@@ -650,6 +654,7 @@ class GuardedPrint:
                     preserve_home(reaper)
             receipt = {
                 "backend": "guarded-print-development",
+                "requested_network_policy": settings.network.value,
                 "acceptance": "blocked",
                 "full_id": state.identity,
                 "command": command,

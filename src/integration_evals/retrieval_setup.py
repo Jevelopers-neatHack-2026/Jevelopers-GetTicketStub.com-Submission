@@ -2,7 +2,6 @@
 
 import sys
 from pathlib import Path
-from typing import Literal
 
 import typer
 
@@ -17,11 +16,10 @@ from integration_evals.models import (
     Catalog,
     Component,
     Mode,
-    Record,
-    Revision,
     Selection,
     Suite,
 )
+from integration_evals.retrieval_inputs import RetrievalProfile
 from integration_evals.validation import (
     git_value,
     validate_assembly,
@@ -29,14 +27,7 @@ from integration_evals.validation import (
     validate_suite,
 )
 
-
-class RetrievalProfile(Record):
-    """Reviewed adapter scope; contains no credentials or provider authority."""
-
-    case_id: Literal["ssrf-egress"]
-    mode: Literal["mock-only"]
-    producer_revision: Revision
-    node_version: Literal["22.23.3"]
+__all__ = ["RetrievalProfile", "prepare"]
 
 
 def prepare(workspace: Path, runtime: Path, output: Path) -> None:

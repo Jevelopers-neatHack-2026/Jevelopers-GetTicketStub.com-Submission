@@ -26,6 +26,7 @@ from component_tests.guarded_print import (
 from component_tests.test_retrieval import commit, git
 from integration_evals.errors import InvalidArtifactError
 from integration_evals.execution import Settings
+from integration_evals.process_network import OfflineNetwork
 from integration_evals.processes import ProcessSettings
 from integration_evals.validation import git_value
 
@@ -42,6 +43,27 @@ def test_guarded_backend_is_explicit_and_refuses_unsupported_host(tmp_path: Path
         with pytest.raises(InvalidArtifactError, match="guarded_print_host_unavailable"):
             _ = backend(("/bin/true",), settings)
     assert not backend.evidence.exists()
+
+
+def test_guarded_print_denies_retrieval_private_policy_before_dispatch(tmp_path: Path) -> None:
+    backend = GuardedPrint(tmp_path / "source", tmp_path / "untouched")
+    settings = ProcessSettings(
+        tmp_path / "checkout",
+        {},
+        b"",
+        subprocess.DEVNULL,
+        30,
+        offline=True,
+        writable_directory=tmp_path / "home",
+        network=OfflineNetwork.RETRIEVAL,
+        test_invocation=backend,
+    )
+    with pytest.raises(InvalidArtifactError, match="guarded_print_network_policy_unsupported"):
+        _ = backend(("original-owner",), settings)
+    assert not backend.evidence.exists()
+    assert not settings.checkout.exists()
+    assert settings.writable_directory is not None
+    assert not settings.writable_directory.exists()
 
 
 def test_minimal_git_omits_credential_metadata_and_preserves_identity(tmp_path: Path) -> None:
