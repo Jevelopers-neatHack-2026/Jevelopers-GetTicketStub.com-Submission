@@ -48,8 +48,8 @@ jobs:
       - name: Verify real Linux isolation and retained owner output
         run: |
           mkdir -p reports
-          sudo -n .venv/bin/python -m pytest tests/test_owner_output.py tests/test_processes.py tests/test_retrieval_capability.py -o cache_dir="${RUNNER_TEMP}/integration-evals-root-cache" --junitxml=reports/linux-owner-junit.xml
-      - run: uv run pytest --ignore=tests/test_owner_output.py --ignore=tests/test_processes.py --ignore=tests/test_retrieval_capability.py --junitxml=reports/tooling-junit.xml
+          sudo -n .venv/bin/python -m pytest tests/test_owner_output.py tests/test_processes.py tests/test_retrieval_capability.py tests/test_diagnostic_execution.py tests/test_diagnostic_denials.py tests/test_seeded_history.py -o cache_dir="${RUNNER_TEMP}/integration-evals-root-cache" --junitxml=reports/linux-owner-junit.xml
+      - run: uv run pytest --ignore=tests/test_owner_output.py --ignore=tests/test_processes.py --ignore=tests/test_retrieval_capability.py --ignore=tests/test_diagnostic_execution.py --ignore=tests/test_diagnostic_denials.py --ignore=tests/test_seeded_history.py --junitxml=reports/tooling-junit.xml
       - name: Verify complete canonical scope and controlled failures
         shell: bash
         run: |
