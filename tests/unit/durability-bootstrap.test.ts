@@ -109,7 +109,9 @@ test("cold opens preserve every concurrent writer", async () => {
 			const database = new DurabilityDatabase(path);
 			try {
 				const rows = database.sql.prepare("SELECT COUNT(*) n FROM operations");
-				const settings = database.sql.prepare("SELECT COUNT(*) n FROM settings");
+				const settings = database.sql.prepare(
+					"SELECT COUNT(*) n FROM settings",
+				);
 				const integrity = database.sql.prepare("PRAGMA integrity_check").get();
 				assert.equal(rows.get()?.["n"], 8);
 				assert.equal(settings.get()?.["n"], 1);
