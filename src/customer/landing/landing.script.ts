@@ -8,6 +8,9 @@ import { animate, inView, scroll, stagger } from "motion";
 
 export function mountLanding(ctx) {
   const lpRoot = ctx.root, hosts = ctx.hosts;
+  // ctx.mode (motion.ts): still = no motion at all; no3d = never load three.js, show the printed version at once
+  const STILL = !!ctx.mode?.still, LITE = STILL || !!ctx.mode?.no3d;
+  lpRoot.classList.toggle('still', STILL);
   let disposed = false;
   const disposers = [];
   // every global the page listens or schedules with goes through these, so cleanup can undo it
@@ -36,7 +39,7 @@ export function mountLanding(ctx) {
     /* ---------- TicketStub cards: one component for the studio, the gallery ribbon and the checkout preview ---------- */
     const TS = (() => {
       const fine = matchMedia('(hover:hover) and (pointer:fine)').matches;
-      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const still = STILL;
       const buzz = p => { try { if (!still && navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
       const esc = v => String(v).replace(/[&<>"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[ch]));
       // brand motion: foil and tilt never step. Targets are eased every frame (tilt tau 110ms, glow in 400ms / out 600ms), max 11deg.
@@ -224,7 +227,7 @@ export function mountLanding(ctx) {
 
     /* ---------- brand motion, driven by Motion (motion.dev) with the brand-kit timings ---------- */
     const TSMotion = (() => {
-      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const still = STILL;
       const ENTER = [.16, 1, .3, 1], STD = [.2, .8, .2, 1], FLIP = [.45, 0, .55, 1];
       const ok = !!(M && M.animate && !still);
       // print-complete shutter: an RGB split that fades out with (1-p)^2.6 over 320ms, plus a paper snap of scale
@@ -386,9 +389,11 @@ export function mountLanding(ctx) {
 
 
 
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduced = STILL;
     const loaderEl = byId('loader');
     function dismissLoader(){ if (loaderEl.classList.contains('done')) return; loaderEl.classList.add('done'); lpRoot.classList.add('ready'); setTimeout(() => { loaderEl.hidden = true; }, 1200); }
+    // no motion: the loader never shows (it would only slide away); the printed version is ready as soon as the page is
+    if (STILL){ loaderEl.classList.add('done'); loaderEl.hidden = true; lpRoot.classList.add('ready'); }
     const safety = setTimeout(() => { lpRoot.classList.add('no3d'); dismissLoader(); }, 8000);   // last resort if fonts or art stall
 
     /* =============================== DATA =============================== */
@@ -809,13 +814,14 @@ export function mountLanding(ctx) {
       if (disposed) return;
       root.classList.add('no3d');
       // A failed 3D frame may have hidden entering scene copy; restore its CSS defaults.
-      sceneEls.forEach(el => el.querySelector('.info').style.removeProperty('--ia'));
+      qsa('.scene .info').forEach(el => el.style.removeProperty('--ia'));
       if (!staticLoop) staticLoop = startStaticLoop();
     }
     function leaveStatic(){ if (staticLoop){ staticLoop.stop(); staticLoop = null; } root.classList.remove('no3d'); }
-    const threeP = build3D().then(start => start, err => { console.warn('3D unavailable, showing the static version', err); return null; });
+    // no3d (motion off, no GPU, Save-Data, low-end device): three.js is never fetched and the printed version shows now
+    const threeP = LITE ? Promise.resolve(null) : build3D().then(start => start, err => { console.warn('3D unavailable, showing the static version', err); return null; });
     // reveal as soon as the 3D hero is ready, or after a short wait with the printed stub on the disc instead
-    const first = await Promise.race([threeP, new Promise(r => setTimeout(() => r('wait'), 3500))]);
+    const first = LITE ? null : await Promise.race([threeP, new Promise(r => setTimeout(() => r('wait'), 3500))]);
     clearTimeout(safety);
     if (disposed) return;
     if (typeof first !== 'function') useStatic();
@@ -881,9 +887,10 @@ export function mountLanding(ctx) {
         const col = navColour(); const rs = scenes.map(s => s.el.getBoundingClientRect()); const b = boardEl.getBoundingClientRect();
         // writes
         paintNav(nav, col); const onWall = b.top < Hh * .9 && b.bottom > Hh;
-        if ((sy > lastY + 2 && sy > 400) || onWall) nav.classList.add('hide'); else if (sy < lastY - 2) nav.classList.remove('hide'); lastY = sy;
+        if (!STILL && ((sy > lastY + 2 && sy > 400) || onWall)) nav.classList.add('hide'); else if (sy < lastY - 2) nav.classList.remove('hide'); lastY = sy;
         scenes.forEach(({ st, hand }, i) => { const r = rs[i]; if (r.top > Hh || r.bottom < 0) return;
-          const p = Math.max(0, Math.min(1, -r.top / (r.height - Hh))); const t = Math.max(0, Math.min(1, (p - .1) / .8)); const dir = i % 2 ? -1 : 1;
+          // no motion: the stub stays in the performer's hand instead of flying across as you scroll
+          const p = STILL ? 0 : Math.max(0, Math.min(1, -r.top / (r.height - Hh))); const t = Math.max(0, Math.min(1, (p - .1) / .8)); const dir = i % 2 ? -1 : 1;
           st.style.setProperty('--hx', hand[0] + 'px'); st.style.setProperty('--hy', hand[1] + 'px');
           st.style.setProperty('--tx', (dir * t * Ww * .8) + 'px'); st.style.setProperty('--ty', (Math.sin(t * Math.PI) * -80 + t * 120) + 'px'); st.style.setProperty('--tr', (dir * t * 220) + 'deg'); });
         if (!fallbackBuilt && b.top < Hh * 3) buildFallbackWall();
