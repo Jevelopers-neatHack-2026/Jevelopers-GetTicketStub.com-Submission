@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import { runInNewContext } from 'node:vm';
 import { createDashboardAuthorizer, createGuardedRouteReader, parseInstant, routeCapabilities, toHostAccessProjection, type GuardedReadOutcome, type HostAccess, type HostSessionVerifier, type RouteState, type TrustedReadRequest } from '../../src/server';
 import { routes } from '../../integration';
 import { captainClaims, FIXTURE_AUDIENCE, FIXTURE_NOW, fixtureVerifier, hostState, issueFixtureToken } from '../fixtures/host-verifier';
@@ -37,6 +38,22 @@ describe('TD-07 trusted host authorization', () => {
     for (const route of routes) expect((await authorizer.authorize({ credential: member, route: route.id })).status).toBe(route.id === 'exports' ? 'denied' : 'allowed');
     expect(await authorizer.authorize({ credential: member, route: 'exports' })).toEqual({ status: 'denied', reason: 'forbidden', cause: 'missing_capability' });
     expect(Object.keys(routeCapabilities).sort()).toEqual(routes.map((route) => route.id).sort());
+  });
+
+  it('keeps exported route capability requirements immutable at runtime', async () => {
+    const { authorizer } = setup();
+    const required = routeCapabilities.exports as string[];
+    const original = [...required];
+    try {
+      const mutationAccepted = Reflect.set(required, 'length', 0);
+      const decision = await authorizer.authorize({ credential: member, route: 'exports' });
+      expect(Object.values(routeCapabilities).every(Object.isFrozen)).toBe(true);
+      expect(Object.isFrozen(required)).toBe(true);
+      expect(mutationAccepted).toBe(false);
+      expect(decision).toEqual({ status: 'denied', reason: 'forbidden', cause: 'missing_capability' });
+    } finally {
+      if (!Object.isFrozen(required)) required.splice(0, required.length, ...original);
+    }
   });
 
   it('never consults the role name: a captain or staff role without grants gets nothing', async () => {
@@ -375,6 +392,25 @@ describe('TD-07 guarded server reads', () => {
       const authorizer = createDashboardAuthorizer({ verifier: fixtureVerifier(hostState()), audience: FIXTURE_AUDIENCE, now });
       const guarded = createGuardedRouteReader<string>({ authorizer, basePath: base, onOutcome: async () => { throw new Error('audit backend down'); }, read: async () => ({ status: 'empty' }) });
       expect(await guarded({ credential: captain, pathname: base, signal: signal() })).toMatchObject({ state: { status: 'empty' } });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  it('swallows rejected cross-realm promises and thenables from the audit hook', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const authorizer = createDashboardAuthorizer({ verifier: fixtureVerifier(hostState()), audience: FIXTURE_AUDIENCE, now });
+      const crossRealmHook = runInNewContext('(async function () { throw new Error("cross-realm audit failure"); })') as (outcome: GuardedReadOutcome) => unknown;
+      const rejectedThenable = () => ({ then: (_resolve: (value: unknown) => void, reject: (reason: unknown) => void) => reject(new Error('thenable audit failure')) });
+      for (const onOutcome of [crossRealmHook, rejectedThenable]) {
+        const guarded = createGuardedRouteReader<string>({ authorizer, basePath: base, onOutcome, read: async () => ({ status: 'empty' }) });
+        expect(await guarded({ credential: captain, pathname: base, signal: signal() })).toMatchObject({ state: { status: 'empty' } });
+      }
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(unhandled).toEqual([]);
     } finally {

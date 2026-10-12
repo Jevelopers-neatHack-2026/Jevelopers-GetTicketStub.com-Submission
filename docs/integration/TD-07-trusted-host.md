@@ -59,7 +59,7 @@ An allowed decision exposes `trustedScope`, exactly the five `TrustedScope` fiel
 
 ## Denial cause and audit
 
-Denied and unavailable decisions carry a server-only `cause` (`revoked`, `stale`, `expired`, `forged`, `wrong_audience`, `malformed`, `unsupported_version`, `missing`, `invalid_credential`, `lifetime_exceeded`, `project_mismatch`, `missing_capability`, `unknown_route`; or `timeout`, `aborted`, `verifier_error`, `verifier_unavailable`, `malformed_answer`). `toHostAccessProjection` drops it. The guarded reader never returns it. Instead it reports a `GuardedReadOutcome` (cause, route, actor, revision, read result) to an optional server-only `onOutcome` hook. Synchronous throws and rejected promises from the hook are both swallowed, so an audit backend outage cannot crash the server or change the result. `revision` values containing control characters are rejected as malformed, so they cannot forge log lines. **Never forward a cause to the browser.** Use it for logs, audit (TD-07.E), and choosing between re-authentication and refresh.
+Denied and unavailable decisions carry a server-only `cause` (`revoked`, `stale`, `expired`, `forged`, `wrong_audience`, `malformed`, `unsupported_version`, `missing`, `invalid_credential`, `lifetime_exceeded`, `project_mismatch`, `missing_capability`, `unknown_route`; or `timeout`, `aborted`, `verifier_error`, `verifier_unavailable`, `malformed_answer`). `toHostAccessProjection` drops it. The guarded reader never returns it. Instead it reports a `GuardedReadOutcome` (cause, route, actor, revision, read result) to an optional server-only `onOutcome` hook. Synchronous throws and rejected promises or thenables from the hook are swallowed, including promises created in another JavaScript realm, so an audit backend outage cannot crash the server or change the result. `revision` values containing control characters are rejected as malformed, so they cannot forge log lines. **Never forward a cause to the browser.** Use it for logs, audit (TD-07.E), and choosing between re-authentication and refresh.
 
 ## Guarded read result
 
@@ -77,7 +77,7 @@ Denied and unavailable decisions carry a server-only `cause` (`revoked`, `stale`
 | Verified context lacks a route's required capability | `denied/forbidden` | `restricted` |
 | Unknown route id | `denied/not_found` | unknown path is `unavailable` |
 | Verifier throws, times out (default 5 s, aborts its signal), says `unavailable`, or returns a malformed answer (including a non-strict `expiresAt`, a getter, or a missing `environment`/`billingMode`) | `unavailable` | `unavailable` |
-| Reader throws / returns a malformed or `loading` state / exceeds `readTimeoutMs` (default 10 s, aborts its signal) / request aborted | — | `error` (retryable) / `error` (not retryable) / `unavailable` / `unavailable` |
+| Reader throws / returns a malformed or `loading` state / exceeds `readTimeoutMs` (default 9 s, aborts its signal) / request aborted | — | `error` (retryable) / `error` (not retryable) / `unavailable` / `unavailable` |
 
 Identifiers must match `^[\w.:-]{1,128}$` (the host's kind-prefixed ids, e.g. `account:…`, `event:…`). Capabilities must be lowercase dotted strings.
 

@@ -294,8 +294,10 @@ export function createGuardedRouteReader<T>({ authorizer, basePath, read, readTi
   const report = (outcome: GuardedReadOutcome) => {
     try {
       const pending: unknown = onOutcome?.(Object.freeze(outcome));
-      // An async hook that rejects must not become an unhandled rejection, which terminates Node by default.
-      if (pending instanceof Promise) pending.catch(() => undefined);
+      // Assimilate cross-realm promises and thenables so audit failures never become unhandled rejections.
+      if (pending !== null && (typeof pending === 'object' || typeof pending === 'function')) {
+        void Promise.resolve(pending).catch(() => undefined);
+      }
     } catch { /* Audit hooks never change the result. */ }
   };
   const result = (state: RouteState<T>, access: HostAccess): GuardedReadResult<T> => Object.freeze({ state, access });
