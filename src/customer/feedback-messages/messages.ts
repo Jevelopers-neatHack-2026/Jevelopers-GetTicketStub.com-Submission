@@ -30,6 +30,7 @@ const PROVIDER_SETUP = "This preview isn't set up for that helper yet. Your stub
 export const MESSAGES = {
   // Request and access
   bad_origin: { message: "That request didn't come from TicketStub, so we stopped it. Open TicketStub directly and try again.", action: RELOAD },
+  origin_unavailable: { message: "We can't finish that action right now. Open your wall and try again later.", action: WALL },
   unauthorized: { message: "Sign in with an emailed link to do that. It takes a minute and needs no password.", action: SIGN_IN },
   forbidden: { message: "This stub isn't yours to change. Open one from your own wall.", action: WALL },
   not_found: { message: "We couldn't find that. The link may have been stopped, or it may have a typo.", action: START },
