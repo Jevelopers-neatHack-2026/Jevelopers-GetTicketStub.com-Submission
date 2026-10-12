@@ -6,10 +6,51 @@ import {
   safeFallback,
   validateDecisionRequest,
   validateDecisionResult,
+  decisionExecutionTarget,
+  decisionExecutionTargetHash,
 } from "../../src/contracts/decision-port/v1.mjs";
 import { clone, fixture } from "./fixture-utils.mjs";
 
 const trustedScope = { tenant_id: "tenant-1", project_id: "project-1" };
+
+test("owned decision execution target excludes only the eventual real reservation", async () => {
+  const request = await fixture("decision-port/request.json");
+  const fullHash = decisionExecutionTargetHash(request);
+  const bare = clone(request);
+  delete bare.budget_ref.reservation_ref;
+  assert.equal(decisionExecutionTargetHash(bare, { trustedScope }), fullHash);
+  const differentReservation = clone(request);
+  differentReservation.budget_ref.reservation_ref = "other-actual-reservation";
+  assert.equal(decisionExecutionTargetHash(differentReservation), fullHash);
+  const target = decisionExecutionTarget(bare, { trustedScope });
+  assert.equal(target.contract, "DecisionExecutionTarget");
+  assert.equal(Object.isFrozen(target.request.budget_ref), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(target.request)), bare);
+  expectCode("missing_trusted_context", () => decisionExecutionTargetHash(bare));
+  expectCode("invalid_type", () => validateDecisionRequest(bare, { trustedScope }));
+  for (const mutate of [
+    value => { value.request_id = "other-request"; },
+    value => { value.budget_ref.policy_version = "other-policy"; },
+    value => { value.deadline_at = "2026-10-10T15:00:00.000Z"; },
+    value => { value.state.text = "changed evidence"; },
+  ]) {
+    const changed = clone(request); mutate(changed);
+    assert.notEqual(decisionExecutionTargetHash(changed), fullHash);
+  }
+  const foreign = clone(bare); foreign.tenant_id = "foreign-tenant";
+  expectCode("scope_mismatch", () => decisionExecutionTargetHash(foreign, { trustedScope }));
+  const incomplete = clone(bare); delete incomplete.budget_ref.policy_version;
+  expectCode("invalid_type", () => decisionExecutionTargetHash(incomplete, { trustedScope }));
+});
+
+test("decision execution target rejects bounded-data violations before executing getters", async () => {
+  const request = await fixture("decision-port/request.json");
+  for (const invalid of [null, { ...request, state: { text: "x".repeat(128_001) } },
+    { ...request, source_refs: new Array(20_001) },
+    Object.defineProperty(clone(request), "state", { get() { assert.fail("decision target invoked a getter"); } })]) {
+    expectCode("invalid_type", () => decisionExecutionTargetHash(invalid));
+  }
+});
 
 function expectCode(code, callback) {
   assert.throws(callback, (error) => error instanceof ContractError && error.code === code);

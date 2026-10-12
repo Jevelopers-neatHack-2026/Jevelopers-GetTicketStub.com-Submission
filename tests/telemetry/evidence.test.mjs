@@ -12,6 +12,51 @@ import { fixtureAttempt, trustedScope } from "../../fixtures/metering/attempt.mj
 
 const modes = Object.freeze({ provider_execution_mode: "live", commerce_mode: "simulated" });
 
+test("prepared target admission and dispatch share the one preallocated transport identity", async () => {
+  const events = [];
+  const authority = new FakeMeteringAuthority();
+  const attempt = fixtureAttempt();
+  const target = { tenant_id: attempt.tenant_id, project_id: attempt.project_id,
+    billable_attempt_id: attempt.billable_attempt_id, model: attempt.provider.model,
+    deadline_at: "2026-10-10T12:01:00.000Z" };
+  const executionTarget = { target_binding: target, target_binding_sha256: `sha256:${"a".repeat(64)}`,
+    deadline_at: target.deadline_at };
+  let admitted;
+  const originalReserve = authority.reserveAttempt.bind(authority);
+  authority.reserveAttempt = async (request, context) => {
+    admitted = context;
+    assert.equal(context.target_binding.model, attempt.provider.model);
+    assert.equal(Object.isFrozen(context.target_binding), true);
+    return originalReserve(request);
+  };
+  const evidence = evidencePort(events);
+  const append = evidence.append;
+  evidence.append = async event => {
+    target.model = "mutated-after-snapshot";
+    return append(event);
+  };
+  const result = await runWithTelemetry({ meteringPort: authority, evidencePort: evidence, request: attempt,
+    trustedScope, modes, executionTarget, idFactory: idFactory(), clock: () => new Date("2026-10-10T12:00:00.000Z"),
+    dispatch: async context => {
+      assert.equal(context.transport_attempt_id, admitted.transport_attempt_id);
+      assert.equal(context.transport_attempt_id, "transport:2");
+      return successfulDispatch(events)(context);
+    } });
+  assert.equal(result.outcome.status, "settled");
+});
+
+test("malformed preparation context cannot admit a Finance reservation", async () => {
+  const attempt = fixtureAttempt();
+  const authority = new FakeMeteringAuthority();
+  authority.reserveAttempt = () => { assert.fail("invalid preparation context reserved funds"); };
+  await assert.rejects(runWithTelemetry({ meteringPort: authority, evidencePort: evidencePort([]), request: attempt,
+    trustedScope, modes, dispatch: () => { assert.fail("invalid preparation context dispatched"); },
+    executionTarget: { target_binding: { tenant_id: "foreign", project_id: attempt.project_id,
+      billable_attempt_id: attempt.billable_attempt_id, model: attempt.provider.model,
+      deadline_at: "2026-10-10T12:01:00.000Z" }, target_binding_sha256: `sha256:${"a".repeat(64)}`,
+      deadline_at: "2026-10-10T12:01:00.000Z" } }), error => error.code === "invalid_execution_target");
+});
+
 function idFactory() {
   let counter = 0;
   return (kind) => `${kind}:${++counter}`;

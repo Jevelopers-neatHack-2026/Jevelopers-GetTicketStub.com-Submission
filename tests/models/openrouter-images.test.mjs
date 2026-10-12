@@ -18,6 +18,22 @@ const JPEG = readFileSync(new URL("../../fixtures/models/valid-16x16.jpg", impor
 const WEBP = readFileSync(new URL("../../fixtures/models/valid-16x16.webp", import.meta.url));
 const PROMPT = "A synthetic offline test image.";
 
+for (const operation of ["generate", "edit"]) test(`OpenRouter ${operation} prepares the owned target before reservation or credential access`, async () => {
+  const h = orHarness({ operation, assetPort: { readArtifact: () => makePng() } });
+  const raw = { ...h.ctx, operation };
+  for (const field of ["reservation_ref", "transport_attempt_id", "dispatch_intent_ref", "recordTransportAttempt", "revalidateDispatch"]) delete raw[field];
+  const prepared = await h.provider.prepareAttempt(raw);
+  assert.equal(prepared.target_binding.service, "openrouter");
+  assert.equal(prepared.target_binding.model, OR_MODEL);
+  assert.equal(h.fetchCount, 0);
+  assert.equal(h.events.some((event) => event.startsWith("capability.") || event.startsWith("authority.") || event.startsWith("credential.")), false);
+  const result = await h.provider[operation]({ ...h.ctx, prepared_attempt: prepared });
+  assert.equal(result.target_binding_sha256, prepared.target_binding_sha256);
+  assert.equal(h.fetchCount, 1);
+  await assert.rejects(h.provider[operation]({ ...h.ctx, prepared_attempt: prepared }), error => error.code === "prepared_attempt_mismatch");
+  assert.equal(h.fetchCount, 1);
+});
+
 function jsonResponse(status, body, headers = {}) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 }

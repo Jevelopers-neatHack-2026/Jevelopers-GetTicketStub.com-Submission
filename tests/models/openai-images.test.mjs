@@ -14,6 +14,63 @@ import { readPrivateOpenAIImageRequestId, readPrivateOpenAIImageRetryDisposition
 import { chunk, corruptPngCrc, makeInvalidIndexedPng, makePng, makePng16Rgba } from "../../fixtures/models/png.mjs";
 
 const MODEL = "gpt-image-2.5-sunburst-2026-09-08";
+
+for (const operation of ["generate", "edit"]) test(`reservation-free ${operation} preparation reuses the exact target and input on native dispatch`, async () => {
+  const h = providerHarness({ operation, assetPort: { readArtifact: () => makePng(),
+    readReference: () => makePng({ transparent: true }) } });
+  const raw = { ...h.ctx, operation };
+  for (const field of ["reservation_ref", "transport_attempt_id", "dispatch_intent_ref", "recordTransportAttempt", "revalidateDispatch"]) delete raw[field];
+  const prepared = await h.provider.prepareAttempt(raw);
+  assert.match(prepared.target_binding_sha256, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(prepared.target_binding.billable_attempt_id, h.ctx.attempt.billable_attempt_id);
+  assert.equal(Object.hasOwn(prepared.target_binding, "reservation_ref"), false);
+  assert.equal(Object.isFrozen(prepared), true);
+  assert.equal(h.fetchCount, 0);
+  assert.equal(h.events.some((event) => event.startsWith("capability.") || event.startsWith("authority.") || event.startsWith("credential.")), false);
+  const result = await h.provider[operation]({ ...h.ctx, prepared_attempt: prepared });
+  assert.equal(result.target_binding_sha256, prepared.target_binding_sha256);
+  assert.equal(h.fetchCount, 1);
+  await assert.rejects(h.provider[operation]({ ...h.ctx, prepared_attempt: prepared }), error => error.code === "prepared_attempt_mismatch");
+  assert.equal(h.fetchCount, 1);
+});
+
+for (const change of ["plan", "brief", "scope", "deadline", "signal", "forged", "foreign_provider"]) test(`prepared image rejects ${change} before credentials or transport`, async () => {
+  const h = providerHarness();
+  const prepared = await h.provider.prepareAttempt({ ...h.ctx, operation: "generate" });
+  const raw = { ...h.ctx, prepared_attempt: prepared };
+  if (change === "plan") raw.plan = { ...raw.plan, steps: [{ action: "image.generate", parameters: { instruction: "changed" } }] };
+  if (change === "brief") raw.brief = { ...raw.brief, brief_id: "other-brief" };
+  if (change === "scope") raw.scope = { ...raw.scope, actor_ref: "other-authority" };
+  if (change === "deadline") raw.deadline_at = new Date(NOW + 50_000).toISOString();
+  if (change === "signal") raw.signal = new AbortController().signal;
+  if (change === "forged") raw.prepared_attempt = { ...prepared, token: {} };
+  const provider = change === "foreign_provider" ? providerHarness().provider : h.provider;
+  await assert.rejects(provider.generate(raw), error => error.code === "prepared_attempt_mismatch");
+  assert.equal(h.fetchCount, 0);
+  assert.equal(h.events.some((event) => event.startsWith("credential.")), false);
+});
+
+test("preparation snapshots before prompt awaits and cancellation cannot dispatch", async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const h = providerHarness({ promptPort: { async render() { await pending; return "Original immutable prompt"; } } });
+  const preparing = h.provider.prepareAttempt({ ...h.ctx, operation: "generate" });
+  h.ctx.plan.steps[0].parameters.changed = true;
+  h.ctx.controller.abort();
+  release();
+  await assert.rejects(preparing, error => error.code === "deadline_or_cancelled");
+  assert.equal(h.fetchCount, 0);
+});
+
+test("preparation rejects accessor, huge string and sparse wide array without executing application data", async () => {
+  for (const value of [Object.defineProperty({}, "payload", { enumerable: true, get() { assert.fail("preparation invoked a getter"); } }),
+    { payload: "x".repeat(128_001) }, { payload: new Array(20_001) }]) {
+    const h = providerHarness();
+    await assert.rejects(h.provider.prepareAttempt({ ...h.ctx, operation: "generate", brief: value }), error => error.code === "invalid_provider_input");
+    assert.equal(h.fetchCount, 0);
+    assert.equal(h.events.length, 0);
+  }
+});
 const NOW = Date.parse("2026-10-10T18:00:00.000Z");
 const HASH = (value) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const TEST_HASH = `sha256:${"a".repeat(64)}`;

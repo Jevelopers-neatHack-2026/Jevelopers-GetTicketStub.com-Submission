@@ -3,7 +3,7 @@ import { types as utilTypes } from "node:util";
 import {
   MAX_PIXELS, OpenAIImagesProviderError, PRIVATE_PROVIDER_REQUEST_IDS, PRIVATE_RETRY_DISPOSITIONS,
   PRIVATE_TARGET_BINDING_SHA256, attachUsageObservation, checkRef, exactUsage, fail, freezeUsageObservation, hashJson,
-  inspectConceptReferenceBytes, isRecord, runImageDispatch, snapshotUsageData, usageWithMissingField,
+  inspectConceptReferenceBytes, isRecord, runImageDispatch, prepareImageAttempt, snapshotUsageData, usageWithMissingField,
 } from "./image-adapter-core.mjs";
 import { IMAGE_PROVIDER_ROUTES } from "./image-routes.mjs";
 
@@ -723,6 +723,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
 
     return Object.freeze({
       resolveRoute,
+      prepareAttempt(input) { return guardedAsync(() => prepareImageAttempt(driver, undefined, input)); },
       getConceptConfiguration() {
         return guarded(() => {
           requireOperation("edit");

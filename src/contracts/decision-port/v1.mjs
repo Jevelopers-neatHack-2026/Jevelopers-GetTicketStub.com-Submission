@@ -2,6 +2,7 @@ import {
   assertHash,
   assertIsoDateTime,
   assertOnlyKeys,
+  canonicalHash,
   expectArray,
   expectEnum,
   expectFiniteNumber,
@@ -11,6 +12,7 @@ import {
   fail,
   rejectCredentialMaterial,
 } from "../validation.mjs";
+import { types as utilTypes } from "node:util";
 import { assertTrustedScope } from "../scope.mjs";
 
 export const DECISION_PORT_SCHEMA_VERSION = "1.0";
@@ -217,7 +219,7 @@ function validateObservation(observation, index, contract) {
   }
 }
 
-export function validateDecisionRequest(value, options = {}) {
+function validateDecisionRequestValue(value, options = {}, { allowUnreserved = false } = {}) {
   const contract = "DecisionPortRequest";
   expectObject(value, contract, contract);
   assertOnlyKeys(value, REQUEST_KEYS, contract);
@@ -233,7 +235,9 @@ export function validateDecisionRequest(value, options = {}) {
   expectObject(value.budget_ref, contract, "budget_ref");
   assertOnlyKeys(value.budget_ref, ["budget_scope_ref", "reservation_ref", "policy_version"], contract, "budget_ref");
   expectString(value.budget_ref.budget_scope_ref, contract, "budget_ref.budget_scope_ref", { maxLength: 200 });
-  expectString(value.budget_ref.reservation_ref, contract, "budget_ref.reservation_ref", { maxLength: 200 });
+  if (!allowUnreserved || Object.hasOwn(value.budget_ref, "reservation_ref")) {
+    expectString(value.budget_ref.reservation_ref, contract, "budget_ref.reservation_ref", { maxLength: 200 });
+  }
   expectString(value.budget_ref.policy_version, contract, "budget_ref.policy_version", { maxLength: 100 });
   assertIsoDateTime(value.deadline_at, contract, "deadline_at");
   expectString(value.cancellation_ref, contract, "cancellation_ref", { maxLength: 200 });
@@ -275,6 +279,75 @@ export function validateDecisionRequest(value, options = {}) {
   assertTrustedScope(value, options.trustedScope, contract);
   rejectCredentialMaterial(value, contract);
   return value;
+}
+
+export function validateDecisionRequest(value, options = {}) {
+  return validateDecisionRequestValue(value, options);
+}
+
+/** Reservation-free admission target; ordinary dispatch still requires the full C02 envelope. */
+export function decisionExecutionTarget(value, options = {}) {
+  const contract = "DecisionExecutionTarget";
+  let nodes = 0;
+  let bytes = 0;
+  const seen = new Set();
+  const copy = (current, depth) => {
+    if (++nodes > 20_000 || depth > 64) throw new Error();
+    if (typeof current === "string") {
+      bytes += Buffer.byteLength(current, "utf8");
+      if (current.length > 128_000 || bytes > 1024 * 1024) throw new Error();
+      return current;
+    }
+    if (current === null || typeof current === "boolean") return current;
+    if (typeof current === "number" && Number.isFinite(current)) return current;
+    if (!current || typeof current !== "object" || utilTypes.isProxy(current) || seen.has(current) ||
+        !Array.isArray(current) && ![Object.prototype, null].includes(Object.getPrototypeOf(current))) throw new Error();
+    seen.add(current);
+    if (Array.isArray(current) && current.length > 20_000) throw new Error();
+    const descriptors = Object.getOwnPropertyDescriptors(current);
+    const keys = Reflect.ownKeys(descriptors);
+    if (keys.length > 20_000 || keys.some((key) => typeof key !== "string")) throw new Error();
+    const result = Array.isArray(current) ? [] : Object.create(null);
+    for (const key of keys) {
+      bytes += Buffer.byteLength(key, "utf8");
+      if (key.length > 256 || bytes > 1024 * 1024) throw new Error();
+      const descriptor = descriptors[key];
+      if (!Object.hasOwn(descriptor, "value")) throw new Error();
+      if (Array.isArray(current) && key === "length") continue;
+      if (Array.isArray(current) && !/^(?:0|[1-9]\d*)$/.test(key)) throw new Error();
+      Object.defineProperty(result, key, { value: copy(descriptor.value, depth + 1), enumerable: true });
+    }
+    if (Array.isArray(current) && Object.keys(result).length !== current.length) throw new Error();
+    seen.delete(current);
+    return Object.freeze(result);
+  };
+  let request;
+  try {
+    request = copy(value, 0);
+    if (Buffer.byteLength(JSON.stringify(request), "utf8") > 1024 * 1024) throw new Error();
+  } catch { fail("invalid_type", contract, "request", "Execution targets require bounded plain JSON without accessors."); }
+  expectObject(request, contract, "request");
+  const hasReservation = request.budget_ref && Object.hasOwn(request.budget_ref, "reservation_ref");
+  if (!hasReservation && !options.trustedScope) {
+    fail("missing_trusted_context", contract, "trusted_scope", "Reservation-free preparation requires separately supplied trusted scope.");
+  }
+  const trustedScope = options.trustedScope ?? { tenant_id: request.tenant_id, project_id: request.project_id,
+    ...Object.fromEntries(["workflow_id", "run_id", "order_id", "job_id", "design_version_id", "artifact_id"]
+      .filter((key) => Object.hasOwn(request, key)).map((key) => [key, request[key]])) };
+  validateDecisionRequestValue(request, { trustedScope }, { allowUnreserved: !hasReservation });
+  const { reservation_ref: _reservation, ...budget } = request.budget_ref;
+  return Object.freeze({ contract, schema_version: "1.0", request: Object.freeze({ ...request,
+    budget_ref: Object.freeze(budget) }) });
+}
+
+export function decisionExecutionTargetHash(value, options = {}) {
+  return canonicalHash(decisionExecutionTarget(value, options));
+}
+
+/** Planning counterpart used only by owned reservation-free inspection preparation. */
+export function planDecisionExecutionQuestionBatches(value, options = {}) {
+  const request = decisionExecutionTarget(value, options).request;
+  return request.execution_mode === "independent_batch" ? [questionIds(request)] : planQuestionBatchesUnchecked(request);
 }
 
 export function planQuestionBatches(value, options = {}) {

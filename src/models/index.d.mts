@@ -7,6 +7,8 @@ import type {
   ProviderOutput,
   CreativeProviderRoute,
   UsageRecord,
+  ImagePreparationInput,
+  PreparedImageAttempt,
 } from "../api/v1.mjs";
 
 export type OpenAIImageOperation = "generate" | "edit";
@@ -225,6 +227,7 @@ export declare class OpenAIImagesProviderError extends Error {
 }
 
 export declare function createOpenAIImagesProvider(options: OpenAIImageProviderOptions): Readonly<{
+  prepareAttempt(input: ImagePreparationInput): Promise<PreparedImageAttempt>;
   resolveRoute(input: Pick<CreativeProviderRouteInput, "operation">): CreativeProviderRoute;
   getConceptConfiguration(): Readonly<{ model_id: string; configuration: OpenAIImageConfiguration }>;
   inspectConceptReferences(input: { scope: ProviderInput["scope"];
@@ -405,6 +408,7 @@ export declare class OpenRouterImagesProviderError extends OpenAIImagesProviderE
 }
 
 export declare function createOpenRouterImagesProvider(options: OpenRouterImageProviderOptions): Readonly<{
+  prepareAttempt(input: ImagePreparationInput): Promise<PreparedImageAttempt>;
   resolveRoute(input: Pick<CreativeProviderRouteInput, "operation">): CreativeProviderRoute;
   getConceptConfiguration(): Readonly<{ model_id: string; provider_tag: string; capabilities: OpenRouterImageCapabilities;
     configuration: OpenRouterImageConfiguration }>;

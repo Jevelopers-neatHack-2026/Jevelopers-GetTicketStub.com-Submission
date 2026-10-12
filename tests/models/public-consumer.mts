@@ -8,6 +8,7 @@ import {
   type OpenAIImageAuthorizationRequest,
 } from "creative-engine/models";
 import type { PrivateProviderUsageAttribution } from "creative-engine/api/v1";
+import type { ImagePreparationInput, ProviderInput, PreparedImageAttempt } from "creative-engine/api/v1";
 import type { TrustedProviderUsageProfileAuthority } from "creative-engine/telemetry";
 import type { UsageObservation } from "creative-engine/contracts/metering";
 
@@ -32,6 +33,13 @@ export async function consume(input: OpenAIImagesInput): Promise<OpenAIImagesOut
   void totalCount;
   void transportId;
   return output;
+}
+
+export async function consumePreparedImage(input: ImagePreparationInput, dispatched: ProviderInput): Promise<OpenAIImagesOutput> {
+  const prepared: PreparedImageAttempt = await provider.prepareAttempt(input);
+  prepared.target_binding_sha256 satisfies `sha256:${string}`;
+  prepared.token satisfies object;
+  return provider.generate({ ...dispatched, prepared_attempt: prepared });
 }
 
 export function consumeAuthorizationBinding(input: OpenAIImageAuthorizationRequest) {
