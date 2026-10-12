@@ -1,4 +1,6 @@
 """Negative and positive tests for the BK-01 checks. Run: python3 -m unittest discover -s tools/tests"""
+import contextlib
+import io
 import json
 import shutil
 import subprocess
@@ -10,6 +12,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 sys.path.insert(0, str(HERE.parents[1]))
 import check_inventory  # noqa: E402
+import check_governance  # noqa: E402
 import check_links  # noqa: E402
 from inventory_lib import INVENTORY, ROOT  # noqa: E402
 
@@ -231,6 +234,43 @@ class LinkTests(Fixture):
     def test_code_blocks_ignored(self):
         (self.tmp / "README.md").write_text("```\n[x](nope.md)\n```\n`[y](nope2.md)`\n")
         self.assertEqual(check_links.check(self.tmp)[0], [])
+
+
+class GovernanceTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.original = (check_governance.GOV, check_governance.TPL, check_governance.SIM)
+        sources = self.original + tuple(ROOT / p for p in (
+            "SPEC.md", "tools/check_governance.py", "docs/architecture/OWNERSHIP.md",
+            "docs/architecture/ACCEPTANCE.md"))
+        for source in sources:
+            target = self.tmp / source.relative_to(ROOT)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+        check_governance.GOV, check_governance.TPL, check_governance.SIM = tuple(
+            self.tmp / source.relative_to(ROOT) for source in self.original)
+
+    def tearDown(self):
+        check_governance.GOV, check_governance.TPL, check_governance.SIM = self.original
+        shutil.rmtree(self.tmp)
+
+    def run_checker(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = check_governance.main()
+        return status, output.getvalue()
+
+    def test_valid_governance_documents_pass(self):
+        self.assertEqual(self.run_checker()[0], 0)
+
+    def test_release_eligibility_rejects_contradictory_trailing_text(self):
+        sim = check_governance.SIM.read_text()
+        self.assertIn("- **Release eligible:** no", sim)
+        check_governance.SIM.write_text(sim.replace(
+            "- **Release eligible:** no", "- **Release eligible:** no, yes", 1))
+        status, output = self.run_checker()
+        self.assertEqual(status, 1)
+        self.assertIn("must state exactly one 'Release eligible: no'", output)
 
 
 class RealRepo(unittest.TestCase):
