@@ -302,7 +302,12 @@ function safeProcessError(error) {
   return /^[A-Z][A-Z0-9_]{0,39}$/u.test(code) ? code : "spawn_failed";
 }
 
+// The suite child's stderr is NEVER part of the validated report (its mere presence is the `runner.stderr` failure). When the run FAILED, the command-line
+// entry below copies a bounded, control-character-free head of it to this process's own stderr so a CI log carries the narrow diagnostic a failing case wrote.
+let lastChildStderr = "";
+
 export function runPackageTests({ spawn = spawnSync } = {}) {
+  lastChildStderr = "";
   let child;
   try {
     child = spawn(process.execPath, [suiteFile], {
@@ -319,6 +324,7 @@ export function runPackageTests({ spawn = spawnSync } = {}) {
     child = { stdout: "", stderr: "", status: null, signal: null, error: { code: "invalid_spawn_result" } };
   }
 
+  if (typeof child.stderr === "string") lastChildStderr = child.stderr;
   const parsed = parsePackageOutput(child.stdout);
   const processError = child.error === undefined ? null : safeProcessError(child.error);
   const rawSignal = child.signal;
@@ -379,5 +385,8 @@ export function runPackageTests({ spawn = spawnSync } = {}) {
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const report = runPackageTests();
   process.stdout.write(`${JSON.stringify(report)}\n`);
-  if (report.status !== "passed") process.exitCode = 1;
+  if (report.status !== "passed") {
+    process.exitCode = 1;
+    if (lastChildStderr !== "") process.stderr.write(`package suite child stderr (first 8192 characters):\n${lastChildStderr.slice(0, 8192).replace(/[^\x09\x0a\x20-\x7e]/gu, "?")}\n`);
+  }
 }

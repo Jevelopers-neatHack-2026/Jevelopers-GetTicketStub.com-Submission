@@ -408,26 +408,50 @@ export function register(define_) {
   });
 
   define_("bounds.repeated-view-no-copy-amplification-child-process", () => {
-    const runChild = (mode) => {
+    // Every child run is recorded in a SMALL, bounded diagnostic list (exit status/signal, stderr head, the child's own measurements; never a typed array).
+    // If anything below fails, the list is written to stderr once so a CI log shows the real numbers (the package runner hides assertion messages) and
+    // the original error is re-thrown unchanged.
+    const diagnostics = [];
+    const runChild = (mode, attempt = 1) => {
       const child = spawnSync(process.execPath, ["--max-old-space-size=256", "--expose-gc", new URL("./production-bundle-allocation-child.mjs", import.meta.url).pathname, mode], {
         encoding: "utf8", timeout: 120_000, env: { PATH: process.env.PATH, TMPDIR: process.env.TMPDIR ?? "/tmp" }
       });
-      assert.equal(child.status, 0, `${mode} exited ${child.status}: ${child.stderr.slice(0, 300)}`);
-      assert.equal(child.stderr, "", mode);
-      return JSON.parse(child.stdout);
+      const record = { mode, attempt, status: child.status, signal: child.signal, error: child.error?.code ?? null, stderrBytes: (child.stderr ?? "").length, stderrHead: (child.stderr ?? "").slice(0, 160).replace(/[^\x20-\x7e]/gu, "?") };
+      diagnostics.push(record);
+      assert.equal(child.status, 0, `${mode} exited ${child.status} signal ${child.signal}: ${record.stderrHead}`);
+      assert.equal(child.stderr, "", `${mode} wrote to stderr: ${record.stderrHead}`);
+      let result;
+      try { result = JSON.parse(child.stdout); } catch { record.stdoutHead = child.stdout.slice(0, 160).replace(/[^\x20-\x7e]/gu, "?"); assert.fail(`${mode} printed no JSON: ${record.stdoutHead}`); }
+      record.platform = result.platform; record.arch = result.arch; record.node = result.node; record.verdict = result.verdict; record.custody = result.byteCustody.code ?? result.byteCustody.state; record.reasons = result.reasons;
+      record.arrayBuffersDeltaMiB = result.arrayBuffersDeltaMiB; record.sampledPeakRssDeltaMiB = result.sampledPeakRssDeltaMiB; record.samples = result.samples; record.elapsedMs = result.elapsedMs; record.diagnosticOnly = result.diagnosticOnly;
+      return result;
     };
-    // Baseline control: one accepted 40 MiB entry costs one private copy, so the measurement can see a copy at all.
-    const control = runChild("bounds-control-one-copy");
-    assert.equal(control.byteCustody.state, "verified_local");
-    assert.ok(control.peakRssDeltaMiB >= 30, `control peak RSS delta ${control.peakRssDeltaMiB} MiB must show a 40 MiB copy`);
-    // Each hostile list below used to allocate one copy per entry (6 x 40 MiB = 240 MiB, reviewer-measured +282 MiB); now nothing is copied.
-    for (const [mode, expectedReason] of [["bounds-repeat6-same-name", "SNAPSHOT_DUPLICATE_FILENAME"], ["bounds-repeat6-case-variants", "SNAPSHOT_DUPLICATE_FILENAME"],
-      ["bounds-repeat6-distinct-unknown-names", "SNAPSHOT_OVER_CAP"], ["bounds-payload-group", "SNAPSHOT_PAYLOAD_GROUP_OVER_CAP"]]) {
-      const result = runChild(mode);
-      assert.equal(result.byteCustody.code, "SNAPSHOT_REJECTED", mode); assert.ok(result.reasons.includes(expectedReason), `${mode}: ${result.reasons}`);
-      assert.equal(result.verdict, "integrity_failed", mode);
-      assert.ok(result.peakRssDeltaMiB < 8, `${mode}: peak RSS grew ${result.peakRssDeltaMiB} MiB; the rejection must happen before any copy (control copy: ${control.peakRssDeltaMiB} MiB)`);
-      assert.ok(result.elapsedMs < 1000, `${mode} is finite and fast: ${result.elapsedMs} ms`);
+    const summary = (r) => `arrayBuffers +${r.arrayBuffersDeltaMiB} MiB, sampled resident-set peak +${r.sampledPeakRssDeltaMiB} MiB over ${r.samples} samples (kernel maxRSS delta ${r.diagnosticOnly.maxRssDeltaMiB} MiB, diagnostic only)`;
+    try {
+      // CALIBRATION. One accepted 40 MiB entry must show one private copy in BOTH signals, otherwise the instrument cannot see a copy on this platform and
+      // the zero readings below would prove nothing. The calibration may be repeated (at most 3 runs, all recorded) because it measures a ~30 ms window
+      // on a possibly loaded host; the rejection runs below are NOT repeated.
+      let control = null;
+      for (let attempt = 1; attempt <= 3 && control === null; attempt += 1) {
+        const run = runChild("bounds-control-one-copy", attempt);
+        assert.equal(run.byteCustody.state, "verified_local", "the control list is accepted by the first pass");
+        if (run.arrayBuffersDeltaMiB >= 39 && run.sampledPeakRssDeltaMiB >= 30) control = run;
+      }
+      assert.ok(control !== null, `calibration failed in 3 runs: a 40 MiB private copy was not visible (${diagnostics.filter((d) => d.mode === "bounds-control-one-copy").map((d) => `ab +${d.arrayBuffersDeltaMiB}/rss +${d.sampledPeakRssDeltaMiB}`).join("; ")})`);
+      // Each hostile list below used to allocate one copy per entry (6 x 40 MiB = 240 MiB, reviewer-measured +282 MiB); now nothing is copied: no new
+      // ArrayBuffer bytes (< 1 MiB) and no resident-set growth during the call (< 8 MiB), on a baseline taken immediately before the call.
+      for (const [mode, expectedReason] of [["bounds-repeat6-same-name", "SNAPSHOT_DUPLICATE_FILENAME"], ["bounds-repeat6-case-variants", "SNAPSHOT_DUPLICATE_FILENAME"],
+        ["bounds-repeat6-distinct-unknown-names", "SNAPSHOT_OVER_CAP"], ["bounds-payload-group", "SNAPSHOT_PAYLOAD_GROUP_OVER_CAP"]]) {
+        const result = runChild(mode);
+        assert.equal(result.byteCustody.code, "SNAPSHOT_REJECTED", mode); assert.ok(result.reasons.includes(expectedReason), `${mode}: ${result.reasons}`);
+        assert.equal(result.verdict, "integrity_failed", mode);
+        assert.ok(result.arrayBuffersDeltaMiB < 1, `${mode}: ${summary(result)}; a rejection must not allocate (calibration copy: ${summary(control)})`);
+        assert.ok(result.sampledPeakRssDeltaMiB < 8, `${mode}: ${summary(result)}; a rejection must happen before any copy (calibration copy: ${summary(control)})`);
+        assert.ok(result.elapsedMs < 1000, `${mode} is finite and fast: ${result.elapsedMs} ms`);
+      }
+    } catch (error) {
+      process.stderr.write(`bounds-child-diagnostic ${JSON.stringify(diagnostics).slice(0, 6000)}\n`);
+      throw error;
     }
   });
 
