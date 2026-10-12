@@ -48,6 +48,8 @@ export type FinanceV2ViewProps = Readonly<{
    * `onNavigate` must be a real cursor request of the same snapshot; this view never decides what a cursor means.
    */
   paging?: Readonly<{ pageLabel: string; hasPrevious: boolean; hasNext: boolean; onNavigate: (direction: 'previous' | 'next') => void }>;
+  /** Replaces the fixed "Export unavailable" section. Supplied only by the connected view that owns the read and the export hook; absent, export stays unavailable. */
+  exportSlot?: ReactNode;
 }>;
 
 const known = (text: string, currency: string): AmountDisplay => ({ status: 'available', text, currency });
@@ -151,12 +153,12 @@ function BudgetCard({ budget }: { budget: ReportingBudget }) {
     </dl>
   </section>;
 }
-function BudgetView({ page }: { page: FinanceV2Page }) {
+function BudgetView({ page, exportSlot }: { page: FinanceV2Page; exportSlot: ReactNode }) {
   const budgets = page.summary.budgets;
   return <>
     {budgets.length === 0 ? <Notice title="No budget delivered">No budget advisory was delivered for this snapshot. This is not a zero budget.</Notice> : budgets.map((budget) => <BudgetCard key={budget.currency} budget={budget} />)}
     <Coverage coverage={page.summary.coverage} />
-    <ExportUnavailable />
+    {exportSlot ?? <ExportUnavailable />}
   </>;
 }
 
@@ -201,12 +203,12 @@ function CurrencyBreakdown({ entry }: { entry: ReportingCurrencySummary }) {
     </Section>
   </section>;
 }
-function BreakdownView({ page }: { page: FinanceV2Page }) {
+function BreakdownView({ page, exportSlot }: { page: FinanceV2Page; exportSlot: ReactNode }) {
   const currencies = page.summary.currencies;
   return <>
     {currencies.length === 0 ? <Notice title="No currency summary delivered">No cost breakdown was delivered for this snapshot. This is not a zero total.</Notice> : currencies.map((entry) => <CurrencyBreakdown key={entry.currency} entry={entry} />)}
     <Coverage coverage={page.summary.coverage} />
-    <ExportUnavailable />
+    {exportSlot ?? <ExportUnavailable />}
   </>;
 }
 
@@ -218,7 +220,7 @@ function Anchor({ href, onNavigate, children }: { href: string; onNavigate: ((hr
     event.preventDefault(); onNavigate(href);
   }}>{children}</a>;
 }
-function TransactionList({ page, detailHref, onNavigate, filters, onFiltersChange, paging }: { page: FinanceV2Page | undefined } & Nav & Pick<FinanceV2ViewProps, 'filters' | 'onFiltersChange' | 'paging'>) {
+function TransactionList({ page, detailHref, onNavigate, filters, onFiltersChange, paging, exportSlot }: { page: FinanceV2Page | undefined; exportSlot?: ReactNode } & Nav & Pick<FinanceV2ViewProps, 'filters' | 'onFiltersChange' | 'paging'>) {
   const [local, setLocal] = useState<FinanceV2TransactionFilters>({ valuation: 'all', currency: 'all' });
   const hostOwned = filters !== undefined && onFiltersChange !== undefined;
   const selected = hostOwned ? filters : local;
@@ -258,7 +260,7 @@ function TransactionList({ page, detailHref, onNavigate, filters, onFiltersChang
         </tr>)}{shown.length === 0 && <tr><td colSpan={9}><p role="status">No transactions match these filters.</p></td></tr>}</tbody>
       </table></TableScroll>
     </Section>
-    <ExportUnavailable />
+    {exportSlot ?? <ExportUnavailable />}
   </>;
 }
 function DetailBody({ detail, parent }: { detail: ReportingDetail; parent: ReportingCurrencySummary | undefined }) {
@@ -291,11 +293,11 @@ function DetailBody({ detail, parent }: { detail: ReportingDetail; parent: Repor
     </Section> : null}
   </>;
 }
-function DetailView({ page, detailId, listHref, onNavigate }: { page: FinanceV2Page; detailId: string | undefined } & Nav) {
+function DetailView({ page, detailId, listHref, onNavigate, exportSlot }: { page: FinanceV2Page; detailId: string | undefined; exportSlot?: ReactNode } & Nav) {
   const detail = detailId === undefined ? undefined : page.details.find((item) => item.detailId === detailId);
   const back = listHref ? <p><Anchor href={listHref} onNavigate={onNavigate}>Back to transactions</Anchor></p> : null;
   if (!detail) return <>{back}<Notice title="Transaction not in this snapshot">This transaction was not delivered in this snapshot. No amounts are shown.</Notice></>;
-  return <>{back}<DetailBody detail={detail} parent={page.summary.currencies.find((entry) => entry.currency === detail.currency)} /><ExportUnavailable /></>;
+  return <>{back}<DetailBody detail={detail} parent={page.summary.currencies.find((entry) => entry.currency === detail.currency)} />{exportSlot ?? <ExportUnavailable />}</>;
 }
 
 const HEADINGS: Readonly<Record<FinanceV2ViewName, string>> = { budget: 'Budget advisory', breakdown: 'Cost breakdown', transactions: 'Transaction drilldown', 'transaction-detail': 'Transaction detail view' };
@@ -307,7 +309,7 @@ const HEADINGS: Readonly<Record<FinanceV2ViewName, string>> = { budget: 'Budget 
  */
 export function FinanceV2View(props: FinanceV2ViewProps) {
   const headingId = useId();
-  const { view, input, expectedScope, expectedSnapshotId, expectedQueryContentHash, expectedSummaryContentHash, expectedReferences, detailId, detailHref, listHref, onNavigate, filters, onFiltersChange, paging } = props;
+  const { view, input, expectedScope, expectedSnapshotId, expectedQueryContentHash, expectedSummaryContentHash, expectedReferences, detailId, detailHref, listHref, onNavigate, filters, onFiltersChange, paging, exportSlot } = props;
   const wrap = (body: ReactNode) => <section className="td-component-stack" aria-labelledby={headingId}><h2 id={headingId}>{HEADINGS[view] ?? 'Finance v2'}</h2>{body}</section>;
   if (props.mode !== 'SYNTHETIC_PROPOSAL') return wrap(<Notice alert title="Unsupported mode">This presentation only renders in explicit SYNTHETIC_PROPOSAL mode. Nothing is shown. Code UNSUPPORTED_MODE.</Notice>);
   if (!input || typeof input !== 'object') return wrap(<Notice title="Finance state unknown">The state of this report could not be determined. No amounts are shown.</Notice>);
@@ -332,9 +334,9 @@ export function FinanceV2View(props: FinanceV2ViewProps) {
   const { page } = checked;
   return wrap(<>
     <Banner page={page} />
-    {view === 'budget' && <BudgetView page={page} />}
-    {view === 'breakdown' && <BreakdownView page={page} />}
-    {view === 'transactions' && <TransactionList page={page} {...(detailHref ? { detailHref } : {})} {...(onNavigate ? { onNavigate } : {})} {...(filters ? { filters } : {})} {...(onFiltersChange ? { onFiltersChange } : {})} {...(paging ? { paging } : {})} />}
-    {view === 'transaction-detail' && <DetailView page={page} detailId={detailId} {...(listHref ? { listHref } : {})} {...(onNavigate ? { onNavigate } : {})} />}
+    {view === 'budget' && <BudgetView page={page} exportSlot={exportSlot} />}
+    {view === 'breakdown' && <BreakdownView page={page} exportSlot={exportSlot} />}
+    {view === 'transactions' && <TransactionList page={page} {...(detailHref ? { detailHref } : {})} {...(onNavigate ? { onNavigate } : {})} {...(filters ? { filters } : {})} {...(onFiltersChange ? { onFiltersChange } : {})} {...(paging ? { paging } : {})} {...(exportSlot ? { exportSlot } : {})} />}
+    {view === 'transaction-detail' && <DetailView page={page} detailId={detailId} {...(listHref ? { listHref } : {})} {...(onNavigate ? { onNavigate } : {})} {...(exportSlot ? { exportSlot } : {})} />}
   </>);
 }
