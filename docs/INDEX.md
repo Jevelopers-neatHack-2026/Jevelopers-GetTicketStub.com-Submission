@@ -9,6 +9,7 @@ This map routes engineers to the maintained API, gates, local evidence and bound
 
 ## Providers, usage and versions
 - [OpenAI Images](providers/openai-images.md) and [OpenRouter Images](providers/openrouter-images.md) describe adapter boundaries.
+- [Offline generation/edit API fixtures](providers/offline-api-fixtures.md) documents reproducible synthetic API packets and explicit mock, no-live-provider limits.
 - [Provider-access preparation](operations/provider-access.md) and [execution-target preparation](operations/execution-target-preparation.md) are gated preparation documents; follow their owner decisions before any provider configuration or call.
 - [Usage trace evidence](usage-trace-evidence.md) explains local attempt and usage records.
 - [Version state machine](creative/version-state-machine.md) documents immutable versions and transitions.
