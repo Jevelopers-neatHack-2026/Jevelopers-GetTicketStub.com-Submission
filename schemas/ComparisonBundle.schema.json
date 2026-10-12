@@ -1,0 +1,616 @@
+{
+  "$defs": {
+    "Assembly": {
+      "additionalProperties": false,
+      "description": "App-owned composed release input; never inferred from moving branches.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "owner": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Owner",
+          "type": "string"
+        },
+        "kind": {
+          "default": "composed",
+          "enum": [
+            "composed",
+            "component"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "selected_cases": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Cases"
+        },
+        "integration_revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Integration Revision",
+          "type": "string"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "minItems": 1,
+          "title": "Components",
+          "type": "array"
+        },
+        "contract_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Contract Digest",
+          "type": "string"
+        },
+        "contract_artifact_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contract Artifact Path"
+        },
+        "fixture_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Fixture Digest",
+          "type": "string"
+        },
+        "runtime": {
+          "title": "Runtime",
+          "type": "string"
+        },
+        "configuration_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Configuration Digest",
+          "type": "string"
+        },
+        "configuration_component": {
+          "default": "integration-evals",
+          "title": "Configuration Component",
+          "type": "string"
+        },
+        "configuration_artifact_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Configuration Artifact Path"
+        },
+        "providers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Provider"
+          },
+          "title": "Providers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "owner",
+        "integration_revision",
+        "components",
+        "contract_digest",
+        "fixture_digest",
+        "runtime",
+        "configuration_digest"
+      ],
+      "title": "Assembly",
+      "type": "object"
+    },
+    "Assertion": {
+      "additionalProperties": false,
+      "description": "Compare an owner-produced named observation to a frozen oracle.",
+      "properties": {
+        "observation": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Observation",
+          "type": "string"
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected"
+        }
+      },
+      "required": [
+        "observation",
+        "expected"
+      ],
+      "title": "Assertion",
+      "type": "object"
+    },
+    "Case": {
+      "additionalProperties": false,
+      "description": "Declarative verification scenario with no competing domain implementation.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "requirements": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Requirements",
+          "type": "array"
+        },
+        "fixtures": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fixtures",
+          "type": "array"
+        },
+        "component": {
+          "title": "Component",
+          "type": "string"
+        },
+        "interface": {
+          "title": "Interface",
+          "type": "string"
+        },
+        "invariant": {
+          "title": "Invariant",
+          "type": "string"
+        },
+        "assertions": {
+          "items": {
+            "$ref": "#/$defs/Assertion"
+          },
+          "minItems": 1,
+          "title": "Assertions",
+          "type": "array"
+        },
+        "artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "modes": {
+          "items": {
+            "$ref": "#/$defs/Mode"
+          },
+          "minItems": 1,
+          "title": "Modes",
+          "type": "array"
+        },
+        "provider_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Provider Ids",
+          "type": "array"
+        },
+        "operations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Operations",
+          "type": "array"
+        },
+        "platform": {
+          "default": "any",
+          "enum": [
+            "any",
+            "linux"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "safety": {
+          "default": false,
+          "title": "Safety",
+          "type": "boolean"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "enum": [
+                "functional",
+                "safety",
+                "authorization",
+                "benchmark"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "quarantined": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quarantined"
+        },
+        "mandatory": {
+          "default": true,
+          "title": "Mandatory",
+          "type": "boolean"
+        },
+        "timeout_seconds": {
+          "default": 30,
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "fault": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fault"
+        },
+        "dependencies": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "artifact_producers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Producers",
+          "type": "array"
+        },
+        "required_evidence_kinds": {
+          "default": [
+            "evaluation"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Evidence Kinds",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "requirements",
+        "fixtures",
+        "component",
+        "interface",
+        "invariant",
+        "assertions",
+        "artifacts",
+        "modes"
+      ],
+      "title": "Case",
+      "type": "object"
+    },
+    "ComparisonInput": {
+      "additionalProperties": false,
+      "description": "Only comparison context is exported; no execution settings or host paths are restored.",
+      "properties": {
+        "case": {
+          "$ref": "#/$defs/Case"
+        },
+        "assembly": {
+          "$ref": "#/$defs/Assembly"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "clock": {
+          "format": "date-time",
+          "title": "Clock",
+          "type": "string"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "reserved_evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reserved Evidence Ids",
+          "type": "array"
+        },
+        "response_json": {
+          "title": "Response Json",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case",
+        "assembly",
+        "run_id",
+        "clock",
+        "seed",
+        "mode",
+        "reserved_evidence_ids",
+        "response_json"
+      ],
+      "title": "ComparisonInput",
+      "type": "object"
+    },
+    "Component": {
+      "additionalProperties": false,
+      "description": "Immutable owner-provided checkout and adapter entrypoints.",
+      "properties": {
+        "repository": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Repository",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "tree": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Tree",
+          "type": "string"
+        },
+        "lockfile_path": {
+          "title": "Lockfile Path",
+          "type": "string"
+        },
+        "lockfile_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Lockfile Digest",
+          "type": "string"
+        },
+        "command": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Command",
+          "type": "array"
+        },
+        "cleanup_command": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Cleanup Command",
+          "type": "array"
+        },
+        "supported_modes": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Mode"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supported Modes"
+        }
+      },
+      "required": [
+        "repository",
+        "revision",
+        "tree",
+        "lockfile_path",
+        "lockfile_digest"
+      ],
+      "title": "Component",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "Provider": {
+      "additionalProperties": false,
+      "description": "Preflight configuration; credential values never enter records.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
+        "credential_env": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credential Env"
+        },
+        "eligible": {
+          "default": false,
+          "title": "Eligible",
+          "type": "boolean"
+        },
+        "authority_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authority Ref"
+        },
+        "cap": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "cleanup_supported": {
+          "default": false,
+          "title": "Cleanup Supported",
+          "type": "boolean"
+        },
+        "allowed_operations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Operations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "mode",
+        "model"
+      ],
+      "title": "Provider",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A minimal replay bundle binds serialized original oracle inputs to a run digest.",
+  "properties": {
+    "evaluator_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Evaluator Digest",
+      "type": "string"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/ComparisonInput"
+      },
+      "minItems": 1,
+      "title": "Inputs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "evaluator_digest",
+    "inputs"
+  ],
+  "title": "ComparisonBundle",
+  "type": "object"
+}

@@ -150,6 +150,11 @@ class Assertion(Record):
     expected: str | int | bool | Decimal | None
 
 
+def _absent(value: str | bool | None) -> bool:
+    """Omit new optional suite facts to preserve existing frozen suite digests."""
+    return value is None
+
+
 class Case(Record):
     """Declarative verification scenario with no competing domain implementation."""
 
@@ -166,6 +171,10 @@ class Case(Record):
     operations: tuple[str, ...] = ()
     platform: Literal["any", "linux"] = "any"
     safety: bool = False
+    category: Literal["functional", "safety", "authorization", "benchmark"] | None = Field(
+        default=None, exclude_if=_absent
+    )
+    quarantined: bool | None = Field(default=None, exclude_if=_absent)
     mandatory: bool = True
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     fault: str | None = None
@@ -228,6 +237,10 @@ class CaseResult(Record):
     exit_code: int | None = None
     cleanup_status: Literal["not-run", "passed", "failed", "unknown"] = "not-run"
     output_digest: Digest | None = None
+    case_category: Literal["functional", "safety", "authorization", "benchmark"] | None = None
+    quarantined: bool | None = None
+    evaluation_failure: Literal["oracle-mismatch"] | None = None
+    evaluation_category: Literal["recorded-comparison"] | None = None
 
 
 class Run(Record):
@@ -236,6 +249,9 @@ class Run(Record):
     schema_version: Literal["1.0"] = "1.0"
     id: Identifier
     parent_id: Identifier | None = None
+    execution_kind: Literal["owner-execution", "recorded-evaluation-replay"] = "owner-execution"
+    evaluation_source_run: Identifier | None = None
+    comparison_digest: Digest | None = None
     attempt: int = Field(default=0, ge=0, le=2)
     rationale: str | None = None
     started_at: datetime

@@ -1,0 +1,47 @@
+{
+  "additionalProperties": false,
+  "description": "Local triage metadata; expiry never automatically releases a case.",
+  "properties": {
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "owner": {
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "title": "Owner",
+      "type": "string"
+    },
+    "remediation_issue": {
+      "pattern": "^https://github\\.com/[\\w.-]+/[\\w.-]+/issues/[1-9][0-9]*$",
+      "title": "Remediation Issue",
+      "type": "string"
+    },
+    "reason": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "reproduction": {
+      "const": "integration-evals history-report",
+      "default": "integration-evals history-report",
+      "title": "Reproduction",
+      "type": "string"
+    }
+  },
+  "required": [
+    "case_id",
+    "owner",
+    "remediation_issue",
+    "reason",
+    "expires_at"
+  ],
+  "title": "Quarantine",
+  "type": "object"
+}

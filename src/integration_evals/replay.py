@@ -56,6 +56,13 @@ def validate_history(history: tuple[Run, ...], suite: Suite) -> None:
         if run.id in seen:
             fail("rerun_identity_cycle", run.id)
         seen.add(run.id)
+        original = history[0]
+        if run.evaluation_source_run is not None and (
+            not index
+            or run.evaluation_source_run != original.id
+            or run.evidence != original.evidence
+        ):
+            fail("invalid_recorded_evaluation_source", run.id)
         parent = history[index - 1] if index else None
         if run.attempt != index or run.parent_id != (parent.id if parent else None):
             fail("rerun_history_incomplete", run.id)

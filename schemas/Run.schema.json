@@ -125,6 +125,62 @@
           ],
           "default": null,
           "title": "Output Digest"
+        },
+        "case_category": {
+          "anyOf": [
+            {
+              "enum": [
+                "functional",
+                "safety",
+                "authorization",
+                "benchmark"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Case Category"
+        },
+        "quarantined": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quarantined"
+        },
+        "evaluation_failure": {
+          "anyOf": [
+            {
+              "const": "oracle-mismatch",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluation Failure"
+        },
+        "evaluation_category": {
+          "anyOf": [
+            {
+              "const": "recorded-comparison",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluation Category"
         }
       },
       "required": [
@@ -507,6 +563,42 @@
       ],
       "default": null,
       "title": "Parent Id"
+    },
+    "execution_kind": {
+      "default": "owner-execution",
+      "enum": [
+        "owner-execution",
+        "recorded-evaluation-replay"
+      ],
+      "title": "Execution Kind",
+      "type": "string"
+    },
+    "evaluation_source_run": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evaluation Source Run"
+    },
+    "comparison_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Comparison Digest"
     },
     "attempt": {
       "default": 0,

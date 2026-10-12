@@ -11,6 +11,7 @@ from pydantic import Field
 
 from integration_evals.artifacts import confined_path
 from integration_evals.errors import fail
+from integration_evals.history import History, runs_of, summarize_history, validate_record
 from integration_evals.models import (
     CaseResult,
     Evidence,
@@ -83,21 +84,35 @@ class OwnerResponse(Record):
     cost_status: Literal["unknown", "estimated", "confirmed"] = "unknown"
 
 
-def coverage(run: Run, tracker: Tracker) -> tuple[CoverageRow, ...]:
+def coverage(run: Run | History, tracker: Tracker) -> tuple[CoverageRow, ...]:
     """Export canonical states unchanged and list cases proving only their modes."""
+    history = runs_of(run)
+    quarantined: set[str] = (
+        {item.case_id for item in run.quarantines} if isinstance(run, History) else set()
+    )
     rows: list[CoverageRow] = []
     for criterion in tracker.criteria:
-        cases = tuple(result for result in run.results if criterion.id in result.requirements)
+        cases = tuple(
+            result
+            for sample in history
+            for result in sample.results
+            if criterion.id in result.requirements
+        )
         excluded = criterion.priority != "P0"
         status = criterion.status
-        if not excluded and any(case.criterion_status is Status.BLOCKED for case in cases):
+        if not excluded and any(
+            case.outcome is not Outcome.PASSED
+            or case.quarantined is True
+            or case.case_id in quarantined
+            for case in cases
+        ):
             status = Status.BLOCKED
         rows.append(
             CoverageRow(
                 requirement=criterion.id,
                 status=status,
-                case_ids=tuple(case.case_id for case in cases),
-                run_id=run.id,
+                case_ids=tuple(dict.fromkeys(case.case_id for case in cases)),
+                run_id=history[-1].id,
                 artifacts=tuple(ref for case in cases for ref in case.evidence_ids),
                 issue_refs=criterion.implementation_issue_refs,
                 dependencies=criterion.dependencies,
@@ -133,6 +148,17 @@ def save_run(
     run: Run, root: Path, tracker: Tracker, suite: Suite, artifact_root: Path | None = None
 ) -> Path:
     """Preserve original failures by refusing to overwrite an existing run ID."""
+    if run.attempt or run.parent_id:
+        fail("complete_history_required", run.id)
+    return save_snapshot(History(runs=(run,)), root, tracker, suite, artifact_root)
+
+
+def save_snapshot(
+    history: History, root: Path, tracker: Tracker, suite: Suite, artifact_root: Path | None
+) -> Path:
+    """Write one immutable full-history snapshot after archive sequencing checks."""
+    validate_record(history, suite)
+    run = history.runs[-1]
     validate_run(run, suite)
     if run.evidence and artifact_root is None:
         fail("artifact_root_unavailable", run.id)
@@ -144,10 +170,15 @@ def save_run(
         copy_artifacts(run, artifact_root, directory)
     _ = (directory / "run.json").write_text(run.model_dump_json(indent=2), encoding="utf-8")
     _ = (directory / "suite.json").write_text(suite.model_dump_json(indent=2), encoding="utf-8")
-    rows = coverage(run, tracker)
+    rows = coverage(history, tracker)
     export = json.dumps([row.model_dump(mode="json") for row in rows], indent=2)
     _ = (directory / "coverage.json").write_text(export, encoding="utf-8")
-    _ = (directory / "junit.xml").write_bytes(junit(run.results))
+    _ = (directory / "history.json").write_text(history.model_dump_json(indent=2), encoding="utf-8")
+    register = [row.model_dump(mode="json") for row in summarize_history(history, suite)]
+    _ = (directory / "register.json").write_text(json.dumps(register, indent=2), encoding="utf-8")
+    _ = (directory / "junit.xml").write_bytes(
+        junit(tuple(result for sample in history.runs for result in sample.results))
+    )
     lines = [
         f"# Evaluation run {run.id}",
         "",
@@ -169,7 +200,8 @@ def save_run(
                 "",
             )
         )
-        for result in run.results
+        for sample in history.runs
+        for result in sample.results
     )
     lines.extend(
         [

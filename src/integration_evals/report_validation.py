@@ -21,7 +21,11 @@ def validate_evidence(evidence: tuple[Evidence, ...], root: Path, run: Run) -> N
     cases = {result.case_id: result for result in run.results}
     for item in evidence:
         result = cases.get(item.case_id)
-        if result is None or item.requirement not in result.requirements or item.run_id != run.id:
+        if (
+            result is None
+            or item.requirement not in result.requirements
+            or item.run_id != (run.evaluation_source_run or run.id)
+        ):
             fail("dangling_evidence_join", item.id)
         if components.get(item.component) != item.revision:
             fail("evidence_revision_mismatch", item.id)
@@ -35,6 +39,14 @@ def validate_evidence(evidence: tuple[Evidence, ...], root: Path, run: Run) -> N
 
 def validate_run(run: Run, suite: Suite) -> None:
     """Reject forged status, dangling references and unknown-as-zero costs."""
+    if (run.execution_kind == "recorded-evaluation-replay") != (
+        run.evaluation_source_run is not None
+    ):
+        fail("invalid_evaluation_source", run.id)
+    if run.evaluation_source_run is not None and (
+        run.evaluation_source_run == run.id or not run.comparison_digest
+    ):
+        fail("invalid_evaluation_source", run.id)
     ids = [result.case_id for result in run.results]
     if len(ids) != len(set(ids)):
         fail("duplicate_case_result", run.id)
@@ -42,7 +54,7 @@ def validate_run(run: Run, suite: Suite) -> None:
     if len(evidence) != len(run.evidence):
         fail("duplicate_evidence", run.id)
     for result in run.results:
-        validate_result(result, run.id, evidence)
+        validate_result(result, run.evaluation_source_run or run.id, evidence)
     validate_suite_binding(run, suite, evidence)
     if not run.results or not run.selected_case_ids or not set(run.selected_case_ids).issubset(ids):
         fail("empty_or_omitted_run_selection", run.id)
@@ -65,6 +77,10 @@ def validate_suite_binding(run: Run, suite: Suite, evidence: dict[str, Evidence]
     pins = {name: component.revision for name, component in components.items()}
     for result in run.results:
         case = definitions[result.case_id]
+        if result.case_category is not None and result.case_category != case.category:
+            fail("case_category_mismatch", result.case_id)
+        if result.quarantined is not None and result.quarantined != case.quarantined:
+            fail("case_quarantine_mismatch", result.case_id)
         if result.requirements != case.requirements or (
             result.outcome is Outcome.PASSED and result.mode not in case.modes
         ):
@@ -75,7 +91,7 @@ def validate_suite_binding(run: Run, suite: Suite, evidence: dict[str, Evidence]
                 fail("archived_component_mode_mismatch", case.id)
             validate_claim(
                 case,
-                ClaimContext(pins, run.id, result.mode),
+                ClaimContext(pins, run.evaluation_source_run or run.id, result.mode),
                 tuple(evidence[key] for key in result.evidence_ids),
                 result.origin,
             )
