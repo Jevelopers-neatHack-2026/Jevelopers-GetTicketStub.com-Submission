@@ -165,6 +165,31 @@ async function expectCompositionError(promise, code) {
   });
 }
 
+for (const [code, contentType, content] of [
+  ["JS_REQUIRED", "text/html", '<html><body><noscript>JavaScript is required to continue</noscript></body></html>'],
+  ["ACCESS_RESTRICTED", "text/html", '<html><body><h1>Access denied</h1></body></html>'],
+  ["UNSUPPORTED_MEDIA", "application/octet-stream", 'unsupported source bytes'],
+  ["UNSUPPORTED_ENCODING", "text/html", '<html><head><meta charset="iso-8859-1"></head><body>Legacy encoding</body></html>'],
+  ["MALFORMED_ENCODING", "text/html", Buffer.from([0x3c, 0x70, 0x3e, 0xff, 0x3c, 0x2f, 0x70, 0x3e])],
+]) {
+  test(`preserves ${code} extraction refusal before persisting source facts`, async (t) => {
+    const harness = await createHarness(t);
+    const doc = { ...document(Buffer.from(content)), contentType };
+    const original = Buffer.from(doc.bytes);
+    assert.equal((await extractDeterministically(doc)).status, code, 'the actual extractor establishes the refusal');
+
+    await expectCompositionError(
+      composeSourceIdentity(sourceInput(harness.store, doc, harness.createPermit())), code,
+    );
+
+    const scope = await harness.store.scopeForAuthenticatedRequest(request());
+    const stored = await harness.store.integritySnapshot(scope);
+    assert.equal(stored.availableEvidence, 0);
+    assert.equal(stored.availableFacts, 0);
+    assert.deepEqual(doc.bytes, original, 'the caller still owns its unchanged source bytes');
+  });
+}
+
 test("binds multibyte extraction claims to full-source evidence and keeps distinct events separate", async (t) => {
   const harness = await createHarness(t);
   const bytes = await fixture("multi-event.html");
