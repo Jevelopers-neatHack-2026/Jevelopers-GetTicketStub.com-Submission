@@ -1,5 +1,6 @@
 import type { FinanceV2Input, FinanceV2ReadRequest, FinanceV2SyntheticReadPort } from '@jevelopers/team-dashboard';
-import { financeV2Fixture, syntheticQueryContentHash, syntheticSnapshotId, syntheticSummaryContentHash, syntheticOpaqueScope, type FinanceV2FixtureName } from '../../src/views/finance-v2/fixtures';
+import { syntheticQueryContentHash, syntheticSnapshotId, syntheticSummaryContentHash, syntheticOpaqueScope } from '../../src/views/finance-v2/fixtures';
+import { hostFixture, type HostFixtureName } from './conformance';
 
 /**
  * Fixture-host only: a SYNTHETIC_PROPOSAL read port over the named fixture, with scripted behaviour for browser journeys. It is data,
@@ -13,7 +14,7 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 const fault = (status: number) => Object.assign(new Error('fixture fault'), { status });
 
 export type FixturePortLog = { calls: Array<{ actorId: string; revision: string; token: string }> };
-export function fixtureFinanceV2Port(name: FinanceV2FixtureName, behavior: PortBehavior, log: FixturePortLog = { calls: [] }): FinanceV2SyntheticReadPort {
+export function fixtureFinanceV2Port(name: HostFixtureName, behavior: PortBehavior, log: FixturePortLog = { calls: [] }): FinanceV2SyntheticReadPort {
   let attempts = 0;
   return {
     kind: 'SYNTHETIC_PROPOSAL',
@@ -29,7 +30,7 @@ export function fixtureFinanceV2Port(name: FinanceV2FixtureName, behavior: PortB
       if (behavior === 'fault500') throw fault(503);
       if (behavior === 'timeout') throw Object.assign(new Error('fixture timeout'), { code: 'TIMEOUT' });
       if (behavior === 'flaky' && attempts === 1) throw fault(500);
-      const fixture = financeV2Fixture(name);
+      const fixture = hostFixture(name);
       const input = fixture.input;
       if (input.status !== 'ready' || behavior === 'ok') return input;
       const page = input.page as { scope: unknown; requestId: string };

@@ -47,6 +47,19 @@ The same hashes and status are recorded in `FROZEN_PROPOSAL_PROVENANCE` (`src/vi
 - `tests/e2e/finance-v2.spec.ts` (Playwright/Chromium + axe): written against the packed fixture host. See the report for whether it was executed in this checkout.
 - Fixtures are not observations and not Finance output; passing tests prove presentation of synthetic data only, not Finance correctness.
 
+## SYNTHETIC_CONFORMANCE (producer 22a3237)
+
+Label: **SYNTHETIC_CONFORMANCE_ONLY**. The Finance owner accepted reviewed synthetic outputs only (receipt `cost-intelligence#2` comment 6123320849). This is not live grants, not a production acknowledgement and not an owner ACK of this dashboard. Producer gate PG passed 29/29; the producer's full CI **failed** (migration job) and that failure is neither reproduced nor waived here.
+
+- `simulated.*` is now a `ReportingAmount` (status, knownSubtotal, nullable total, unknownCount), rendered in its own table with all four cells. No scalar coercion and no zero fallback: a partial simulated expense of known subtotal `5`, total `null`, unknown count `1` reads "5 USD / Amount unknown / 1", beside an actual expense that is `unknown`.
+- The earlier proposal's scalar `simulated` strings are a different shape. They are refused as `LEGACY_PROPOSAL_SHAPE` at their exact path and are never read as this `2.0.0`.
+- The guard now also requires the closed set of eighteen page members (an invented member such as `grant` is refused), `filters`, `watermark` and an array `canonicalSummaries` (carried, never rendered).
+- `checkFinanceV2Page(..., { references })` binds every `canonicalSummaries[].metrics.*.definition_ref` and `policy_ref` to references the host pinned independently (the test derives them from the committed `definition-registry.json` after re-hashing it). A page is never its own authority; with no host references supplied nothing is bound. Mismatches are `REFERENCE_MISMATCH`. The references are an optional `expectedReferences` prop on `FinanceV2View` and `FinanceV2ConnectedView`, forwarded to the async read port and part of its identity key (changing them discards a settled answer). Supplying none leaves canonical references unbound; that is a documented limit, not an acceptance.
+- Fixture host: `?v2=conformance-base|conformance-budget|conformance-unknown-simulated|conformance-pg|conformance-v1-refused` serves the actual produced pages through the same injected synthetic port, with host-literal snapshot/query/summary identities and registry-derived references (`integration/fixture-host/conformance.ts`). The earlier proposal fixtures are unchanged and now use the new `simulated` amount shape; the old scalar shape is only reachable as a refused case.
+- Committed under `tests/fixtures/finance-v2-conformance/` with `PROVENANCE.json`: the four v2 pages, the v1 page (refused), the registry (`577ce880...`), the page schema (`862900ad...`), and the producer `source/schema-v2.ts` and `source/query-export-handoff.json` as byte-exact pinned references. `source/` is excluded from this repository's `tsc` and eslint (the TypeScript imports producer-only modules) and is never imported or executed; all nine pins are re-hashed. `tests/components/finance-v2-conformance.test.tsx` re-hashes them in place; it reads nothing from `/tmp` and has no skips.
+- The page schema declares `partial_wrapper_requires_combined_validation`: it is not the full producer validator, and neither is this guard.
+- CFO export stays disabled; no export port is accepted.
+
 ## Not claimed, and still open
 
 - The async read port, lifecycle and fault mapping are in `docs/integration/TD-v2-async-port.md`.

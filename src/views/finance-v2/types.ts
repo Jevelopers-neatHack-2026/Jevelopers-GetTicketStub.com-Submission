@@ -41,7 +41,8 @@ export type ReportingCurrencySummary = Readonly<{
   currency: string; scale: 18; metrics: Metrics;
   valuation: Readonly<{ estimated: ReportingAmount; confirmed: ReportingAmount; unknownCount: number }>;
   reconciliation: Readonly<{ matchedCount: number; unmatchedCount: number; exceptionCount: number }>;
-  simulated: Readonly<{ expense: DecimalString; grossSales: DecimalString; netSales: DecimalString; directCosts: DecimalString }>;
+  /** Producer reporting amounts (status, known subtotal, nullable total, unknown count). A simulated amount can be partial or unknown; it is never a bare scalar. */
+  simulated: Readonly<{ expense: ReportingAmount; grossSales: ReportingAmount; netSales: ReportingAmount; directCosts: ReportingAmount }>;
   groups: readonly ReportingGroup[];
 }>;
 export type ReportingBudget = Readonly<{
@@ -58,10 +59,17 @@ export type ReportingProjection = Readonly<{
   currencies: readonly ReportingCurrencySummary[]; coverage: ReportingCoverage; budgets: readonly ReportingBudget[];
   unitCosts: readonly unknown[]; allocations: readonly unknown[];
 }>;
+export type ReportingWatermark = Readonly<{
+  watermarkId: Sha256Ref; capturedAt: Instant;
+  sources: readonly Readonly<{ source: string; revision: string; observedThrough: Instant; contentHash: Sha256Ref; completeness: string }>[];
+}>;
 export type FinanceV2Page = Readonly<{
   schemaVersion: '2.0.0'; requestId: string; snapshotId: Sha256Ref; queryContentHash: Sha256Ref; summaryContentHash: Sha256Ref;
   asOf: Instant; timezone: string; period: Readonly<{ start: Instant; end: Instant }>; scope: OpaqueProductScope;
+  filters: Readonly<{ environments: readonly string[]; billingModes: readonly string[] }>; watermark: ReportingWatermark;
   summary: ReportingProjection; details: readonly ReportingDetail[]; detailCount: number; hasMore: boolean; nextCursor: string | null;
+  /** Carried opaque and never rendered: the rich projection is shown whether or not a canonical mapping exists. Its references are only compared with host-pinned ones. */
+  canonicalSummaries: readonly unknown[];
   canonicalMappingStatus: 'proposal_only_owner_ack_pending' | 'unsupported_opaque_scope';
 }>;
 
@@ -74,5 +82,5 @@ export type FinanceV2Result =
 export type FinanceV2Input = Readonly<{ status: 'ready'; page: unknown }> | Readonly<{ status: 'missing' | 'restricted' | 'unauthorized' | 'unknown' }>;
 /** The only mode this slice accepts. Anything else renders nothing financial. */
 export type FinanceV2Mode = 'SYNTHETIC_PROPOSAL';
-export type FinanceV2RefusalCode = 'INVALID_SHAPE' | 'SCOPE_MISMATCH' | 'UNSUPPORTED_VERSION' | 'SNAPSHOT_MISMATCH' | 'QUERY_HASH_MISMATCH' | 'SUMMARY_HASH_MISMATCH' | 'UNSUPPORTED_MODE';
+export type FinanceV2RefusalCode = 'INVALID_SHAPE' | 'LEGACY_PROPOSAL_SHAPE' | 'SCOPE_MISMATCH' | 'UNSUPPORTED_VERSION' | 'SNAPSHOT_MISMATCH' | 'QUERY_HASH_MISMATCH' | 'SUMMARY_HASH_MISMATCH' | 'REFERENCE_MISMATCH' | 'UNSUPPORTED_MODE';
 export type FinanceV2Check = Readonly<{ ok: true; page: FinanceV2Page }> | Readonly<{ ok: false; code: FinanceV2RefusalCode; path: string }>;

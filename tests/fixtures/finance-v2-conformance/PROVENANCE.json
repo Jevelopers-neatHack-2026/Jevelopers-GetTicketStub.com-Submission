@@ -1,0 +1,34 @@
+{
+  "classification": "SYNTHETIC_CONFORMANCE_ONLY",
+  "note": "Byte-for-byte copies of the reviewed, synthetic Finance-producer outputs named in the tested handoff manifest. They are not live grants, not production data and not an owner or production acknowledgement. Every committed file is re-hashed by tests/components/finance-v2-conformance.test.tsx against the digests below; nothing is read from /tmp.",
+  "producer": {
+    "revision": "22a3237dd44f376017969ac881586ff396f19cf8",
+    "treePrefix": "4f8dcc",
+    "treeNote": "Only the 6-character tree prefix was supplied with the handoff; the full tree digest is not recorded here and cannot be re-verified from this repository."
+  },
+  "handoff": {
+    "review": "SCOPED_APPROVE",
+    "reviewSha256": "3a9fb67fb1445cf22c57a180f8ad0f0a587576b15783ed56a075f685a5db2eb1",
+    "producerGate": "PG 29/29 pass",
+    "producerFullCi": "FAIL (migration)",
+    "authority": "synthetic reviewed outputs; not live grants or owner ACK",
+    "acceptance": "Finance-owner accepted SYNTHETIC_CONFORMANCE_ONLY",
+    "ownerReceipt": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2#issuecomment-6123320849"
+  },
+  "committed": [
+    { "path": "producer-v2-page.json", "sha256": "c272b9b8d25f3d73bed228554f95b448d3951bc2bb9b8defcabc4d633249ac3d" },
+    { "path": "producer-budget-v2-page.json", "sha256": "5887fede39b86791972fcb57f35f549ec5869a2108a4f18a3a07bb7e61abfe85" },
+    { "path": "producer-unknown-simulated-v2-page.json", "sha256": "a2fc429439d1a7488ed037ce499acb1d97aaf614997fd1d17afb1bebdfcf4755" },
+    { "path": "producer-v1-page.json", "sha256": "0b9b7210c515d05af66eea0f48c9fd1b79b737bb60230dcf67b23b4588447be3" },
+    { "path": "ie-ci06-pg-page.json", "sha256": "4462b866d69c9da2d5f92086f89c6cec8cb898d4af08d9e2ac8e94c9cbb21e03" },
+    { "path": "definition-registry.json", "sha256": "577ce8801855db08ba393f115c00ac670df3a47a5cc9e9a5a78f8b0132cb34e1", "producerPath": "fixtures/reporting/definition-registry.json" },
+    { "path": "schemas/FinancialSummaryPageSchema.json", "sha256": "862900ad30b1e5684c98852cb93f0010eb73504d2fd9f58018673c9334ddf814", "producerPath": "schemas/cost-intelligence/2.0.0/reporting/FinancialSummaryPageSchema.json" },
+    { "path": "source/schema-v2.ts", "sha256": "0400a033d1bf13cf047cda507639126b362e99c1bb26348ad3b233758aa38fdb", "producerPath": "src/reporting/schema-v2.ts" },
+    { "path": "source/query-export-handoff.json", "sha256": "eca74fe6fd34b9631fcb3022f3417425ef94580043a67fce4832b52fa6993da9", "producerPath": "fixtures/reporting/query-export-handoff.json" }
+  ],
+  "limits": [
+    "The page schema declares x-schema-completeness partial_wrapper_requires_combined_validation: the committed JSON schema alone is not the full producer validator.",
+    "Producer full CI failed on the migration job; only the producer gate (29/29) passed. This repository neither reproduces nor waives that failure.",
+    "source/schema-v2.ts is producer TypeScript that imports producer-only modules; it is committed byte for byte as a pinned reference, excluded from this repository's tsc and eslint, and never imported or executed here."
+  ]
+}

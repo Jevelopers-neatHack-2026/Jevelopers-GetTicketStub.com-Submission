@@ -52,7 +52,7 @@ const summary = (currency: string, over: Partial<ReportingCurrencySummary> = {})
   currency, scale: 18, metrics: metrics(),
   valuation: { estimated: known('12'), confirmed: known('30'), unknownCount: 0 },
   reconciliation: { matchedCount: 3, unmatchedCount: 1, exceptionCount: 0 },
-  simulated: { expense: amount('5'), grossSales: zero, netSales: zero, directCosts: amount('5') },
+  simulated: { expense: known('5'), grossSales: known('0'), netSales: known('0'), directCosts: known('5') },
   groups: [group('provider', 'provider-a', known('25'), 3), group('provider', 'provider-b', known('17'), 2), group('model', 'model-a', known('42'), 5)], ...over,
 });
 const policyReference = { id: 'budget-policy-synthetic', revision: 1, contentHash: placeholderHash('synthetic-budget-policy') };
@@ -92,7 +92,10 @@ const eurDetail = (): ReportingDetail => ({
 const page = (over: Partial<FinanceV2Page> = {}): FinanceV2Page => ({
   schemaVersion: '2.0.0', requestId: 'synthetic-request-1', snapshotId: syntheticSnapshotId, queryContentHash: syntheticQueryContentHash, summaryContentHash: syntheticSummaryContentHash,
   asOf: '2026-10-08T00:05:00Z', timezone: 'UTC', period: { start: '2026-10-01T00:00:00Z', end: '2026-10-08T00:00:00Z' }, scope: syntheticOpaqueScope,
-  summary: projection(), details: details(), detailCount: 4, hasMore: false, nextCursor: null, canonicalMappingStatus: 'unsupported_opaque_scope', ...over,
+  filters: { environments: ['test'], billingModes: ['simulated'] },
+  watermark: { watermarkId: placeholderHash('synthetic-watermark'), capturedAt: '2026-10-08T00:05:00Z',
+    sources: [{ source: 'immutable_finance_inputs', revision: 'ci08-reporting-policy-2.0.0', observedThrough: '2026-10-08T00:05:00Z', contentHash: placeholderHash('synthetic-watermark-source'), completeness: 'partial' }] },
+  summary: projection(), details: details(), detailCount: 4, hasMore: false, nextCursor: null, canonicalSummaries: [], canonicalMappingStatus: 'unsupported_opaque_scope', ...over,
 });
 
 export type FinanceV2Fixture = Readonly<{ input: FinanceV2Input; expectedScope: OpaqueProductScope; expectedSnapshotId: string }>;

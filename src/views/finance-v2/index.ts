@@ -1,5 +1,5 @@
 export { FinanceV2View, type FinanceV2ViewProps, type FinanceV2ViewName, type FinanceV2TransactionFilters } from './FinanceV2Views';
-export { checkFinanceV2Page } from './check';
+export { checkFinanceV2Page, type FinanceV2CanonicalReference, type FinanceV2ExpectedHashes, type FinanceV2TrustedReferences } from './check';
 export { FinanceV2ConnectedView, type FinanceV2ConnectedViewProps } from './FinanceV2ConnectedView';
 export {
   useFinanceV2Read, resolveFinanceV2Port, classifyFinanceV2Fault, FINANCE_V2_FAULT_COPY, FINANCE_V2_PAGINATION,
@@ -8,5 +8,5 @@ export {
 } from './async-port';
 export type {
   FinanceV2Page, FinanceV2Input, FinanceV2Mode, FinanceV2Result, FinanceV2Check, FinanceV2RefusalCode, OpaqueProductScope,
-  ReportingAmount, ReportingBudget, ReportingCoverage, ReportingCurrencySummary, ReportingDetail, ReportingGroup, ReportingProjection,
+  ReportingAmount, ReportingBudget, ReportingCoverage, ReportingCurrencySummary, ReportingDetail, ReportingGroup, ReportingProjection, ReportingWatermark,
 } from './types';
