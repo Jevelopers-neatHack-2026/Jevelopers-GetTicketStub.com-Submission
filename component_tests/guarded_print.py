@@ -390,6 +390,7 @@ class GuardedPrint:
             json.dumps(
                 {
                     "request_sha256": digest(settings.payload),
+                    "logical_scenario_clock": request.get("clock"),
                     "configuration_sha256": digest(configuration_bytes),
                     "owner_script_sha256": digest(
                         read_bytes(checkout / command[1], max_bytes=LIMIT, deadline=deadline)
@@ -411,12 +412,15 @@ class GuardedPrint:
                             "component_tests/guarded_compose_probe.py",
                             "component_tests/guarded_identity.py",
                             "component_tests/container_socket.py",
+                            "component_tests/print_clock.py",
+                            "component_tests/print_protocol.py",
                             "src/integration_evals/artifacts.py",
                             "src/integration_evals/validation.py",
                             "src/integration_evals/print_setup.py",
                             "src/integration_evals/processes.py",
                             "src/integration_evals/owner.py",
                             "src/integration_evals/execution.py",
+                            "src/integration_evals/runner.py",
                         )
                     },
                 },

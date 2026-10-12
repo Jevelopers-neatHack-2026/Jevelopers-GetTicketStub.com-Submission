@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from component_tests.print_checks import assert_outcome
+from component_tests.print_clock import GUARDED_CLOCK
 from component_tests.print_protocol import Mutation, protocol_control
 from component_tests.print_workspace import workspace_at
 from integration_evals.artifacts import load_record, read_bytes
@@ -36,7 +37,11 @@ def verified_print_workspace(
     catalog = load_record(repository / "fixtures/catalog.json", Catalog)
     tracker = load_record(repository / "planning/acceptance-checklist.json", Tracker)
     settings = Settings(
-        repository, workspace, workspace / "assembly.json", test_invocation=print_invocation
+        repository,
+        workspace,
+        workspace / "assembly.json",
+        test_invocation=print_invocation,
+        test_clock=GUARDED_CLOCK if print_invocation is not None else None,
     )
     destination = Path(os.environ["IE_PRINT_EVIDENCE"]).resolve()
     inputs = destination / "inputs"
@@ -89,4 +94,5 @@ def test_print_protocol_rejects_unsupported_inputs(
         mutation,
         Path(os.environ["IE_PRINT_EVIDENCE"]) / "protocol",
         test_invocation=print_invocation,
+        clock=GUARDED_CLOCK if print_invocation is not None else None,
     )

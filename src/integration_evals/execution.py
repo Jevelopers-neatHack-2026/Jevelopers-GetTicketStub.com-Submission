@@ -1,10 +1,11 @@
 """Typed run settings and case receipts shared by orchestration and owner invocation."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
+from integration_evals.errors import fail
 from integration_evals.models import (
     Assembly,
     Case,
@@ -31,6 +32,16 @@ class Settings:
     seed: int = 17
     artifact_root: Path | None = None
     test_invocation: TestInvocation | None = None
+    test_clock: datetime | None = None
+
+    def __post_init__(self) -> None:
+        """Permit an explicit logical clock only for guarded mock development tests."""
+        if self.test_clock is None:
+            return
+        if self.test_invocation is None or self.mode is not Mode.MOCK or self.authorize_paid:
+            fail("test_clock_requires_guarded_mock", "development-only")
+        if self.test_clock.tzinfo is not UTC:
+            fail("test_clock_requires_aware_utc", "development-only")
 
     @property
     def artifacts(self) -> Path:

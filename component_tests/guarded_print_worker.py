@@ -7,6 +7,7 @@ from pathlib import Path
 from component_tests.container_prototype import cancellation
 from component_tests.container_records import Record
 from component_tests.guarded_print import GuardedPrint
+from component_tests.print_clock import GUARDED_CLOCK
 from component_tests.print_protocol import Invocation
 from integration_evals.processes import invoke
 
@@ -28,7 +29,9 @@ def main(configuration: WorkerConfiguration) -> int:
         daemon_failure=configuration.daemon_failure,
         compose_checkpoint=configuration.compose_checkpoint,
     )
-    invocation = Invocation(configuration.workspace, configuration.home, "replay", backend)
+    invocation = Invocation(
+        configuration.workspace, configuration.home, "replay", backend, clock=GUARDED_CLOCK
+    )
     with (configuration.home / "stdout").open("w+b") as output:
         settings = invocation.settings(output)
         node = str(configuration.producer / "out/toolchain/node-v24.21.0-linux-x64/bin/node")

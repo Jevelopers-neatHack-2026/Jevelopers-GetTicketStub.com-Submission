@@ -33,7 +33,7 @@ jobs:
       - run: uv run ruff check --config ruff-stdlib.toml tools tests/test_audit_evidence.py tests/test_rerun_report.py
       - run: uv run integration-evals validate
       - name: Verify print source preparation and default-off runtime gates
-        run: uv run pytest component_tests/test_print_setup.py component_tests/test_container_defaults.py component_tests/test_container_pidfd.py component_tests/test_guarded_defaults.py component_tests/test_guarded_compose_probe.py component_tests/test_guarded_custody.py --junitxml=reports/runs/verification/print-defaults-junit.xml
+        run: uv run pytest component_tests/test_print_setup.py component_tests/test_print_clock.py component_tests/test_container_defaults.py component_tests/test_container_pidfd.py component_tests/test_guarded_defaults.py component_tests/test_guarded_compose_probe.py component_tests/test_guarded_custody.py --junitxml=reports/runs/verification/print-defaults-junit.xml
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/shared-contracts

@@ -184,6 +184,18 @@ to evaluator capture only after inspected namespace termination and removal.
 The original response, retention, cleanup, SQL, hash, logical-clock and protocol
 oracles continue to decide the result.
 
+The guarded test profile explicitly supplies logical scenario time
+`2026-10-10T12:30:00+00:00`. The unchanged producer's synthetic capability capture
+is retrieved at noon and fresh until 13:00; its pinned validator correctly rejects
+the ordinary midnight clock with `CLOCK_BEFORE_CAPTURE`. `Settings.test_clock`
+defaults to `None` and accepts only an aware UTC value with an explicit test
+invocation, mock mode and no paid authorization. Live, recorded, sandbox, unguarded,
+paid, naive and non-UTC overrides are rejected. CLI/environment/default execution
+retain midnight. The evaluator run, original source protocol controls, retainer
+and death/interruption workers share 12:30; actual `Run.started_at` remains wall
+time, and the original fixture's collected timestamp stays midnight. This is
+synthetic logical chronology, with no claim of live capture equivalence.
+
 Additional readonly mounts expose only fresh clean tracked evaluator/configuration
 and pinned print projections at their original paths, plus the verified Node
 archive directory. The original producer checkout and its Git metadata are not
@@ -253,6 +265,14 @@ evidence; neither proves a current producer protocol or nested Bubblewrap result
 The combined script now executes and retains both suites independently and exits
 nonzero if either fails. Sanitized controller failures retain phase, error class
 and errno only.
+The `f5a1e13` dispatch then passed all eleven lifecycle/native cases, and genuine
+baseline run/cleanup executed with proved namespace teardown. The original
+print oracle failed: the source returned `INCOMPATIBLE_TEMPLATE`, zero asset
+resolutions and no execution attempts. Its retained capability capture was noon
+while its request clock was midnight. The sixteen guarded cases therefore failed
+shared baseline setup; no producer-control or active-compose pass is claimed.
+The explicit guarded logical-clock correction leaves fixture/capability bytes,
+source validity predicates, and all original comparison assertions intact.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,

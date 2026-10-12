@@ -3,7 +3,7 @@
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import IO, Literal, assert_never
@@ -33,6 +33,7 @@ class Invocation:
     home: Path
     mutation: Mutation
     test_invocation: TestInvocation | None = None
+    clock: datetime = datetime(2026, 10, 10, tzinfo=UTC)
 
     def settings(self, stdout: IO[bytes]) -> ProcessSettings:
         repository = self.workspace / "integration-evals"
@@ -47,7 +48,7 @@ class Invocation:
             "IE_NAMESPACE": "print-protocol-print-invalid",
             "IE_MODE": "mock-only",
             "IE_SEED": "17",
-            "IE_CLOCK": "2026-10-10T00:00:00+00:00",
+            "IE_CLOCK": self.clock.isoformat(),
             "IE_ARTIFACT_DIR": str(self.home / "artifacts"),
             "PP_RENDERER_IMAGE": config.renderer_image,
         }
@@ -112,7 +113,7 @@ class Invocation:
                 artifact_root=destination / self.mutation,
             ),
             "print-protocol",
-            datetime.fromisoformat("2026-10-10T00:00:00+00:00"),
+            self.clock,
         )
         response = OwnerResponse.model_validate_json(data)
         outcome, reason = compare_response(case, response, context)
@@ -130,6 +131,7 @@ def protocol_control(
     destination: Path,
     *,
     test_invocation: TestInvocation | None = None,
+    clock: datetime | None = None,
 ) -> None:
     """Retain observations even when an actual unsupported Linux runtime fails."""
     runtime = load_record(Path(os.environ["IE_PRINT_RUNTIME"]), ContractRuntime)
@@ -140,7 +142,13 @@ def protocol_control(
         with TemporaryDirectory(prefix="print-protocol-") as directory:
             home = Path(directory).resolve()
             (home / "artifacts").mkdir()
-            invocation = Invocation(workspace, home, mutation, test_invocation)
+            invocation = Invocation(
+                workspace,
+                home,
+                mutation,
+                test_invocation,
+                clock=clock or datetime(2026, 10, 10, tzinfo=UTC),
+            )
             with (home / "stdout").open("w+b") as stdout:
                 settings = invocation.settings(stdout)
                 run_command = (
