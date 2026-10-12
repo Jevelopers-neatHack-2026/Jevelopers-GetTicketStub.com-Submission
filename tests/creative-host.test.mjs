@@ -299,7 +299,7 @@ test("application session -> owned CE API/SQLite -> real Finance SQL -> intercep
       return answer;
     });
     const publishing = POST(request(input));
-    await Promise.race([publicationPaused, publishing.then(async (response) => { throw new Error(`Publication did not reach its owner commit: ${JSON.stringify(await response.json())}`); })]);
+    await Promise.race([publicationPaused, publishing.then(async (response) => { throw new Error(`Publication did not reach its owner commit: ${JSON.stringify(await response.clone().json())}`); })]);
     let concurrentReadCompleted = false;
     const reading = POST(request({ projectId: entry.application_project_id, operation: "list", actionId: randomUUID(), payload: { brief_id: entry.brief_id } }))
       .then((response) => { concurrentReadCompleted = true; return response; });
