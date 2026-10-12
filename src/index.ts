@@ -2,6 +2,30 @@ export { CONTRACT_OWNERSHIP, INPUT_SHAPES, OUTPUT_SHAPES, AUXILIARY_SHAPES, ALL_
 export { ConnectorError } from "./errors.js";
 export type { ConnectorErrorCode, SideEffectState } from "./errors.js";
 export { FulfillmentConnectorRuntime } from "./runtime.js";
+export {
+  ORDER_AUTHORIZATION_ACTION,
+  ORDER_AUTHORIZATION_AUDIENCE,
+  ORDER_AUTHORIZATION_CONSUMER_HEADERS,
+  ORDER_AUTHORIZATION_PATHS,
+  ORDER_AUTHORIZATION_REJECTION_REASONS,
+  ORDER_AUTHORIZATION_SCHEMA,
+  OrderAuthorizationError,
+  canonicalJson as orderAuthorizationCanonicalJson,
+  consumerSignature as orderAuthorizationConsumerSignature,
+  createConsumerRequestSigner,
+  createTicketStubOrderAuthorizationVerifier,
+  deriveOrderActionId,
+  deriveOrderClaimKey,
+  orderClaimLookupBody
+} from "./order-authorization-client.js";
+export type {
+  ConsumerRequestSigner,
+  OrderAuthorizationErrorCode,
+  OrderAuthorizationHttpPort,
+  OrderAuthorizationHttpRequest,
+  OrderAuthorizationHttpResponse,
+  TicketStubOrderAuthorizationOptions
+} from "./order-authorization-client.js";
 export type * from "./types.js";
 export * from "./catalog.js";
 export { createRuntimeMeteringResolver, FulfillmentMetering } from "./metering.js";

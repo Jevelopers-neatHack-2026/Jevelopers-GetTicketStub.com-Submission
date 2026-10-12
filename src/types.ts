@@ -258,12 +258,82 @@ export type AuthorizationClaimResult =
       readonly claimReference: string;
     };
 
+export type AuthorizationClaimed = Extract<AuthorizationClaimResult, { readonly status: "claimed" }>;
+
+export type AuthorizationDispatchResult =
+  | { readonly status: "dispatchable" }
+  | { readonly status: "rejected" };
+
 export interface AuthorizationVerifier {
   /**
    * The external authorization authority must verify these exact facts and
    * atomically claim the permitted action. A local boolean check is insufficient.
    */
   verifyAndClaim(check: AuthorizationCheck): Promise<AuthorizationClaimResult>;
+  /**
+   * Optional. A claim is not a promise that the authority still holds at
+   * dispatch. When present, submit calls this immediately before EVERY
+   * transport request, including adapter retries, after every other awaited
+   * pre-dispatch step (including the dispatching metering write) with only
+   * synchronous checks between the answer and the request, and sends nothing unless the
+   * answer is exactly `dispatchable`. `rejected` is a stale authorization and a
+   * throw or malformed answer is an unavailable verifier. Verifiers without the
+   * method behave exactly as before.
+   */
+  revalidateBeforeDispatch?(check: AuthorizationCheck, claim: AuthorizationClaimed): Promise<AuthorizationDispatchResult>;
+}
+
+/**
+ * The complete purchase terms the connector itself holds, in the shape an
+ * order-authorization issuer compares against the signed record. They come from
+ * the connector's own quote, bundle and destination bindings, never from the
+ * authorization envelope.
+ */
+export interface TrustedOrderTerms {
+  readonly orderRef: string;
+  /** The confirmed supplier SKU, or null while none is confirmed. Never guessed. */
+  readonly sku: string | null;
+  readonly options: {
+    readonly variantId: string;
+    readonly material: string;
+    readonly finish: string;
+    readonly size: string;
+    readonly quantity: number;
+  };
+  readonly quote: { readonly id: string; readonly amountMinor: number; readonly currency: string };
+  /** An opaque destination reference and its digest. Never an address. */
+  readonly destination: { readonly ref: string; readonly digest: string };
+  readonly design: {
+    readonly versionId: string;
+    readonly designHash: string;
+    readonly artHash: string;
+    readonly factsHash: string;
+    readonly compositionHash: string;
+  };
+  readonly approvalId: string;
+  readonly capabilityVersion: string;
+}
+
+export interface TrustedTermsRequest {
+  readonly trustedScope: TrustedScope;
+  readonly providerId: string;
+  readonly mode: ProviderMode;
+  readonly productionBundleDigest: string;
+  readonly quote: SubmitQuoteTerms;
+}
+
+export type TrustedTermsResult =
+  | {
+      readonly status: "bound";
+      readonly terms: TrustedOrderTerms;
+      /** Only explicit development fixtures are accepted until canonical bindings are accepted. */
+      readonly provenance: { readonly kind: "development_fixture"; readonly digest: string };
+    }
+  | { readonly status: "missing"; readonly fields: readonly string[] };
+
+/** Returns full terms only from exact local bindings, or reports what it cannot bind. */
+export interface TrustedTermsSource {
+  resolve(request: TrustedTermsRequest): Promise<TrustedTermsResult>;
 }
 
 export interface BudgetRequest {

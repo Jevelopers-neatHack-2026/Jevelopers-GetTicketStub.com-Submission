@@ -1154,6 +1154,152 @@ cases.push(["minor-unit amount must be an explicit positive safe integer", async
   assert.equal(state.budgetCalls.length, 0);
 }]);
 
+function revalidatingHarness(answer, options = {}) {
+  const harness = createHarness(options);
+  const calls = [];
+  harness.dependencies.authorizationVerifier.revalidateBeforeDispatch = async (check, claim) => {
+    calls.push({ check, claim, order: [...harness.state.budgetCalls.map(() => "budget"), ...harness.state.transportCalls.map(() => "transport")] });
+    return typeof answer === "function" ? answer(calls.length, check, claim) : answer;
+  };
+  return { ...harness, calls };
+}
+
+cases.push(["optional dispatch revalidation runs after budget and before the single transport request", async () => {
+  const { runtime, state, calls } = revalidatingHarness({ status: "dispatchable" });
+  await runtime.submit(envelope(submitCommand()), scope);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].order, ["budget"]);
+  assert.equal(calls[0].claim.status, "claimed");
+  assert.equal(calls[0].claim.claimReference, "fixture-submit-claim-1");
+  assert.deepEqual(calls[0].check.facts.command.quote.quoteId, "quote-fixture-1");
+  assert.ok(Object.isFrozen(calls[0].check));
+  assert.equal(state.transportCalls.length, 1);
+}]);
+
+cases.push(["rejected dispatch revalidation sends nothing, is stale_authorization, and records the reserved budget state", async () => {
+  const { runtime, state, calls } = revalidatingHarness({ status: "rejected" });
+  await expectError(runtime.submit(envelope(submitCommand()), scope), "stale_authorization", "not_dispatched");
+  assert.equal(calls.length, 1);
+  assert.equal(state.transportCalls.length, 0);
+  assert.equal(state.budgetCalls.length, 1);
+  const [attempt] = [...state.attempts.values()];
+  assert.equal(attempt.budgetReservationState, "reserved");
+  assert.equal(attempt.sideEffectState, "not_dispatched");
+}]);
+
+cases.push(["throwing or malformed dispatch revalidation is authorization_unavailable with no transport", async () => {
+  for (const answer of [() => { throw new Error("verifier down"); }, undefined, null, "dispatchable", { status: "ok" }, { status: " dispatchable" }, {}]) {
+    const { runtime, state } = revalidatingHarness(answer);
+    await expectError(runtime.submit(envelope(submitCommand()), scope), "authorization_unavailable", "not_dispatched");
+    assert.equal(state.transportCalls.length, 0);
+  }
+}]);
+
+cases.push(["dispatch revalidation runs before every adapter transport request including retries", async () => {
+  const { runtime, adapter, state, calls } = revalidatingHarness((count) => ({ status: count < 3 ? "dispatchable" : "rejected" }));
+  adapter.submit = async (command, context) => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await context.transport.request({ operation: "submit", method: "POST", path: "/fixture/orders", body: command, idempotencyKey: command.idempotencyKey });
+    }
+    return { status: "supported", value: { providerRequestId: "request-fixture-1", acceptedAt: "2026-10-10T14:00:00.000Z" } };
+  };
+  await expectError(runtime.submit(envelope(submitCommand()), scope), "stale_authorization", "possible");
+  assert.equal(calls.length, 3);
+  assert.equal(state.transportCalls.length, 2);
+  assert.deepEqual(calls.map((call) => call.order.filter((entry) => entry === "transport").length), [0, 1, 2]);
+}]);
+
+cases.push(["verifiers without dispatch revalidation, or with a non-function member, behave exactly as before", async () => {
+  for (const member of [undefined, null, "dispatchable", {}]) {
+    const harness = createHarness();
+    if (member !== undefined) harness.dependencies.authorizationVerifier.revalidateBeforeDispatch = member;
+    await harness.runtime.submit(envelope(submitCommand()), scope);
+    assert.equal(harness.state.transportCalls.length, 1);
+    assert.equal(harness.state.budgetCalls.length, 1);
+  }
+}]);
+
+// Records the order of metering writes, revalidation answers and transport requests on a revalidating harness.
+function orderedHarness(onDispatchingMetering) {
+  const lapse = { lapsed: false };
+  const harness = revalidatingHarness(() => ({ status: lapse.lapsed ? "rejected" : "dispatchable" }));
+  const events = [];
+  const { dependencies } = harness;
+  const revalidate = dependencies.authorizationVerifier.revalidateBeforeDispatch;
+  dependencies.authorizationVerifier.revalidateBeforeDispatch = async (...args) => {
+    const answer = await revalidate(...args);
+    events.push(`revalidate:${answer.status}`);
+    return answer;
+  };
+  const openMetering = dependencies.metering;
+  dependencies.metering = async (requestedScope) => {
+    const recorder = await openMetering(requestedScope);
+    const record = recorder.recordObservation.bind(recorder);
+    recorder.recordObservation = async (observation) => {
+      const result = await record(observation);
+      events.push(`metering:${observation.outcome}`);
+      if (observation.outcome === "dispatching") await onDispatchingMetering?.(lapse, harness);
+      return result;
+    };
+    return recorder;
+  };
+  const transport = dependencies.transport.request.bind(dependencies.transport);
+  dependencies.transport.request = async (request) => {
+    events.push("transport");
+    return transport(request);
+  };
+  return { ...harness, events, lapse };
+}
+
+function submitWithTransports(adapter, count) {
+  adapter.submit = async (command, context) => {
+    for (let index = 0; index < count; index += 1) {
+      await context.transport.request({ operation: "submit", method: "POST", path: "/fixture/orders", body: command, idempotencyKey: command.idempotencyKey });
+    }
+    return { status: "supported", value: { providerRequestId: "request-fixture-1", acceptedAt: "2026-10-10T14:00:00.000Z" } };
+  };
+}
+
+cases.push(["dispatch revalidation is the last awaited step: after the dispatching metering write and directly before every transport request", async () => {
+  const { runtime, adapter, events } = orderedHarness();
+  submitWithTransports(adapter, 2);
+  await runtime.submit(envelope(submitCommand()), scope);
+  const dispatch = events.filter((event) => event !== "metering:attempt_prepared" && event !== "metering:provider_accepted");
+  assert.deepEqual(dispatch, [
+    "metering:dispatching", "revalidate:dispatchable", "transport",
+    "metering:dispatching", "revalidate:dispatchable", "transport"
+  ]);
+}]);
+
+cases.push(["authority lapsing while the dispatching metering write is awaited sends nothing and keeps not_dispatched evidence", async () => {
+  const { runtime, state, events } = orderedHarness(async (lapse) => {
+    await Promise.resolve();
+    lapse.lapsed = true;
+  });
+  await expectError(runtime.submit(envelope(submitCommand()), scope), "stale_authorization", "not_dispatched");
+  assert.equal(state.transportCalls.length, 0);
+  assert.equal(state.budgetCalls.length, 1);
+  assert.deepEqual(events.filter((event) => event !== "metering:attempt_prepared"), ["metering:dispatching", "revalidate:rejected", "metering:not_dispatched"]);
+  assert.deepEqual(state.meteringObservations.map((observation) => observation.outcome), ["attempt_prepared", "dispatching", "not_dispatched"]);
+  const [attempt] = [...state.attempts.values()];
+  assert.equal(attempt.sideEffectState, "not_dispatched");
+  assert.equal(attempt.budgetReservationState, "reserved");
+}]);
+
+cases.push(["authority lapsing during a retry's dispatching metering write stops that request and reports possible uncertainty", async () => {
+  let writes = 0;
+  const { runtime, adapter, state } = orderedHarness(async (lapse) => {
+    writes += 1;
+    if (writes === 2) lapse.lapsed = true;
+  });
+  submitWithTransports(adapter, 3);
+  await expectError(runtime.submit(envelope(submitCommand()), scope), "stale_authorization", "possible");
+  assert.equal(state.transportCalls.length, 1);
+  assert.equal(state.meteringObservations.at(-1).outcome, "unknown");
+  const [attempt] = [...state.attempts.values()];
+  assert.equal(attempt.sideEffectState, "possible");
+}]);
+
 export async function runContractSuite() {
   const checks = [];
   for (const [name, run] of cases) {

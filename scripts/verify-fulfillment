@@ -9,6 +9,11 @@ import {
   runPngInspectionTests,
   validPngInspectionRunnerReport
 } from "./run-png-inspection-tests.mjs";
+import {
+  ORDER_AUTHORIZATION_SUITE_CASE_COUNT,
+  runOrderAuthorizationTests,
+  validOrderAuthorizationRunnerReport
+} from "./run-order-authorization-tests.mjs";
 
 let allSharedShapes = [];
 let contractOwnership = {};
@@ -23,6 +28,7 @@ let attemptStoreApiAvailable = false;
 let statusApiAvailable = false;
 let prodigiProductDetailsApiAvailable = false;
 let pngInspectionApiAvailable = false;
+let orderAuthorizationApiAvailable = false;
 let providerEnvironmentMatrix = null;
 try {
   const catalog = await import("../dist/index.js");
@@ -52,6 +58,9 @@ try {
     typeof catalog.ProdigiProductDetailsError === "function";
   pngInspectionApiAvailable = typeof catalog.inspectPngBytes === "function" &&
     typeof catalog.PNG_INSPECTION_LIMITS === "object";
+  orderAuthorizationApiAvailable = typeof catalog.createTicketStubOrderAuthorizationVerifier === "function" &&
+    typeof catalog.createConsumerRequestSigner === "function" && typeof catalog.deriveOrderClaimKey === "function" &&
+    typeof catalog.OrderAuthorizationError === "function";
 } catch {
   // Keep argument and missing-build failures machine-readable even before a build.
 }
@@ -89,7 +98,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "attempt-store", "comparison", "status", "prodigi-product-details", "png-inspection", "sandbox", "release"]);
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "attempt-store", "comparison", "status", "prodigi-product-details", "png-inspection", "order-authorization", "sandbox", "release"]);
 const allowedModes = new Set(["simulated", "sandbox"]);
 function validStatusRunnerReport(report) {
   const reportKeys = ["schemaVersion", "suite", "mode", "status", "passed", "failed", "results", "processExitCode",
@@ -219,6 +228,13 @@ const prodigiProductDetailsBlockers = [
   "issue 15 full acceptance still includes the supported cancellation outcome; this component implements no order lifecycle operation",
   "canonical schema acceptance and producer/consumer conformance remain pending"
 ];
+const orderAuthorizationBlockers = [
+  "this result covers only a simulated, development-only consumer adapter and dispatch-time revalidation hook against a fake issuer, a fake HTTP port, and the producer's pinned fixture verifier",
+  "purchase terms come from an injected development-fixture terms source; canonical production bundle, quote, destination and OrderAuthorization bindings are not accepted and none is forged",
+  "the app provider prodigi and the connector sandbox mode are refused; the producer cannot issue prodigi authorizations today",
+  "no real endpoint, base URL, fetch, consumer key or issuer integration exists; issuer responses are not message-authenticated and rely on the transport",
+  "this is not consumer-conformance evidence and does not complete issue 15 or any release scope"
+];
 const pngInspectionBlockers = [
   "this result covers only bounded byte observations for one static RGB8 noninterlaced PNG profile and private synthetic fixtures",
   "the six pinned renderer PNGs are diagnostic bytes with handoffEligible=false, not an approved ProductionBundle",
@@ -236,6 +252,7 @@ let attemptStoreReport = null;
 let statusReport = null;
 let prodigiProductDetailsReport = null;
 let pngInspectionReport = null;
+let orderAuthorizationReport = null;
 let failureReasons = [];
 let status = "failed";
 
@@ -257,6 +274,7 @@ if (args.suite === "comparison" && args.mode !== "simulated") failureReasons.pus
 if (args.suite === "status" && args.mode !== "simulated") failureReasons.push("status_fixture_suite_requires_simulated_mode");
 if (args.suite === "prodigi-product-details" && args.mode !== "simulated") failureReasons.push("prodigi_product_details_requires_simulated_mode");
 if (args.suite === "png-inspection" && args.mode !== "simulated") failureReasons.push("png_inspection_requires_simulated_mode");
+if (args.suite === "order-authorization" && args.mode !== "simulated") failureReasons.push("order_authorization_requires_simulated_mode");
 
 if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
@@ -454,6 +472,25 @@ if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "s
   } catch {
     failureReasons.push("png_inspection_suite_prerequisite_failed");
   }
+} else if (failureReasons.length === 0 && args.suite === "order-authorization" && args.mode === "simulated") {
+  if (!orderAuthorizationApiAvailable) failureReasons.push("order_authorization_runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      orderAuthorizationReport = runOrderAuthorizationTests();
+      checks = orderAuthorizationReport.results ?? [];
+      if (!validOrderAuthorizationRunnerReport(orderAuthorizationReport)) {
+        failureReasons.push("order_authorization_runner_report_invalid");
+      } else if (orderAuthorizationReport.status === "passed" &&
+        orderAuthorizationReport.passed === ORDER_AUTHORIZATION_SUITE_CASE_COUNT && orderAuthorizationReport.failed === 0 &&
+        checks.length === ORDER_AUTHORIZATION_SUITE_CASE_COUNT && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_order_authorization_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("order_authorization_suite_prerequisite_failed");
+  }
 } else if (failureReasons.length === 0 && args.suite === "metering" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("metering_build_prerequisite_missing");
   try {
@@ -512,6 +549,8 @@ const result = {
             ? "local_private_prodigi_product_details_wire_fixture_suite"
           : args.suite === "png-inspection"
             ? "local_private_bounded_png_byte_observation_suite"
+          : args.suite === "order-authorization"
+            ? "local_private_simulated_order_authorization_consumer_suite"
           : args.suite === "metering"
             ? "local_private_metering_fixture_suite"
             : "local_private_fixture_contract_suite"
@@ -526,6 +565,7 @@ const result = {
     ...(args.suite === "status" ? statusBlockers : []),
     ...(args.suite === "prodigi-product-details" ? prodigiProductDetailsBlockers : []),
     ...(args.suite === "png-inspection" ? pngInspectionBlockers : []),
+    ...(args.suite === "order-authorization" ? orderAuthorizationBlockers : []),
     ...(args.suite === "attempt-store" ? attemptStoreBlockers : []),
     ...(args.suite === "comparison" ? comparisonBlockers : []),
     ...(args.suite === "provider-matrix" ? [
@@ -822,6 +862,34 @@ const result = {
       evidenceWriteStatus: "not_attempted"
     }
   } : {}),
+  ...(args.suite === "order-authorization" ? {
+    orderAuthorizationAssessment: {
+      schemaVersion: "fulfillment-order-authorization-assessment/1",
+      evidenceScope: "simulated_development_consumer_adapter_and_dispatch_revalidation_against_fake_issuer_only",
+      completion: "partial_simulated_development_consumer_leaf",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      consumerMode: "simulated_only; connector_sandbox_and_live_refused",
+      appProvider: "sandbox_only; prodigi_refused",
+      termsSource: "injected_development_fixture_provenance_only; never_copied_from_the_envelope",
+      dispatchTimeRevalidation: "optional_verifier_hook_called_before_every_submit_transport_request",
+      producerFixturePin: "7d2dd17810425f0b06e07dadbba3e173800ea5fd",
+      canonicalBindingAndConformance: "pending",
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: orderAuthorizationReport?.externalProviderCalls ?? 0,
+      orderCalls: orderAuthorizationReport?.orderCalls ?? 0,
+      financeCalls: orderAuthorizationReport?.financeCalls ?? 0,
+      runner: orderAuthorizationReport,
+      blockers: orderAuthorizationBlockers,
+      evidenceWriteStatus: "not_attempted"
+    }
+  } : {}),
   providerMatrixAssessment: args.suite === "provider-matrix" ? {
     schemaVersion: "fulfillment-provider-matrix-assessment/1",
     evidenceScope: "documented_metadata_and_private_policy_fixtures_only",
@@ -891,33 +959,34 @@ const result = {
 };
 
 if (args["evidence-dir"] !== undefined) {
-  const evidenceDir = args.suite === "png-inspection"
+  const evidenceDir = args.suite === "png-inspection" || args.suite === "order-authorization"
     ? path.resolve(repositoryRoot, args["evidence-dir"])
     : path.resolve(args["evidence-dir"]);
   const evidenceFile = path.join(evidenceDir, "result.json");
   result.evidenceFile = evidenceFile;
   result.completedAt = new Date().toISOString();
   try {
-    if (args.suite === "png-inspection") {
-      const expectedEvidenceDir = path.resolve(repositoryRoot, "evidence/FC-08-10-PNG");
-      if (evidenceDir !== expectedEvidenceDir) throw new Error("unsafe_png_evidence_directory");
+    if (args.suite === "png-inspection" || args.suite === "order-authorization") {
+      const expectedEvidenceDir = path.resolve(repositoryRoot, args.suite === "png-inspection" ? "evidence/FC-08-10-PNG" : "evidence/FC-ORDER-AUTH");
+      if (evidenceDir !== expectedEvidenceDir) throw new Error("unsafe_evidence_directory");
       for (const candidate of [path.resolve(repositoryRoot, "evidence"), evidenceDir]) {
         try {
           const details = await lstat(candidate);
-          if (!details.isDirectory() || details.isSymbolicLink()) throw new Error("unsafe_png_evidence_directory");
+          if (!details.isDirectory() || details.isSymbolicLink()) throw new Error("unsafe_evidence_directory");
         } catch (error) {
           if (error?.code !== "ENOENT") throw error;
         }
       }
       try {
         const details = await lstat(evidenceFile);
-        if (!details.isFile() || details.isSymbolicLink()) throw new Error("unsafe_png_evidence_file");
+        if (!details.isFile() || details.isSymbolicLink()) throw new Error("unsafe_evidence_file");
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
       }
     }
     await mkdir(evidenceDir, { recursive: true });
     if (result.pngInspectionAssessment !== undefined) result.pngInspectionAssessment.evidenceWriteStatus = "written";
+    if (result.orderAuthorizationAssessment !== undefined) result.orderAuthorizationAssessment.evidenceWriteStatus = "written";
     await writeFile(evidenceFile, `${JSON.stringify(result, null, 2)}\n`, { encoding: "utf8", flag: "w" });
   } catch {
     status = "failed";
@@ -936,6 +1005,7 @@ if (args["evidence-dir"] !== undefined) {
       ...(args.suite === "status" ? statusBlockers : []),
       ...(args.suite === "prodigi-product-details" ? prodigiProductDetailsBlockers : []),
       ...(args.suite === "png-inspection" ? pngInspectionBlockers : []),
+      ...(args.suite === "order-authorization" ? orderAuthorizationBlockers : []),
       ...failureReasons
     ];
     if (result.catalogAssessment !== undefined) result.catalogAssessment.localFixtureResult = "failed";
@@ -952,6 +1022,10 @@ if (args["evidence-dir"] !== undefined) {
     if (result.pngInspectionAssessment !== undefined) {
       result.pngInspectionAssessment.localFixtureResult = "failed";
       result.pngInspectionAssessment.evidenceWriteStatus = "failed";
+    }
+    if (result.orderAuthorizationAssessment !== undefined) {
+      result.orderAuthorizationAssessment.localFixtureResult = "failed";
+      result.orderAuthorizationAssessment.evidenceWriteStatus = "failed";
     }
   }
 }
