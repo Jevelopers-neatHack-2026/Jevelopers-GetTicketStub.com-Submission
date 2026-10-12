@@ -8,8 +8,8 @@ Before you start: `https://getticketstub.com/api/health` should answer `{"ok":tr
 
 - [ ] In the host's environment settings, for **Preview** and for **Publish**, `TICKETSTUB_SANDBOX_MAIL` is not set at all. Only the exact value `1` turns it on, but delete it rather than setting it to `0`.
 - [ ] Redeploy, so the running process has the new environment.
-- [ ] Until Resend is set up (no `RESEND_API_KEY`): on the live site, open sign-in and enter your own address. Expect the message "Email isn't set up on this server yet." and **no** "Open the link" button. In the browser's network panel, `POST /api/auth/link` answers 503 `mail_unavailable` and its body has no `devLink`.
-- [ ] In the host's logs, search for `signin/confirm?token=` and `sandbox sign-in link`. There should be no match. The expected line is `[mail] no RESEND_API_KEY, not sent: sign-in link to y***@domain`.
+- [ ] Until Resend is set up (no `RESEND_API_KEY`): on the live site, open sign-in and enter your own address. The sign-in sheet should say "Email isn't switched on for this preview, so we can't send a link. Come back soon." and show **no** "Open the link" button. In the browser's network panel, `POST /api/auth/link` answers 503 with code `mail_unavailable` and the API message "Email isn't set up on this server yet." (the page shows the first text, not this one), and its body has no `devLink`.
+- [ ] In the host's logs, search for `signin/confirm?token=`, `sandbox sign-in link` and `sandbox email-change link`. There should be no match. The expected line is `[mail] no RESEND_API_KEY, not sent: sign-in link to y***@domain`.
 
 ## 2. Real-email sign-in, once Resend is set up (items a and c)
 
@@ -36,7 +36,7 @@ Before you start: `https://getticketstub.com/api/health` should answer `{"ok":tr
 - [ ] The answer is 201 with `backup.ok: true`, `database.integrity: "ok"`, `missing: []`, and `downloadable: true`. A 409 means another backup (the weekly one, or the other environment) is running: try again in a minute.
 - [ ] Signed out, the same call is a 404.
 - [ ] In File Manager, Private Storage, download `/private/backups/<id>/`: `manifest.json`, `ticketstub.sqlite` and every file under `files/`. Keep it off GitHub and out of shared folders: it holds customer data.
-- [ ] After about a week, the host log shows `[backup] scheduled <id> ok`, and `GET /api/admin/backup` lists it.
+- [ ] After about a week, the host log shows `[backup] scheduled <id> ok, <n> files`, and `GET /api/admin/backup` lists it.
 
 ## 5. Restore drill on a copy (item b)
 

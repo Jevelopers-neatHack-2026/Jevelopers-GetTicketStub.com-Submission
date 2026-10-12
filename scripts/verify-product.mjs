@@ -148,7 +148,18 @@ function freePort() {
   });
 }
 
+/** Starts `next start` on a free port, retrying with a new port if another process took the probed one first. */
 async function startServer(extraEnv = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await startServerOnce(extraEnv);
+    } catch (e) {
+      if (attempt >= 3 || !(e instanceof Error) || !/EADDRINUSE/.test(e.message)) throw e;
+    }
+  }
+}
+
+async function startServerOnce(extraEnv = {}) {
   const port = await freePort();
   const env = childEnv({ PORT: String(port), NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", ...extraEnv });
   // An extra set to undefined means "not in the environment at all", not the string "undefined".
@@ -396,6 +407,8 @@ function newestLink(email) {
 }
 
 async function stopServer(s) {
+  // A server that already died has fired "close" already; waiting for it again would hang the job.
+  if (s.child.exitCode !== null || s.child.signalCode !== null) return;
   const exited = new Promise((done) => s.child.once("close", done));
   s.child.kill();
   await exited;
@@ -582,56 +595,61 @@ async function backupDrill() {
   const backupDir = join(dirname(live.db), "backups", manifest.id);
   // A sibling of the live database would be refused (and rightly): restore into a folder of its own.
   const restoreRoot = mkdtempSync(join(tmpdir(), "ticketstub-restore-"));
-  const target = join(restoreRoot, "restored");
-  const restoreEnv = { ...process.env, TICKETSTUB_DB: live.db, TICKETSTUB_FILES: live.files };
-  const refusedOverlap = await runNode([join(root, "scripts/restore-backup.mjs"), backupDir, live.files], restoreEnv);
-  record("restore refuses a target that overlaps the live storage", refusedOverlap.code !== 0 && /refusing a target/.test(refusedOverlap.out), refusedOverlap.out.slice(0, 120));
-  const restored = await runNode([join(root, "scripts/restore-backup.mjs"), backupDir, target], restoreEnv);
-  const restorePasses = restored.out.split(/\r?\n/).filter((l) => l.startsWith("PASS ")).length;
-  record("restore-backup.mjs exits 0 with every check passing", restored.code === 0 && restorePasses > 0 && !/FAIL/.test(restored.out), restored.out.split("\n").find((l) => l.startsWith("FAIL")) ?? `exit ${restored.code}`);
-  const refusedNonEmpty = await runNode([join(root, "scripts/restore-backup.mjs"), backupDir, target], restoreEnv);
-  record("restore refuses a target that isn't empty", refusedNonEmpty.code !== 0 && /not empty/.test(refusedNonEmpty.out), refusedNonEmpty.out.slice(0, 120));
-
-  // Re-check the copy independently of the script.
-  const restoredDb = join(target, "ticketstub.sqlite");
-  const facts = dbFacts(restoredDb);
-  record("restored database integrity_check is ok", facts.integrity === "ok", facts.integrity);
-  record("restored row counts equal the manifest, table by table", JSON.stringify(facts.tables) === JSON.stringify(Object.fromEntries(Object.keys(facts.tables).map((k) => [k, manifest.database.tables[k]]))) && Object.keys(facts.tables).length === Object.keys(manifest.database.tables).length, JSON.stringify({ restored: facts.tables, manifest: manifest.database.tables }));
-  // Hashed before a server opens the copy: from then on the copy is a live database of its own.
-  const restoredSha = fileSha(restoredDb);
-  record("restored database bytes hash to the manifest", restoredSha === manifest.database.sha256);
-  const restoredFiles = manifest.files.map((f) => ({ name: f.name, ok: fileSha(join(target, "files", f.name)) === f.sha256 && f.sha256 === f.name.slice(0, 64) }));
-  record("every restored art file hashes to the manifest and its name", restoredFiles.length === 2 && restoredFiles.every((f) => f.ok));
-  record("the snapshot is point in time: the later stub is not in it", manifest.database.tables.wall_stubs === dbFacts(live.db).tables.wall_stubs - 1, JSON.stringify({ backup: manifest.database.tables.wall_stubs, live: dbFacts(live.db).tables.wall_stubs }));
-
-  // Serve the copy, isolated: mail off, schedule off, its own folder.
-  s = await startServer({ ...env, TICKETSTUB_DB: restoredDb, TICKETSTUB_FILES: join(target, "files"), TICKETSTUB_SANDBOX_MAIL: undefined });
   try {
-    const anon = client(s.base);
-    const health = parse(await anon.get("/api/health"));
-    record("a server on the restored copy is healthy with storage ok", health?.ok === true && health.storage === "ok", JSON.stringify(health));
-    const wall = parse(await anon.get(`/api/u/${wallToken}`));
-    record("the restored public wall has the two stubs from the backup", wall?.stubs?.length === 2 && wall.stubs.every((x) => x.id !== "drill-later"), `got ${wall?.stubs?.length}`);
-    const share = await anon.get(`/api/share/${shareToken}`);
-    const shareArt = parse(share)?.stub?.versions?.[0]?.art?.src;
-    record("the restored share resolves", share.status === 200 && /^\/api\/files\//.test(shareArt ?? ""), `got ${share.status}`);
-    let served = 0;
-    for (const src of [artPath, shareArt]) {
-      const r = await fetch(s.base + src, { signal: AbortSignal.timeout(20000) });
-      if (r.status === 200 && createHash("sha256").update(Buffer.from(await r.arrayBuffer())).digest("hex") === src.slice(11, 75)) served++;
-    }
-    record("the restored art files serve byte for byte", served === 2, `${served}/2`);
-  } finally {
-    await stopServer(s);
-  }
+    const target = join(restoreRoot, "restored");
+    // childEnv keeps the fixture network guard on the restore script too.
+    const restoreEnv = childEnv({ TICKETSTUB_DB: live.db, TICKETSTUB_FILES: live.files });
+    const refusedOverlap = await runNode([join(root, "scripts/restore-backup.mjs"), backupDir, live.files], restoreEnv);
+    record("restore refuses a target that overlaps the live storage", refusedOverlap.code !== 0 && /refusing a target/.test(refusedOverlap.out), refusedOverlap.out.slice(0, 120));
+    const restored = await runNode([join(root, "scripts/restore-backup.mjs"), backupDir, target], restoreEnv);
+    const restorePasses = restored.out.split(/\r?\n/).filter((l) => l.startsWith("PASS ")).length;
+    record("restore-backup.mjs exits 0 with every check passing", restored.code === 0 && restorePasses > 0 && !/FAIL/.test(restored.out), restored.out.split("\n").find((l) => l.startsWith("FAIL")) ?? `exit ${restored.code}`);
+    const refusedNonEmpty = await runNode([join(root, "scripts/restore-backup.mjs"), backupDir, target], restoreEnv);
+    record("restore refuses a target that isn't empty", refusedNonEmpty.code !== 0 && /not empty/.test(refusedNonEmpty.out), refusedNonEmpty.out.slice(0, 120));
 
-  drill = {
-    backupId: manifest.id,
-    manifest: { ok: manifest.ok, integrity: manifest.database.integrity, databaseBytes: manifest.database.bytes, databaseSha256: manifest.database.sha256, tables: manifest.database.tables, files: manifest.files.map((f) => ({ sha256: f.sha256, bytes: f.bytes })), downloadable: manifest.downloadable, missing: manifest.missing.length },
-    restored: { integrity: facts.integrity, databaseSha256: restoredSha, tables: facts.tables, filesMatching: restoredFiles.filter((f) => f.ok).length, restoreScriptChecksPassed: restorePasses },
-    liveAfterBackup: { wall_stubs: dbFacts(live.db).tables.wall_stubs },
-  };
-  rmSync(restoreRoot, { recursive: true, force: true });
+    // Re-check the copy independently of the script.
+    const restoredDb = join(target, "ticketstub.sqlite");
+    const facts = dbFacts(restoredDb);
+    record("restored database integrity_check is ok", facts.integrity === "ok", facts.integrity);
+    record("restored row counts equal the manifest, table by table", JSON.stringify(facts.tables) === JSON.stringify(Object.fromEntries(Object.keys(facts.tables).map((k) => [k, manifest.database.tables[k]]))) && Object.keys(facts.tables).length === Object.keys(manifest.database.tables).length, JSON.stringify({ restored: facts.tables, manifest: manifest.database.tables }));
+    // Hashed before a server opens the copy: from then on the copy is a live database of its own.
+    const restoredSha = fileSha(restoredDb);
+    record("restored database bytes hash to the manifest", restoredSha === manifest.database.sha256);
+    const restoredFiles = manifest.files.map((f) => ({ name: f.name, ok: fileSha(join(target, "files", f.name)) === f.sha256 && f.sha256 === f.name.slice(0, 64) }));
+    record("every restored art file hashes to the manifest and its name", restoredFiles.length === 2 && restoredFiles.every((f) => f.ok));
+    record("the snapshot is point in time: the later stub is not in it", manifest.database.tables.wall_stubs === dbFacts(live.db).tables.wall_stubs - 1, JSON.stringify({ backup: manifest.database.tables.wall_stubs, live: dbFacts(live.db).tables.wall_stubs }));
+
+    // Serve the copy, isolated: mail off, schedule off, its own folder.
+    s = await startServer({ ...env, TICKETSTUB_DB: restoredDb, TICKETSTUB_FILES: join(target, "files"), TICKETSTUB_SANDBOX_MAIL: undefined });
+    try {
+      const anon = client(s.base);
+      const health = parse(await anon.get("/api/health"));
+      record("a server on the restored copy is healthy with storage ok", health?.ok === true && health.storage === "ok", JSON.stringify(health));
+      const wall = parse(await anon.get(`/api/u/${wallToken}`));
+      record("the restored public wall has the two stubs from the backup", wall?.stubs?.length === 2 && wall.stubs.every((x) => x.id !== "drill-later"), `got ${wall?.stubs?.length}`);
+      const share = await anon.get(`/api/share/${shareToken}`);
+      const shareArt = parse(share)?.stub?.versions?.[0]?.art?.src;
+      record("the restored share resolves", share.status === 200 && /^\/api\/files\//.test(shareArt ?? ""), `got ${share.status}`);
+      let served = 0;
+      for (const src of [artPath, shareArt]) {
+        const r = await fetch(s.base + src, { signal: AbortSignal.timeout(20000) });
+        if (r.status === 200 && createHash("sha256").update(Buffer.from(await r.arrayBuffer())).digest("hex") === src.slice(11, 75)) served++;
+      }
+      record("the restored art files serve byte for byte", served === 2, `${served}/2`);
+    } finally {
+      await stopServer(s);
+    }
+
+    drill = {
+      backupId: manifest.id,
+      manifest: { ok: manifest.ok, integrity: manifest.database.integrity, databaseBytes: manifest.database.bytes, databaseSha256: manifest.database.sha256, tables: manifest.database.tables, files: manifest.files.map((f) => ({ sha256: f.sha256, bytes: f.bytes })), downloadable: manifest.downloadable, missing: manifest.missing.length },
+      restored: { integrity: facts.integrity, databaseSha256: restoredSha, tables: facts.tables, filesMatching: restoredFiles.filter((f) => f.ok).length, restoreScriptChecksPassed: restorePasses },
+      liveAfterBackup: { wall_stubs: dbFacts(live.db).tables.wall_stubs },
+    };
+  } finally {
+    // Remove the copy of the drill database even when a check above throws.
+    rmSync(restoreRoot, { recursive: true, force: true });
+  }
 }
 
 // ---- run ----
@@ -665,11 +683,8 @@ try {
 } catch (e) {
   record("suite ran to completion", false, e instanceof Error ? e.message : String(e));
 } finally {
-  if (server) {
-    const exited = new Promise((done) => server.child.once("close", done));
-    server.child.kill();
-    await exited; // the server holds the throwaway database open; Windows won't delete it until it is gone
-  }
+  // The server holds the throwaway database open; Windows won't delete it until it is gone.
+  if (server) await stopServer(server);
   exit = steps.length > 0 && steps.every((s) => s.ok) ? 0 : 1;
   const counts = steps.reduce(
     (c, s) => ({ passed: c.passed + (s.passed ?? (s.ok ? 1 : 0)), failed: c.failed + (s.failed ?? (s.ok ? 0 : 1)), skipped: c.skipped + (s.skipped ?? 0) }),
