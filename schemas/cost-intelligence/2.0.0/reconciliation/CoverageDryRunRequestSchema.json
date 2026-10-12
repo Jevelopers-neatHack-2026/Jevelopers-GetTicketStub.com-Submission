@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/reconciliation/CoverageDryRunRequestSchema/2.0.0",
+  "x-schema-completeness": "partial_wrapper_requires_combined_validation",
+  "x-combined-validator": "validateCoverageDryRunRequestBoundary",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "mode",
+    "requestId",
+    "scope",
+    "idempotencyKey",
+    "windowStart",
+    "windowEnd",
+    "sourceSnapshots"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0",
+      "type": "string"
+    },
+    "mode": {
+      "const": "coverage_only",
+      "type": "string"
+    },
+    "requestId": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "scope": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "tenantId",
+        "projectId",
+        "environment",
+        "billingMode",
+        "actorId"
+      ],
+      "properties": {
+        "tenantId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "projectId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "const": "development",
+              "type": "string"
+            },
+            {
+              "const": "test",
+              "type": "string"
+            },
+            {
+              "const": "production",
+              "type": "string"
+            }
+          ]
+        },
+        "billingMode": {
+          "anyOf": [
+            {
+              "const": "live",
+              "type": "string"
+            },
+            {
+              "const": "sandbox",
+              "type": "string"
+            },
+            {
+              "const": "simulated",
+              "type": "string"
+            }
+          ]
+        },
+        "actorId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        }
+      }
+    },
+    "idempotencyKey": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128,
+      "type": "string"
+    },
+    "windowStart": {
+      "format": "date-time",
+      "maxLength": 40,
+      "type": "string"
+    },
+    "windowEnd": {
+      "format": "date-time",
+      "maxLength": 40,
+      "type": "string"
+    },
+    "sourceSnapshots": {
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sourceId",
+          "importId",
+          "revision",
+          "contentHash"
+        ],
+        "properties": {
+          "sourceId": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "importId": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "contentHash": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
