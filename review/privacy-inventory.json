@@ -5,7 +5,7 @@
     "Product and frontend",
     "Finance and reliability"
   ],
-  "auditedSourceRevision": "01d9b08d59bf65ea44fc19ede06701dc67363c63",
+  "auditedSourceRevision": "096fe76f8f559ac504693168e3cd6068337d0bb3",
   "executableScriptSha256": [
     "2b01e1d0f5ba18ee57a1420149ce8f8b94e776195f29bfc76db93c245ead4320",
     "36a753a532ea32e936c8b602ba024799d8c395e8bd633d39fe4247eef0400490"
@@ -26,7 +26,7 @@
   "reviewStatus": "PENDING",
   "styleSha256": [
     "a4a477526673b7cbb466775e39698516d7867f308f9c94fd1f243e5ffe190c75",
-    "21e13959a2fd33f73c8d541512669391bd6a92a33f8880cfd99bcdc683305df4"
+    "11bf41426913ab9214e424e31b8fa56d8ad6c36784a59c8c2cdf386a619c77d3"
   ],
   "markupTagsSha256": "90a084ab64d12fee88b5eeac7cb5dd00598fbac5d8964cd54cf8d76586339288",
   "scriptTagsSha256": [
@@ -39,5 +39,5 @@
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   ],
-  "auditNote": "Author re-audit of link-only activation against immutable base. Product navigation-only decision exists in review/cta-navigation-decision.json; privacy/full-copy/clean-browser/publication approvals remain PENDING. No form, query or input handoff."
+  "auditNote": "Author re-audit of link-only activation against immutable base. Product navigation-only decision exists in review/cta-navigation-decision.json; privacy/full-copy/clean-browser/publication approvals remain PENDING. No form, query or input handoff. CSS-only narrow header wrapping and hero/maker clearance re-audited against e5bc742 baseline; scripts, text and external data boundary unchanged."
 }

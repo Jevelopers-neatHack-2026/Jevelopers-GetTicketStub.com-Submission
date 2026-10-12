@@ -1,0 +1,283 @@
+{
+  "schema": "ticketstub.ux-header-fit/1",
+  "codeSourceRevision": "096fe76f8f559ac504693168e3cd6068337d0bb3",
+  "baselineSourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+  "sourcePageSha256": "a078774df18e59b884bdff968f2bec3e4a5b2a009458d30c8320242f595858f6",
+  "artifactManifestSha256": "9fb1a349cc9e3e850fef5d0e50005787dd66f04441b0c8089fe92aa3ef968e62",
+  "artifactFiles": {
+    "assets/ballet-clean.webp": {
+      "bytes": 53684,
+      "sha256": "2195943b492e4cd54d082bb09804e20e2317e5b8866d346a1440a1417f1e22d4"
+    },
+    "assets/fan-clean.webp": {
+      "bytes": 41546,
+      "sha256": "a28d2a81943ea441c259faa4d23027c05dc094c4be279e5cf2437a67b2166a48"
+    },
+    "assets/flight.json": {
+      "bytes": 556743,
+      "sha256": "8a69e3e289014de675a6249b004c28e1ffe4e603f550678ab5a95c1a161d9e15"
+    },
+    "assets/hockey-clean.webp": {
+      "bytes": 51778,
+      "sha256": "314e749eda387b3b0426238965ecd8350135fc9257f9c083e8f85d9bb92107cc"
+    },
+    "assets/hoops-clean.webp": {
+      "bytes": 64550,
+      "sha256": "dc58c6f5f79a3625bad5e7337f865593073b55af780d1dfd01c242f70cfc230c"
+    },
+    "assets/keeper-clean.webp": {
+      "bytes": 96974,
+      "sha256": "a14ee8df327cffae8ff3de4ff70f18f7b1beedf799ac84026f1992b7ee541cab"
+    },
+    "assets/pitcher-clean.webp": {
+      "bytes": 85802,
+      "sha256": "d870f2afa43831cc1ad1eb7c7175d8f699c8b0244dc16e47042f91c81e310b07"
+    },
+    "assets/qb-clean.webp": {
+      "bytes": 67992,
+      "sha256": "cb361142ff8821cf1df6610e9a2e958edfcd6683fb15eb493c1d1dbdaaf328cd"
+    },
+    "assets/singer-clean.webp": {
+      "bytes": 100472,
+      "sha256": "e87628c1117385dff1463e03663f26f6b82ea56a2a6b5bebabd56ec1cd5e398e"
+    },
+    "assets/ticketstub.gltf.json": {
+      "bytes": 1594648,
+      "sha256": "c36b5d0af494390fd2fdd18d581033e60dc156b45604c00060b0dd6bd8153936"
+    },
+    "index.html": {
+      "bytes": 197069,
+      "sha256": "a078774df18e59b884bdff968f2bec3e4a5b2a009458d30c8320242f595858f6"
+    }
+  },
+  "evidenceClass": "LOCAL_SOURCE_AND_ACTUAL_BROWSER_CONTROLS",
+  "baseReceipt": "review/ux/header-fit/baseline-browser.json",
+  "baseReceiptSha256": "9fd1c70b9a8282cb17c5214e604f786c8f0e7c924fb4e8562aad6efa4396b181",
+  "candidateReceipt": "review/ux/header-fit/candidate-browser.json",
+  "candidateReceiptSha256": "bd039046224c53c324b9e1880067707812031ec25094c1f40041e109f01d4267",
+  "screenshots": [
+    {
+      "path": "review/ux/header-fit/baseline-375.jpg",
+      "sha256": "d12c6b97dfb883b1ee98720e24d17591aa0b12b8ed54cbd6263f528f57f2d5fe"
+    },
+    {
+      "path": "review/ux/header-fit/baseline-320.jpg",
+      "sha256": "cee286d5f0d26c28440f6201f57ac34e6a8cdc19e78e4048826392a64bd7531f"
+    },
+    {
+      "path": "review/ux/header-fit/candidate-375.jpg",
+      "sha256": "97be6060ecd0a63096d168a4bd07eccda37d45d90d99772ba8b0cea7648b6764"
+    },
+    {
+      "path": "review/ux/header-fit/candidate-320.jpg",
+      "sha256": "e7919e8b6336db3e492036b5e5420974cec6f7cf1dd6549e3986e09ff280bf40"
+    },
+    {
+      "path": "review/ux/header-fit/candidate-maker-320.jpg",
+      "sha256": "12acdae2ae036a5229274365b7e9a37773bf368d72a2368548181cf9c7065069"
+    },
+    {
+      "path": "review/ux/header-fit/candidate-375-stable.jpg",
+      "sha256": "76c4636fbf440e10c57e16babcff270d7d5ce93e5abcb65212c2ffe4859ce419"
+    }
+  ],
+  "commandsExecuted": [
+    {
+      "id": "all-tests",
+      "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+      "arguments": [
+        "--test",
+        "tests/content-proof.test.mjs",
+        "tests/cta.test.mjs",
+        "tests/foundation.test.mjs",
+        "tests/metadata.test.mjs",
+        "tests/privacy.test.mjs",
+        "tests/scroll.test.mjs",
+        "tests/ux.test.mjs"
+      ],
+      "startedAt": "2026-10-12T12:01:17.103Z",
+      "endedAt": "2026-10-12T12:01:18.162Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/header-fit/reports/all-tests.stdout.log",
+      "stderr": "review/ux/header-fit/reports/all-tests.stderr.log",
+      "stdoutSha256": "bc82c9b30b9a35b84b12247f667d94db93ae2fb6bf9417c0ef8a5a7541904f6f",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests": 104
+    },
+    {
+      "id": "foundation-draft",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "foundation",
+        "--mode",
+        "draft"
+      ],
+      "startedAt": "2026-10-12T12:01:18.167Z",
+      "endedAt": "2026-10-12T12:01:19.363Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/header-fit/reports/foundation-draft.stdout.log",
+      "stderr": "review/ux/header-fit/reports/foundation-draft.stderr.log",
+      "stdoutSha256": "c6245500cd3e2f4063b28ca78d94e274417c9c5a7789fe17b1a23da692666d97",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests": 5
+    },
+    {
+      "id": "content-draft",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "content",
+        "--mode",
+        "draft"
+      ],
+      "startedAt": "2026-10-12T12:01:19.364Z",
+      "endedAt": "2026-10-12T12:01:19.454Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/header-fit/reports/content-draft.stdout.log",
+      "stderr": "review/ux/header-fit/reports/content-draft.stderr.log",
+      "stdoutSha256": "fa718068475c627a77b657fcf4cb0ddb1d468eac37cbacbeba22dfc8ab78950e",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests": null
+    },
+    {
+      "id": "proof-draft",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "proof",
+        "--mode",
+        "draft"
+      ],
+      "startedAt": "2026-10-12T12:01:19.454Z",
+      "endedAt": "2026-10-12T12:01:19.542Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/header-fit/reports/proof-draft.stdout.log",
+      "stderr": "review/ux/header-fit/reports/proof-draft.stderr.log",
+      "stdoutSha256": "606586428597d69c6f94d810606a3f67d2a12e1ea931ae52cf1e4f594b752eb3",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests": null
+    },
+    {
+      "id": "cta-draft",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "cta",
+        "--mode",
+        "draft"
+      ],
+      "startedAt": "2026-10-12T12:01:19.542Z",
+      "endedAt": "2026-10-12T12:01:19.862Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/header-fit/reports/cta-draft.stdout.log",
+      "stderr": "review/ux/header-fit/reports/cta-draft.stderr.log",
+      "stdoutSha256": "1dded269924c24176dffd28bea66f912ef84fda031ed4e4a606245dfb7dd5192",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests": 10
+    },
+    {
+      "id": "privacy-draft",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "privacy",
+        "--mode",
+        "draft"
+      ],
+      "startedAt": "2026-10-12T12:01:19.865Z",
+      "endedAt": "2026-10-12T12:01:19.996Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/header-fit/reports/privacy-draft.stdout.log",
+      "stderr": "review/ux/header-fit/reports/privacy-draft.stderr.log",
+      "stdoutSha256": "11fc906cb06dddd9ac9fc6cef2e8614e1be3dd34daa983bf061cb891e3283883",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests": null
+    },
+    {
+      "id": "metadata-draft",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "metadata",
+        "--mode",
+        "draft"
+      ],
+      "startedAt": "2026-10-12T12:01:19.996Z",
+      "endedAt": "2026-10-12T12:01:20.348Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/header-fit/reports/metadata-draft.stdout.log",
+      "stderr": "review/ux/header-fit/reports/metadata-draft.stderr.log",
+      "stdoutSha256": "1c63e7074287123baa0b64f69877914a13c3993e890f51c87c22a6734a0d46c8",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests": 11
+    },
+    {
+      "id": "ux-draft",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "ux",
+        "--mode",
+        "draft"
+      ],
+      "startedAt": "2026-10-12T12:01:20.350Z",
+      "endedAt": "2026-10-12T12:01:20.604Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/header-fit/reports/ux-draft.stdout.log",
+      "stderr": "review/ux/header-fit/reports/ux-draft.stderr.log",
+      "stdoutSha256": "e48d619eea93744e22cf265ff3f1305838d5956221505f86b0975be465e7e13b",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tests": 9
+    },
+    {
+      "id": "ux-release",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "ux"
+      ],
+      "startedAt": "2026-10-12T12:01:20.607Z",
+      "endedAt": "2026-10-12T12:01:20.852Z",
+      "exitCode": 1,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/header-fit/reports/ux-release.stdout.log",
+      "stderr": "review/ux/header-fit/reports/ux-release.stderr.log",
+      "stdoutSha256": "57e6f359625190e10ed60e292cda651dbafea98852a0fd57c2671f131b89c9ce",
+      "stderrSha256": "154c5505b056429a495dca948620bcd937943658e1ea0c56c9dbd6829f93ea58",
+      "tests": 9
+    }
+  ],
+  "invariants": {
+    "visibleTextUnchanged": true,
+    "scriptBlocksUnchanged": true,
+    "imageAndDataAssetsUnchanged": true,
+    "anchorsAndLabelsUnchanged": true
+  },
+  "browserResult": "BOUNDED_HEADER_FIT_AND_CLEARANCE_OBSERVED_320_375",
+  "limitations": [
+    "WebGL unavailable; existing-profile Chrome static fallback",
+    "No full viewport, touch, accessibility, privacy, performance or deployment acceptance",
+    "Broader page overflow and maker text/art readability remain unresolved"
+  ],
+  "release": "BLOCKED",
+  "deployedLandingIdentity": "UNKNOWN",
+  "publicationByThisTask": "NOT_DEPLOYED"
+}
