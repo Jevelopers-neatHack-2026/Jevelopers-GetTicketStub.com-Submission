@@ -4,8 +4,11 @@ import { resolve } from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { readFinancialSummary, type ProjectionResult, type SummaryProjection } from '../../src/data/shared-contracts-adapter';
-import { FinancialSummaryView, evaluateFinancePacket, readFinancePage, type PacketOutcome, type TrustedPacketExpectation } from '../../src/views/financial-summary';
+import { FinancialSummaryView, evaluateFinancePacket as evaluateStrict, projectWrapperMetadata, readFinancePage, type PacketMode, type PacketOutcome, type TrustedPacketExpectation } from '../../src/views/financial-summary';
 import { projection, ready, requestedOf, stale, stubKit, stubScope, wirePayload } from './financial-summary.fixtures';
+
+/** Test-local convenience only: src has no default mode, so the gate tests state synthetic development here. The F-SUM-06 tests call `evaluateStrict` directly. */
+const evaluateFinancePacket = (manifest: unknown, trusted: TrustedPacketExpectation, mode: PacketMode = 'synthetic_development') => evaluateStrict(manifest, trusted, mode);
 
 const view = (result: ProjectionResult<SummaryProjection>, projectLabel?: string) => render(<FinancialSummaryView result={result} {...(projectLabel ? { projectLabel } : {})} />);
 
@@ -178,6 +181,23 @@ describe('Finance packet gate: schema, contract, digest, reference and review, n
       expect(refusal(evaluateFinancePacket(manifestOf(), trusted({ references: { '/policy_ref': reference } })))).toMatchObject({ code: 'REFERENCE_MISMATCH', path: '/trusted/references//policy_ref' });
     }
   });
+  it('F-SUM-06: has no default eligible mode; only the explicit synthetic_development literal opts in', () => {
+    const refusedAs = (outcome: PacketOutcome) => expect(outcome).toMatchObject({ outcome: 'refused', result: { status: 'refused', code: 'INVALID_TRUST_CONTEXT', path: '/mode' } });
+    refusedAs(evaluateStrict(manifestOf(), trusted(), undefined as never));
+    refusedAs((evaluateStrict as (m: unknown, t: TrustedPacketExpectation) => PacketOutcome)(manifestOf(), trusted()));
+    for (const bad of ['prod', 'Production', 'SYNTHETIC_DEVELOPMENT', ' synthetic_development', '', null, 0, true, {}, ['synthetic_development']]) refusedAs(evaluateStrict(manifestOf(), trusted(), bad as never));
+    expect(evaluateStrict(manifestOf(), trusted(), 'synthetic_development').outcome).toBe('synthetic_development_only');
+    expect(evaluateStrict(manifestOf(), trusted(), 'production')).toMatchObject({ outcome: 'refused', result: { code: 'UNACCEPTED_INTERFACE' } });
+  });
+  it('F-SUM-06: readFinancePage refuses an absent or invalid mode before any canonical read', () => {
+    let called = false;
+    const kit = { ...stubKit, parseContractVersion: () => { called = true; return { ok: true as const, value: {} }; } };
+    const base = { kit, scope: stubScope, now: '2026-10-08T00:10:00Z', maxAgeMs: 3_600_000, currency: 'USD', metricNames: ['expense.effective'], manifest: manifestOf(), trusted: trusted(), page: { summary: wirePayload() } };
+    for (const mode of [undefined, 'prod', 'production']) {
+      expect(readFinancePage({ ...base, mode } as never).result).toMatchObject({ status: 'refused' });
+    }
+    expect(called).toBe(false);
+  });
   it('renders a refused outcome as an alert without amounts', () => {
     view(refusal(evaluateFinancePacket(manifestOf({ schemaVersion: '2.0.0' }), trusted()))!);
     expect(screen.getByRole('alert')).toHaveTextContent('Unsupported summary contract');
@@ -188,7 +208,7 @@ describe('Finance packet gate: schema, contract, digest, reference and review, n
 describe('readFinancePage keeps the Finance wrapper apart and hands only the exact inner summary to the canonical reader', () => {
   const summary = wirePayload();
   const page = { schema: 'FinancialSummaryPage', asOf: '2026-10-08T00:05:00Z', timezone: 'UTC', watermark: 'w-1', queryContentHash: 'q', summaryContentHash: 'sha256:digest', filters: { project: 'p' }, pagination: { cursor: null }, summary };
-  const request = (over = {}) => ({ kit: stubKit, scope: stubScope, now: '2026-10-08T00:10:00Z', maxAgeMs: 3_600_000, currency: 'USD', metricNames: ['expense.effective'], manifest: manifestOf(), trusted: trusted(), page, ...over });
+  const request = (over = {}) => ({ kit: stubKit, scope: stubScope, now: '2026-10-08T00:10:00Z', maxAgeMs: 3_600_000, currency: 'USD', metricNames: ['expense.effective'], manifest: manifestOf(), trusted: trusted(), mode: 'synthetic_development' as const, page, ...over });
   it('preserves every non-summary wrapper field verbatim and passes the inner summary with the trusted references and digest', () => {
     const seen: unknown[] = [];
     const kit = { ...stubKit, parseContractVersion: (contract: string, version: string, text: string) => { seen.push(JSON.parse(text)); return stubKit.parseContractVersion(contract, version, text); }, hashManifest: () => 'sha256:digest' };
@@ -223,12 +243,46 @@ describe('readFinancePage keeps the Finance wrapper apart and hands only the exa
     const semantic = { ...stubKit, hashManifest: () => 'sha256:digest', checkFinancialSummary: () => ({ ok: false as const, errors: [{ code: 'INVALID_PAYLOAD', path: '/coverage' }] }) };
     expect(readFinancePage(request({ kit: semantic })).result).toMatchObject({ status: 'refused', code: 'INVALID_PAYLOAD', path: '/coverage' });
   });
-  it('shows wrapper metadata in its own section without altering or summing anything', () => {
-    const { container } = render(<FinancialSummaryView result={ready()} wrapper={{ asOf: 'A', filters: { project: 'p' }, pagination: { cursor: null } }} />);
+  it('shows only allowlisted wrapper fields in their own section, labelled unvalidated, withholding the rest without echo', () => {
+    const { container } = render(<FinancialSummaryView result={ready()} wrapper={{ asOf: '2026-10-08T00:05:00Z', filters: { project: 'p' }, pagination: { cursor: null } }} />);
     const section = screen.getByRole('region', { name: 'Finance response metadata' });
-    expect(within(section).getByText('asOf', { selector: 'dt' }).nextElementSibling).toHaveTextContent('A');
-    expect(within(section).getByText('filters', { selector: 'dt' }).nextElementSibling).toHaveTextContent('{"project":"p"}');
+    expect(within(section).getByText('asOf', { selector: 'dt' }).nextElementSibling).toHaveTextContent('2026-10-08T00:05:00Z');
+    expect(section).toHaveTextContent('Unvalidated transport metadata');
+    expect(section).toHaveTextContent('not bound to this summary');
+    expect(section).toHaveTextContent('2 other fields withheld.');
+    expect(within(section).queryByText('filters')).toBeNull();
     expect(container.textContent).not.toMatch(/\b(spent|earned|remaining|budget|balance)\b/iu);
+  });
+  it('never echoes malicious, secret-like or forged wrapper content, in the projection or the DOM', () => {
+    const canary = 'CANARY-7f3a';
+    const hostile = {
+      schema: `${canary}-forged-schema`, asOf: `${canary} <img src=x onerror=alert(1)>`, timezone: `Bearer ${canary}`, watermark: `sk-live-${canary}`,
+      queryContentHash: `sha256:${canary}`, summaryContentHash: { toString: () => canary },
+      [`secret_${canary}`]: `password=${canary}`, privateNote: canary, authorization: `Bearer ${canary}`, __proto__: { polluted: canary },
+      filters: { token: canary }, pagination: { cursor: canary }, summary: { evil: canary }, 'x-field': ['a', canary],
+    };
+    const shown = projectWrapperMetadata(hostile);
+    expect(shown).toEqual({ status: 'unvalidated', fields: [], withheld: Object.keys(hostile).length });
+    expect(JSON.stringify(shown)).not.toContain(canary);
+    const { container } = render(<FinancialSummaryView result={ready()} wrapper={hostile} />);
+    expect(container.textContent).not.toContain(canary);
+    expect(container.textContent).not.toMatch(/secret_|password|authorization|privateNote/iu);
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Finance response metadata' })).toHaveTextContent(`${Object.keys(hostile).length} other fields withheld.`);
+  });
+  it('shows a well-formed allowlisted subset and withholds a forged field next to it', () => {
+    const hash = `sha256:${'c'.repeat(64)}`;
+    const shown = projectWrapperMetadata({ schema: 'FinancialSummaryPage', asOf: '2026-10-08T00:05:00+00:00', timezone: 'America/New_York', watermark: 'w-1', queryContentHash: hash, summaryContentHash: hash, budget: '1.00', spent: 'x' });
+    expect(shown.status).toBe('unvalidated');
+    expect(shown.fields.map(({ key }) => key)).toEqual(['schema', 'asOf', 'timezone', 'watermark', 'queryContentHash', 'summaryContentHash']);
+    expect(shown.withheld).toBe(2);
+    for (const nothing of [undefined, null, 'x', 7, [], [{ asOf: '2026-10-08T00:05:00Z' }]]) expect(projectWrapperMetadata(nothing)).toEqual({ status: 'unvalidated', fields: [], withheld: 0 });
+  });
+  it('renders no metadata section when the wrapper is absent or empty', () => {
+    const { rerender } = render(<FinancialSummaryView result={ready()} />);
+    expect(screen.queryByRole('region', { name: 'Finance response metadata' })).toBeNull();
+    rerender(<FinancialSummaryView result={ready()} wrapper={{}} />);
+    expect(screen.queryByRole('region', { name: 'Finance response metadata' })).toBeNull();
   });
 });
 

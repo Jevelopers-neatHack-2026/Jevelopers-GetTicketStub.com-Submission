@@ -3,7 +3,7 @@
  * the Dashboard 0.9.7 pin found the FinancialSummary 1.0.0 wire schema byte-identical, so a differing package version is
  * NOT a refusal reason. The gate instead checks, in order: the manifest and wire/schema version, the FinancialSummary schema
  * entry, its digest against a host-supplied trusted digest, the host-supplied summary digest and versioned-reference
- * expectations, and the mode. The semantic producer check (`checkFinancialSummary`) runs inside `readFinancialSummary` and is
+ * expectations, and the mode, which the caller must state explicitly (there is no default). The semantic producer check (`checkFinancialSummary`) runs inside `readFinancialSummary` and is
  * never bypassed here.
  *
  * Nothing in a packet can establish production adoption. An owner acknowledgement or `adoptionAccepted` claim is recorded as
@@ -60,7 +60,7 @@ function validReference(value: unknown): boolean {
 }
 
 /** Evaluates a Finance handoff manifest against host-trusted expectations. Pure; reads nothing outside its arguments. */
-export function evaluateFinancePacket(manifest: unknown, trusted: TrustedPacketExpectation, mode: PacketMode = 'synthetic_development'): PacketOutcome {
+export function evaluateFinancePacket(manifest: unknown, trusted: TrustedPacketExpectation, mode: PacketMode): PacketOutcome {
   const root = record(manifest) ? manifest : undefined;
   const refs = root && record(root.canonicalReferences) ? root.canonicalReferences as FinancePacketReferences : undefined;
   if (!root || !refs) return refused('INVALID_PAYLOAD', '/canonicalReferences');
@@ -76,6 +76,8 @@ export function evaluateFinancePacket(manifest: unknown, trusted: TrustedPacketE
   const bad = keys.find((key) => !validReference(trusted.references[key]));
   if (bad !== undefined) return refused('REFERENCE_MISMATCH', `/trusted/references/${bad}`);
   if (mode === 'production') return refused('UNACCEPTED_INTERFACE', '/ownerAcknowledgement');
+  // No default eligibility: only the exact literal opts in. An absent, unknown or mistyped runtime mode is refused, never coerced.
+  if (mode !== 'synthetic_development') return refused('INVALID_TRUST_CONTEXT', '/mode');
   const acknowledged = root.financeAcknowledgment != null || root.dashboardAcknowledgment != null || refs.adoptionAccepted === true;
   return {
     outcome: 'synthetic_development_only', productionAdoption: 'not_established', ownerAcknowledgement: acknowledged ? 'claimed_unverified' : 'absent',
@@ -83,11 +85,52 @@ export function evaluateFinancePacket(manifest: unknown, trusted: TrustedPacketE
   };
 }
 
-/** Finance response-envelope fields other than the canonical `summary`, preserved exactly as delivered and never summed or re-derived. */
+/**
+ * Finance response-envelope fields other than the canonical `summary`, preserved exactly as delivered and never summed or
+ * re-derived. This is UNVALIDATED transport data: it is not bound to a query or snapshot and may hold anything. Display goes
+ * only through `projectWrapperMetadata`.
+ */
 export type FinanceWrapperMetadata = Readonly<Record<string, unknown>>;
 
+/** Envelope keys the view may show, each with the only value shape it accepts. Anything else is withheld, never echoed. */
+const SECRET_LIKE = /secret|token|passw|bearer|credential|api[-_]?key|private|\bsk-/iu;
+const WRAPPER_ALLOWLIST = {
+  schema: (value: string) => value === 'FinancialSummaryPage',
+  asOf: (value: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/u.test(value),
+  timezone: (value: string) => /^[A-Za-z][A-Za-z0-9_+/-]{0,63}$/u.test(value) && !SECRET_LIKE.test(value),
+  watermark: (value: string) => /^[A-Za-z0-9._:-]{1,64}$/u.test(value) && !SECRET_LIKE.test(value),
+  queryContentHash: (value: string) => REFERENCE_HASH.test(value),
+  summaryContentHash: (value: string) => REFERENCE_HASH.test(value),
+} as const satisfies Record<string, (value: string) => boolean>;
+export type WrapperMetadataKey = keyof typeof WRAPPER_ALLOWLIST;
+
+/**
+ * Display projection of the wrapper. `unvalidated` is the only status: nothing here claims the metadata matches the query,
+ * snapshot or watermark of the summary, and it stays unsupported until a reviewed Finance producer port binds it.
+ */
+export type WrapperMetadataDisplay = Readonly<{
+  status: 'unvalidated';
+  fields: readonly Readonly<{ key: WrapperMetadataKey; value: string }>[];
+  /** Delivered fields not shown (unknown keys, nested values, or values outside the allowed shape). Their names and values are never exposed. */
+  withheld: number;
+}>;
+
+/** Allowlisted, shape-checked projection of untrusted wrapper metadata. Pure; does not throw on hostile input. */
+export function projectWrapperMetadata(wrapper: unknown): WrapperMetadataDisplay {
+  if (!record(wrapper)) return { status: 'unvalidated', fields: [], withheld: 0 };
+  const fields: { key: WrapperMetadataKey; value: string }[] = [];
+  let total = 0;
+  for (const key of Object.keys(wrapper)) {
+    total += 1;
+    if (!Object.hasOwn(WRAPPER_ALLOWLIST, key)) continue;
+    const value = wrapper[key];
+    if (typeof value === 'string' && WRAPPER_ALLOWLIST[key as WrapperMetadataKey](value)) fields.push({ key: key as WrapperMetadataKey, value });
+  }
+  return { status: 'unvalidated', fields, withheld: total - fields.length };
+}
+
 export type FinancePageRequest = Omit<SummaryRequest, 'delivery' | 'references' | 'expectedDigest'> & Readonly<{
-  manifest: unknown; trusted: TrustedPacketExpectation; mode?: PacketMode;
+  manifest: unknown; trusted: TrustedPacketExpectation; mode: PacketMode;
   /** The whole Finance page. Only its inner `summary` is handed to the canonical reader. */
   page: unknown;
 }>;

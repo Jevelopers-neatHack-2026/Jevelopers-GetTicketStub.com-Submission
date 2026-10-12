@@ -33,10 +33,11 @@ const packetManifest = (over: { schemaVersion?: string; sha256?: string } = {}) 
 });
 /** Synthetic Finance response-envelope metadata, kept apart from the summary. Not Finance output. */
 const syntheticWrapper: FinanceWrapperMetadata = { asOf: '2026-10-08T00:05:00Z', timezone: 'UTC', watermark: 'synthetic-watermark', queryContentHash: 'synthetic-query-hash', pagination: { cursor: null } };
+// `queryContentHash` and `pagination` above are deliberately outside the allowed shape, so the fixture also shows the withheld notice.
 export type SummaryFixture = Readonly<{ result: ProjectionResult<SummaryProjection>; wrapper?: FinanceWrapperMetadata }>;
 /** `evaluate` is the packaged `evaluateFinancePacket`, injected so this module stays type-only against src. */
-export function summaryFixture(name: SummaryFixtureName, evaluate: (manifest: unknown, trusted: TrustedPacketExpectation, mode?: PacketMode) => PacketOutcome): SummaryFixture {
-  const gated = (manifest: unknown): SummaryFixture => { const packet = evaluate(manifest, trustedExpectation); return { result: packet.outcome === 'refused' ? packet.result : { status: 'unknown', authority } }; };
+export function summaryFixture(name: SummaryFixtureName, evaluate: (manifest: unknown, trusted: TrustedPacketExpectation, mode: PacketMode) => PacketOutcome): SummaryFixture {
+  const gated = (manifest: unknown): SummaryFixture => { const packet = evaluate(manifest, trustedExpectation, 'synthetic_development'); return { result: packet.outcome === 'refused' ? packet.result : { status: 'unknown', authority } }; };
   switch (name) {
     case 'ready': return { result: { status: 'ready', authority, data: synthetic() }, wrapper: syntheticWrapper };
     case 'partial': return { result: { status: 'ready', authority, data: synthetic(incompleteUnknownCoverage) } };

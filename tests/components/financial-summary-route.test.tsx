@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
-import { Dashboard } from '../../src';
+import { describe, expect, it, vi } from 'vitest';
+import { Dashboard, type HostAccess } from '../../src';
 import { FinancialSummaryView, evaluateFinancePacket } from '../../src/views/financial-summary';
 import { authorizedFixture, fixtureProvider, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type SummaryFixtureName } from '../../integration/fixture-host/host';
 
@@ -55,6 +55,22 @@ describe('FinancialSummaryView through the real Dashboard overview route (synthe
       expect(await screen.findByRole('region', { name: 'Financial summary' })).toBeVisible();
       view.unmount();
     }
+  });
+  it.each([
+    ['restricted', { status: 'restricted' }],
+    ['loading', { status: 'loading' }],
+    ['unavailable', { status: 'unavailable' }],
+    ['absent', undefined],
+    ['authorized with a blank revision', { status: 'authorized', scope: { tenantId: 't', projectId: 'p' }, revision: ' ' }],
+    ['authorized with a blank project', { status: 'authorized', scope: { tenantId: 't', projectId: '' }, revision: 'r' }],
+  ] as const)('renders no summary, amounts or metadata for %s host access (existing host grant seam, no aliasing)', async (_label, access) => {
+    const renderRoute = vi.fn(() => <FinancialSummaryView {...summaryFixture('ready', evaluateFinancePacket)} projectLabel={syntheticProjectLabel} />);
+    render(<Dashboard basePath="/admin/finance" pathname="/admin/finance" navigate={() => undefined} access={access as HostAccess | undefined} provider={fixtureProvider('ready')} renderRoute={renderRoute} />);
+    await new Promise((settle) => setTimeout(settle, 20));
+    expect(renderRoute).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Financial summary' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Finance response metadata' })).toBeNull();
+    expect(screen.queryByText('0.000007')).toBeNull();
   });
   it('does not render the summary outside the overview route', async () => {
     mount('ready', '/admin/finance/ai-costs');

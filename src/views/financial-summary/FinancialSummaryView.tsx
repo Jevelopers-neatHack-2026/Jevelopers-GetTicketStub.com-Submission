@@ -4,7 +4,7 @@ import { StateBadge } from '../../components/StateBadge';
 import { ScopeContext } from '../../components/ScopeContext';
 import { TableScroll } from '../../components/TableScroll';
 import { SHARED_CONTRACTS_PIN, type ProjectionResult, type SummaryProjection } from '../../data/shared-contracts-adapter';
-import type { FinanceWrapperMetadata, PacketOutcome } from './packet';
+import { projectWrapperMetadata, type FinanceWrapperMetadata, type PacketOutcome } from './packet';
 
 export type FinancialSummaryViewProps = Readonly<{
   /** Output of `readFinancialSummary` (or the refusal from `evaluateFinancePacket`). The view renders it and derives nothing from it. */
@@ -13,11 +13,9 @@ export type FinancialSummaryViewProps = Readonly<{
   projectLabel?: string;
   /** Gate outcome for the handoff packet, when one was evaluated. Shown as adoption status only; it never changes the amounts. */
   packet?: PacketOutcome;
-  /** Finance response-envelope metadata kept apart from the canonical summary. Shown verbatim; nothing is summed or derived. */
+  /** Unvalidated Finance response-envelope metadata kept apart from the canonical summary. Only allowlisted, shape-checked fields are shown; nothing is summed or derived. */
   wrapper?: FinanceWrapperMetadata;
 }>;
-
-const wrapperText = (value: unknown) => typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
 
 const UNSUPPORTED = new Set(['UNSUPPORTED_VERSION', 'UNSUPPORTED_INTERFACE', 'UNKNOWN_CONTRACT', 'UNACCEPTED_INTERFACE', 'LEGACY_UNREPRESENTABLE']);
 
@@ -50,6 +48,7 @@ export function FinancialSummaryView({ result, projectLabel, packet, wrapper }: 
   if (!('data' in result)) return wrap(<Notice title="Summary state unknown">The state of this summary could not be determined. No amounts are shown.</Notice>);
   const data = result.data;
   const stale = result.status === 'stale';
+  const metadata = projectWrapperMetadata(wrapper);
   const names = Object.keys(data.requested).length ? Object.keys(data.requested) : Object.keys(data.metrics);
   const present = names.filter((name) => Object.hasOwn(data.metrics, name));
   return wrap(<>
@@ -101,9 +100,11 @@ export function FinancialSummaryView({ result, projectLabel, packet, wrapper }: 
         {packet?.outcome === 'synthetic_development_only' && <div><dt>Contract adoption</dt><dd>Synthetic development only. Production adoption is not established{packet.ownerAcknowledgement === 'absent' ? ': no owner acknowledgement.' : ': the owner acknowledgement claimed in the packet is not verified.'}</dd></div>}
       </dl>
     </section>
-    {wrapper && Object.keys(wrapper).length > 0 && <section className="td-example-section" aria-label="Finance response metadata">
+    {(metadata.fields.length > 0 || metadata.withheld > 0) && <section className="td-example-section" aria-label="Finance response metadata">
       <h3>Finance response metadata</h3>
-      <dl>{Object.entries(wrapper).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{wrapperText(value)}</dd></div>)}</dl>
+      <p>Unvalidated transport metadata. It is not bound to this summary's query or snapshot and is unsupported until a reviewed Finance producer port accepts it.</p>
+      {metadata.fields.length > 0 && <dl>{metadata.fields.map(({ key, value }) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>}
+      {metadata.withheld > 0 && <p>{metadata.withheld} other {metadata.withheld === 1 ? 'field' : 'fields'} withheld.</p>}
     </section>}
   </>);
 }
