@@ -12,6 +12,7 @@ This map routes engineers to the maintained API, gates, local evidence and bound
 - [Provider-access preparation](operations/provider-access.md) and [execution-target preparation](operations/execution-target-preparation.md) are gated preparation documents; follow their owner decisions before any provider configuration or call.
 - [Usage trace evidence](usage-trace-evidence.md) explains local attempt and usage records.
 - [Version state machine](creative/version-state-machine.md) documents immutable versions and transitions.
+- [Durable state persistence](state-persistence.md) documents the paired SQLite adapter, publication/recovery behavior, process fixtures and host-durability limits.
 
 ## Controls and handoff
 - [Controls integration](controls-integration.md), [controls package integration](controls-package-integration.md), [actual inspection](controls/actual-inspection.md), and [inspection consumer preparation](controls/inspection-consumer-preparation.md) cover local controls and consumer boundaries.

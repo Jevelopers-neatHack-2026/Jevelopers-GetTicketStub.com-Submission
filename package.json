@@ -101,6 +101,7 @@
     "src/models/codec-runtime/package-lock.json",
     "src/planning",
     "src/preflight",
+    "src/sqlite",
     "src/runtime",
     "src/storage",
     "src/telemetry",

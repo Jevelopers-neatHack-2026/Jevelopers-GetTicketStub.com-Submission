@@ -7,6 +7,7 @@ import {
 import { canonicalHash, canonicalSerialize } from "../contracts/validation.mjs";
 import { CREATIVE_TELEMETRY_SCHEMA, TelemetryBoundaryError } from "./evidence.mjs";
 import { assertSafePublicIdentifier, projectPublicTelemetry } from "./privacy.mjs";
+import { runSqliteDatabaseOperation, runSqliteDatabaseOperationSync } from "../sqlite/admission.mjs";
 
 const OBSERVATION_DEFER_REASONS = new Set([
   "trusted_scope_or_record_unavailable",
@@ -182,6 +183,17 @@ function assertOutermostCommitBoundary(database) {
   if (database.isTransaction === true) throw boundary("telemetry_outer_transaction_active");
 }
 
+function runOutboxWrite(database, owner, work) {
+  return runSqliteDatabaseOperation({ database, owner,
+    work: () => {
+      assertOutermostCommitBoundary(database);
+      return work();
+    },
+    identityError: () => boundary("telemetry_storage_unavailable"),
+    conflictError: () => boundary(database.isTransaction === true
+      ? "telemetry_outer_transaction_active" : "telemetry_storage_unavailable") });
+}
+
 function normalizeEvent(event) {
   if (!isRecord(event)) throw boundary("invalid_evidence_event");
   const snapshot = makeSnapshot(event, "unsafe_evidence_event");
@@ -342,15 +354,23 @@ export function createSqliteTelemetryOutbox({
     !Number.isSafeInteger(claimLeaseMs) || claimLeaseMs < 1 || claimLeaseMs > MAX_LEASE_MS) {
     throw boundary("invalid_telemetry_store_options");
   }
-  initializeSchema(database);
+  const owner = {};
+  runSqliteDatabaseOperationSync({ database, owner,
+    work: () => {
+      assertOutermostCommitBoundary(database);
+      initializeSchema(database);
+    },
+    identityError: () => boundary("telemetry_storage_unavailable"),
+    conflictError: () => boundary(database.isTransaction === true
+      ? "telemetry_outer_transaction_active" : "telemetry_storage_unavailable") });
+  const write = (work) => runOutboxWrite(database, owner, work);
 
   return Object.freeze({
     /** Persist an event before the caller treats the local evidence append as durable. */
     async append(rawEvent) {
-      assertOutermostCommitBoundary(database);
       const event = normalizeEvent(rawEvent).payloadValue;
       const now = nowMilliseconds(clock);
-      return withTransaction(database, () => {
+      return write(() => withTransaction(database, () => {
         const existing = database.prepare(`SELECT payload_sha256, tenant_id, project_id, budget_scope_id FROM ${EVIDENCE_TABLE} WHERE event_id = ?`)
           .get(event.event_id);
         const payloadHash = canonicalHash(event);
@@ -368,7 +388,7 @@ export function createSqliteTelemetryOutbox({
           .run(event.event_id, event.tenant_id, event.project_id, event.budget_scope_id,
             event.event_type, payloadJson, payloadHash.slice("sha256:".length), now);
         return Object.freeze({ status: "recorded", event_id: event.event_id });
-      });
+      }));
     },
 
     /**
@@ -438,10 +458,9 @@ export function createSqliteTelemetryOutbox({
 
     /** Retry a sanitized outcome append through a direct durable queue path. */
     async stagePendingEvidence(rawEvent) {
-      assertOutermostCommitBoundary(database);
       const event = normalizeEvent(rawEvent).payloadValue;
       const now = nowMilliseconds(clock);
-      return withTransaction(database, () => {
+      return write(() => withTransaction(database, () => {
         const existing = database.prepare(`SELECT payload_sha256, tenant_id, project_id, budget_scope_id FROM ${EVIDENCE_TABLE} WHERE event_id = ?`)
           .get(event.event_id);
         const payloadHash = canonicalHash(event);
@@ -459,15 +478,14 @@ export function createSqliteTelemetryOutbox({
           .run(event.event_id, event.tenant_id, event.project_id, event.budget_scope_id,
             event.event_type, payloadJson, payloadHash.slice("sha256:".length), now);
         return Object.freeze({ status: "recorded", event_id: event.event_id });
-      });
+      }));
     },
 
     /** Persist one exact C03 pair; same source identity and payload is idempotent. */
     async enqueueUsageObservation(input) {
-      assertOutermostCommitBoundary(database);
       const record = normalizeObservation(input);
       const now = nowMilliseconds(clock);
-      return withTransaction(database, () => {
+      return write(() => withTransaction(database, () => {
         const existing = database.prepare(`SELECT record_ref, payload_sha256, billable_attempt_id
           FROM ${OBSERVATION_TABLE}
           WHERE tenant_id = ? AND project_id = ? AND budget_scope_id = ? AND source_observation_id = ?`)
@@ -498,18 +516,17 @@ export function createSqliteTelemetryOutbox({
           source_observation_id: record.sourceObservationId,
           payload_hash: record.payloadHash,
         });
-      });
+      }));
     },
 
     /** Record a synchronous C03 acceptance against its already durable row. */
     async acknowledgeEnqueuedObservation({ record_ref, source_observation_id, effective_billable_attempt_id, authority_status }) {
-      assertOutermostCommitBoundary(database);
       const recordRef = safeIdentifier(record_ref, "invalid_observation_reference");
       const observationId = safeIdentifier(source_observation_id, "invalid_observation_identity");
       const billableAttemptId = safeIdentifier(effective_billable_attempt_id, "invalid_observation_identity");
       if (!["accepted", "duplicate"].includes(authority_status)) throw boundary("invalid_metering_acknowledgement");
       const now = nowMilliseconds(clock);
-      return withTransaction(database, () => {
+      return write(() => withTransaction(database, () => {
         const row = database.prepare(`SELECT source_observation_id, billable_attempt_id, status, metering_ack_status
           FROM ${OBSERVATION_TABLE} WHERE record_ref = ?`).get(recordRef);
         if (!row || row.source_observation_id !== observationId || row.billable_attempt_id !== billableAttemptId) {
@@ -526,123 +543,129 @@ export function createSqliteTelemetryOutbox({
           .run(now, authority_status, recordRef, observationId, billableAttemptId).changes;
         return Object.freeze({ status: changed === 1 ? "acknowledged" : "mismatch",
           source_observation_id: observationId, authority_status });
-      });
+      }));
     },
 
     /** Port consumed by deliverPendingUsageObservations; each claim has a lease fence. */
     async claimPending({ limit }) {
-      assertOutermostCommitBoundary(database);
-      const now = nowMilliseconds(clock);
-      const { leaseUntil } = claimLeaseArgs(limit, claimLeaseMs, now);
-      const records = withTransaction(database, () => selectClaimable(
-        database, OBSERVATION_TABLE, limit, now, leaseUntil, idFactory, "observation",
-        (row) => {
-          const payload = decodePayload(row, { kind: "observation", idField: "source_observation_id", hashField: "payload_sha256" });
-          if (payload.attempt.tenant_id !== row.tenant_id || payload.attempt.project_id !== row.project_id ||
-            payload.attempt.budget_scope_id !== row.budget_scope_id ||
-            payload.attempt.logical_operation_id !== row.logical_operation_id ||
-            payload.attempt.billable_attempt_id !== row.billable_attempt_id ||
-            payload.observation.source_observation_id !== row.source_observation_id) {
-            throw boundary("corrupt_observation_record");
-          }
-          return payload;
-        },
-      ));
-      return Object.freeze({ status: "claimed", records: Object.freeze(records) });
+      return write(() => {
+        const now = nowMilliseconds(clock);
+        const { leaseUntil } = claimLeaseArgs(limit, claimLeaseMs, now);
+        const records = withTransaction(database, () => selectClaimable(
+          database, OBSERVATION_TABLE, limit, now, leaseUntil, idFactory, "observation",
+          (row) => {
+            const payload = decodePayload(row, { kind: "observation", idField: "source_observation_id", hashField: "payload_sha256" });
+            if (payload.attempt.tenant_id !== row.tenant_id || payload.attempt.project_id !== row.project_id ||
+              payload.attempt.budget_scope_id !== row.budget_scope_id ||
+              payload.attempt.logical_operation_id !== row.logical_operation_id ||
+              payload.attempt.billable_attempt_id !== row.billable_attempt_id ||
+              payload.observation.source_observation_id !== row.source_observation_id) {
+              throw boundary("corrupt_observation_record");
+            }
+            return payload;
+          },
+        ));
+        return Object.freeze({ status: "claimed", records: Object.freeze(records) });
+      });
     },
 
     async acknowledge({ record_ref, claim_token, source_observation_id, effective_billable_attempt_id, authority_status }) {
-      assertOutermostCommitBoundary(database);
-      const recordRef = safeIdentifier(record_ref, "invalid_observation_reference");
-      const observationId = safeIdentifier(source_observation_id, "invalid_observation_identity");
-      safeIdentifier(effective_billable_attempt_id, "invalid_observation_identity");
-      const tokenHash = hashClaimToken(claim_token);
-      if (!["accepted", "duplicate"].includes(authority_status)) throw boundary("invalid_metering_acknowledgement");
-      const now = nowMilliseconds(clock);
-      return withTransaction(database, () => {
-        const row = makeClaimTokenMatcher(database, OBSERVATION_TABLE, "record_ref", recordRef, claim_token, now);
-        if (!row || row.claim_token_sha256 !== tokenHash || row.source_observation_id !== observationId ||
-          row.billable_attempt_id !== effective_billable_attempt_id) {
-          return Object.freeze({ status: "mismatch", source_observation_id: observationId });
-        }
-        const changed = database.prepare(`UPDATE ${OBSERVATION_TABLE}
-          SET status = 'delivered', claim_token_sha256 = NULL, lease_expires_at = NULL,
-              delivered_at = ?, metering_ack_status = ?, last_defer_reason = NULL
-          WHERE record_ref = ? AND status = 'claimed' AND claim_token_sha256 = ? AND lease_expires_at > ?`)
-          .run(now, authority_status, recordRef, tokenHash, now).changes;
-        return Object.freeze({
-          status: changed === 1 ? "acknowledged" : "mismatch",
-          source_observation_id: observationId,
+      return write(() => {
+        const recordRef = safeIdentifier(record_ref, "invalid_observation_reference");
+        const observationId = safeIdentifier(source_observation_id, "invalid_observation_identity");
+        safeIdentifier(effective_billable_attempt_id, "invalid_observation_identity");
+        const tokenHash = hashClaimToken(claim_token);
+        if (!["accepted", "duplicate"].includes(authority_status)) throw boundary("invalid_metering_acknowledgement");
+        const now = nowMilliseconds(clock);
+        return withTransaction(database, () => {
+          const row = makeClaimTokenMatcher(database, OBSERVATION_TABLE, "record_ref", recordRef, claim_token, now);
+          if (!row || row.claim_token_sha256 !== tokenHash || row.source_observation_id !== observationId ||
+            row.billable_attempt_id !== effective_billable_attempt_id) {
+            return Object.freeze({ status: "mismatch", source_observation_id: observationId });
+          }
+          const changed = database.prepare(`UPDATE ${OBSERVATION_TABLE}
+            SET status = 'delivered', claim_token_sha256 = NULL, lease_expires_at = NULL,
+                delivered_at = ?, metering_ack_status = ?, last_defer_reason = NULL
+            WHERE record_ref = ? AND status = 'claimed' AND claim_token_sha256 = ? AND lease_expires_at > ?`)
+            .run(now, authority_status, recordRef, tokenHash, now).changes;
+          return Object.freeze({
+            status: changed === 1 ? "acknowledged" : "mismatch",
+            source_observation_id: observationId,
+          });
         });
       });
     },
 
     async defer({ record_ref, claim_token, reason }) {
-      assertOutermostCommitBoundary(database);
-      const recordRef = safeIdentifier(record_ref, "invalid_observation_reference");
-      const tokenHash = hashClaimToken(claim_token);
-      if (!OBSERVATION_DEFER_REASONS.has(reason)) throw boundary("invalid_observation_defer_reason");
-      const now = nowMilliseconds(clock);
-      return withTransaction(database, () => {
-        const row = makeClaimTokenMatcher(database, OBSERVATION_TABLE, "record_ref", recordRef, claim_token, now);
-        if (!row || row.claim_token_sha256 !== tokenHash) return Object.freeze({ status: "lease_lost" });
-        const changed = database.prepare(`UPDATE ${OBSERVATION_TABLE}
-          SET status = 'pending', claim_token_sha256 = NULL, lease_expires_at = NULL, last_defer_reason = ?
-          WHERE record_ref = ? AND status = 'claimed' AND claim_token_sha256 = ? AND lease_expires_at > ?`)
-          .run(reason, recordRef, tokenHash, now).changes;
-        return Object.freeze({ status: changed === 1 ? "retained" : "lease_lost" });
+      return write(() => {
+        const recordRef = safeIdentifier(record_ref, "invalid_observation_reference");
+        const tokenHash = hashClaimToken(claim_token);
+        if (!OBSERVATION_DEFER_REASONS.has(reason)) throw boundary("invalid_observation_defer_reason");
+        const now = nowMilliseconds(clock);
+        return withTransaction(database, () => {
+          const row = makeClaimTokenMatcher(database, OBSERVATION_TABLE, "record_ref", recordRef, claim_token, now);
+          if (!row || row.claim_token_sha256 !== tokenHash) return Object.freeze({ status: "lease_lost" });
+          const changed = database.prepare(`UPDATE ${OBSERVATION_TABLE}
+            SET status = 'pending', claim_token_sha256 = NULL, lease_expires_at = NULL, last_defer_reason = ?
+            WHERE record_ref = ? AND status = 'claimed' AND claim_token_sha256 = ? AND lease_expires_at > ?`)
+            .run(reason, recordRef, tokenHash, now).changes;
+          return Object.freeze({ status: changed === 1 ? "retained" : "lease_lost" });
+        });
       });
     },
 
     /** Evidence delivery claim API; a sink acknowledgement is owned by the host. */
     async claimPendingEvidence({ limit, leaseMs = claimLeaseMs }) {
-      assertOutermostCommitBoundary(database);
-      const now = nowMilliseconds(clock);
-      const { leaseUntil } = claimLeaseArgs(limit, leaseMs, now);
-      const records = withTransaction(database, () => selectClaimable(
-        database, EVIDENCE_TABLE, limit, now, leaseUntil, idFactory, "evidence",
-        (row) => {
-          const event = decodePayload(row, { kind: "evidence", idField: "event_id", hashField: "payload_sha256" });
-          if (event.tenant_id !== row.tenant_id || event.project_id !== row.project_id ||
-            event.budget_scope_id !== row.budget_scope_id || event.event_type !== row.event_type) {
-            throw boundary("corrupt_evidence_record");
-          }
-          return Object.freeze({ event });
-        },
-      ));
-      return Object.freeze({ status: "claimed", records: Object.freeze(records) });
+      return write(() => {
+        const now = nowMilliseconds(clock);
+        const { leaseUntil } = claimLeaseArgs(limit, leaseMs, now);
+        const records = withTransaction(database, () => selectClaimable(
+          database, EVIDENCE_TABLE, limit, now, leaseUntil, idFactory, "evidence",
+          (row) => {
+            const event = decodePayload(row, { kind: "evidence", idField: "event_id", hashField: "payload_sha256" });
+            if (event.tenant_id !== row.tenant_id || event.project_id !== row.project_id ||
+              event.budget_scope_id !== row.budget_scope_id || event.event_type !== row.event_type) {
+              throw boundary("corrupt_evidence_record");
+            }
+            return Object.freeze({ event });
+          },
+        ));
+        return Object.freeze({ status: "claimed", records: Object.freeze(records) });
+      });
     },
 
     async acknowledgeEvidence({ event_id, claim_token }) {
-      assertOutermostCommitBoundary(database);
-      const eventId = safeIdentifier(event_id, "invalid_evidence_identity");
-      const tokenHash = hashClaimToken(claim_token);
-      const now = nowMilliseconds(clock);
-      return withTransaction(database, () => {
-        const row = makeClaimTokenMatcher(database, EVIDENCE_TABLE, "event_id", eventId, claim_token, now);
-        if (!row || row.claim_token_sha256 !== tokenHash) return Object.freeze({ status: "lease_lost", event_id: eventId });
-        const changed = database.prepare(`UPDATE ${EVIDENCE_TABLE}
-          SET status = 'delivered', claim_token_sha256 = NULL, lease_expires_at = NULL, delivered_at = ?, last_defer_reason = NULL
-          WHERE event_id = ? AND status = 'claimed' AND claim_token_sha256 = ? AND lease_expires_at > ?`)
-          .run(now, eventId, tokenHash, now).changes;
-        return Object.freeze({ status: changed === 1 ? "acknowledged" : "lease_lost", event_id: eventId });
+      return write(() => {
+        const eventId = safeIdentifier(event_id, "invalid_evidence_identity");
+        const tokenHash = hashClaimToken(claim_token);
+        const now = nowMilliseconds(clock);
+        return withTransaction(database, () => {
+          const row = makeClaimTokenMatcher(database, EVIDENCE_TABLE, "event_id", eventId, claim_token, now);
+          if (!row || row.claim_token_sha256 !== tokenHash) return Object.freeze({ status: "lease_lost", event_id: eventId });
+          const changed = database.prepare(`UPDATE ${EVIDENCE_TABLE}
+            SET status = 'delivered', claim_token_sha256 = NULL, lease_expires_at = NULL, delivered_at = ?, last_defer_reason = NULL
+            WHERE event_id = ? AND status = 'claimed' AND claim_token_sha256 = ? AND lease_expires_at > ?`)
+            .run(now, eventId, tokenHash, now).changes;
+          return Object.freeze({ status: changed === 1 ? "acknowledged" : "lease_lost", event_id: eventId });
+        });
       });
     },
 
     async deferEvidence({ event_id, claim_token, reason }) {
-      assertOutermostCommitBoundary(database);
-      const eventId = safeIdentifier(event_id, "invalid_evidence_identity");
-      const tokenHash = hashClaimToken(claim_token);
-      if (!EVIDENCE_DEFER_REASONS.has(reason)) throw boundary("invalid_evidence_defer_reason");
-      const now = nowMilliseconds(clock);
-      return withTransaction(database, () => {
-        const row = makeClaimTokenMatcher(database, EVIDENCE_TABLE, "event_id", eventId, claim_token, now);
-        if (!row || row.claim_token_sha256 !== tokenHash) return Object.freeze({ status: "lease_lost" });
-        const changed = database.prepare(`UPDATE ${EVIDENCE_TABLE}
-          SET status = 'pending', claim_token_sha256 = NULL, lease_expires_at = NULL, last_defer_reason = ?
-          WHERE event_id = ? AND status = 'claimed' AND claim_token_sha256 = ? AND lease_expires_at > ?`)
-          .run(reason, eventId, tokenHash, now).changes;
-        return Object.freeze({ status: changed === 1 ? "retained" : "lease_lost" });
+      return write(() => {
+        const eventId = safeIdentifier(event_id, "invalid_evidence_identity");
+        const tokenHash = hashClaimToken(claim_token);
+        if (!EVIDENCE_DEFER_REASONS.has(reason)) throw boundary("invalid_evidence_defer_reason");
+        const now = nowMilliseconds(clock);
+        return withTransaction(database, () => {
+          const row = makeClaimTokenMatcher(database, EVIDENCE_TABLE, "event_id", eventId, claim_token, now);
+          if (!row || row.claim_token_sha256 !== tokenHash) return Object.freeze({ status: "lease_lost" });
+          const changed = database.prepare(`UPDATE ${EVIDENCE_TABLE}
+            SET status = 'pending', claim_token_sha256 = NULL, lease_expires_at = NULL, last_defer_reason = ?
+            WHERE event_id = ? AND status = 'claimed' AND claim_token_sha256 = ? AND lease_expires_at > ?`)
+            .run(reason, eventId, tokenHash, now).changes;
+          return Object.freeze({ status: changed === 1 ? "retained" : "lease_lost" });
+        });
       });
     },
 

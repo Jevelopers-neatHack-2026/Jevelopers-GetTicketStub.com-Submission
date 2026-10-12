@@ -2,7 +2,7 @@
 
 **Repository status:** Public on GitHub; verified October 12, 2026.
 **Proposed owner:** Creative and fulfillment.
-**Implementation state:** The private, unpublished Node.js 22 package contains a typed creative API, local controls, provider adapters, inspection, immutable version storage and telemetry. External contract acceptance, application identity and approval, finance authority, production provider access and rendering remain separate boundaries.
+**Implementation state:** The private, unpublished Node.js package requires Node.js >=22.23.3 and contains a typed creative API, local controls, provider adapters, inspection, immutable version storage and telemetry. External contract acceptance, application identity and approval, finance authority, production provider access and rendering remain separate boundaries.
 
 ## Responsibility
 
@@ -14,7 +14,7 @@ Exact event text, personalized typography, print dimensions, and production vali
 
 The ESM package exports versioned API, contracts, planning, versions, controls, inspection, models, telemetry and preflight subpaths. The API wraps injected job, storage, provider, research/rights, DecisionPort, metering, approval, inspection, handoff and telemetry ports; it is not a service or customer-facing application.
 
-Local source implements brief planning; generate, edit, inspect, list, compare, restore, cancel and handoff operations; content-addressed artwork; an immutable SQLite version store; a durable local controls Apply outbox; deterministic inspection and bounded repair; and sanitized attempt-usage evidence. OpenAI Images and OpenRouter adapter modules have local checks. An offline check does not prove paid access, external-contract agreement, production rendering or deployment. Public API, controls and C01-C04 schemas remain local proposals. Application authentication and approval issuance, finance authority and production renderer are not implemented here.
+Local source implements brief planning; generate, edit, inspect, list, compare, restore, cancel and handoff operations; content-addressed artwork; an immutable SQLite version store and paired API/storage adapter; a durable local controls Apply outbox; deterministic inspection and bounded repair; and sanitized attempt-usage evidence. The paired adapter serializes operations by database-file identity within one Node process, commits selected version/job metadata together, and keeps external callbacks outside its publication transaction. Current mock fixtures include installed public-API process journeys, process-exit recovery and a separate SQLite busy-lock case. See the [state-persistence guide](../state-persistence.md) for the exact exercised scope and limits: these checks do not certify production-host durability, power-loss behavior, backup/restore, multi-host coordination or external integration. OpenAI Images and OpenRouter adapter modules have local checks. An offline check does not prove paid access, external-contract agreement, production rendering or deployment. Public API, controls and C01-C04 schemas remain local proposals. Application authentication and approval issuance, finance authority and production renderer are not implemented here.
 
 ## Integration targets and handoff
 
