@@ -41,7 +41,12 @@ test("emits only one path digest per file boundary and preserves entry-file iden
 test("ignores raw output, names, failures and global or missing-file summaries", () => {
 	const output = [];
 	const emit = createProgressEmitter((line) => output.push(line), root);
-	for (const type of ["test:stdout", "test:stderr", "test:fail", "test:enqueue"])
+	for (const type of [
+		"test:stdout",
+		"test:stderr",
+		"test:fail",
+		"test:enqueue",
+	])
 		emit({
 			type,
 			data: {
@@ -139,16 +144,15 @@ test("handles multiple records and rejects embedded control characters", () => {
 	);
 });
 
-test(
-	"native reporter exposes progress before exit and keeps forged test stderr private",
-	{ timeout: 10000 },
-	async (t) => {
-		const directory = await mkdtemp(join(tmpdir(), "pp-progress-"));
-		t.after(() => rm(directory, { recursive: true, force: true }));
-		const name = "gate.test.mjs";
-		await writeFile(
-			join(directory, name),
-			`
+test("native reporter exposes progress before exit and keeps forged test stderr private", {
+	timeout: 10000,
+}, async (t) => {
+	const directory = await mkdtemp(join(tmpdir(), "pp-progress-"));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const name = "gate.test.mjs";
+	await writeFile(
+		join(directory, name),
+		`
 import { test } from "node:test";
 import { existsSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
@@ -158,46 +162,49 @@ test("private customer name", { timeout: 5000 }, async (t) => {
   while (!existsSync("release")) await setTimeout(10, undefined, { signal: t.signal });
 });
 `,
-		);
-		const environment = Object.fromEntries(
-			Object.entries(process.env).filter(
-				([key]) => !key.startsWith("NODE_TEST_"),
-			),
-		);
-		const execution = promisify(execFile)(
-			process.execPath,
-			[
-				"--test",
-				`--test-reporter=${resolve(import.meta.dirname, "ci-workload-reporter.mjs")}`,
-				name,
-			],
-			{ cwd: directory, env: environment, timeout: 8000 },
-		);
-		const output = [];
-		execution.child.stderr.on(
-			"data",
-			createProgressForwarder((line) => {
-				const progress = JSON.parse(line).ciWorkloadProgress;
-				output.push(progress);
-				if (
-					progress.event === "started" &&
-					progress.filePathSha256 === digest(name)
-				)
-					writeFileSync(join(directory, "release"), "released by observed progress");
-			}),
-		);
-		const result = await execution;
-		assert.ok(
-			output.some(
-				(item) => item.event === "started" && item.filePathSha256 === digest(name),
-			),
-		);
-		assert.equal(
-			output.some((item) => item.filePathSha256 === "0".repeat(64)),
-			false,
-		);
-		assert.equal(result.stdout.includes("token=secret"), false);
-		assert.equal(result.stderr.includes("token=secret"), false);
-		assert.equal(JSON.stringify(output).includes(name), false);
-	},
-);
+	);
+	const environment = Object.fromEntries(
+		Object.entries(process.env).filter(
+			([key]) => !key.startsWith("NODE_TEST_"),
+		),
+	);
+	const execution = promisify(execFile)(
+		process.execPath,
+		[
+			"--test",
+			`--test-reporter=${resolve(import.meta.dirname, "ci-workload-reporter.mjs")}`,
+			name,
+		],
+		{ cwd: directory, env: environment, timeout: 8000 },
+	);
+	const output = [];
+	execution.child.stderr.on(
+		"data",
+		createProgressForwarder((line) => {
+			const progress = JSON.parse(line).ciWorkloadProgress;
+			output.push(progress);
+			if (
+				progress.event === "started" &&
+				progress.filePathSha256 === digest(name)
+			)
+				writeFileSync(
+					join(directory, "release"),
+					"released by observed progress",
+				);
+		}),
+	);
+	const result = await execution;
+	assert.ok(
+		output.some(
+			(item) =>
+				item.event === "started" && item.filePathSha256 === digest(name),
+		),
+	);
+	assert.equal(
+		output.some((item) => item.filePathSha256 === "0".repeat(64)),
+		false,
+	);
+	assert.equal(result.stdout.includes("token=secret"), false);
+	assert.equal(result.stderr.includes("token=secret"), false);
+	assert.equal(JSON.stringify(output).includes(name), false);
+});
