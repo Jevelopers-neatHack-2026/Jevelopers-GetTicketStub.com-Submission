@@ -58,6 +58,9 @@ import {
 import { inspectPngBytes } from "./png-inspection.js";
 import type { Clock, TrustedScope, TrustedTermsSource } from "./types.js";
 
+// The values hosts need alongside the implementation. They live in the owner-free contract module; the package root exports only types.
+export { OWNER_PACKAGE_PIN, PRODUCTION_BUNDLE_CRITERIA, PRODUCTION_BUNDLE_REPORT_VERSION, PRODUCTION_BUNDLE_VALIDATOR_VERSION };
+
 // ---------------------------------------------------------------------------------------------------------
 // 1. Native-intrinsic private snapshots (PBR-04, PBR-16)
 // ---------------------------------------------------------------------------------------------------------
