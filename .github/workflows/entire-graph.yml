@@ -21,9 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install pinned Entire CLI
         run: |
           mkdir -p "$RUNNER_TEMP/entire" "$HOME/.local/bin"
@@ -62,16 +64,62 @@ jobs:
           retention-days: 90
       - name: Write agent instructions
         run: entire graph init-agents --repo .
-      - name: Push init-agents output for review
-        if: github.event_name == 'workflow_dispatch' && inputs.push_branch
+
+  push-init-agents:
+    # This job runs only from trusted main after a manual dispatch. PR-controlled
+    # workflow edits and refs cannot reach it. Checkout credentials are not
+    # persisted; only the final push step exports the token to its shell.
+    if: github.event_name == 'workflow_dispatch' && inputs.push_branch && github.repository == 'Jevelopers-neatHack-2026/event-intelligence' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Install pinned Entire CLI
         run: |
-          branch="entire-graph/${GITHUB_SHA::7}"
+          mkdir -p "$RUNNER_TEMP/entire" "$HOME/.local/bin"
+          cd "$RUNNER_TEMP/entire"
+          base="https://github.com/entireio/cli/releases/download/$ENTIRE_VERSION"
+          curl -fsSLO "$base/entire_linux_amd64.tar.gz"
+          curl -fsSLO "$base/checksums.txt"
+          grep ' entire_linux_amd64.tar.gz$' checksums.txt | sha256sum -c -
+          tar -xzf entire_linux_amd64.tar.gz
+          install -m 0755 entire git-remote-entire "$HOME/.local/bin/"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install graph plugin
+        run: |
+          entire version
+          entire plugin install graph
+          entire graph version --json
+          entire graph capabilities --json
+      - name: Write agent instructions
+        run: entire graph init-agents --repo .
+      - id: stage
+        name: Stage init-agents output for review
+        run: |
           git add .entire/graph-agent.md AGENTS.md CLAUDE.md
           if git diff --cached --quiet; then
             echo "No init-agents changes to push." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Commit init-agents output for review
+        if: steps.stage.outputs.changed == 'true'
+        run: |
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "Enable entire-graph (generated from ${GITHUB_SHA::7})"
-          git push origin "HEAD:refs/heads/$branch"
+      - name: Push init-agents output for review
+        if: steps.stage.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          commit="$(git rev-parse HEAD)"
+          branch="entire-graph/${commit::7}"
+          token_auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $token_auth" \
+            push origin "HEAD:refs/heads/$branch"
           echo "- Pushed \`$branch\` for review" >> "$GITHUB_STEP_SUMMARY"
