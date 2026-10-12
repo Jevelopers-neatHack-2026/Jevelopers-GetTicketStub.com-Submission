@@ -1,6 +1,6 @@
 # Development and verification
 
-Operational reference for building and testing `@jevelopers/cost-intelligence`. The [README](../README.md#status) summarizes what is implemented; API behavior is described in [API notes](api/README.md).
+Operational reference for building and testing `@jevelopers/cost-intelligence`. Use the maintained [API map](api/INDEX.md) and domain guides for current behavior and limits; the package README is a quick entry point.
 
 ## Toolchain
 
@@ -46,11 +46,15 @@ The public script names are `test:accounting`, `test:adapters`, `test:budgets`, 
 | `pricing` | `tests/pricing/pricing.test.mjs` | PostgreSQL 16 |
 | `ledger` | `tests/ledger/ledger.test.mjs` | PostgreSQL 16 |
 | `migrations` | `tests/migrations/migrations.test.mjs` | PostgreSQL 16 |
-| `accounting` | `tests/accounting/accounting.test.mjs` | Node only |
-| `adapters`, `budgets`, `metering`, `reconciliation`, `recovery`, `reporting` | none yet | fail closed |
-| `integration`, `release` | require all domain leaves | fail closed (`blocked`) |
+| `accounting`, `evidence`, `security` | Files registered in `scripts/suite-policy.mjs` | Node or PostgreSQL as package scripts specify |
+| `budgets` | Authorization, contention and lifecycle files | PostgreSQL 16 |
+| `metering` | Registered suite file | Node only |
+| `recovery`, `reporting` | Registered suite files | PostgreSQL 16 |
+| `adapters`, `reconciliation` | Required leaf files are currently absent | Fail closed |
+| `integration`, `release` | Compose the required domain files; release also requires security and traceability | Fail closed while required leaf files are absent |
 
-Leaf suites that are not implemented yet deliberately exit nonzero with an evidence manifest; integration and release use `blocked` status until all required leaf implementations and nonempty suites are present.
+The `scripts/suite-policy.mjs` inventory is authoritative for each selected file. At this revision the adapters and reconciliation leaf files are missing, so integration and release fail closed with missing-file evidence. This gate status concerns test inventory; it is not a finance acceptance result.
+
 
 ## PostgreSQL lifecycle
 
@@ -66,7 +70,7 @@ The selector contract currently defines budget leaves: `npm run test:budgets -- 
 
 An empty, repeated, unknown, or unsupported selector fails without falling back to the full suite. A recognized selector whose required leaf has not landed also fails and records the missing file. The runner checks Node 22 structured test events separately for every required file, ignores the Node file wrapper, and requires each file to register and complete at least one real test case. Any skipped, todo, cancelled, failed, empty, or missing required file fails the gate; an unrelated passing file cannot satisfy it. See the [Node.js 22 test runner event API](https://nodejs.org/download/release/v22.23.3/docs/api/test.html#test-runner-events) used by the custom reporter.
 
-`npm run test:integration -- --offline` and `npm run test:release -- --offline` currently fail closed because the required financial leaf suites are absent (adapters, budgets, metering, reconciliation, recovery, reporting; the accounting leaf is now implemented, release also requires security). Their manifests list the missing suites. They must remain blocked until real domain tests and implementations land; missing or empty suites cannot pass.
+`npm run test:integration -- --offline` and `npm run test:release -- --offline` currently fail closed because `tests/adapters/adapters.test.mjs` and `tests/reconciliation/reconciliation.test.mjs` are absent from the required-file inventory. Their manifests identify the missing files; release additionally requires the security and traceability suites. Restore the gate only when each required suite has a real, nonempty test file. Missing or empty suites cannot pass.
 
 ## Package checks
 
@@ -80,7 +84,7 @@ Sanitized finance-owned request and response proposal examples live in [`fixture
 
 [`examples/worker-composition.ts`](../examples/worker-composition.ts) shows typed in-process composition of the fail-closed boundaries (metering, legacy 1.0.0 pricing estimate, budgets, financial event ingestion, reporting, reconciliation, export) with injected trusted context, clock, storage, and provider-source ports. It does not start a service and does not compose the implemented pricing v2 or ledger operations.
 
-The finance-owned summary wrapper carries the query timezone, as-of instant, immutable snapshot identity, query and summary hashes, and source watermarks around the shared `FinancialSummary`. It also defines proposed scoped filters for repository, workstream, provider, model, workflow, job, feature category, and permitted order/customer identifiers. Query execution and export delivery are not implemented.
+The finance-owned reporting reader executes scoped PostgreSQL queries and stores immutable snapshots with query/summary hashes, as-of time, timezone and source watermarks. Snapshot-backed JSON/CSV export preparation reads that stored query result and returns immutable prepared artifacts when host ports are configured. Actual hosted PostgreSQL execution and the [original reporting/pagination/export synthetic ACKs](api/cfo-ai-handoff.md#accepted-synthetic-handoffs) are recorded. Broader canonical adoption, new reported-unsettled compatibility/ACKs, actual host/current-grant/fence adoption and CFO delivery/import remain separate prerequisites. Filter dimensions remain limited to what the source can establish; see [reporting](api/reporting.md) and [prepared exports](api/prepared-exports.md).
 
 ## Data hygiene
 

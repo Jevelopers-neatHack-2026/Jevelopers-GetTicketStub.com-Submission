@@ -1,6 +1,6 @@
 # Foundation decisions and unresolved handoffs
 
-These decisions describe the foundation boundary and test policy. They do not claim that a financial domain leaf has shipped.
+These decisions describe implemented local boundaries, deferred operations, and external handoffs. Source and local test coverage do not mean that a criterion has been accepted.
 
 ## Typed boundary policy
 
@@ -16,8 +16,8 @@ These decisions describe the foundation boundary and test policy. They do not cl
 
 The pinned shared-contract package is a proposal test dependency, not an accepted release. Its FC-001 through FC-004 blockers and pending finance acknowledgement are recorded in [`contracts.lock.json`](../../contracts.lock.json) and [compatibility notes](../api/compatibility.md). Finance wrappers are local, versioned API proposals and must be reviewed with the producer and consuming applications before adoption.
 
-The public query filters for repository, workstream, provider, model, workflow, job, feature category, and permitted order/customer IDs require the #2 capability contract and consumer handoff. Query math, filtering, exports, and access policy are not implemented. Current scope binds each request to one authenticated environment and billing mode.
+The reporting reader, scoped query filters, immutable snapshot writer and prepared-export pipeline are implemented locally. Repository, workstream, provider, model, workflow, job, feature, and permitted order/customer dimensions are returned only where the source provides them; missing attribution stays unknown. [Issue #2](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2) is the completed reporting slice. The exact reporting registry mapping/read-model semantics, pagination and export packets have the [recorded synthetic owner/consumer acknowledgements](../api/cfo-ai-handoff.md#accepted-synthetic-handoffs). Broader policy and canonical adoption, the new reported-unsettled bucket, actual host issuer/fence adoption and CFO delivery/import remain pending. See [reporting](../api/reporting.md) and [prepared exports](../api/prepared-exports.md).
 
 ## Delivery gates
 
-The foundation package, local schemas, migration tracking, and offline boundary checks are present. Pricing v2 catalog/estimate operations and the PostgreSQL ledger append/projection operations are implemented locally against synthetic fixtures (see [pricing](../api/pricing.md) and [ledger](../api/ledger.md)); the remaining financial domain operations still return typed unavailable results, and no financial acceptance criterion is verified. Integration and release runners require nonempty tests for the accounting, adapters, budgets, ledger, metering, pricing, reconciliation, reporting, and recovery leaves; until those tests and leaves land, their negative manifests must report `blocked` and the commands must exit nonzero.
+Pricing v2, usage intake, PostgreSQL ledger append/projection, CI05A budget authority, scoped reporting snapshots and prepared-export functions have local source/tests (see the [API map](../api/INDEX.md)). Legacy pricing 1.0.0 estimate, ledger financial ingest, settlement/release, expense adjustment and reconciliation remain typed unavailable. Nested budget scopes are deferred as P1 issue #17 outside the default v1 gate by issue #18. Integration and release runners currently fail closed because the required adapters and reconciliation leaf test files are absent. No local result closes a financial acceptance criterion.

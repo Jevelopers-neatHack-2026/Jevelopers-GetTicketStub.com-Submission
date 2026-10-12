@@ -12,11 +12,11 @@ labels establish no source or accounting authority.
 | `ReportingExportRequest@2.0.0` through `exportSummaryV2` or `getPreparedExportArtifacts` | `ReportingExportReceipt@2.0.0`: `ReportingExportManifest@2.0.0` and bytes | Finance-owned rich projection proposal; opaque scopes and separate currency blocks supported |
 
 These wrappers do not replace shared `FinancialSummary@1.0.0` in package
-shared-contracts 0.3.0. Dashboard SDK 0.9.7 at `d432ad5c` remains a distinct
-version. Dashboard's synthetic consumer revision
-`840231c1753157bac309cb8f8d2c4b3d26690747` has not acknowledged this producer
-or the four structured simulated `ReportingAmount` fields. Canonical adoption,
-mounted host acceptance, consumer ACK and CFO import remain pending.
+shared-contracts 0.3.0. Dashboard's distinct SDK pin is unchanged by the
+[accepted synthetic reporting/pagination/export handoffs](cfo-ai-handoff.md#accepted-synthetic-handoffs),
+which include the structured simulated `ReportingAmount` fields. Broader
+canonical adoption, new reported-unsettled compatibility/ACKs, actual mounted
+host/current-grant/fence adoption and CFO delivery/import remain pending.
 
 ## Concrete host composition
 
@@ -53,8 +53,9 @@ canonical registry hash is
 Exporter privately deep-copies/freezes the pinned registry before any await,
 checks definition bodies, UUID references and policy hashes, and applies shared
 `checkFinancialSummary` with independently resolved references. Definitions
-remain Finance-owned proposals pending supervisor adjudication, not caller
-same-name aliases. `ReportingExportRequestSchema` is explicitly marked partial:
+retain their broader Finance-owned proposal policy labels; the exact tested
+reference mapping/read-model semantics have the scoped acceptance linked above.
+Caller same-name aliases supply no authority. `ReportingExportRequestSchema` is explicitly marked partial:
 use `validateReportingExportRequestBoundary` for nested canonical semantics.
 
 Every public operation requires current `integrations.exportSummary` /

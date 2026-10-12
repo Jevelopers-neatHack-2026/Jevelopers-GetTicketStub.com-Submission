@@ -39,9 +39,12 @@ coverage, exact approval ratios, budget and safe detail data; its
 `canonicalSummaries` retain the unchanged installed shared FinancialSummary.
 The independently compared FinancialSummary/CommonEnvelope/ErrorEnvelope
 schema bytes match Dashboard's 0.9.7 pin. Package-version difference alone is
-not a wire blocker; issuer mapping, independently resolved reference bodies,
-selected metric names, exact semantic fixtures and owner/consumer ACK remain
-pending. No dependency archive or canonical schema was changed by CI-08.
+not a wire blocker. The exact tested reference mapping, read-model semantics,
+reporting/pagination fixtures and original export packets have
+[scoped synthetic owner/consumer acceptance](cfo-ai-handoff.md#accepted-synthetic-handoffs).
+Broader policy/canonical adoption, new reported-unsettled compatibility/ACKs,
+actual issuer/fence adoption and CFO delivery/import remain pending. No
+dependency archive or canonical schema was changed by CI-08.
 
 See [reporting.md](./reporting.md) for the precise version/hash/cursor/snapshot
 contract, declared Finance-owned definition registry, optional proposed
