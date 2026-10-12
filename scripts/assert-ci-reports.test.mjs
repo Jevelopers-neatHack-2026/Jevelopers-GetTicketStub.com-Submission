@@ -87,3 +87,29 @@ test('contrast report accepts intentional negative controls only when they match
   assert.throws(() => validateContrastReport({ ...report, pairs: [{ ...report.pairs[0], passes: true }] }), /unexpected result/);
   assert.throws(() => validateContrastReport({ ...report, pairs: [] }), /checked pairs/);
 });
+
+// TEST_BUILT report variants: exercise the gate, not browser contrast measurement.
+for (const threshold of [3, 4.5]) {
+  const reportWith = (ratio, passes) => ({
+    source: 'fixture', method: 'unrounded fixture comparison',
+    pairs: [{ name: 'fixture contrast pair', ratio, threshold, passes, expected: passes }],
+  });
+
+  test(`contrast rejects a false positive below ${threshold} even when both flags agree`, () => {
+    assert.throws(() => validateContrastReport(reportWith(threshold - 0.001, true)), /inconsistent with its ratio and threshold/);
+  });
+
+  test(`contrast rejects a false negative above ${threshold} even when both flags agree`, () => {
+    assert.throws(() => validateContrastReport(reportWith(threshold + 0.001, false)), /inconsistent with its ratio and threshold/);
+  });
+
+  test(`contrast rejects a false negative exactly at ${threshold}`, () => {
+    assert.throws(() => validateContrastReport(reportWith(threshold, false)), /inconsistent with its ratio and threshold/);
+  });
+
+  test(`contrast uses an inclusive, unrounded comparison at ${threshold}`, () => {
+    for (const [ratio, passes] of [[threshold - 0.001, false], [threshold, true], [threshold + 0.001, true]]) {
+      assert.deepEqual(validateContrastReport(reportWith(ratio, passes)), { pairs: 1 });
+    }
+  });
+}
