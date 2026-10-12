@@ -47,6 +47,8 @@ const CASES_ALL = [
   { key: "harbour", edition: "risograph", finish: "foil", art: "procedural" },
   { key: "pale", edition: "classic", finish: "matte", art: "image" },
   { key: "harbour", edition: "minimal", finish: "holo", art: "procedural" },
+  // the researched painters lay a grain SVG over the art; it once made the export drop the whole art window
+  { key: "neathack", edition: "researched", finish: "foil", art: "procedural" },
 ];
 // DOWNLOAD_ONLY=<n> runs the first n cases at 390 only (for working on the renderer).
 const ONLY = Number(process.env.DOWNLOAD_ONLY) || 0;
@@ -320,8 +322,19 @@ try {
       const rec = { viewport: vp.name, ...c };
       evidence.cases.push(rec);
       try {
-        if (!check(`${label}: the stub is on the studio desk`, await openStudio(c))) continue;
-        const got = await download("front");
+        // the very first capture of the run is also taken slow (CPU 6x, a slow link): the cold-load race must not show
+        const cold = !evidence.cases.slice(0, -1).length;
+        if (cold) {
+          await page.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+          await page.send("Network.emulateNetworkConditions", { offline: false, latency: 150, downloadThroughput: 200_000, uploadThroughput: 200_000 });
+        }
+        const opened = await openStudio(c);
+        const got = opened ? await download("front") : { error: "no studio" };
+        if (cold) {
+          await page.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+          await page.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+        }
+        if (!check(`${label}: the stub is on the studio desk${cold ? " (first load, throttled)" : ""}`, opened)) continue;
         if (!check(`${label}: the Download button saved a file`, !got.error, got.error)) continue;
         const shot = await screenStub(c, { checkout: true });
         if (!check(`${label}: the on-screen stub was captured`, !!shot)) continue;
