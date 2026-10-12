@@ -4151,6 +4151,71 @@ for (const siblingAbortDelayMs of [0, 600, 900]) {
   });
 }
 
+test('an entered stop callback cannot retain an expired signal after the run returns', { timeout: 8_000 }, async (t) => {
+  const h = await harness(t);
+  const body = eventHtml();
+  let requestCount = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html' }, body);
+  });
+  t.after(() => server.close());
+  let stopSignal;
+  let signalAtEntry;
+  let callbackReturnedAt;
+  let stopCalls = 0;
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    stopRun: async (_scope, _runId, _reason, signal) => {
+      stopCalls += 1;
+      stopSignal = signal;
+      signalAtEntry = signal.aborted;
+      // Entry has a valid allowance. Synchronous host work consumes it, then
+      // returns control before the overdue abort timer can run.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 900);
+      callbackReturnedAt = performance.now();
+      return new Promise(() => {});
+    },
+  });
+  let retentionEntered;
+  const entered = new Promise((resolve) => { retentionEntered = resolve; });
+  const cancellation = new AbortController();
+  const runId = 'private-entered-stop-expiry';
+  const seeds = [{ url: sourceUrl('/entered-stop') }];
+  const limits = { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs: 5_000 };
+  const running = runPrivateRetrieval(h.makeInput({
+    runId, server, frontier, seeds, limits, signal: cancellation.signal,
+    retentionHandleFor() { retentionEntered(); return new Promise(() => {}); },
+  }));
+  assert.equal(await Promise.race([
+    entered.then(() => 'retention'), running.then(() => 'completed-before-retention'),
+  ]), 'retention');
+  const cancelledAt = performance.now();
+  cancellation.abort();
+  const result = await running;
+  const returnedAt = performance.now();
+  const signalAbortedAtReturn = stopSignal?.aborted;
+  t.diagnostic(JSON.stringify({ signalAtEntry, signalAbortedAtReturn, stopCalls, requestCount,
+    callbackReturnMs: callbackReturnedAt - cancelledAt, cleanupAfterCallbackMs: returnedAt - callbackReturnedAt }));
+  assert.equal(stopCalls, 1);
+  assert.equal(signalAtEntry, false, 'the stop callback starts with a valid allowance');
+  assert.ok(callbackReturnedAt - cancelledAt >= 750, 'synchronous work consumes the entire shared envelope');
+  assert.ok(returnedAt - callbackReturnedAt < 100, 'return grants no new scheduled cleanup wait');
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.draft, null);
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transport.reservedBytes, 0);
+  assert.equal(transport.spentBytes, body.length);
+  const reopened = h.openFrontier();
+  const restarted = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits, frontier: reopened }));
+  assert.equal(restarted.draft, null);
+  assert.equal(requestCount, 1, 'restart cannot repeat the admitted request');
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+  const recoveredTransport = await reopened.getTransportProgress(reopenedScope, runId);
+  assert.equal(recoveredTransport.reservedBytes, transport.reservedBytes);
+  assert.equal(recoveredTransport.spentBytes, transport.spentBytes);
+  assert.equal(signalAbortedAtReturn, true, 'the expired pending signal is revoked before the run returns');
+});
+
 test('external cancellation still resolves an admitted lease when stop persistence rejects', { timeout: 8_000 }, async (t) => {
   let retentionStarted;
   const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });

@@ -1052,6 +1052,7 @@ export async function runPrivateRetrieval(value) {
   let watcherPromise = Promise.resolve();
   let watcherDrained = false;
   let localStopPromise = Promise.resolve();
+  const stopCleanupCallbacks = new Map();
   let externalAbort = false;
   let stopCause = null;
   let deadlineStopStarted = false;
@@ -1086,20 +1087,33 @@ export async function runPrivateRetrieval(value) {
     const stopDeadlineAt = Math.min(performance.now() + STOP_PERSIST_CLEANUP_MS, cleanupEnvelopeDeadline);
     const remaining = Math.max(0, stopDeadlineAt - performance.now());
     let timer;
-    if (remaining <= 0) cleanup.abort();
-    else timer = setTimeout(() => cleanup.abort(), remaining);
+    const abortStop = () => {
+      clearTimeout(timer);
+      if (!cleanup.signal.aborted) cleanup.abort();
+    };
+    stopCleanupCallbacks.set(abortStop, stopDeadlineAt);
+    if (remaining <= 0) abortStop();
+    else timer = setTimeout(abortStop, remaining);
     const pending = Promise.resolve().then(() => {
       // A sibling abort listener may block after this microtask is scheduled.
       // Microtasks run before overdue timers, so enforce the original bound
       // again at callback entry without granting another stop allowance.
-      if (performance.now() >= stopDeadlineAt) cleanup.abort();
+      if (performance.now() >= stopDeadlineAt) abortStop();
       return input.frontier.stopRun(scope, input.runId, reason, cleanup.signal);
     })
       .catch(() => {}).finally(() => {
-        clearTimeout(timer);
-        if (!cleanup.signal.aborted) cleanup.abort();
+        stopCleanupCallbacks.delete(abortStop);
+        abortStop();
       });
     localStopPromise = Promise.all([localStopPromise, pending]).then(() => undefined);
+  };
+  const awaitStopPersistence = async () => {
+    const remaining = remainingCleanupMs();
+    const settled = remaining > 0 && await awaitBoundedCleanup(() => localStopPromise, remaining);
+    // The bounded waiter can run before a stop timer due at the same boundary.
+    // Once this wait is exhausted, no pending stop signal retains an allowance.
+    if (!settled) for (const abortStop of stopCleanupCallbacks.keys()) abortStop();
+    return settled;
   };
   const revokeAssetReleaseAuthority = (reason) => {
     if (!assetReleaseController || assetReleaseAuthorityRevoked) return;
@@ -2532,9 +2546,7 @@ export async function runPrivateRetrieval(value) {
             // the same SQLite writer lock. Let the separately bounded stop
             // attempt finish first, then spend only the remaining shared
             // cleanup budget on one recovery write.
-            const remaining = remainingCleanupMs();
-            const stopSettled = remaining > 0
-              && await awaitBoundedCleanup(() => localStopPromise, remaining);
+            const stopSettled = await awaitStopPersistence();
             if (stopSettled) {
               await awaitRunCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
                 leaseToken: claim.leaseToken,
@@ -2797,13 +2809,15 @@ export async function runPrivateRetrieval(value) {
     limitations.add(limitationFor(code));
     if (code === 'DEADLINE_EXCEEDED') {
       triggerDeadline();
-      const remaining = remainingCleanupMs();
-      if (remaining > 0) await awaitBoundedCleanup(() => localStopPromise, remaining);
+      await awaitStopPersistence();
       return incompleteResult(input.runId, 'incomplete', [...limitations, 'deadline_exceeded']);
     }
     if (code === 'CANCELED' || externalAbort) return incompleteResult(input.runId, 'cancelled', [...limitations, 'cancelled']);
     return incompleteResult(input.runId, 'incomplete', [...limitations]);
   } finally {
+    for (const [abortStop, stopDeadlineAt] of stopCleanupCallbacks) {
+      if (performance.now() >= stopDeadlineAt) abortStop();
+    }
     if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
     watcherOpen = false;
     if (!watcherDrained) void watcherPromise.catch(() => {});
