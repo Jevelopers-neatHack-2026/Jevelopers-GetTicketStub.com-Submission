@@ -37,6 +37,11 @@ import { readStoreCompatibility, readOperationsHealth, requestOwnerRetention } f
 import { runBoundedLocalPlan } from '../../src/orchestrator/internal/controller.js';
 import { buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics } from './failure-diagnostics.js';
 import { createAdmissionFailureDiagnostic } from './fixtures/admission-store-child.mjs';
+import {
+  classifyOps04ExitDisposition, createOps04FailureDetails, isOps04ExitDisposition,
+  ops04FailureFields, ops04ReadErrorKind, parseOps04FailureDetails, throwAfterOps04FailureCapture,
+  validateOps04PublicPhaseMetrics
+} from './ops04-failure-diagnostics.js';
 
 const ROOT = resolve(new URL('../..', import.meta.url).pathname);
 const PLAN = JSON.stringify({
@@ -106,7 +111,7 @@ const CI1_CHILD_PHASE_STAGES = new Set([
   'signal_seen', 'stop_requested', 'stop_settled', 'loop_settled', 'shutdown_verified',
   'restart_worker_started', 'restart_work_completed', 'restart_stop_settled',
   'restart_loop_settled', 'restart_store_closed',
-  'store_close_started', 'store_closed', 'runner_escalation_sent',
+  'store_close_started', 'store_closed', 'runner_escalation_sent', 'fixture_failure',
   'fixture_finally_started', 'fixture_finally_complete'
 ]);
 const CI1_PARENT_PHASE_STAGES = new Set([
@@ -327,9 +332,20 @@ function parseCi1ChildPhaseCaptureBytes(bytes, phase, role, state = METRICS) {
       setFailure('shape');
       break;
     }
+    const hasFailureDetails = item.stage === 'fixture_failure';
     const hasStopResult = item.stage === 'stop_settled' || item.stage === 'restart_stop_settled';
+    const failureDetails = hasFailureDetails
+      ? parseOps04FailureDetails(Object.fromEntries(Object.entries(item)
+        .filter(([key]) => !['elapsedMs', 'schema', 'sequence', 'stage'].includes(key))))
+      : null;
+    if (hasFailureDetails && !failureDetails) {
+      setFailure('failure_shape');
+      break;
+    }
     const keys = Object.keys(item).sort();
-    const expectedKeys = hasStopResult
+    const expectedKeys = hasFailureDetails
+      ? ['elapsedMs', 'schema', 'sequence', 'stage', ...Object.keys(failureDetails)].sort()
+      : hasStopResult
       ? ['childrenReaped', 'elapsedMs', 'schema', 'sequence', 'stage', 'stopped', 'storeClosed']
       : ['elapsedMs', 'schema', 'sequence', 'stage'];
     if (keys.length !== expectedKeys.length || keys.some((key, keyIndex) => key !== expectedKeys[keyIndex])) {
@@ -352,6 +368,10 @@ function parseCi1ChildPhaseCaptureBytes(bytes, phase, role, state = METRICS) {
       setFailure('stop_result');
       break;
     }
+    if (hasFailureDetails && stages.includes('fixture_failure')) {
+      failureCode = 'duplicate_failure';
+      break;
+    }
     priorElapsedMs = item.elapsedMs;
     stages.push(item.stage);
     const retained = {
@@ -366,6 +386,10 @@ function parseCi1ChildPhaseCaptureBytes(bytes, phase, role, state = METRICS) {
         stopResultsComplete = false;
         setFailure('stop_result');
       }
+    }
+    if (hasFailureDetails) {
+      setFailure('fixture_failure');
+      Object.assign(retained, failureDetails);
     }
     if (!aggregateRejected && !appendCi1PhaseCapture(retained, state)) {
       aggregateRejected = true;
@@ -447,9 +471,9 @@ async function finalizeCi1ChildCapture({
   phase, role, closeResult, closeOwnedChild, cleanupOwnedChild,
   readCapture, captureParent, state = METRICS
 }) {
-  const safeParentCapture = stage => {
+  const safeParentCapture = (stage, details) => {
     try {
-      if (captureParent(stage) === false) state.ci1PhaseCaptureIncomplete = true;
+      if (captureParent(stage, details) === false) state.ci1PhaseCaptureIncomplete = true;
     } catch {
       state.ci1PhaseCaptureIncomplete = true;
     }
@@ -492,7 +516,9 @@ async function finalizeCi1ChildCapture({
     if (!captureResult || !captureResult.complete) state.ci1PhaseCaptureIncomplete = true;
     return { closeResult: finalCloseResult, captureResult, reaped: false, ownedGroupEmpty };
   }
-  safeParentCapture(`${role}_child_closed`);
+  safeParentCapture(`${role}_child_closed`, {
+    exitDisposition: classifyOps04ExitDisposition(finalCloseResult)
+  });
   safeParentCapture('owned_group_empty');
   try { captureResult = readCapture(); } catch { state.ci1PhaseCaptureIncomplete = true; }
   if (!captureResult || !captureResult.complete) {
@@ -502,7 +528,7 @@ async function finalizeCi1ChildCapture({
       ? 'child_capture_missing'
       : ['child_byte_limit', 'child_record_limit', 'aggregate_limit'].includes(failureCode)
         ? 'child_capture_overflow'
-        : failureCode === 'required_stages'
+        : ['required_stages', 'fixture_failure'].includes(failureCode)
           ? 'child_capture_partial'
           : 'child_capture_invalid';
     safeParentCapture(stage);
@@ -1777,6 +1803,172 @@ function countOpenFileDescriptors(pid) {
   return result.stdout.split(/\r?\n/u).filter(line => /^f[^n]/u.test(line)).length;
 }
 
+test('OPS04.C03 fixed failure diagnostics preserve bounded schemas and original errors', () => {
+  const boundaryCases = [
+    ['SHUTDOWN_STOP_INVARIANT', {
+      workerStopped: true, ownedChildrenReaped: true, storeClosed: true, sinkCalledOnce: true
+    }],
+    ['TELEMETRY_BACKLOG_INVARIANT', { cursorIsZero: true, pendingRecordsIsPositive: true }],
+    ['POSTSTOP_READ', { errorKind: 'SQLITE_BUSY' }],
+    ['QUEUE_ACCOUNTING_INVARIANT', {
+      workIsQueued: true, inFlightIsZero: true, attemptsUnchanged: true
+    }],
+    ['OTHER_BOUNDARY', {}]
+  ];
+  for (const [boundary, observations] of boundaryCases) {
+    const details = createOps04FailureDetails(boundary, observations);
+    assert.ok(details, `${boundary} has a valid fixed schema`);
+    assert.deepEqual(parseOps04FailureDetails(details), details);
+    assert.deepEqual(ops04FailureFields(boundary), Object.keys(observations));
+  }
+  assert.equal(createOps04FailureDetails('UNLISTED', {}), null);
+  assert.equal(createOps04FailureDetails('TELEMETRY_BACKLOG_INVARIANT', {
+    cursorIsZero: true, pendingRecordsIsPositive: 1
+  }), null);
+  assert.equal(createOps04FailureDetails('POSTSTOP_READ', { errorKind: 'secret-message' }), null);
+  assert.equal(ops04ReadErrorKind({ errcode: 517 }), 'SQLITE_BUSY');
+  assert.equal(ops04ReadErrorKind({ errcode: 10 }), 'SQLITE_IOERR');
+  assert.equal(ops04ReadErrorKind({ errcode: 11 }), 'SQLITE_CORRUPT');
+  assert.equal(ops04ReadErrorKind({ code: 'ERR_SQLITE_ERROR' }), 'SQLITE_ERROR');
+  assert.equal(ops04ReadErrorKind({ message: 'never published' }), 'OTHER');
+  assert.equal(parseOps04FailureDetails({
+    diagnosticSchema: 'agent-harness.ops04-child-failure.v1',
+    failureBoundary: 'OTHER_BOUNDARY', extra: true
+  }), null);
+
+  assert.equal(classifyOps04ExitDisposition({ code: 0, signal: null }), 'exit_zero');
+  assert.equal(classifyOps04ExitDisposition({ code: 1, signal: null }), 'exit_nonzero');
+  assert.equal(classifyOps04ExitDisposition({ code: null, signal: 'SIGTERM' }), 'signal');
+  assert.equal(classifyOps04ExitDisposition({ code: null, signal: null }), 'unknown');
+  assert.equal(classifyOps04ExitDisposition({ code: -1, signal: null }), null);
+  assert.equal(classifyOps04ExitDisposition({ code: 1, signal: 'SIGTERM' }), null);
+  assert.equal(isOps04ExitDisposition('SIGTERM'), false);
+  const normalClose = {
+    schema: 1, source: 'parent', phase: 'before-marker', role: 'shutdown', sequence: 1,
+    stage: 'shutdown_child_closed', elapsedMs: 0, exitDisposition: 'exit_zero'
+  };
+  const normalMetrics = {
+    ci1PhaseCaptures: [normalClose], ci1PhaseCaptureBytes: Buffer.byteLength(JSON.stringify(normalClose)),
+    ci1PhaseCaptureOverflow: false, ci1PhaseCaptureIncomplete: false,
+    ci1PhaseCaptureChildCloseUnconfirmed: false, ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
+  };
+  assert.deepEqual(validateOps04PublicPhaseMetrics(normalMetrics), { valid: true, failureCount: 0 });
+  const inconsistentClose = { ...normalClose, exitDisposition: 'exit_nonzero' };
+  assert.equal(validateOps04PublicPhaseMetrics({
+    ...normalMetrics,
+    ci1PhaseCaptures: [inconsistentClose],
+    ci1PhaseCaptureBytes: Buffer.byteLength(JSON.stringify(inconsistentClose))
+  }).valid, false, 'nonzero exit cannot be published as complete evidence');
+
+  const shutdownStages = [
+    'fixture_started', 'store_opened', 'worker_started', 'runner_claimed', 'workflow_opened',
+    'marker_written', 'signal_seen', 'stop_requested', 'stop_settled', 'loop_settled',
+    'shutdown_verified', 'store_close_started', 'store_closed', 'fixture_finally_started',
+    'fixture_finally_complete'
+  ];
+  const rows = shutdownStages.map((stage, index) => ({
+    schema: 1, sequence: index + 1, stage, elapsedMs: index,
+    ...(stage === 'stop_settled' ? { stopped: true, childrenReaped: true, storeClosed: true } : {})
+  }));
+  rows.push({
+    schema: 1, sequence: rows.length + 1, stage: 'fixture_failure', elapsedMs: rows.length,
+    ...createOps04FailureDetails('QUEUE_ACCOUNTING_INVARIANT', {
+      workIsQueued: false, inFlightIsZero: true, attemptsUnchanged: true
+    })
+  });
+  const state = {
+    ci1PhaseCaptures: [], ci1PhaseCaptureBytes: 0, ci1PhaseCaptureOverflow: false,
+    ci1PhaseCaptureIncomplete: false, ci1PhaseCaptureChildCloseUnconfirmed: false,
+    ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
+  };
+  const parsed = parseCi1ChildPhaseCaptureBytes(
+    Buffer.from(`${rows.map(row => JSON.stringify(row)).join('\n')}\n`), 'before-marker', 'shutdown', state
+  );
+  assert.equal(parsed.complete, false, 'a failure row never changes the original success oracle');
+  assert.equal(parsed.failureCode, 'fixture_failure');
+  assert.equal(state.ci1PhaseCaptureIncomplete, true);
+  assert.deepEqual(state.ci1PhaseCaptures.at(-1), {
+    schema: 1, source: 'child', phase: 'before-marker', role: 'shutdown',
+    sequence: rows.length, stage: 'fixture_failure', elapsedMs: rows.length - 1,
+    diagnosticSchema: 'agent-harness.ops04-child-failure.v1',
+    failureBoundary: 'QUEUE_ACCOUNTING_INVARIANT',
+    workIsQueued: false, inFlightIsZero: true, attemptsUnchanged: true
+  });
+
+  const malformed = [...rows.slice(0, -1), { ...rows.at(-1), unexpected: 'redacted' }];
+  const malformedState = {
+    ci1PhaseCaptures: [], ci1PhaseCaptureBytes: 0, ci1PhaseCaptureOverflow: false,
+    ci1PhaseCaptureIncomplete: false, ci1PhaseCaptureChildCloseUnconfirmed: false,
+    ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
+  };
+  const malformedResult = parseCi1ChildPhaseCaptureBytes(
+    Buffer.from(`${malformed.map(row => JSON.stringify(row)).join('\n')}\n`),
+    'before-marker', 'shutdown', malformedState
+  );
+  assert.equal(malformedResult.complete, false);
+  assert.equal(malformedResult.failureCode, 'failure_shape');
+  assert.equal(malformedState.ci1PhaseCaptures.length, rows.length - 1,
+    'malformed diagnostic data does not erase the valid prefix');
+
+  const firstFailure = {
+    ...rows.at(-1), sequence: 15, elapsedMs: 14
+  };
+  const duplicateRows = [
+    ...rows.slice(0, 14), firstFailure,
+    { ...firstFailure, sequence: 16, elapsedMs: 15 }
+  ];
+  const duplicateState = {
+    ci1PhaseCaptures: [], ci1PhaseCaptureBytes: 0, ci1PhaseCaptureOverflow: false,
+    ci1PhaseCaptureIncomplete: false, ci1PhaseCaptureChildCloseUnconfirmed: false,
+    ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
+  };
+  const duplicateResult = parseCi1ChildPhaseCaptureBytes(
+    Buffer.from(`${duplicateRows.map(row => JSON.stringify(row)).join('\n')}\n`),
+    'before-marker', 'shutdown', duplicateState
+  );
+  assert.equal(duplicateResult.complete, false);
+  assert.equal(duplicateResult.failureCode, 'duplicate_failure');
+  assert.equal(duplicateState.ci1PhaseCaptures.length, 15,
+    'the first failure record and valid prefix survive a duplicate row');
+  assert.equal(duplicateState.ci1PhaseCaptureIncomplete, true);
+
+  const publicFailure = { ...state.ci1PhaseCaptures.at(-1), sequence: 1 };
+  const parentClose = {
+    schema: 1, source: 'parent', phase: 'before-marker', role: 'shutdown', sequence: 1,
+    stage: 'shutdown_child_closed', elapsedMs: 20, exitDisposition: 'exit_nonzero'
+  };
+  const captures = [publicFailure, parentClose];
+  const publicMetrics = {
+    ci1PhaseCaptures: captures,
+    ci1PhaseCaptureBytes: captures.reduce((sum, record) => sum + Buffer.byteLength(JSON.stringify(record)), 0),
+    ci1PhaseCaptureOverflow: false, ci1PhaseCaptureIncomplete: true,
+    ci1PhaseCaptureChildCloseUnconfirmed: false, ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
+  };
+  assert.deepEqual(validateOps04PublicPhaseMetrics(publicMetrics), { valid: true, failureCount: 1 });
+  assert.deepEqual(validateOps04PublicPhaseMetrics({ ...publicMetrics, ci1PhaseCaptureIncomplete: false }),
+    { valid: false, failureCount: 1 });
+  const missingExit = { ...parentClose };
+  delete missingExit.exitDisposition;
+  assert.equal(validateOps04PublicPhaseMetrics({
+    ...publicMetrics,
+    ci1PhaseCaptures: [publicFailure, missingExit],
+    ci1PhaseCaptureBytes: Buffer.byteLength(JSON.stringify(publicFailure)) + Buffer.byteLength(JSON.stringify(missingExit))
+  }).valid, false, 'parent close records require a bounded exit disposition');
+
+  const primaryError = new Error('primary fixture assertion');
+  let captureCalled = false;
+  let finallyRan = false;
+  assert.throws(() => {
+    try {
+      throwAfterOps04FailureCapture(primaryError, () => { captureCalled = true; throw new Error('capture failed'); });
+    } finally {
+      finallyRan = true;
+    }
+  }, error => error === primaryError);
+  assert.equal(captureCalled, true);
+  assert.equal(finallyRan, true, 'diagnostic capture preserves primary error identity and finally cleanup');
+});
+
 test('OPS01_CONFIG_HOSTILE rejects hostile option/job objects before getters, traps, or serialization run', async t => {
   let getterCalls = 0;
   const accessor = {};
@@ -2955,8 +3147,16 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
   assert.equal(exactRecordControl.ci1PhaseCaptureOverflow, true, 'record overflow is retained as explicit failure custody');
   const parentStartedAt = performance.now();
   const parentSequences = new Map();
-  const captureParentPhase = (phase, role, stage) => {
+  const captureParentPhase = (phase, role, stage, details) => {
     if (!CI1_PHASES.has(phase) || !['shutdown', 'restart'].includes(role) || !CI1_PARENT_PHASE_STAGES.has(stage)) {
+      METRICS.ci1PhaseCaptureIncomplete = true;
+      return false;
+    }
+    const closeStage = stage === 'shutdown_child_closed' || stage === 'restart_child_closed';
+    if ((closeStage && ((stage === 'shutdown_child_closed') !== (role === 'shutdown')
+        || !details || Object.keys(details).sort().join(',') !== 'exitDisposition'
+        || !isOps04ExitDisposition(details.exitDisposition)))
+        || (!closeStage && details !== undefined)) {
       METRICS.ci1PhaseCaptureIncomplete = true;
       return false;
     }
@@ -2965,7 +3165,8 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     parentSequences.set(key, sequence);
     const appended = appendCi1PhaseCapture({
       schema: 1, source: 'parent', phase, role, sequence, stage,
-      elapsedMs: Math.max(0, Math.round(performance.now() - parentStartedAt))
+      elapsedMs: Math.max(0, Math.round(performance.now() - parentStartedAt)),
+      ...(closeStage ? { exitDisposition: details.exitDisposition } : {})
     });
     if (!appended) METRICS.ci1PhaseCaptureIncomplete = true;
     return appended;
@@ -3042,7 +3243,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
             const cleanup = await cleanupOwnedGroup();
             return cleanup.groupEmpty ? cleanup.closeResult : null;
           },
-          captureParent: stage => captureParentPhase(phase, role, stage), state: METRICS
+          captureParent: (stage, details) => captureParentPhase(phase, role, stage, details), state: METRICS
         });
         closeResult = shutdownClose.closeResult;
         if (shutdownClose.timedOut) {
@@ -3059,7 +3260,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
             const cleanup = await cleanupOwnedGroup();
             return cleanup.groupEmpty ? cleanup.closeResult : null;
           },
-          captureParent: stage => captureParentPhase(phase, role, stage), state: METRICS
+          captureParent: (stage, details) => captureParentPhase(phase, role, stage, details), state: METRICS
         });
         closeResult = restartClose.closeResult;
         if (restartClose.timedOut) {
@@ -3073,7 +3274,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         phase, role, closeResult,
         cleanupOwnedChild: cleanupOwnedGroup,
         readCapture: () => readCi1ChildPhaseCapture(phaseCapturePath, phase, role, closeResult?.code === 0),
-        captureParent: stage => captureParentPhase(phase, role, stage),
+        captureParent: (stage, details) => captureParentPhase(phase, role, stage, details),
         state: METRICS
       }), METRICS);
     const finalization = lifecycle.finalization;

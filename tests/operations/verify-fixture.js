@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import process from 'node:process';
 import { buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics } from './failure-diagnostics.js';
+import { validateOps04PublicPhaseMetrics } from './ops04-failure-diagnostics.js';
 import { parseOperationsCaptureFromTap } from '../../src/internal/private-ops-diagnostics.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -14,7 +15,7 @@ const REQUIRED_LOCAL_CASES = Object.freeze([
   'OPS01.C01', 'OPS01.C02',
   'OPS02.C01', 'OPS02.C02', 'OPS02.C03', 'OPS02.C04', 'OPS02.C05',
   'OPS03.C01', 'OPS03.C02', 'OPS03.C03', 'OPS03.C04',
-  'OPS04.C01', 'OPS04.C02',
+  'OPS04.C01', 'OPS04.C02', 'OPS04.C03',
   'OPS05.C01', 'OPS05.C02', 'OPS05.C03', 'OPS05.C04', 'OPS05.C05', 'OPS05.C06', 'OPS05.C07', 'OPS05.C08', 'OPS05.C09', 'OPS05.C10',
   'OPS05.C11', 'OPS05.C12', 'OPS05.C13', 'OPS05.C14',
   'OPS05.C15', 'OPS05.C16', 'OPS05.C17', 'OPS05.C18',
@@ -388,6 +389,7 @@ const diagnosticsSidecarArtifact = writeArtifact(
 const allNetworkCallCountsZero = metrics !== null
   && metrics.providerCalls === 0
   && metrics.blockedExternalNetworkAttempts === 0;
+const ops04PhaseMetrics = validateOps04PublicPhaseMetrics(metrics);
 const uploadWorkflow = readFileSync(join(ROOT, '.github/workflows/runtime-foundation.yml'), 'utf8');
 const runbookJsonlMembers = [runbookArtifact, runbookRecoveryArtifact].filter(Boolean);
 const diagnosticMembers = [diagnosticsArtifact, diagnosticsSidecarArtifact];
@@ -424,6 +426,8 @@ const diagnosticsIncludedInUpload = diagnosticMembers.every(artifact =>
 const resourceMetricsComplete = metrics !== null
   && metrics.c02ControlReadDiagnosticsComplete === true
   && c02ControlReadDiagnostics.complete === true
+  && ops04PhaseMetrics.valid === true
+  && ops04PhaseMetrics.failureCount === 0
   && metrics.ci1PhaseCaptureOverflow === false
   && metrics.ci1PhaseCaptureIncomplete === false
   && metrics.ci1PhaseCaptureChildCloseUnconfirmed === false
