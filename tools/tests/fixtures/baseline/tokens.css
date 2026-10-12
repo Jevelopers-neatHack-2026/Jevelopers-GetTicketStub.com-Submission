@@ -1,0 +1,101 @@
+/* TicketStub master-brand tokens. Source of truth: tokens.json.
+   Day theme (paper) is the default; night (stage) is used for printing, reveal,
+   finishes and the tear moment, or follows the OS dark setting. */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..800,0..100,0..1&family=Inter+Tight:wght@400..600&display=swap");
+
+:root {
+  /* palette: 6 colours, nothing else */
+  --ts-orange: #E4572E;
+  --ts-copper: #B4693E;
+  --ts-moss: #26302A;
+  --ts-cyan: #7CC6D2;
+  --ts-cream: #F4ECDD;
+  --ts-ink: #17140F;
+
+  /* semantic: day */
+  --ts-bg: var(--ts-cream);
+  --ts-surface: rgb(23 20 15 / 0.05);
+  --ts-text: var(--ts-ink);
+  --ts-text-muted: rgb(23 20 15 / 0.66);
+  --ts-cta-bg: var(--ts-orange);
+  --ts-cta-label: var(--ts-ink);
+  --ts-focus: var(--ts-ink);
+
+  --ts-foil: linear-gradient(135deg, #B4693E 0%, #E4572E 45%, #7CC6D2 100%);
+  --ts-holo-spectrum: repeating-linear-gradient(118deg, hsl(348 92% 58%) 0, hsl(34 94% 60%) 26px, hsl(58 90% 62%) 50px, hsl(150 82% 58%) 76px, hsl(200 92% 60%) 102px, hsl(280 88% 62%) 128px, hsl(348 92% 58%) 152px);
+
+  /* type */
+  --ts-font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --ts-font-ui: "Inter Tight", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --ts-step--1: 0.8rem;
+  --ts-step-0: 1rem;
+  --ts-step-1: 1.25rem;
+  --ts-step-2: 1.563rem;
+  --ts-step-3: 1.953rem;
+  --ts-step-4: 2.441rem;
+  --ts-step-5: 3.052rem;
+  --ts-step-6: 3.815rem;
+  --ts-lh-tight: 1.05;
+  --ts-lh-heading: 1.15;
+  --ts-lh-body: 1.5;
+  --ts-track-display: -0.02em;
+  --ts-track-label: 0.08em;
+
+  /* space, radius, shadow */
+  --ts-space-1: 4px;  --ts-space-2: 8px;  --ts-space-3: 12px; --ts-space-4: 16px;
+  --ts-space-5: 24px; --ts-space-6: 32px; --ts-space-7: 48px; --ts-space-8: 64px;
+  --ts-radius-paper: 2px;
+  --ts-radius-control: 12px;
+  --ts-radius-sheet: 20px;
+  --ts-radius-pill: 999px;
+  --ts-shadow-paper: 0 1px 0 rgb(23 20 15 / .06), 0 10px 24px -10px rgb(23 20 15 / .45);
+  --ts-shadow-lifted: 0 2px 0 rgb(23 20 15 / .05), 0 24px 48px -16px rgb(23 20 15 / .55);
+
+  /* motion */
+  --ts-dur-track: 80ms;
+  --ts-dur-quick: 160ms;
+  --ts-dur-base: 240ms;
+  --ts-dur-settle: 380ms;
+  --ts-dur-reveal: 600ms;
+  --ts-dur-shutter: 320ms;
+  --ts-dur-print-sweep: 2600ms;
+  --ts-ease-standard: cubic-bezier(.2, .8, .2, 1);
+  --ts-ease-enter: cubic-bezier(.16, 1, .3, 1);
+  --ts-ease-exit: cubic-bezier(.4, 0, 1, 1);
+  --ts-ease-flip: cubic-bezier(.45, 0, .55, 1);
+  --ts-tilt-max: 11deg;
+  --ts-perspective: 1400px;
+}
+
+/* night stage */
+.ts-night,
+:root[data-theme="dark"] {
+  --ts-bg: var(--ts-ink);
+  --ts-surface: var(--ts-moss);
+  --ts-text: var(--ts-cream);
+  --ts-text-muted: rgb(244 236 221 / 0.66);
+  --ts-focus: var(--ts-cyan);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ts-bg: var(--ts-ink);
+    --ts-surface: var(--ts-moss);
+    --ts-text: var(--ts-cream);
+    --ts-text-muted: rgb(244 236 221 / 0.66);
+    --ts-focus: var(--ts-cyan);
+    color-scheme: dark;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ts-dur-track: 0ms;
+    --ts-dur-quick: 0ms;
+    --ts-dur-base: 0ms;
+    --ts-dur-settle: 0ms;
+    --ts-dur-reveal: 0ms;
+    --ts-dur-shutter: 0ms;
+  }
+}

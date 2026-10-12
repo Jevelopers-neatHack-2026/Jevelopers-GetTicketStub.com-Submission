@@ -242,7 +242,8 @@ class RealRepo(unittest.TestCase):
         inv = json.loads((ROOT / INVENTORY).read_text(encoding="utf-8"))
         by = {e["path"]: e for e in inv["entries"]}
         for p in ("tokens/tokens.css", "tokens/tailwind.preset.js"):
-            self.assertEqual(by[p]["classification"], "derived-manual")
+            self.assertEqual(by[p]["classification"], "generated")
+            self.assertEqual(by[p]["generated_by"], "tools/build_tokens.py")
         for p in ("fonts/Fraunces-OFL.txt", "fonts/InterTight-OFL.txt"):
             self.assertEqual(by[p]["classification"], "licence-provenance")
             self.assertEqual(by[p]["release_class"], "candidate-unapproved")

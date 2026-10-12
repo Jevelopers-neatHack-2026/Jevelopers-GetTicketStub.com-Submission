@@ -1,11 +1,14 @@
-/* TicketStub master-brand tokens. Source of truth: tokens.json.
-   Day theme (paper) is the default; night (stage) is used for printing, reveal,
-   finishes and the tear moment, or follows the OS dark setting. */
-
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..800,0..100,0..1&family=Inter+Tight:wght@400..600&display=swap");
+/* GENERATED FILE - DO NOT EDIT BY HAND.
+   Loads no fonts and makes no network request. Opt-in web fonts: tokens/external-fonts-google.css.
+   Source of truth: tokens/tokens.json (rules: tokens/profile.json, outputs: tokens/mapping.json).
+   Generator: tools/build_tokens.py. Regenerate with `make build-tokens`; `make check-tokens` fails on drift.
+   Profile: ticketstub-token-profile 1.0.0 (not claimed DTCG-compatible).
+   Input sha256 tokens/tokens.json: 649e570dc1397ef78bc00b28127ce166d640a4187eb2889fb2f57cc54054f228
+   Input sha256 tokens/profile.json: 18ce404d9e9f667bcab5a6cc0a87ca7be9e9866c5b7e69bff0c529e21742fef3
+   Input sha256 tokens/mapping.json: 7db9104591711ff10a86f2fa26f2ec64fc995f3fb5eec9b7040be6ae363ffb45 */
 
 :root {
-  /* palette: 6 colours, nothing else */
+  /* color */
   --ts-orange: #E4572E;
   --ts-copper: #B4693E;
   --ts-moss: #26302A;
@@ -13,7 +16,7 @@
   --ts-cream: #F4ECDD;
   --ts-ink: #17140F;
 
-  /* semantic: day */
+  /* semantic.day */
   --ts-bg: var(--ts-cream);
   --ts-surface: rgb(23 20 15 / 0.05);
   --ts-text: var(--ts-ink);
@@ -22,12 +25,15 @@
   --ts-cta-label: var(--ts-ink);
   --ts-focus: var(--ts-ink);
 
+  /* gradient */
   --ts-foil: linear-gradient(135deg, #B4693E 0%, #E4572E 45%, #7CC6D2 100%);
   --ts-holo-spectrum: repeating-linear-gradient(118deg, hsl(348 92% 58%) 0, hsl(34 94% 60%) 26px, hsl(58 90% 62%) 50px, hsl(150 82% 58%) 76px, hsl(200 92% 60%) 102px, hsl(280 88% 62%) 128px, hsl(348 92% 58%) 152px);
 
-  /* type */
+  /* font.family */
   --ts-font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   --ts-font-ui: "Inter Tight", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  /* font.scale */
   --ts-step--1: 0.8rem;
   --ts-step-0: 1rem;
   --ts-step-1: 1.25rem;
@@ -36,23 +42,37 @@
   --ts-step-4: 2.441rem;
   --ts-step-5: 3.052rem;
   --ts-step-6: 3.815rem;
+
+  /* font.line-height */
   --ts-lh-tight: 1.05;
   --ts-lh-heading: 1.15;
   --ts-lh-body: 1.5;
+
+  /* font.tracking */
   --ts-track-display: -0.02em;
   --ts-track-label: 0.08em;
 
-  /* space, radius, shadow */
-  --ts-space-1: 4px;  --ts-space-2: 8px;  --ts-space-3: 12px; --ts-space-4: 16px;
-  --ts-space-5: 24px; --ts-space-6: 32px; --ts-space-7: 48px; --ts-space-8: 64px;
+  /* space */
+  --ts-space-1: 4px;
+  --ts-space-2: 8px;
+  --ts-space-3: 12px;
+  --ts-space-4: 16px;
+  --ts-space-5: 24px;
+  --ts-space-6: 32px;
+  --ts-space-7: 48px;
+  --ts-space-8: 64px;
+
+  /* radius */
   --ts-radius-paper: 2px;
   --ts-radius-control: 12px;
   --ts-radius-sheet: 20px;
   --ts-radius-pill: 999px;
+
+  /* shadow */
   --ts-shadow-paper: 0 1px 0 rgb(23 20 15 / .06), 0 10px 24px -10px rgb(23 20 15 / .45);
   --ts-shadow-lifted: 0 2px 0 rgb(23 20 15 / .05), 0 24px 48px -16px rgb(23 20 15 / .55);
 
-  /* motion */
+  /* motion.duration */
   --ts-dur-track: 80ms;
   --ts-dur-quick: 160ms;
   --ts-dur-base: 240ms;
@@ -60,15 +80,19 @@
   --ts-dur-reveal: 600ms;
   --ts-dur-shutter: 320ms;
   --ts-dur-print-sweep: 2600ms;
+
+  /* motion.easing */
   --ts-ease-standard: cubic-bezier(.2, .8, .2, 1);
   --ts-ease-enter: cubic-bezier(.16, 1, .3, 1);
   --ts-ease-exit: cubic-bezier(.4, 0, 1, 1);
   --ts-ease-flip: cubic-bezier(.45, 0, .55, 1);
+
+  /* motion.tilt */
   --ts-tilt-max: 11deg;
   --ts-perspective: 1400px;
 }
 
-/* night stage */
+/* night stage: only variables whose value differs from day */
 .ts-night,
 :root[data-theme="dark"] {
   --ts-bg: var(--ts-ink);
@@ -89,6 +113,7 @@
   }
 }
 
+/* reduced motion: durations go to 0ms so transitions and loops built on the variables stop */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --ts-dur-track: 0ms;
@@ -97,5 +122,6 @@
     --ts-dur-settle: 0ms;
     --ts-dur-reveal: 0ms;
     --ts-dur-shutter: 0ms;
+    --ts-dur-print-sweep: 0ms;
   }
 }

@@ -1,0 +1,17 @@
+/* Plain-CSS consumer fixture for BK-03A. Uses only public --ts-* variables, no Tailwind and no build step.
+   Checked by tools/tests/test_tokens.py and tools/check_tokens_tailwind.py against tokens.css and the source values. */
+body { background: var(--ts-bg); color: var(--ts-text); font: var(--ts-step-0) / var(--ts-lh-body) var(--ts-font-ui); }
+h1 { font-family: var(--ts-font-display); font-size: var(--ts-step-5); line-height: var(--ts-lh-tight); letter-spacing: var(--ts-track-display); }
+.label { color: var(--ts-text-muted); letter-spacing: var(--ts-track-label); }
+.chip { background: var(--ts-surface); border-radius: var(--ts-radius-pill); padding: var(--ts-space-2) var(--ts-space-4); }
+.button { background: var(--ts-cta-bg); color: var(--ts-cta-label); border-radius: var(--ts-radius-control);
+  transition: transform var(--ts-dur-base) var(--ts-ease-standard), opacity var(--ts-dur-quick) var(--ts-ease-exit); }
+.button:focus-visible { outline: 2px solid var(--ts-focus); }
+.stub { box-shadow: var(--ts-shadow-paper); border-radius: var(--ts-radius-paper); background: var(--ts-foil);
+  transform: perspective(var(--ts-perspective)) rotateX(var(--ts-tilt-max));
+  transition: transform var(--ts-dur-settle) var(--ts-ease-flip); }
+.stub.lifted { box-shadow: var(--ts-shadow-lifted); animation: land var(--ts-dur-reveal) var(--ts-ease-enter); }
+.flash { animation: fade var(--ts-dur-shutter) linear; }
+.sweep { background: var(--ts-holo-spectrum); animation: sweep var(--ts-dur-print-sweep) linear infinite; }
+.track { transition: transform var(--ts-dur-track) linear; }
+.sheet { border-radius: var(--ts-radius-sheet); padding: var(--ts-space-6); }
