@@ -4,8 +4,9 @@ import { resolve } from 'node:path';
 // An offline stand-in for Neatlogs: OTLP/HTTP ingest plus the Public API
 // routes the readback uses. It decodes the real protobuf body, stores root
 // spans like the receiver does (the completion marker is not stored), and
-// mimics the observed behavior that a trace ID whose first delivery was lost
-// silently drops every later delivery while still answering HTTP 200.
+// can simulate a configured lost trace for deterministic queue tests. That
+// synthetic behavior is a fixture choice and does not establish receiver
+// behavior or permanent loss.
 
 const require = createRequire(import.meta.url);
 const otlpRoot = require(resolve('node_modules/@opentelemetry/otlp-transformer/build/src/generated/root.js'));
@@ -26,12 +27,19 @@ function attributeMap(list = []) {
   return out;
 }
 
-export function fakeNeatlogs({ loseFirstDelivery = [], ingestStatus = () => 200 } = {}) {
+export function fakeNeatlogs({
+  loseFirstDelivery = [],
+  ingestStatus = () => 200,
+  readbackStatus = () => 200,
+  finalizationStatus = () => 'finalized',
+  beforeFetch = async () => {}
+} = {}) {
   const stored = new Map();
   const seen = new Set();
   const lost = new Set(loseFirstDelivery);
   const bodies = [];
   const calls = [];
+  let ingestOrdinal = 0;
   const json = (status, data) => new Response(JSON.stringify({ success: true, requestId: 'req_fake', data }), {
     status, headers: { 'content-type': 'application/json' }
   });
@@ -39,12 +47,23 @@ export function fakeNeatlogs({ loseFirstDelivery = [], ingestStatus = () => 200 
 
   async function fetchImpl(url, init) {
     const parsed = new URL(String(url));
-    calls.push({ method: init.method, path: parsed.pathname, headers: init.headers });
+    const call = {
+      method: init.method,
+      path: parsed.pathname,
+      headers: init.headers,
+      ingestOrdinal: parsed.pathname === '/v1/traces' ? ++ingestOrdinal : null
+    };
+    calls.push(call);
+    const body = parsed.pathname === '/v1/traces' ? Buffer.from(init.body) : null;
+    if (body) bodies.push(body);
+    await beforeFetch(Object.freeze({ ...call, body }));
     if (parsed.pathname === '/v1/traces') {
-      const status = ingestStatus(calls.length);
-      if (status !== 200) return new Response('', { status });
-      const body = Buffer.from(init.body);
-      bodies.push(body);
+      const configured = ingestStatus(call.ingestOrdinal);
+      const status = typeof configured === 'number' ? configured : configured.status;
+      if (status !== 200) return new Response('', {
+        status,
+        headers: configured?.retryAfter ? { 'retry-after': String(configured.retryAfter) } : undefined
+      });
       const request = ExportRequest.decode(body);
       for (const resourceSpans of request.resourceSpans) {
         const resource = attributeMap(resourceSpans.resource.attributes);
@@ -60,6 +79,8 @@ export function fakeNeatlogs({ loseFirstDelivery = [], ingestStatus = () => 200 
               traceId,
               spanId: hex(span.spanId),
               spanName: span.name,
+              startTimeUnixNano: String(span.startTimeUnixNano),
+              endTimeUnixNano: String(span.endTimeUnixNano),
               sessionId: attributes['neatlogs.session.id'],
               workflowName: resource['neatlogs.workflow_name'],
               tags: (attributes['neatlogs.tags'] ?? '').split(',').filter(Boolean),
@@ -74,6 +95,16 @@ export function fakeNeatlogs({ loseFirstDelivery = [], ingestStatus = () => 200 
       });
     }
     const path = parsed.pathname.replace('/api/v1/public', '');
+    const configuredReadback = readbackStatus(parsed.pathname, call);
+    const readbackHttpStatus = typeof configuredReadback === 'number'
+      ? configuredReadback : configuredReadback.status;
+    if (readbackHttpStatus !== 200) {
+      return new Response('', {
+        status: readbackHttpStatus,
+        headers: configuredReadback?.retryAfter
+          ? { 'retry-after': String(configuredReadback.retryAfter) } : undefined
+      });
+    }
     if (path === '/project') return json(200, { id: FAKE_PROJECT_ID, name: 'Synthetic project' });
     const match = /^\/traces\/([0-9a-f]{32})(\/spans(?:\/([0-9a-f]{16})\/payload)?)?$/.exec(path);
     const trace = match ? stored.get(match[1]) : null;
@@ -81,7 +112,7 @@ export function fakeNeatlogs({ loseFirstDelivery = [], ingestStatus = () => 200 
     if (!match[2]) {
       return json(200, {
         traceId: trace.traceId, sessionId: trace.sessionId, workflowName: trace.workflowName,
-        tags: trace.tags, spansCount: 1, finalizationStatus: 'finalized'
+        tags: trace.tags, spansCount: 1, finalizationStatus: finalizationStatus(trace.traceId, call)
       });
     }
     if (!match[3]) {
