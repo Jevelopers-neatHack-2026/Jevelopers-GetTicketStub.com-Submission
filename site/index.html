@@ -31,8 +31,6 @@
 }
 *{box-sizing:border-box}
 html{background:var(--ink)}
-html.lenis,html.lenis body{height:auto}
-.lenis.lenis-smooth{scroll-behavior:auto!important}
 body{margin:0;background:var(--ink);color:var(--stock);font-family:var(--body);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 img{max-width:100%;display:block}
 a{color:inherit}
@@ -558,7 +556,8 @@ footer a{text-decoration:none;opacity:.85}footer a:hover{opacity:1;text-decorati
 .f-brand{display:flex;align-items:center;gap:12px;margin-bottom:18px;color:var(--stock)}.f-stamp{width:26px;height:33px;color:var(--punch)}.f-name{font-family:var(--display);font-weight:900;font-stretch:125%;font-size:22px;letter-spacing:-.02em}.f-credit{display:flex;align-items:center;gap:8px;margin:0 0 16px;font:500 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#a89d88}.f-word{width:86px;height:19px;color:#cfc4b0}
 .legal{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:#9c8e78;font-size:13px}
 
-.rail{position:fixed;right:10px;top:50%;transform:translateY(-50%);height:34vh;width:3px;border-radius:3px;background:rgba(128,118,100,.35);z-index:31}
+/* Display-only progress marker: all input passes through to the page/native scrollbar. */
+.rail{position:fixed;right:10px;top:50%;transform:translateY(-50%);height:34vh;width:3px;border-radius:3px;background:rgba(128,118,100,.35);z-index:31;pointer-events:none;cursor:default}
 .rail i{position:absolute;left:-2px;width:7px;height:28px;border-radius:4px;background:var(--punch);top:calc(var(--rp,0) * (100% - 28px))}
 @media (max-width:760px){.rail{display:none}
   #boardUI:before{height:26vh;background:linear-gradient(transparent,rgba(23,20,15,.92) 45%)}
@@ -1082,7 +1081,6 @@ window.TSMotion = (() => {
   return { shutter, pin, ok, shake, sent, drop };
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1404,7 +1402,7 @@ function buildLoopStubs(){
   }
 }
 function respawn(it, vh, below){ it.y = below ? vh + 40 + Math.random() * vh * .5 : -it.h - 60 - Math.random() * 200; it.x = .05 + Math.random() * .9; }
-function jumpTo(y){ if (lenisRef) lenisRef.scrollTo(y, { immediate: true, force: true }); else window.scrollTo({ top: y, behavior: 'instant' }); }
+function jumpTo(y){ window.scrollTo({ top: y, behavior: 'instant' }); }
 function loopTick(){
   const sy = scrollY, vh = innerHeight, vw = innerWidth;
   const p = (sy + vh - zoneTop) / Math.max(1, cloneTop - zoneTop + vh);   // progress through the fade (used to prepare the hero copy)
@@ -1475,7 +1473,6 @@ function navColour(){ for (const s of navSections){ const r = s.getBoundingClien
 function paintNav(nav, col){ if (col === navCol) return; navCol = col; nav.style.setProperty('--navc', col); nav.style.setProperty('--navbg', col === '#17140f' ? '#f4ecdd' : '#17140f'); }
 
 /* ---------- in-page links: a short glide, and "Make yours" lands focus in the form ---------- */
-let lenisRef = null, madeTrip = false;
 const ev = document.getElementById('ev');
 function focusMaker(){   // wait until the finale is actually showing, then put the cursor in the field
   const t0 = performance.now(); let stopped = false; const stop = () => { stopped = true; };
@@ -1487,22 +1484,29 @@ document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click
   const id = a.getAttribute('href'); const t = document.querySelector(id); if (!t) return; e.preventDefault();
   const make = id === '#make';
   const y = make ? boardEl.offsetTop + boardEl.offsetHeight - innerHeight * 1.02 : t.getBoundingClientRect().top + scrollY;
-  const screens = Math.abs(y - scrollY) / innerHeight;
   try { history.pushState(null, '', id); } catch (err) {}
-  if (lenisRef && !reduced){
-    // the first trip to the wall plays the whole fill; later trips are quick
-    const duration = make ? (madeTrip ? 1.2 : Math.min(3.2, 1 + screens * .1)) : Math.min(2, .6 + screens * .08);
-    lenisRef.scrollTo(y, { duration, onComplete: make ? focusMaker : undefined });
-  } else {
-    scrollTo({ top: y, behavior: reduced ? 'auto' : 'smooth' });
-    if (make) focusMaker();
-  }
-  if (make) madeTrip = true;
+  scrollTo({ top: y, behavior: reduced ? 'auto' : 'smooth' });
+  if (make) focusMaker();
 }));
+
+// Progress follows native scroll events in both 3D and fallback modes.
+const rail = document.querySelector('.rail');
+function updateRail(){
+  const max = document.documentElement.scrollHeight - innerHeight;
+  rail.style.setProperty('--rp', (max > 0 ? Math.max(0, Math.min(1, scrollY / max)) : 0).toFixed(4));
+}
+addEventListener('scroll', updateRail, { passive: true });
+addEventListener('resize', updateRail);
+updateRail();
 
 /* =============================== 3D, with the printed (2D) version standing in =============================== */
 let staticLoop = null, dead3d = false;
-function useStatic(){ root.classList.add('no3d'); if (!staticLoop) staticLoop = startStaticLoop(); }
+function useStatic(){
+  root.classList.add('no3d');
+  // A failed 3D frame may have hidden entering scene copy; restore its CSS defaults.
+  sceneEls.forEach(el => el.querySelector('.info').style.removeProperty('--ia'));
+  if (!staticLoop) staticLoop = startStaticLoop();
+}
 function leaveStatic(){ if (staticLoop){ staticLoop.stop(); staticLoop = null; } root.classList.remove('no3d'); }
 const threeP = build3D().then(start => start, err => { console.warn('3D unavailable, showing the static version', err); return null; });
 // reveal as soon as the 3D hero is ready, or after a short wait with the printed stub on the disc instead
@@ -1804,13 +1808,12 @@ async function build3D(){
   document.querySelectorAll('.athlete,.panel img').forEach(im => { if (!im.complete) im.addEventListener('load', layout, { once: true }); });
 
   /* ---------- scroll engine ---------- */
-  let lenis = null;
-  if (!reduced && window.Lenis){ lenis = new Lenis({ lerp: 0.085, smoothWheel: true }); lenisRef = lenis; }
+  // Read native scrolling; page input must never depend on an animation frame.
   const clamp = (x, a=0, b=1) => Math.max(a, Math.min(b, x));
   const ease = t => t*t*(3 - 2*t);
   let mouseX = 0, mouseY = 0;
   addEventListener('pointermove', e => { mouseX = e.clientX / W - .5; mouseY = e.clientY / H - .5; });
-  const tallyEl = document.getElementById('tally'), rail = document.querySelector('.rail'), nav = document.getElementById('nav');
+  const tallyEl = document.getElementById('tally'), nav = document.getElementById('nav');
   const ribbonSec = document.querySelector('.gallery'); const flAll = ['fl1','fl2','fl3','fl4'].map(id => document.getElementById(id));
   let shownTally = 0, panS = 0, lastF = -1, camFx = 0, camFy = 0;
   let clock = 0, last = performance.now(), lastY = scrollY, lastTally = -1, drewLast = true, shadowKey = '', ribbonSpan = 0, navHidden = false;
@@ -1824,17 +1827,16 @@ async function build3D(){
 
   function tick(now){
     if (dead3d) return;   // WebGL context lost: the static version has taken over
+    try {
     const dt = Math.min(.05, (now - last) / 1000); last = now; clock += reduced ? 0 : dt;
-    if (lenis) lenis.raf(now);
     /* ---- reads: every measurement for this frame, before any style is written ---- */
-    const sy = scrollY, maxS = document.documentElement.scrollHeight - H;
+    const sy = scrollY;
     const navCol = navColour();
     const wb = boardEl.getBoundingClientRect(), hr = heroEl.getBoundingClientRect();
     const srs = sceneParts.map(sp => sp.el.getBoundingClientRect());
     const frs = flAll.map(f => f.getBoundingClientRect());
     const gr = ribbonSec.getBoundingClientRect();
     /* ---- writes ---- */
-    rail.style.setProperty('--rp', clamp(sy / maxS).toFixed(4));
     paintNav(nav, navCol);
     { const onWall = wb.top < H * .9 && wb.bottom > H;
       if ((sy > lastY + 2 && sy > 400) || onWall){ if (!navHidden){ nav.classList.add('hide'); navHidden = true; } }
@@ -1963,6 +1965,11 @@ async function build3D(){
     }
     drewLast = anything;
     requestAnimationFrame(tick);
+    } catch (err){
+      dead3d = true;
+      console.warn('3D animation unavailable, showing the static version', err);
+      useStatic();
+    }
   }
   // start the loop when the page hands over to 3D; build the wall in idle time from then on
   return () => { requestAnimationFrame(tick); idle(pump); };
