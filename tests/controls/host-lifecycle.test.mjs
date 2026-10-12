@@ -56,3 +56,20 @@ test('failed directory removal retains ownership until the next transition clean
   await lifecycle.change('capture'); assert.deepEqual(removed, ['old']);
   await lifecycle.stop(); assert.deepEqual(removed, ['old', 'new']);
 });
+
+test('a drain control entering after the last release keeps finalization waiting', async () => {
+  const { lifecycle, events } = fixture(), lease = await lifecycle.acquire();
+  const reset = lifecycle.change('reset', {}); await tick();
+  lease.release(); const control = await lifecycle.acquire({ draining: true });
+  await tick(); assert.deepEqual(events, []); assert.equal(lifecycle.state().active, 1);
+  control.release(); await reset; assert.deepEqual(events, ['close-old', 'capture-old', 'remove-old']);
+  await lifecycle.stop();
+});
+test('drain admission closes atomically before an asynchronous finalizer runs', async () => {
+  let finishCapture; const capture = new Promise(resolve => { finishCapture = resolve; });
+  const { lifecycle } = fixture({ async finalize(session) { assert.equal(session.active, 0); await capture; assert.equal(session.active, 0); session.closed = true; session.finalized = true; } });
+  const reset = lifecycle.change('reset', {}); await tick();
+  let admitted = false; const control = lifecycle.acquire({ draining: true }).then(lease => { admitted = true; return lease; });
+  await tick(); assert.equal(admitted, false); finishCapture(); await reset;
+  const lease = await control; assert.equal(lease.host.id, 'new'); lease.release(); await lifecycle.stop();
+});
