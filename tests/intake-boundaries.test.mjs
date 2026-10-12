@@ -8,7 +8,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createServer as httpServer } from "node:http";
 import { createServer as httpsServer } from "node:https";
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
 import ts from "typescript";
 
 // Offline negative tests for the URL-first intake boundary: nothing here may reach the network.
