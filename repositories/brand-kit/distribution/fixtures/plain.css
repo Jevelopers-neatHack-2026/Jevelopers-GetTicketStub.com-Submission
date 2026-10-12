@@ -1,0 +1,9 @@
+body { margin: 0; padding: 1rem; color: var(--ts-text); background: var(--ts-bg); font-family: var(--ts-font-ui); }
+main { max-width: 60rem; margin-inline: auto; }
+.example { padding: 1.5rem; margin-block: 1rem; border: 1px solid currentColor; color: var(--ts-text); background: var(--ts-bg); }
+.brand-plate { display: inline-block; box-sizing: border-box; max-width: 100%; padding: 1rem; background: var(--ts-cream); }
+.brand-plate img { display: block; width: 200px; max-width: 100%; height: auto; }
+h1, h2 { font-family: var(--ts-font-display); }
+button { padding: .75rem 1rem; color: var(--ts-cta-label); background: var(--ts-cta-bg); border: 2px solid currentColor; border-radius: var(--ts-radius-control); font: inherit; }
+button:focus-visible { outline: 3px solid var(--ts-focus); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

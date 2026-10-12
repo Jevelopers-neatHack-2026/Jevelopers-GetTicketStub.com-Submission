@@ -1,15 +1,15 @@
 # Brand governance
 
-**Status: governance scaffolding only.** This document defines how brand changes are proposed, reviewed and decided. It records no approval of any identity, token, font, asset or release. [BK-07 #8](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8) closure is **blocked** (see [Closure blockers](#closure-blockers)).
+**Status: governance scaffolding only.** This document defines how brand changes are proposed, reviewed and decided. It records no approval of any identity, token, font, asset or release. [BK-07 #8](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8) is closed on GitHub, but its [latest owner comment](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8#issuecomment-6118159083) explicitly preserves missing reviewer appointments and acknowledgements. The evidence requirements under [Closure blockers](#closure-blockers) remain unsatisfied; issue state is not approval evidence.
 
-Controls described here are **manual**. This repository has no branch protection, CODEOWNERS or reviewer enforcement that this document relies on or claims. The only automation is [`tools/check_governance.py`](../tools/check_governance.py), which checks the shape of these documents, not anyone's approval.
+Controls described here are **manual**. This document does not rely on branch protection, CODEOWNERS or configured reviewer enforcement. The 2026-10-12 read-only refresh found no tracked local CODEOWNERS or workflows and no listed rulesets; the integration could not read classic branch protection (HTTP 403). Protection settings are therefore unverified. [`tools/check_governance.py`](../tools/check_governance.py) checks the shape of these documents, not anyone's approval.
 
 ## Responsibility table (BK-07.1)
 
 | Role | Holder | Status | Evidence |
 |---|---|---|---|
 | Accountable brand approver (Product/frontend) | **@CompleteDotTech** | Confirmed nomination | [Issue #8 comment, 2026-10-11T20:41:31Z](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8#issuecomment-6113526793) |
-| Brand implementation/release owner team | CompleteDotTech, LaJefa, Lars | Recorded by the user. CompleteDotTech is a confirmed GitHub username. LaJefa and Lars have **no verified GitHub handles**, and **no per-person responsibility split** (including BK-03A/B) is assigned | [Issue #8 comment, 2026-10-12T02:42:03Z](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8#issuecomment-6116787775) |
+| Brand implementation/release owner team | CompleteDotTech, LaJefa, Lars | Recorded by the user. CompleteDotTech is a confirmed GitHub username. The later owner request identifies Lars as **@lmvdz**; this identifies the recipient but supplies no reviewer-role acknowledgement. LaJefa's GitHub handle and the per-person BK-03A/B responsibility split remain **Unknown** | [Original team receipt](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8#issuecomment-6116787775); [later owner request to @lmvdz (Lars)](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/9#issuecomment-6118216028) |
 | Technical token/export reviewer | **Unknown** | Not appointed | Receipt 2026-10-11 says technical reviewer appointments under BK-07.1 "remain outstanding" |
 | Provenance/rights reviewer | **Unknown** | Not appointed | same |
 | Affected consumer reviewers (getticketstub.com, landing-page-repo, team-dashboard, marketing-material) | **Unknown** | Not appointed. No consumer repository has acknowledged a review role | same |
@@ -98,11 +98,11 @@ Currently **no decision is approved**, so **no release is eligible**.
 - [ ] Provenance/rights reviewer named, with linked acknowledgement.
 - [ ] Affected consumer reviewers named, with linked acknowledgements.
 - [ ] Release reviewer/publisher named.
-- [ ] LaJefa and Lars GitHub handles verified and responsibilities assigned (or an explicit decision not to).
+- [ ] LaJefa's GitHub handle verified; Lars/@lmvdz and the other owner-team members acknowledge the responsibilities assigned to them (or an explicit decision not to assign them).
 - [ ] Reviewed by the accountable approver (@CompleteDotTech), with a link to that review.
 - [ ] BK-01 (#6) dependency satisfied, including the `make check-links` target, which this change does not provide.
 
-Until these are done, **BK-07 stays open**. The pull request only references the issue (`Refs #8`).
+The recorded closed state of BK-07 does not fill these rows or close dependent identity/release gates. Further work references the issue neutrally (`Refs #8`) and preserves the missing evidence. The [baseline review packet](identity-decision-packet.md) is a concrete proposal for the accountable owner and required reviewers; every decision remains pending.
 
 ## Related
 

@@ -1,0 +1,32 @@
+✔ LP-09 supported update: replay the retained physical-to-illustrative correction as a pending draft (257.007902ms)
+✔ LP-09 unsupported/stale update: rehashing or changing an approval label cannot publish a claim (52.418633ms)
+✔ LP-09 withdrawal: real built claim/asset disappear, a safe local replacement is present, rollback restores exact bytes (881.07265ms)
+✔ withdrawal rejects stale active inventories and hiding content in comments (369.253175ms)
+✔ withdrawal rejects original asset bytes under a renamed file and a stale scene reference (399.705471ms)
+▶ GOV-R1: character references cannot retain withdrawn rendered text or attributes
+  ✔ decimal (190.529888ms)
+  ✔ hexadecimal (301.865805ms)
+  ✔ omitted numeric semicolon (277.334315ms)
+  ✔ encoded whitespace (187.078563ms)
+  ✔ named whitespace (125.178457ms)
+  ✔ legacy whitespace without semicolon (142.405761ms)
+  ✔ unsupported named reference (187.208034ms)
+  ✔ unsupported legacy prefix (104.909475ms)
+  ✔ inline element split (141.500364ms)
+  ✔ accessible attribute (207.367692ms)
+✔ GOV-R1: character references cannot retain withdrawn rendered text or attributes (1868.202109ms)
+✔ a once-escaped character reference remains literal text instead of being recursively decoded (180.795418ms)
+▶ GOV-R2: renamed and padded public payloads cannot retain the complete original asset bytes
+  ✔ original followed by newline (287.908501ms)
+  ✔ original embedded between padding (226.087379ms)
+✔ GOV-R2: renamed and padded public payloads cannot retain the complete original asset bytes (522.036668ms)
+✔ withdrawal requires an immutable known nonempty selection and rejects still-packaged media (419.31052ms)
+✔ changed destination dry run withdraws both native and no-JavaScript links (10.105842ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5134.257813

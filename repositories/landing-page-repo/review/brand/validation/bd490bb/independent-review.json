@@ -1,0 +1,31 @@
+{
+  "schema": "ticketstub.independent-code-review/1",
+  "reviewer": "Independent automated reviewer /root/upstream_dependencies",
+  "reviewedCommit": "bd490bb05ccb060a7d7dec16156c983e9d386adb",
+  "reviewedTree": "e368c0f262cb9e232dc317b568c859a5d94e7256",
+  "baseCommit": "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+  "equivalentPreviouslyReviewedCommit": "140fbc61bafd127544eff5e4473724c6126c5866",
+  "decision": "APPROVE_SCOPED_CODE",
+  "findings": [],
+  "scope": "LP-06 draft brand inventory, exact source binding, conservative approval state, negative/recovery tests, documented consumption and immutable evidence. No application runtime source is changed.",
+  "codeReviewBasis": "Full code/doc review of the local candidate plus verified complete tree equality to the published candidate. The independent reviewer also re-fetched all six pinned upstream files and verified digests, byte lengths and 19 token excerpts during the original code review.",
+  "freshChecks": {
+    "runtime": "v24.15.0",
+    "fullTests": "164 passed; 0 failed; 0 skipped",
+    "build": "11 source files; exit 0",
+    "brandDraft": "PASS_DRAFT; exit 0",
+    "brandRelease": "FAIL; exit 1 for empty publishable subset and missing real owner decisions",
+    "diffCheck": "exit 0",
+    "treeEquality": "exit 0; full tree IDs equal",
+    "records": "commands.json"
+  },
+  "currentState": "10 retained local assets, zero approved brand imports; brand/publication/consumer-contract/visual approvals PENDING.",
+  "limitations": [
+    "Review is not an authenticated GitHub approval by an accountable human owner.",
+    "Draft validation is an explicitly bounded brand-source projection and retained-file hash check, not a complete CSS/JavaScript parser or visual/runtime-network proof.",
+    "The captured empty allowlist is verified offline; the other upstream files remain read-only pinned observations. No font/provider response is claimed.",
+    "LP-06 issue #8 and gate/epic acceptance remains partial pending actual scoped brand-kit #14/#15 inputs and accountable acceptance.",
+    "Required checks must be rechecked on the final PR candidate and postmerge main as applicable. New evidence files do not change application/checker source."
+  ],
+  "historicalResults": "Original local evidence remains unchanged under ../ec3d2d2. Fresh checks here ran locally from the reachable published source revision."
+}

@@ -136,15 +136,30 @@ async function unpackPinnedSchema12Producer(destination) {
   try { compressed = await readFile(join(archiveRoot, PINNED_SCHEMA12_SOURCE.archive)); }
   catch { assert.fail(`pinned schema-12 composition producer archive is missing: ${PINNED_SCHEMA12_SOURCE.archive}`); }
   const archive = verifyPinnedSchema12Archive(compressed);
-  const names = execFileSync("tar", ["-tf", "-"], { cwd: REPO_ROOT, input: archive, encoding: "utf8" })
-    .split("\n").filter(Boolean);
-  assert.ok(names.length >= PINNED_SCHEMA12_SOURCE.leaves);
-  assert.equal(new Set(names).size, names.length);
-  assert.ok(names.every((name) => !name.startsWith("/") && !name.split("/").includes("..")));
-  const verbose = execFileSync("tar", ["-tvf", "-"], { cwd: REPO_ROOT, input: archive, encoding: "utf8" });
-  assert.ok(verbose.split("\n").filter(Boolean).every((line) => /^[-d]/.test(line)));
-  await mkdir(destination, { recursive: true });
-  execFileSync("tar", ["-xf", "-", "-C", destination], { input: archive, maxBuffer: 16 * 1024 * 1024 });
+  const temporaryArchive = join(dirname(destination), "schema12-verified-source.tar");
+  let temporaryArchiveCreated = false;
+  try {
+    await writeFile(temporaryArchive, archive, { flag: "wx" });
+    temporaryArchiveCreated = true;
+    const writtenArchive = await readFile(temporaryArchive);
+    assert.equal(writtenArchive.byteLength, PINNED_SCHEMA12_SOURCE.tarBytes,
+      "the temporary schema-12 tar file retains the pinned archive length before tar reads it");
+    assert.equal(createHash("sha256").update(writtenArchive).digest("hex"), PINNED_SCHEMA12_SOURCE.tarSha256,
+      "the temporary schema-12 tar file retains the pinned archive bytes before tar reads it");
+    const names = execFileSync("tar", ["-tf", temporaryArchive], { cwd: REPO_ROOT, encoding: "utf8" })
+      .split("\n").filter(Boolean);
+    assert.ok(names.length >= PINNED_SCHEMA12_SOURCE.leaves);
+    assert.equal(new Set(names).size, names.length);
+    assert.ok(names.every((name) => !name.startsWith("/") && !name.split("/").includes("..")));
+    const verbose = execFileSync("tar", ["-tvf", temporaryArchive], { cwd: REPO_ROOT, encoding: "utf8" });
+    assert.ok(verbose.split("\n").filter(Boolean).every((line) => /^[-d]/.test(line)));
+    await mkdir(destination, { recursive: true });
+    execFileSync("tar", ["-xf", temporaryArchive, "-C", destination], { maxBuffer: 16 * 1024 * 1024 });
+  } finally {
+    if (temporaryArchiveCreated) await rm(temporaryArchive, { force: true });
+  }
+  assert.equal(existsSync(temporaryArchive), false,
+    "the temporary archive outside the reconstructed Git source tree is removed deterministically");
   execFileSync("git", ["init", "--quiet"], { cwd: destination });
   execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: destination });
   execFileSync("git", ["config", "core.filemode", "true"], { cwd: destination });
@@ -196,6 +211,20 @@ test("pinned schema-12 producer archive reconstructs its tree and rejects byte t
   changed[changed.length - 1] ^= 1;
   assert.throws(() => verifyPinnedSchema12Archive(changed), /custody hash/,
     "schema-12 producer custody rejects a byte-modified archive before extracting or importing its source");
+});
+
+test("pinned schema-12 producer archive preserves an existing temporary tar sibling", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "schema12-source-custody-collision-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const temporaryArchive = join(root, "schema12-verified-source.tar");
+  const sentinel = Buffer.from("pre-existing sibling must survive exclusive-create collision\n");
+  await writeFile(temporaryArchive, sentinel, { flag: "wx" });
+  await assert.rejects(unpackPinnedSchema12Producer(join(root, "producer-source")), (error) => error?.code === "EEXIST",
+    "an exclusive temporary archive collision fails without claiming ownership of the sibling");
+  assert.deepEqual(await readFile(temporaryArchive), sentinel,
+    "cleanup leaves a pre-existing sibling untouched when exclusive creation fails");
+  assert.equal(existsSync(join(root, "producer-source")), false,
+    "a failed exclusive creation does not begin extracting the historical source");
 });
 
 function migrationRows(database, table) {

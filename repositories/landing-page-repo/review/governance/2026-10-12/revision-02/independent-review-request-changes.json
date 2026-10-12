@@ -1,0 +1,87 @@
+{
+  "reviewedHead": "8b0abe50bc000e3d7ef1976f8d3ccf7511a16233",
+  "base": "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+  "codeHead": "4d934e929741689a4a47276a44c61de2989cf410",
+  "disposition": "REQUEST_CHANGES",
+  "scope": "Independent source/evidence review of local governance and withdrawal tooling; not owner/publication/master acceptance.",
+  "instructionsRead": [
+    "landing-page-repo#11 current issue",
+    ".github/CONTRIBUTING.md blob1ffae49f24097cf30d64c146b66f63c77f61a2c1",
+    ".github/standards/acceptance-evidence.md blobc88632fb6bc6f5a432dd5193fd1588d3d0d769a3",
+    ".github/standards/security-secret-handling.md blob3a15d0d4538428ef911b1532c2820e6e835ec19c"
+  ],
+  "localInstructions": "No AGENTS.md or CONTRIBUTING.md found in current repository paths or ancestors.",
+  "runtime": "Node v24.15.0",
+  "independentChecks": [
+    {
+      "revision": "4d934e929741689a4a47276a44c61de2989cf410",
+      "command": "node --test tests/governance.test.mjs",
+      "exitCode": 0,
+      "tests": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "revision": "8b0abe50bc000e3d7ef1976f8d3ccf7511a16233",
+      "command": "node scripts/validate-landing --suite governance --mode draft",
+      "exitCode": 0,
+      "status": "PASS_DRAFT",
+      "tests": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "revision": "8b0abe50bc000e3d7ef1976f8d3ccf7511a16233",
+      "command": "node scripts/validate-landing --suite governance",
+      "exitCode": 1,
+      "status": "FAIL",
+      "reason": "Named maintainer/backup and owner acceptance unconfirmed; refusal expected and remains failure."
+    }
+  ],
+  "findings": [
+    {
+      "id": "GOV-R1",
+      "priority": "P2",
+      "file": "scripts/withdrawal.mjs",
+      "area": "claim loop: visibleText and raw payload comparisons",
+      "problem": "Numeric HTML character reference retains exact rendered withdrawn text while receiving PASS_LOCAL.",
+      "reproduction": "Replace all LP-COPY-02 exactCopy occurrences with '&#80;in the nights that mattered.', remove its active copy inventory entry, build a temporary full artifact, run validateWithdrawal selecting that claim at baseline4d934e9.",
+      "actual": {
+        "status": "PASS_LOCAL",
+        "artifactManifestSha256": "df942fb908f78a8cbcbec7da5ce79b1a9c6991f8e6cdb28644375a7fe8df41c0",
+        "renderedText": "Pin the nights that mattered."
+      },
+      "expected": "Reject because exact rendered withdrawn claim remains.",
+      "remedy": "Inspect decoded relevant HTML text/attributes and test encoded retention; no generalized semantic similarity scanner required."
+    },
+    {
+      "id": "GOV-R2",
+      "priority": "P2",
+      "file": "scripts/withdrawal.mjs",
+      "area": "asset loop: digest equality on each payload",
+      "problem": "Appending a harmless byte to renamed media defeats the digest-only removal check while preserving all original asset bytes.",
+      "reproduction": "Remove ballet-clean.webp, create renamed-ballet.webp from original bytes plus newline, update actual HTML/proof asset/scenes paths and SHA, build temporary artifact, run validateWithdrawal selecting original asset at baseline4d934e9.",
+      "actual": {
+        "status": "PASS_LOCAL",
+        "artifactManifestSha256": "e31ecd322971c542c4700b015b51168894b3cb3e97b982a57b9d11d5588c2cc4",
+        "originalBytes": 53684,
+        "renamedBytes": 53685,
+        "originalByteSequencePresent": true
+      },
+      "expected": "Reject because the original exact bytes remain in a public payload.",
+      "remedy": "Check original byte-sequence containment in payloads, retain existing path/inventory checks, and add regression."
+    }
+  ],
+  "evidenceReview": {
+    "codeUnchangedFromImplementationToFinal": true,
+    "priorFailuresRetained": true,
+    "sourceVsSyntheticOriginsQualified": true,
+    "releaseRefusalNotRelabeledPass": true,
+    "fullAuthor142Tests": "Author evidence inspected; independent reviewer reran focused seven-case suite, not all142."
+  },
+  "limitations": [
+    "No browser, public deployment, provider calls, image semantic/redaction review or owner approvals performed.",
+    "Fixtures use temporary copies of recorded repository assets with unconfirmed rights; no source/runtime files changed.",
+    "Current findings block review approval; exact repaired head requires re-review."
+  ]
+}

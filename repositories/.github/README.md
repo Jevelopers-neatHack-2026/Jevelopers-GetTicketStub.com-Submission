@@ -11,7 +11,7 @@ Shared contribution standards, governance records, contributor templates and reu
 
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
-  <a href="#status"><img alt="Status: partly published guidance" src="https://img.shields.io/badge/status-partly%20published-B4693E?style=flat-square&labelColor=17140F"></a>
+  <a href="#status"><img alt="Status: reduced governance scope accepted" src="https://img.shields.io/badge/status-reduced%20scope%20accepted-B4693E?style=flat-square&labelColor=17140F"></a>
   <a href="templates/README.md"><img alt="Template contracts: GH-PR-TEMPLATE 1.0.0 and GH-ISSUE-FORMS 1.0.0" src="https://img.shields.io/badge/templates-PR%201.0.0%20%C2%B7%20issue%20forms%201.0.0-26302A?style=flat-square&labelColor=17140F"></a>
 </p>
 
@@ -21,19 +21,18 @@ These documents define expectations. They do not change repository settings, pro
 
 ## Status
 
-Current state, reconciled 2026-10-12 against immutable source revision [ebac9e4](https://github.com/Jevelopers-neatHack-2026/.github/commit/ebac9e4f3ad4e6784de6ce16cd857a94b18ae5bf) (merge of [PR #24](https://github.com/Jevelopers-neatHack-2026/.github/pull/24)). Live issue state can change; recheck before relying on it.
+The maintainer accepted the **reduced repository-guidance scope** on 2026-10-12 at immutable revision [2f61f85](https://github.com/Jevelopers-neatHack-2026/.github/commit/2f61f8551ecf38170f0c5b225305c950c7c3b222). The [dated gate decision](https://github.com/Jevelopers-neatHack-2026/.github/issues/16#issuecomment-6122141536) records the accepted scope, exact source, validation and remaining limitations. Recheck live issues before relying on this snapshot.
 
-- **Leaf issues:** nine of the ten planned leaves are closed completed: [#4](https://github.com/Jevelopers-neatHack-2026/.github/issues/4), #6, #7, #8, #9, #10, #12, #14 and #15. [#5](https://github.com/Jevelopers-neatHack-2026/.github/issues/5) (`GH-08`, acceptance status and evidence records) is open.
-- **#5 evidence:** PR #24 merged the evidence-provenance and consumer-terminology guidance at `ebac9e4`. The refreshed integration-evals consumer [review](https://github.com/Jevelopers-neatHack-2026/.github/issues/5#issuecomment-6117637650) reports all four earlier gaps resolved. That is agent evidence only; accountable human acceptance is still pending and is not recorded here.
+- **Leaf issues:** all ten retained leaves are closed completed: #4, #5, #6, #7, #8, #9, #10, #12, #14 and #15. The [GH-08 acceptance receipt](https://github.com/Jevelopers-neatHack-2026/.github/issues/5#issuecomment-6122075793) records actual maintainer acceptance of the unchanged PR #24 guidance and its integration-evals compatibility review. It is distinct from an agent review or a GitHub approval.
 - **Reduced scope:** at the user's direction, [#11](https://github.com/Jevelopers-neatHack-2026/.github/issues/11) (security reporting) and [#13](https://github.com/Jevelopers-neatHack-2026/.github/issues/13) (sixth form and private routing) were closed **not planned**, with possible later addition. See the scope addenda on [#16](https://github.com/Jevelopers-neatHack-2026/.github/issues/16#issuecomment-6116512227) and [#3](https://github.com/Jevelopers-neatHack-2026/.github/issues/3#issuecomment-6116512413). This is deferred scope, not a passed check: the original twelve-leaf security baseline is not complete, no private reporting route is confirmed, and only five active issue forms exist. Do not send sensitive details through a public issue.
-- **Gate and epic:** release gate [#16](https://github.com/Jevelopers-neatHack-2026/.github/issues/16) (`GH-11`) and epic [#3](https://github.com/Jevelopers-neatHack-2026/.github/issues/3) remain open. The [final reduced-scope audit](https://github.com/Jevelopers-neatHack-2026/.github/issues/16#issuecomment-6117682189) at `ebac9e4` is ready pending maintainer acceptance, not a gate pass; no human approval is represented here.
+- **Gate and epic:** [#16](https://github.com/Jevelopers-neatHack-2026/.github/issues/16) (`GH-11`) and [#3](https://github.com/Jevelopers-neatHack-2026/.github/issues/3) are closed for the same reduced scope; the [epic closure receipt](https://github.com/Jevelopers-neatHack-2026/.github/issues/3#issuecomment-6122142963) preserves the exclusions. Earlier pending-acceptance assessments remain historical.
 - **Published sources:** the pull-request template (`GH-PR-TEMPLATE@1.0.0`) and five active issue forms (`GH-ISSUE-FORMS@1.0.0`) were published by [PR #19](https://github.com/Jevelopers-neatHack-2026/.github/pull/19) and [PR #20](https://github.com/Jevelopers-neatHack-2026/.github/pull/20).
 - **Limits:** native GitHub UI behavior beyond the dated client check, hosted Actions and platform isolation, repository settings, adoption by other repositories, master acceptance, product release and security are not verified or claimed. This repository has no root `.github/workflows` installation; downstream workflow execution, private-workflow access, fork isolation and secret behaviour are unverified.
 - **Acceptance:** master acceptance IDs and their status are owned by [integration-evals](https://github.com/Jevelopers-neatHack-2026/integration-evals). A merged documentation change, local fixture result or mock check does not verify one.
 
 **Historical snapshot, superseded where it differs:** at public revision [4129e71](https://github.com/Jevelopers-neatHack-2026/.github/commit/4129e71f42a51d42803b1020e146f54108cf2f93) (observed 2026-10-11 02:48:39 UTC) `GH-03-I` (#13) and `GH-07` (#11) were open and blocked, and `GH-01` and `GH-04` were still awaiting acceptance. The scope change above supersedes that open/blocked state; the snapshot is kept as dated evidence.
 
-Full detail: [current status and boundaries](docs/status.md). The [governance release assessment](adoption/governance-release-record.md) is a dated historical record and was not updated for the later scope change. Recheck live repository state before relying on either.
+Earlier detail: [status and boundaries](docs/status.md) and the [governance release assessment](adoption/governance-release-record.md) are dated records that predate the final acceptance above. Use the linked maintainer decisions for the later disposition; their acceptance does not retroactively supply a missing historical PR review receipt.
 
 ## Start here
 
@@ -75,6 +74,20 @@ It runs the checker extracted from the workflow YAML and validates the source, f
 | Security | [Pending security policy draft](community/SECURITY.pending.md) |
 | Ownership | [Local ownership view](docs/architecture/OWNERSHIP.md) · [Local acceptance view](docs/architecture/ACCEPTANCE.md) |
 | Organization profile | [profile/README.md](profile/README.md) |
+
+## Repository structure
+
+| Path | Responsibility |
+|---|---|
+| [`profile/`](profile/) | Organization entry point and its existing TicketStub artwork |
+| [`.github/`](.github/) | Published pull-request template and five active issue forms |
+| [`standards/`](standards/) | Contribution, evidence, architecture, release and security guidance |
+| [`templates/`](templates/) | Reusable documentation contracts and worked examples |
+| [`adoption/`](adoption/) | Bootstrap instructions and dated rollout observations |
+| [`automation-design/`](automation-design/) | Reviewed workflow sources, synthetic fixtures and local tests |
+| [`workflow-templates/`](workflow-templates/) | Starter files for deliberate adoption in destination repositories |
+
+No product runtime, environment file or deployment command is required to use this documentation. Installing a workflow in another repository and configuring its permissions remain that repository's work.
 
 ## Related repositories
 

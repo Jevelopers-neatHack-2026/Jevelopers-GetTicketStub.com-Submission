@@ -1,0 +1,13 @@
+{
+  "testedRevision": "521fcca7a6c91e675caf15ea589a13086efd2ec8",
+  "command": "node --test tests/governance.test.mjs",
+  "runtime": "v24.15.0",
+  "startedAt": "2026-10-12T16:28:59.127664+00:00",
+  "finishedAt": "2026-10-12T16:29:02.682534+00:00",
+  "exitCode": 1,
+  "outcome": "fail",
+  "mode": "mock/offline; synthetic mutations of recorded repository material",
+  "log": "review/governance/2026-10-12/revision-02/01-reproduced-regressions.log",
+  "logSha256": "6fd66f2f2cd1a2cded9915a5fb6c43506ddb047107c620ad58d21c5f787c685b",
+  "purpose": "Reproduce GOV-R1 and GOV-R2 against unchanged withdrawal implementation before repair; a failing run is retained."
+}

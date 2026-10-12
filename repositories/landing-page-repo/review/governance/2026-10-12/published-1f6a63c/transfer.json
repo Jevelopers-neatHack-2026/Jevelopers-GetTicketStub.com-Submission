@@ -1,0 +1,27 @@
+{
+  "schema": "ticketstub.reviewed-tree-transfer/1",
+  "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+  "localReviewedCommit": "581afccfa8453152f8a59740003f73a4ae3e6d76",
+  "localReviewedTree": "eefe6241693c82b636c10067623bf18108e783e6",
+  "publishedCommit": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+  "publishedCommitUrl": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/commit/1f6a63c33946c36999f9cad50aed57405a3bab91",
+  "publishedTree": "eefe6241693c82b636c10067623bf18108e783e6",
+  "publishedParent": "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+  "remoteCommitMetadataObservedAt": "2026-10-12",
+  "remoteCommitMetadataSource": "https://api.github.com/repos/Jevelopers-neatHack-2026/landing-page-repo/git/commits/1f6a63c33946c36999f9cad50aed57405a3bab91",
+  "verification": [
+    "GitHub Git-data commit metadata reports the recorded published tree and parent.",
+    "The fetched detached worktree and previously reviewed local head resolve to the identical complete Git tree.",
+    "git diff --exit-code 581afccfa8453152f8a59740003f73a4ae3e6d76 1f6a63c33946c36999f9cad50aed57405a3bab91 exited 0.",
+    "Tree equality preserves all tracked paths, bytes and Git modes, including the original REQUEST_CHANGES and failed/repaired historical evidence."
+  ],
+  "unchangedAuditPins": {
+    "copyProofAndPrivacySource": "36c0a841d5b5c5f6e7c3870e65c541825026d214",
+    "historicalCopySource": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+    "governanceFixtureBaseline": "Resolved dynamically from the tested worktree HEAD; this run used the published commit.",
+    "availability": "Active validator pins are existing ancestors of the published parent. Historical local implementation SHAs appear in evidence, not hardcoded runtime validator dependencies."
+  },
+  "historicalEvidence": "Earlier local results and source-revision labels remain unchanged; tree transfer does not turn previous executions into executions of this published commit.",
+  "execution": "The new checks in commands.json ran locally against the fetched reachable published commit. They are not GitHub Actions, browser/provider or deployed-removal results.",
+  "approvalBoundary": "Independent scoped code review only; accountable owner, content/rights, Finance and release acceptance remain separate."
+}

@@ -1,8 +1,10 @@
 # `landing-page-repo`
 
-**Repository status:** Verified existing on GitHub, private, October 10, 2026.
+**Historical repository status:** Verified existing on GitHub, private, October 10, 2026.
 **Proposed owner:** Product and frontend.
-**Delivery state:** Architecture plan; implementation criteria remain planned until evidence is recorded.
+**Historical delivery state (October 10, 2026):** Architecture plan; implementation criteria remain planned until evidence is recorded.
+
+**October 12, 2026 disposition:** Authenticated GitHub metadata now reports this repository public. Static page, build and local validators have since been implemented; current source and evidence are described in the [README](../../README.md). This dated correction preserves the original architecture snapshot and changes no repository visibility, permissions or license. Owner review, public-content acceptance and the release gate remain pending. The proposed [content review and withdrawal policy](../../review/content-policy.md) records the current role/assignment gaps and the local update procedure.
 
 ## Responsibility
 

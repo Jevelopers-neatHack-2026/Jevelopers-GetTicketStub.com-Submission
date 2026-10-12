@@ -1,0 +1,209 @@
+{
+  "schema": "ticketstub.local-validation-record/1",
+  "testedRevision": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+  "testedRevisionUrl": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/commit/1f6a63c33946c36999f9cad50aed57405a3bab91",
+  "testedTree": "eefe6241693c82b636c10067623bf18108e783e6",
+  "runtime": "v24.15.0",
+  "runtimeExecutable": "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+  "workingTreeBefore": "clean before this evidence directory was created",
+  "executionMode": "Local source/build checks and explicitly synthetic fixtures, including loopback HTTP tests. No font/CDN/provider responses fetched by these checks. The tested commit is reachable on GitHub; execution occurred locally.",
+  "scope": "Independent LP-09 code validation and prior finding repair verification; no accountable owner acceptance, provider recovery, deployed removal or publication approval",
+  "records": [
+    {
+      "name": "tree-equality",
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "581afccfa8453152f8a59740003f73a4ae3e6d76",
+        "1f6a63c33946c36999f9cad50aed57405a3bab91"
+      ],
+      "testedRevision": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+      "startedAt": "2026-10-12T16:41:44.959919+00:00",
+      "endedAt": "2026-10-12T16:41:44.963063+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "tree-equality.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        "stderr": {
+          "path": "tree-equality.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "build",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "scripts/build.mjs"
+      ],
+      "testedRevision": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+      "startedAt": "2026-10-12T16:41:44.964036+00:00",
+      "endedAt": "2026-10-12T16:41:45.091491+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "build.stdout.log",
+          "sha256": "c005ef06372299c25d7799129dbf09098a9aebb7deb7c2f3c034e0d67b0869b4",
+          "bytes": 35
+        },
+        "stderr": {
+          "path": "build.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "all-tests",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "--test",
+        "tests/content-proof.test.mjs",
+        "tests/cta.test.mjs",
+        "tests/foundation.test.mjs",
+        "tests/governance.test.mjs",
+        "tests/metadata.test.mjs",
+        "tests/privacy.test.mjs",
+        "tests/scroll.test.mjs",
+        "tests/ux.test.mjs"
+      ],
+      "testedRevision": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+      "startedAt": "2026-10-12T16:41:45.092670+00:00",
+      "endedAt": "2026-10-12T16:41:49.256594+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "all-tests.stdout.log",
+          "sha256": "ff492538ec0d7977316e02c6d92bd6dfee7f665f83986e151be15ef037623ec2",
+          "bytes": 13917
+        },
+        "stderr": {
+          "path": "all-tests.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "governance-draft",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "scripts/validate-landing",
+        "--suite",
+        "governance",
+        "--mode",
+        "draft"
+      ],
+      "testedRevision": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+      "startedAt": "2026-10-12T16:41:49.257639+00:00",
+      "endedAt": "2026-10-12T16:41:53.655346+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "governance-draft.stdout.log",
+          "sha256": "2b20d49da65098edeb5989f99cafa44c724638d95e0fbec7bf877cdabe6b7bdb",
+          "bytes": 2183
+        },
+        "stderr": {
+          "path": "governance-draft.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "governance-release",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "scripts/validate-landing",
+        "--suite",
+        "governance",
+        "--mode",
+        "release"
+      ],
+      "testedRevision": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+      "startedAt": "2026-10-12T16:41:53.655601+00:00",
+      "endedAt": "2026-10-12T16:41:59.221017+00:00",
+      "exitCode": 1,
+      "outcome": "fail",
+      "logs": {
+        "stdout": {
+          "path": "governance-release.stdout.log",
+          "sha256": "41a8fca28cbc5f63ef092f625fde1b91fabb7441a22d69c83bbdaf56e3f17b83",
+          "bytes": 1921
+        },
+        "stderr": {
+          "path": "governance-release.stderr.log",
+          "sha256": "be96055e3e8831086162523a485475ae334cad18e3e88ac87ca1b64da3be68d6",
+          "bytes": 252
+        }
+      },
+      "interpretation": "Actual release FAIL: named maintainers and accountable content/rights/Finance acceptance remain unconfirmed; code review and local fixtures do not supply this acceptance."
+    },
+    {
+      "name": "all-draft",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "scripts/validate-landing",
+        "--mode",
+        "draft"
+      ],
+      "testedRevision": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+      "startedAt": "2026-10-12T16:41:59.221690+00:00",
+      "endedAt": "2026-10-12T16:42:06.848849+00:00",
+      "exitCode": 1,
+      "outcome": "fail",
+      "logs": {
+        "stdout": {
+          "path": "all-draft.stdout.log",
+          "sha256": "0ca2a82d00efbf73f743b8c4d3f952ab46b223736637b2467bbd63739022ef30",
+          "bytes": 7312
+        },
+        "stderr": {
+          "path": "all-draft.stderr.log",
+          "sha256": "f41ec0af9e447072fa69ac1238ddb811b4468fb19fc6e5fffdbcf13b45144ffd",
+          "bytes": 125
+        }
+      },
+      "interpretation": "Actual all-draft FAIL on this standalone governance branch: the required brand validator is unavailable. Recheck the combined integration candidate after the separate brand slice is present; this failure does not become a pass."
+    },
+    {
+      "name": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+        "1f6a63c33946c36999f9cad50aed57405a3bab91"
+      ],
+      "testedRevision": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+      "startedAt": "2026-10-12T16:42:06.849367+00:00",
+      "endedAt": "2026-10-12T16:42:06.856232+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "diff-check.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        "stderr": {
+          "path": "diff-check.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    }
+  ],
+  "artifactManifestSha256": "389e41ab3e2f32b9169cd70db129b01466a329dde74e1c6874ebbdba1df56470",
+  "historicalEvidence": "The original LP-09 runs, unchanged REQUEST_CHANGES, failing regression-only output and repaired local run records remain byte-for-byte unchanged. They record previous local executions, not executions of this published commit."
+}

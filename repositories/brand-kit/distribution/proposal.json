@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "status": "proposal",
+  "brand_version": null,
+  "archive_format": "zip-stored-v1",
+  "paths": [
+    "docs/consumers.md",
+    "docs/distribution.md",
+    "docs/logo.md",
+    "docs/token-profile.md",
+    "logo/app-icon.svg",
+    "logo/favicon.svg",
+    "logo/lockup-horizontal-mono.svg",
+    "logo/lockup-horizontal.svg",
+    "logo/lockup-stacked.svg",
+    "logo/ts-stamp-currentcolor.svg",
+    "logo/ts-stamp-mono-cream.svg",
+    "logo/ts-stamp-mono-ink.svg",
+    "logo/ts-stamp-mono-orange.svg",
+    "logo/ts-stamp.svg",
+    "logo/wordmark-compact.svg",
+    "logo/wordmark-cream.svg",
+    "logo/wordmark-orange.svg",
+    "logo/wordmark.svg",
+    "tokens/external-fonts-google.css",
+    "tokens/mapping.json",
+    "tokens/profile.json",
+    "tokens/tailwind.preset.js",
+    "tokens/token-matrix.md",
+    "tokens/tokens.css",
+    "tokens/tokens.json"
+  ],
+  "font_policy": {
+    "self_hosted": false,
+    "status": "pending_owner_review",
+    "default": "platform_fallbacks_no_network",
+    "external_option": "Existing Google Fonts stylesheet is an explicit pending proposal; no provider approval or availability is asserted.",
+    "source_fonts": "Existing fonts/ binaries remain generator/source inputs only; never included in consumer archives."
+  },
+  "compatibility": {
+    "status": "proposal",
+    "locator": "Local ZIP built from a full Git commit, verified by a separately supplied SHA-256; no registry package or public release.",
+    "css": "brand-kit/tokens/tokens.css",
+    "tailwind": "brand-kit/tokens/tailwind.preset.js",
+    "tailwind_supported": "3.4.x; installed smoke requires the existing exact development lockfile",
+    "external_fonts_opt_in": "brand-kit/tokens/external-fonts-google.css",
+    "version_policy": "Owner selection pending. Full commits and byte hashes identify review candidates; no version tag is assigned.",
+    "removal_policy": "Any removed public token/path is breaking and needs an explicit migration plus affected consumer review.",
+    "deprecation_window": null
+  }
+}

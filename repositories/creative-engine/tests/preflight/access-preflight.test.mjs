@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { types as utilTypes } from 'node:util';
 import { deflateSync } from 'node:zlib';
 import {
   ACCESS_CELL_DEFINITIONS,
@@ -58,6 +59,31 @@ test('fixed required matrix retains all cells and mock evidence can never count 
   assert.equal(fixture.calls.reserve, 1);
   assert.equal(fixture.calls.dispatch, 1);
   assert.equal(fixture.calls.settle, 1);
+});
+
+test('fixed matrix snapshots the caller signal once and keeps a hidden cancellation across cells', async () => {
+  const fixture = createMockAccessFixture();
+  const cancelled = new AbortController();
+  cancelled.abort();
+  Object.defineProperty(cancelled.signal, 'aborted', { value: false });
+  const active = new AbortController();
+  let reads = 0;
+  Object.defineProperty(fixture.args, 'signal', {
+    configurable: true,
+    get() {
+      reads += 1;
+      return reads === 1 ? cancelled.signal : active.signal;
+    },
+  });
+
+  const report = await runAccessPreflight(fixture.args);
+
+  assert.equal(reads, 1, 'the fixed runner snapshots the caller-supplied signal once');
+  assert.equal(report.cells[0].status, 'failed');
+  assert.equal(report.cells[0].reason_code, 'preflight_deadline_passed');
+  assert.equal(report.cells[0].financial_hold, 'none');
+  assert.equal(fixture.calls.reserve, 0);
+  assert.equal(fixture.calls.dispatch, 0);
 });
 
 test('fixture refuses to invent JEV, observer, baseline, planning, or Neatlogs targets', () => {
@@ -941,4 +967,166 @@ test('invalid access plan keeps fixed cell denominator and records safe invalid 
   assert.equal(report.cells[0].reason_code, 'sensitive_configuration_value');
   assert.equal(fixture.calls.dispatch, 0);
   assert.doesNotMatch(JSON.stringify(report), /person@example\.invalid/);
+});
+
+
+test('public runner rejects all Proxy signals without invoking any proxy trap', async () => {
+  for (const kind of ['hostile-aborted', 'benign-active', 'revoked', 'spoof']) {
+    const fixture = createMockAccessFixture();
+    const controller = new AbortController();
+    if (kind === 'hostile-aborted') controller.abort();
+    let traps = 0;
+    const handler = { get(target, key, receiver) {
+      traps += 1;
+      if (key === 'aborted' || String(key) === 'Symbol(kAborted)') return false;
+      return Reflect.get(target, key, receiver);
+    }, getPrototypeOf() { traps += 1; return AbortSignal.prototype; } };
+    const revocable = Proxy.revocable(kind === 'spoof' ? {} : controller.signal, handler);
+    if (kind === 'revoked') revocable.revoke();
+    const result = await executeAuthorizedAccessCell({ ...fixture.args, signal: revocable.proxy });
+    assert.equal(result.reason_code, 'invalid_abort_signal', kind);
+    assert.equal(traps, 0, kind);
+    assert.equal(fixture.calls.inspect, 0, kind);
+    assert.equal(fixture.calls.reserve, 0, kind);
+    assert.equal(fixture.calls.dispatch, 0, kind);
+    assert.equal(result.financial_hold, 'none', kind);
+  }
+});
+
+test('a genuine signal with a subclass prototype retains cancellation and positive behavior', async () => {
+  class SignalSubclass extends AbortSignal {}
+  for (const aborted of [false, true]) {
+    const fixture = createMockAccessFixture();
+    const controller = new AbortController();
+    Object.setPrototypeOf(controller.signal, SignalSubclass.prototype);
+    Object.defineProperty(controller.signal, 'aborted', { value: false });
+    if (aborted) controller.abort();
+    const result = await executeAuthorizedAccessCell({ ...fixture.args, signal: controller.signal });
+    assert.equal(result.status, aborted ? 'failed' : 'simulated');
+    assert.equal(fixture.calls.reserve, aborted ? 0 : 1);
+    assert.equal(fixture.calls.dispatch, aborted ? 0 : 1);
+  }
+});
+
+
+test('Node cancellation primitives can be fooled by a non-Proxy facade with a Proxy prototype', () => {
+  const controller = new AbortController(); controller.abort(); let traps = 0;
+  const proxy = new Proxy(controller.signal, { get(target, key, receiver) {
+    traps += 1;
+    if (key === 'aborted' || String(key) === 'Symbol(kAborted)') return false;
+    return Reflect.get(target, key, receiver);
+  } });
+  const facade = Object.create(Object.create(proxy));
+  const read = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
+  assert.equal(utilTypes.isProxy(facade), false);
+  assert.equal(read.call(controller.signal), true);
+  assert.equal(read.call(facade), false, 'native getter reads through the hostile prototype');
+  assert.equal(read.call(AbortSignal.any([facade])), false, 'native composition alone is insufficient');
+  assert.ok(traps > 0, 'the primitive proof invokes inherited traps; the application must reject before this');
+});
+
+test('public runner rejects inherited signal facades before inspection or financial effects', async () => {
+  for (const kind of ['hostile', 'revoked', 'plain', 'state-shadow']) {
+    for (const levels of [1, 3]) {
+      const fixture = createMockAccessFixture(); const controller = new AbortController(); controller.abort();
+      let traps = 0;
+      const revocable = Proxy.revocable(controller.signal, {
+        get(target, key, receiver) { traps += 1;
+          if (key === 'aborted' || String(key) === 'Symbol(kAborted)') return false;
+          return Reflect.get(target, key, receiver);
+        }, getPrototypeOf() { traps += 1; throw new Error('prototype trap must not run'); },
+        getOwnPropertyDescriptor() { traps += 1; throw new Error('descriptor trap must not run'); },
+      });
+      let signal = ['plain', 'state-shadow'].includes(kind) ? controller.signal : revocable.proxy;
+      for (let level = 0; level < levels; level += 1) signal = Object.create(signal);
+      if (kind === 'revoked') revocable.revoke();
+      if (kind === 'state-shadow') {
+        const key = Object.getOwnPropertySymbols(controller.signal).find((candidate) => String(candidate) === 'Symbol(kAborted)');
+        assert.ok(key); Object.defineProperty(signal, key, { value: false });
+      }
+      const result = await executeAuthorizedAccessCell({ ...fixture.args, signal });
+      assert.equal(result.reason_code, 'invalid_abort_signal', `${kind}/${levels}`);
+      assert.equal(traps, 0, `${kind}/${levels}`);
+      assert.equal(fixture.calls.inspect, 0); assert.equal(fixture.calls.reserve, 0); assert.equal(fixture.calls.dispatch, 0);
+      assert.equal(result.financial_hold, 'none');
+    }
+  }
+});
+
+test('malformed primitive signals and accessor-backed native state fail without running getters', async () => {
+  const controller = new AbortController(); controller.abort(); let reads = 0;
+  const key = Object.getOwnPropertySymbols(controller.signal).find((candidate) => String(candidate) === 'Symbol(kAborted)');
+  assert.ok(key);
+  Object.defineProperty(controller.signal, key, { configurable: true, get() { reads += 1; return false; } });
+  for (const signal of [null, false, 0, 'signal', Symbol('signal'), () => {}, controller.signal]) {
+    const fixture = createMockAccessFixture();
+    const result = await executeAuthorizedAccessCell({ ...fixture.args, signal });
+    assert.equal(result.reason_code, 'invalid_abort_signal');
+    assert.equal(fixture.calls.inspect, 0); assert.equal(fixture.calls.reserve, 0); assert.equal(fixture.calls.dispatch, 0);
+  }
+  assert.equal(reads, 0, 'a malformed native-state accessor is never invoked');
+});
+
+
+test('real elapsed time during signal composition stops before reservation without a retained hold', async () => {
+  const fixture = createMockAccessFixture(); const controller = new AbortController();
+  const deadlineMs = Date.now() + 200;
+  fixture.cell.spend.deadline_at = new Date(deadlineMs).toISOString();
+  for (const method of ['verifyGrant', 'revalidateGrant']) {
+    const original = fixture.authorizationPort[method].bind(fixture.authorizationPort);
+    fixture.authorizationPort[method] = async (...args) => {
+      const decision = await original(...args); decision.grant.expires_at = new Date(deadlineMs - 1).toISOString(); return decision;
+    };
+  }
+  let reads = 0;
+  Object.defineProperty(controller.signal, 'aborted', { get() {
+    reads += 1; while (Date.now() < deadlineMs + 20) {} return false;
+  } });
+  const result = await executeAuthorizedAccessCell({ ...fixture.args, signal: controller.signal });
+  assert.ok(reads > 0, 'composition reaches the supported public property getter');
+  assert.equal(result.reason_code, 'preflight_deadline_passed'); assert.equal(result.status, 'failed');
+  assert.equal(fixture.calls.reserve, 0); assert.equal(fixture.calls.release, 0); assert.equal(fixture.calls.dispatch, 0);
+  assert.equal(result.financial_hold, 'none');
+});
+
+test('deterministic clock advance in signal composition stops before reservation', async () => {
+  const fixture = createMockAccessFixture(); const controller = new AbortController();
+  const deadlineMs = Date.parse(fixture.cell.spend.deadline_at); let reads = 0;
+  for (const method of ['verifyGrant', 'revalidateGrant']) {
+    const original = fixture.authorizationPort[method].bind(fixture.authorizationPort);
+    fixture.authorizationPort[method] = async (...args) => {
+      const decision = await original(...args); decision.grant.expires_at = new Date(deadlineMs - 1).toISOString(); return decision;
+    };
+  }
+  const result = await withClockAdvance(async (advance) => {
+    Object.defineProperty(controller.signal, 'aborted', { get() {
+      reads += 1; advance(Math.max(0, deadlineMs - Date.now()) + 1); return false;
+    } });
+    return executeAuthorizedAccessCell({ ...fixture.args, signal: controller.signal });
+  });
+  assert.ok(reads > 0); assert.equal(result.reason_code, 'preflight_deadline_passed');
+  assert.equal(fixture.calls.reserve, 0); assert.equal(fixture.calls.release, 0); assert.equal(fixture.calls.dispatch, 0);
+  assert.equal(result.financial_hold, 'none');
+});
+
+
+test('scope validation after composition cannot begin a reservation after the deadline', async () => {
+  const fixture = createMockAccessFixture(); const controller = new AbortController(); let armed = false;
+  const deadlineMs = Date.parse(fixture.cell.spend.deadline_at);
+  for (const method of ['verifyGrant', 'revalidateGrant']) {
+    const original = fixture.authorizationPort[method].bind(fixture.authorizationPort);
+    fixture.authorizationPort[method] = async (...args) => {
+      const decision = await original(...args); decision.grant.expires_at = new Date(deadlineMs - 1).toISOString(); return decision;
+    };
+  }
+  const result = await withClockAdvance(async (advance) => {
+    const scope = { ...fixture.args.trustedScope }; const tenant = scope.tenant_id;
+    Object.defineProperty(scope, 'tenant_id', { enumerable: true, get() {
+      if (armed) advance(Math.max(0, deadlineMs - Date.now()) + 1); return tenant;
+    } });
+    Object.defineProperty(controller.signal, 'aborted', { get() { armed = true; return false; } });
+    return executeAuthorizedAccessCell({ ...fixture.args, trustedScope: scope, signal: controller.signal });
+  });
+  assert.equal(result.reason_code, 'preflight_deadline_passed');
+  assert.equal(fixture.calls.reserve, 0); assert.equal(fixture.calls.dispatch, 0); assert.equal(result.financial_hold, 'none');
 });

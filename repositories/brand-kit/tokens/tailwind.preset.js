@@ -6,7 +6,7 @@
  * Source of truth: tokens/tokens.json (rules: tokens/profile.json, outputs: tokens/mapping.json).
  * Generator: tools/build_tokens.py. Regenerate with `make build-tokens`; `make check-tokens` fails on drift.
  * Profile: ticketstub-token-profile 1.0.0 (not claimed DTCG-compatible).
- * Input sha256 tokens/tokens.json: 649e570dc1397ef78bc00b28127ce166d640a4187eb2889fb2f57cc54054f228
+ * Input sha256 tokens/tokens.json: f441264f2e56f8fc8be5129a5a5b3f50403582ee5eb43821c7afb3ed1129b551
  * Input sha256 tokens/profile.json: 18ce404d9e9f667bcab5a6cc0a87ca7be9e9866c5b7e69bff0c529e21742fef3
  * Input sha256 tokens/mapping.json: 7db9104591711ff10a86f2fa26f2ec64fc995f3fb5eec9b7040be6ae363ffb45
  */

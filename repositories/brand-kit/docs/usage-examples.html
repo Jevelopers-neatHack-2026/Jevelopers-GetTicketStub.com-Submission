@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TicketStub — source usage examples for review</title>
+  <style>
+    :root { color-scheme: light; --cream: #F4ECDD; --ink: #17140F; --orange: #E4572E; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--cream); color: var(--ink); font: 1rem/1.55 system-ui, sans-serif; }
+    main { max-width: 1080px; margin: auto; padding: 24px; }
+    h1, h2, h3, p { overflow-wrap: anywhere; }
+    a { color: inherit; text-underline-offset: .15em; }
+    a:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+    code { font-size: .92em; overflow-wrap: anywhere; }
+    .notice { border: 2px solid var(--ink); padding: 16px; }
+    .examples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-block: 18px 32px; }
+    figure { margin: 0; border: 1px solid var(--ink); border-radius: 4px; min-width: 0; overflow: hidden; }
+    .sample { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 20px; min-height: 144px; padding: 24px; background: var(--cream); }
+    .sample img { display: block; max-width: 100%; height: auto; }
+    figcaption { border-top: 1px solid var(--ink); padding: 14px; }
+    figcaption strong { display: block; margin-bottom: 4px; }
+    .measure { padding: 8px; outline: 1px dashed var(--ink); display: inline-flex; }
+    .crowded { padding: 0; border: 1px solid var(--ink); display: flex; align-items: center; }
+    .busy { background: repeating-linear-gradient(45deg, #F4ECDD 0 8px, #26302A 8px 16px, #B4693E 16px 24px); }
+    .plate { background: var(--cream); padding: 8px; }
+    .ink { background: var(--ink); color: var(--cream); }
+    .label { font-weight: 700; }
+    .small-demo { font-size: 16px; }
+    .source-links { font-size: .9rem; }
+    @media (max-width: 640px) { main { padding: 16px; } .examples { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none; transition: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <p><a href="usage.md">Channel usage guide</a> · <a href="../index.html">Brand board</a> · <a href="logo.md">Canonical logo rules</a></p>
+  <h1>Source usage examples</h1>
+  <p class="notice"><strong>Review fixture; identity and export approval pending.</strong> The left-hand examples follow existing source rules. The right-hand examples are intentionally invalid and labelled. No mark or combination becomes approved by appearing here. All artwork is loaded from canonical SVG files; the busy background is a synthetic CSS pattern. This fixture uses system fonts and makes no external font or provider request.</p>
+
+  <h2>Aspect ratio and stamp clear space</h2>
+  <div class="examples">
+    <figure id="ratio-valid"><div class="sample"><div class="measure"><img src="../logo/ts-stamp.svg" width="56" height="70" alt="Canonical Ts stamp, 56 pixels wide and 70 pixels high"></div></div><figcaption><strong>Follows rule: 4:5 aspect ratio; 8 px clear space.</strong>The stamp is 56 px wide. One tooth is 56 ÷ 7 = 8 px; the dashed boundary encloses that padding on all sides.</figcaption></figure>
+    <figure id="ratio-invalid"><div class="sample"><img src="../logo/ts-stamp.svg" width="56" height="70" alt="Intentionally stretched stamp" style="transform:scale(1.7142857143,.5714285714)"></div><figcaption><strong>Invalid: stretched to 96 × 40 px.</strong>A nonuniform CSS transform distorts the canonical source. Remove that transform to restore the intrinsic 4:5 ratio; do not redraw the logo.</figcaption></figure>
+    <figure id="space-valid"><div class="sample"><div class="measure"><img src="../logo/ts-stamp-mono-ink.svg" width="56" height="70" alt="Ink stamp with an 8 pixel clear zone"></div><span>Nearby text outside the clear zone</span></div><figcaption><strong>Follows rule: neighboring content outside the measured area.</strong>The 8 px rule applies to all sides, including a background plate.</figcaption></figure>
+    <figure id="space-invalid"><div class="sample"><div class="crowded"><img src="../logo/ts-stamp-mono-ink.svg" width="56" height="70" alt="Ink stamp with adjacent text entering its clear space"><span>Too close</span></div></div><figcaption><strong>Invalid: zero clear space.</strong>The neighboring words touch the stamp boundary. Restore at least 8 px for this 56 px-wide stamp.</figcaption></figure>
+  </div>
+
+  <h2>Minimum sizes and wordmark substitution</h2>
+  <div class="examples">
+    <figure id="size-valid"><div class="sample"><img src="../logo/ts-stamp.svg" alt="Stamp at the 24 pixel screen-height minimum" style="height:24px;width:auto"><img src="../logo/favicon.svg" width="16" height="16" alt="Square favicon at 16 pixels"></div><figcaption><strong>Follows rule: 24 px-high stamp; favicon at 16 px.</strong>Below a 24 px stamp height, use the square favicon. The 8 mm print minimum needs a measured print export; screen display does not prove it.</figcaption></figure>
+    <figure id="size-invalid"><div class="sample"><img src="../logo/ts-stamp.svg" alt="Intentionally undersized portrait stamp at 16 pixels high" style="height:16px;width:auto"></div><figcaption><strong>Invalid: 16 px-high portrait stamp.</strong>Use the separate favicon source at this small size.</figcaption></figure>
+    <figure id="wordmark-valid"><div class="sample"><img src="../logo/wordmark.svg" width="120" alt="Perforated wordmark at 120 pixels wide"><img src="../logo/wordmark-compact.svg" width="90" alt="Compact wordmark at 90 pixels wide"></div><figcaption><strong>Follows rule: compact form below 120 px.</strong>The minimum for the perforated wordmark is 120 px wide. The fixture does not invent a new minimum for the compact form.</figcaption></figure>
+    <figure id="wordmark-invalid"><div class="sample"><img src="../logo/wordmark.svg" width="90" alt="Intentionally undersized perforated wordmark at 90 pixels wide"></div><figcaption><strong>Invalid: tear dots kept at 90 px wide.</strong>Use <code>wordmark-compact.svg</code> instead.</figcaption></figure>
+  </div>
+
+  <h2>Backgrounds and color</h2>
+  <div class="examples">
+    <figure id="plate-valid"><div class="sample busy"><div class="plate"><img src="../logo/ts-stamp-mono-ink.svg" width="56" height="70" alt="Ink mono stamp on a cream plate over synthetic stripes"></div></div><figcaption><strong>Follows rule: flat cream plate over busy imagery.</strong>The canonical mono stamp retains 8 px of plate clearance at this size. Actual imagery still needs rights clearance.</figcaption></figure>
+    <figure id="plate-invalid"><div class="sample busy"><img src="../logo/ts-stamp.svg" width="56" height="70" alt="Intentionally unplated foil stamp on a busy striped pattern"></div><figcaption><strong>Invalid: bare stamp on a busy background.</strong>Add the flat plate and clear space shown in the paired example.</figcaption></figure>
+    <figure id="text-valid"><div class="sample"><p class="small-demo">Read the sample details.</p></div><figcaption><strong>Follows rule: ink body text on cream.</strong>Use the calculated allowed pair from the accessibility report; no product capability is claimed by this sample.</figcaption></figure>
+    <figure id="text-invalid"><div class="sample"><p class="small-demo" style="color:#E4572E">Read the sample details.</p></div><figcaption><strong>Invalid: orange normal body text on cream.</strong>This pair fails the 4.5:1 text requirement. Keep orange as a permitted fill/accent or use a qualified large-text treatment.</figcaption></figure>
+    <figure id="mono-valid"><div class="sample ink"><img src="../logo/ts-stamp-mono-cream.svg" width="56" height="70" alt="Canonical cream mono stamp on ink"></div><figcaption><strong>Follows rule: canonical cream mono variant on ink.</strong><a href="../logo/ts-stamp-currentcolor.svg">The currentColor source</a> is a separate consumer integration option; its actual embedding/color must be reviewed.</figcaption></figure>
+    <figure id="material-invalid"><div class="sample"><img src="../logo/ts-stamp.svg" width="56" height="70" alt="Intentionally rotated and recolored stamp" style="transform:rotate(14deg);filter:hue-rotate(120deg)"></div><figcaption><strong>Invalid: rotated and recolored logo.</strong>Retain the canonical geometry and brand gradient. Physical-object mockup effects do not authorize transforming the distributed logo file.</figcaption></figure>
+  </div>
+
+  <h2>Existing lockups and unapproved combinations</h2>
+  <div class="examples">
+    <figure id="lockup-valid"><div class="sample"><img src="../logo/lockup-horizontal.svg" width="240" alt="Canonical horizontal TicketStub lockup"></div><figcaption><strong>Existing source combination; approval pending.</strong>Use the canonical lockup and keep the height of its “s” clear on all sides. A brand decision must still approve this exact version.</figcaption></figure>
+    <figure id="lockup-invalid"><div class="sample"><img src="../logo/ts-stamp.svg" width="56" height="70" alt="Stamp beside an unapproved sponsor placeholder"><span class="label">+ Unapproved sponsor</span></div><figcaption><strong>Invalid: implied unapproved co-branding.</strong>The text is a fictional placeholder, not a real mark. Remove the combination and obtain the exact rights, layout and scope decision through BK-07.</figcaption></figure>
+  </div>
+
+  <h2>Review record</h2>
+  <p>These source fixtures are prepared for visual review. Record the actual browser, viewport, zoom and observed result before claiming that the review ran. <a href="usage.md#review-procedure-and-remaining-acceptance">The usage guide</a> retains missing brand, export, accessibility and consumer acceptance. This page is neither a product demonstration nor a distributable release.</p>
+  <p class="source-links">Sources: <a href="../logo/">canonical SVG directory</a> · <a href="accessibility.md">accessibility guidance</a> · <a href="identity-decision-packet.md">baseline source hashes</a> · <a href="claims-register.md">claim dispositions</a></p>
+</main>
+</body>
+</html>

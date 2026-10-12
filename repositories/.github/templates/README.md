@@ -1,6 +1,6 @@
 # Templates
 
-Contributor templates for the fourteen Jevelopers neatHack 2026 repositories. Each one is a
+Contributor templates for the Jevelopers neatHack 2026 repositories. Each one is a
 documented convention; none configures reviews, branch protection or required checks.
 
 | Interface | Contract version | Source | Issue |

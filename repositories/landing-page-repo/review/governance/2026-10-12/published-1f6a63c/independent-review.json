@@ -1,0 +1,42 @@
+{
+  "schema": "ticketstub.independent-code-review/1",
+  "reviewer": "Independent automated reviewer /root/upstream_dependencies",
+  "reviewedCommit": "1f6a63c33946c36999f9cad50aed57405a3bab91",
+  "reviewedTree": "eefe6241693c82b636c10067623bf18108e783e6",
+  "baseCommit": "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+  "equivalentPreviouslyReviewedCommit": "581afccfa8453152f8a59740003f73a4ae3e6d76",
+  "decision": "APPROVE_SCOPED_CODE",
+  "findings": [],
+  "resolvedFindings": [
+    {
+      "id": "GOV-R1",
+      "resolution": "Single-pass decoded public source/attribute and joined/separated text comparisons reject the original encoded-claim reproduction and focused variants; unsupported references fail closed. The positive once-escaped reference remains literal."
+    },
+    {
+      "id": "GOV-R2",
+      "resolution": "Original baseline Buffer containment is rejected in every public payload, including appended-newline and embedded-padding regressions; active path, scene and baseline digest checks remain."
+    }
+  ],
+  "scope": "LP-09 governance procedure, bounded withdrawal checker and meaningful negative/removal/rollback fixture review, including preservation of the original REQUEST_CHANGES and pre-fix failing results.",
+  "codeReviewBasis": "Full initial review and focused repair re-review of local 581afcc, followed by verified complete-tree equivalence and fresh checks against this published source.",
+  "freshChecks": {
+    "runtime": "v24.15.0",
+    "fullTests": "157 passed; 0 failed; 0 skipped",
+    "build": "11 source files; exit 0",
+    "governanceDraft": "22 tests passed; PASS_DRAFT; exit 0",
+    "governanceRelease": "22 tests passed; actual FAIL exit 1 for missing named/accountable acceptance",
+    "allDraft": "Actual FAIL exit 1 on this standalone branch: required brand suite is not yet present. Combined candidate must be rechecked after the separate brand slice is available.",
+    "diffCheck": "exit 0",
+    "treeEquality": "exit 0; complete tree IDs equal",
+    "records": "commands.json"
+  },
+  "limitations": [
+    "This review is not an authenticated GitHub approval by an accountable human owner.",
+    "The checker provides bounded exact-content/original-byte removal, not a full browser parser, semantic equivalence or visual/transformed-media sanitization review.",
+    "Local source/build withdrawal and byte-identical rollback do not prove deployed removal, cache invalidation or provider recovery.",
+    "Issue #11 remains partial until named maintainers and responsible Product/marketing/brand/Finance acceptance are recorded. Gate/epic or global acceptance is not supplied.",
+    "The standalone all-draft failure must remain recorded; the normal integration candidate needs current required checks, then postmerge verification.",
+    "No application source, active audit pins or approval receipts were changed by this evidence directory."
+  ],
+  "historicalResults": "Original failed and repaired local execution records remain unchanged at their prior paths and revisions."
+}

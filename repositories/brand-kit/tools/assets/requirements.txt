@@ -1,0 +1,5 @@
+# Python 3.12, Linux x86_64 wheel lock. See docs/asset-exports.md.
+# No transitive Python dependencies. Do not replace hashes with unpinned installs.
+fonttools==4.66.1 --hash=sha256:7b8ff9e0edbcee2fbf7dff0c41b9041c1901c26acf64e23adb67495012df11de
+uharfbuzz==0.56.3 --hash=sha256:450c32c04dfdfe9dc69b68250605538b493c3444823383a2ede100f0e6686d8e
+Pillow==12.3.0 --hash=sha256:78cb2c6865a35ab8ff8b75fd122f6033b92a62c82801110e48ddd6c936a45d91

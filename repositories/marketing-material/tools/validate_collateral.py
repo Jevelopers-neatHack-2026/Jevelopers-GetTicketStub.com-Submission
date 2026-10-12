@@ -15,7 +15,7 @@ import re
 import subprocess
 import sys
 from html.parser import HTMLParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import unquote, urlsplit
 from xml.etree import ElementTree as ET
@@ -111,6 +111,19 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _read_repo_json(path_text: str) -> dict[str, Any]:
+    path = _safe_repo_path(path_text)
+    if path is None or not path.is_file():
+        raise ValueError(f"policy input must be a normalized repository file without symlinks: {path_text}")
+    return _read_json(path)
+
+
+def _read_cli_json(path: Path, default_relative: str) -> dict[str, Any]:
+    if path.absolute() == ROOT / default_relative:
+        return _read_repo_json(default_relative)
+    return _read_json(path)
+
+
 def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -119,19 +132,37 @@ def _sha256_path(path: Path) -> str:
     return _sha256_bytes(path.read_bytes())
 
 
-def _is_tracked_repo_file(path_text: str) -> bool:
-    candidate = Path(path_text)
-    if candidate.is_absolute() or ".." in candidate.parts:
-        return False
-    local_path = ROOT / candidate
-    if local_path.is_symlink() or not local_path.is_file():
-        return False
+def _safe_repo_path(path_text: Any) -> Path | None:
+    """Return a normalized, symlink-free path contained by the repository root."""
+    if not isinstance(path_text, str) or not path_text or "\\" in path_text:
+        return None
+    relative = PurePosixPath(path_text)
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or ".." in relative.parts
+        or relative.as_posix() != path_text
+    ):
+        return None
+    path = ROOT.joinpath(*relative.parts)
     try:
-        local_path.resolve(strict=True).relative_to(ROOT.resolve())
+        path.resolve(strict=False).relative_to(ROOT)
+        current = path
+        while current != ROOT:
+            if current.is_symlink():
+                return None
+            current = current.parent
     except (OSError, RuntimeError, ValueError):
+        return None
+    return path
+
+
+def _is_tracked_repo_file(path_text: str) -> bool:
+    local_path = _safe_repo_path(path_text)
+    if local_path is None or not local_path.is_file():
         return False
     result = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", path_text], cwd=ROOT,
+        ["git", "ls-files", "--error-unmatch", "--", path_text], cwd=ROOT,
         check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     return result.returncode == 0
@@ -517,6 +548,9 @@ def validate_provenance(register: dict[str, Any]) -> list[str]:
         if missing:
             errors.append(f"{identifier}: missing provenance fields {', '.join(sorted(missing))}")
         source = row.get("source", {})
+        if not isinstance(source, dict):
+            errors.append(f"{identifier}: source must be an object")
+            source = {}
         if not source.get("repo") or not source.get("path"):
             errors.append(f"{identifier}: source repo and path are required")
         revision = source.get("revision")
@@ -527,8 +561,10 @@ def validate_provenance(register: dict[str, Any]) -> list[str]:
             errors.append(f"{identifier}: source revision must be a commit or SHA-256 content digest")
         if source.get("repo") == "Jevelopers-neatHack-2026/marketing-material":
             source_path = source.get("path")
-            local_path = ROOT / str(source_path)
-            if not local_path.is_file():
+            local_path = _safe_repo_path(source_path)
+            if local_path is None:
+                errors.append(f"{identifier}: exact provenance source path must be normalized and contained in the repository without symlinks: {source_path}")
+            elif not local_path.is_file():
                 errors.append(f"{identifier}: exact provenance source file is missing: {source_path}")
             else:
                 actual_digest = _sha256_path(local_path)
@@ -589,8 +625,14 @@ def validate_provenance_composition(register: dict[str, Any]) -> list[str]:
     by_id = {row.get("assetId"): row for row in rows if isinstance(row.get("assetId"), str)}
     by_path: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
-        path = row.get("source", {}).get("path")
-        if isinstance(path, str):
+        source = row.get("source", {})
+        path = source.get("path") if isinstance(source, dict) else None
+        if (
+            isinstance(source, dict)
+            and source.get("repo") == "Jevelopers-neatHack-2026/marketing-material"
+            and isinstance(path, str)
+            and _safe_repo_path(path) is not None
+        ):
             by_path.setdefault(path, []).append(row)
 
     graph: dict[str, set[str]] = {}
@@ -608,17 +650,22 @@ def validate_provenance_composition(register: dict[str, Any]) -> list[str]:
             if dependency_id not in by_id:
                 errors.append(f"{identifier}: unknown composition dependency {dependency_id}")
 
-        source_path = row.get("source", {}).get("path")
+        source = row.get("source", {})
+        source_path = source.get("path") if isinstance(source, dict) else None
         if row.get("kind") != "static_html_rehearsal_support":
             if identifier in STATIC_HTML_COMPOSITION_ASSET_IDS:
                 errors.append(f"{identifier}: canonical HTML composition must retain static_html_rehearsal_support kind")
             continue
-        if not isinstance(source_path, str) or not (ROOT / source_path).is_file():
+        source_file = _safe_repo_path(source_path)
+        if source_file is None:
+            errors.append(f"{identifier}: static HTML composition source path must be normalized and contained in the repository without symlinks")
+            continue
+        if not source_file.is_file():
             errors.append(f"{identifier}: static HTML composition source is missing")
             continue
         parser = _HTMLDependencyParser()
         try:
-            parser.feed((ROOT / source_path).read_text(encoding="utf-8"))
+            parser.feed(source_file.read_text(encoding="utf-8"))
         except (OSError, UnicodeError) as exc:
             errors.append(f"{identifier}: HTML composition references cannot be read: {exc}")
             continue
@@ -843,7 +890,10 @@ def validate_visual_copy(
         if key in map_by_asset_path_surface:
             errors.append(f"{map_id}: duplicate exact copy mapping for {path_text}")
         map_by_asset_path_surface.add(key)
-        path = ROOT / path_text
+        path = _safe_repo_path(path_text)
+        if path is None:
+            errors.append(f"{map_id}: copy source path must be normalized and contained in the repository without symlinks: {path_text}")
+            continue
         if not path.is_file():
             errors.append(f"{map_id}: copy source path is missing: {path_text}")
             continue
@@ -922,7 +972,8 @@ def validate_visual_copy(
         if isinstance(row, dict) and isinstance(row.get("path"), str)
     }
     for path_text, expected_asset_id in EXPECTED_VISUAL_COPY_SOURCES.items():
-        if not (ROOT / path_text).is_file():
+        expected_path = _safe_repo_path(path_text)
+        if expected_path is None or not expected_path.is_file():
             errors.append(f"expected visual-copy source path is missing: {path_text}")
         if path_text not in mapped_paths:
             errors.append(f"expected visual-copy source path has no copy mappings: {path_text}")
@@ -933,9 +984,13 @@ def validate_visual_copy(
         errors.append(f"unexpected visual-copy source path is not in the independent source manifest: {path_text}")
 
     for path_text in sorted(set(EXPECTED_VISUAL_COPY_SOURCES) | mapped_paths):
+        path = _safe_repo_path(path_text)
+        if path is None:
+            errors.append(f"visual-copy source path must be normalized and contained in the repository without symlinks: {path_text}")
+            continue
         try:
-            actual = _extract_copy_units(ROOT / path_text)
-        except (OSError, ET.ParseError) as exc:
+            actual = _extract_copy_units(path)
+        except (OSError, UnicodeError, ET.ParseError) as exc:
             errors.append(f"visual source copy cannot be extracted for {path_text}: {exc}")
             continue
         for surface in {surface for surface, _ in actual}:
@@ -1011,7 +1066,10 @@ def validate_narrative_copy(
     }
 
     def exact_source_pin(path_text: str, commit: str, digest: str, context: str) -> None:
-        path = ROOT / path_text
+        path = _safe_repo_path(path_text)
+        if path is None:
+            errors.append(f"{context}: exact source path must be normalized and contained in the repository without symlinks: {path_text}")
+            return
         if not path.is_file():
             errors.append(f"{context}: exact source path is missing: {path_text}")
             return
@@ -1047,9 +1105,13 @@ def validate_narrative_copy(
     else:
         exact_source_pin(plan_path, plan_ref.get("sourceCommit"), plan_ref.get("sha256"), "narrative render plan")
 
+    scenes_path = _safe_repo_path("demo/rehearsal-scenes.json")
+    plan_path = _safe_repo_path("demo/exports/rehearsal-render-plan.json")
+    if scenes_path is None or plan_path is None:
+        return errors + ["narrative scene/render source paths must be normalized repository files without symlinks"]
     try:
-        scenes_data = _read_json(ROOT / "demo/rehearsal-scenes.json")
-        plan_data = _read_json(ROOT / "demo/exports/rehearsal-render-plan.json")
+        scenes_data = _read_json(scenes_path)
+        plan_data = _read_json(plan_path)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         return errors + [f"narrative scene/render source is invalid: {exc}"]
     scenes = scenes_data.get("scenes", [])
@@ -1257,17 +1319,24 @@ def validate_narrative_copy(
             errors.append(f"narrative surface {path_text}: inventory/provenance ID join is missing")
         if not record or record.get("assetId") != asset_id or record.get("source", {}).get("path") != path_text:
             errors.append(f"narrative surface {path_text}: canonical asset provenance path/ID mismatch")
-        if path_text and (ROOT / path_text).is_file() and record and record.get("checksum", {}).get("value") != _sha256_path(ROOT / path_text):
+        surface_path = _safe_repo_path(path_text)
+        if surface_path is None:
+            errors.append(f"narrative surface {path_text}: path must be normalized and contained in the repository without symlinks")
+        elif surface_path.is_file() and record and record.get("checksum", {}).get("value") != _sha256_path(surface_path):
             errors.append(f"narrative surface {path_text}: current bytes do not match canonical provenance checksum")
 
     # The HTML embeds exact scene and cue data; fixed labels are explicitly classified as draft/accessibility state.
     html_map = mapping.get("html", {})
-    html_path = ROOT / str(html_map.get("path", ""))
-    try:
-        html_text = html_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        errors.append(f"narrative HTML source cannot be read: {exc}")
+    html_path = _safe_repo_path(html_map.get("path"))
+    if html_path is None:
+        errors.append("narrative HTML path must be normalized and contained in the repository without symlinks")
         html_text = ""
+    else:
+        try:
+            html_text = html_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            errors.append(f"narrative HTML source cannot be read: {exc}")
+            html_text = ""
     match = re.search(r"const data=(\{.*?\});const cue=", html_text, re.S)
     if not match:
         errors.append("narrative HTML must embed the exact render-plan data payload")
@@ -1288,8 +1357,12 @@ def validate_narrative_copy(
 
     # SRT/VTT cues must match exact cue text/timestamps; no speech or audio timing is inferred.
     for sidecar_path, is_srt in (("demo/captions/silent-rehearsal.srt", True), ("demo/captions/silent-rehearsal.vtt", False)):
+        sidecar = _safe_repo_path(sidecar_path)
+        if sidecar is None:
+            errors.append(f"caption sidecar path must be a normalized repository file without symlinks: {sidecar_path}")
+            continue
         try:
-            content = (ROOT / sidecar_path).read_text(encoding="utf-8").strip()
+            content = sidecar.read_text(encoding="utf-8").strip()
         except (OSError, UnicodeError) as exc:
             errors.append(f"caption sidecar cannot be read: {sidecar_path}: {exc}")
             continue
@@ -1314,8 +1387,10 @@ def validate_narrative_copy(
             if timing_line != expected_timing or " ".join(text_lines) != cue.get("text"):
                 errors.append(f"{sidecar_path}: exact cue text/timing drift at cue {index + 1}")
 
-    transcript_path = ROOT / "demo/rehearsal-transcript.md"
+    transcript_path = _safe_repo_path("demo/rehearsal-transcript.md")
     try:
+        if transcript_path is None:
+            raise ValueError("path must be a normalized repository file without symlinks")
         transcript = transcript_path.read_text(encoding="utf-8")
         transcript_captions = re.findall(r"^\*\*Caption:\*\* (.*)$", transcript, re.M)
         if transcript_captions != [scene.get("captionText") for scene in scenes]:
@@ -1338,11 +1413,13 @@ def validate_narrative_copy(
         expected_screens = [scene.get("screenText", []) for scene in scenes]
         if transcript_screens != expected_screens:
             errors.append("accessible transcript on-screen text differs from the exact scene screenText lines")
-    except (OSError, UnicodeError) as exc:
+    except (OSError, UnicodeError, ValueError) as exc:
         errors.append(f"accessible transcript cannot be read: {exc}")
 
-    narration_path = ROOT / "demo/narration.md"
+    narration_path = _safe_repo_path("demo/narration.md")
     try:
+        if narration_path is None:
+            raise ValueError("path must be a normalized repository file without symlinks")
         narration = narration_path.read_text(encoding="utf-8")
         narration_rows: dict[str, str] = {}
         for line in narration.splitlines():
@@ -1358,7 +1435,7 @@ def validate_narrative_copy(
             errors.append("narration script must accurately describe the five proposal rows as joined and unapproved")
         if "It has not been merged into `messaging/claims.json`" in narration:
             errors.append("narration script contains stale proposal-join status")
-    except (OSError, UnicodeError) as exc:
+    except (OSError, UnicodeError, ValueError) as exc:
         errors.append(f"narration script cannot be read: {exc}")
 
     return errors
@@ -1391,7 +1468,10 @@ def validate_inventory(inventory: dict[str, Any]) -> list[str]:
             errors.append(f"duplicate canonical tracked file ID {file_id}")
         id_seen.add(file_id)
         path_rows[path_text] = row
-        path = ROOT / path_text
+        path = _safe_repo_path(path_text)
+        if path is None:
+            errors.append(f"inventory path must be normalized and contained in the repository without symlinks: {path_text}")
+            continue
         if not path.is_file() or row.get("exists") is not True:
             errors.append(f"inventory path is marked tracked but missing: {path_text}")
             continue
@@ -1755,7 +1835,7 @@ def submission_blockers(
     if blockers and blockers[0].startswith(("selected collateral scope", "unknown or nonselectable")):
         return blockers
     if inventory is None:
-        inventory = _read_json(ROOT / "docs/collateral-inventory.json")
+        inventory = _read_repo_json("docs/collateral-inventory.json")
     scope = inventory.get("submissionScope", {})
     if not isinstance(scope, dict):
         scope = {}
@@ -1791,9 +1871,10 @@ def submission_blockers(
         if asset_id in SELECTABLE_COLLATERAL_ASSET_IDS and asset_id not in selected:
             blockers.append(f"submission asset {asset_id}: required collateral was not selected")
         path_text = row.get("path")
-        output_exists = isinstance(path_text, str) and (ROOT / path_text).is_file()
+        output_path = _safe_repo_path(path_text)
+        output_exists = output_path is not None and output_path.is_file()
         if not output_exists:
-            blockers.append(f"submission asset {asset_id}: required output is absent ({path_text})")
+            blockers.append(f"submission asset {asset_id}: required output is absent or has an unsafe path ({path_text})")
         else:
             indexed = tracked.get(path_text, {})
             if row.get("pathAvailability") not in {"tracked_at_baseline", "created_in_candidate"} or row.get("lifecycleState") != "released" or indexed.get("releaseEligible") is not True:
@@ -1882,10 +1963,11 @@ def _submission_provenance_rights_blockers(
             blockers.append(f"{record_id}: required output/source provenance is not immutably pinned")
         elif source.get("repo") == "Jevelopers-neatHack-2026/marketing-material":
             source_path = source["path"]
-            exact_path = ROOT / source_path
+            exact_path = _safe_repo_path(source_path)
             checksum = record.get("checksum", {})
             if (
-                not _is_tracked_repo_file(source_path)
+                exact_path is None
+                or not _is_tracked_repo_file(source_path)
                 or not isinstance(checksum, dict)
                 or checksum.get("algorithm") != "SHA-256"
                 or checksum.get("value") != _sha256_path(exact_path)
@@ -1918,10 +2000,10 @@ def validate_all(
     errors.extend(validate_provenance(register))
     errors.extend(validate_fixture(fixture, ledger))
     if handoff is None:
-        handoff = _read_json(ROOT / "review/visual/asset-handoff.json")
+        handoff = _read_repo_json("review/visual/asset-handoff.json")
     errors.extend(validate_visual_copy(ledger, handoff, register))
     if inventory is None:
-        inventory = _read_json(ROOT / "docs/collateral-inventory.json")
+        inventory = _read_repo_json("docs/collateral-inventory.json")
     errors.extend(validate_inventory(inventory))
     errors.extend(validate_inventory_composition(inventory, register))
     errors.extend(validate_inventory_provenance(inventory, register))
@@ -1952,11 +2034,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     try:
-        ledger = _read_json(args.claims)
-        register = _read_json(args.provenance)
-        fixture = _read_json(args.fixture)
-        handoff = _read_json(args.handoff)
-        inventory = _read_json(args.inventory)
+        ledger = _read_cli_json(args.claims, "messaging/claims.json")
+        register = _read_cli_json(args.provenance, "review/provenance.json")
+        fixture = _read_cli_json(args.fixture, "review/fixtures/synthetic-canaries.json")
+        handoff = _read_cli_json(args.handoff, "review/visual/asset-handoff.json")
+        inventory = _read_cli_json(args.inventory, "docs/collateral-inventory.json")
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"invalid input: {exc}", file=sys.stderr)
         return 1
