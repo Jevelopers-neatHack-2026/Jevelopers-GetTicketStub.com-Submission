@@ -12,6 +12,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { launchBrowser, chromePath } from "./lib/cdp.mjs";
+import { clickVisibleButton } from "./lib/visible-pointer.mjs";
+import { checkVisiblePointerControls } from "./lib/visible-pointer-controls.mjs";
 
 const base = (process.argv[2] ?? "http://127.0.0.1:3000").replace(/\/$/, "");
 const evidenceDir = process.argv[3] ? resolve(process.argv[3]) : null;
@@ -31,6 +33,7 @@ const evidence = { chrome: chromePath(), base, journeys: [] };
 
 const browser = await launchBrowser();
 try {
+  evidence.pointerControls = await checkVisiblePointerControls(browser, check);
   const journeys = [
     { name: "phone", width: 390, height: 844, demo: "pale", id: "demo-pale", dateText: "Fix the date to 11 Oct 2024", dateISO: "2024-10-11", dateWords: "11 Oct 2024" },
     { name: "desktop", width: 1440, height: 900, demo: "harbour", id: "demo-harbour", dateText: "Fix the date to 15 Sep 2024", dateISO: "2024-09-15", dateWords: "15 Sep 2024" },
@@ -51,7 +54,7 @@ process.exit(failed ? 1 : 0);
 async function journey(j) {
   const T = (s) => `${j.name} @${j.width}: ${s}`;
   const page = await browser.newPage({ width: j.width, height: j.height, desktop: j.width >= 960 });
-  const log = { name: j.name, width: j.width, steps: [] };
+  const log = { name: j.name, width: j.width, steps: [], pointerActions: [] };
   evidence.journeys.push(log);
   const shot = async (name) => {
     for (const d of shotDirs) await page.screenshot(join(d, `agent-${j.width}-${name}.png`));
@@ -64,17 +67,15 @@ async function journey(j) {
   };
   /** A real mouse click on the first visible, enabled button whose text starts with `text`, inside `scope`. */
   const tap = async (text, scope = `[role="dialog"]`) => {
-    const r = await page.eval(`(() => { const b = [...document.querySelectorAll(${JSON.stringify(`${scope} button`)})].find((e) => e.textContent.trim().startsWith(${JSON.stringify(text)}) && !e.disabled && e.offsetParent); if (!b) return null; b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
-    if (!r) return false;
-    await page.click(r.x, r.y);
-    return true;
+    const receipt = await clickVisibleButton(page, { text, scope });
+    log.pointerActions.push({ text, scope, ...receipt });
+    return receipt.clicked;
   };
   /** Tap the Apply button on the chip whose label contains `label`. */
   const applyFor = async (label) => {
-    const r = await page.eval(`(() => { const li = [...document.querySelectorAll('[role="dialog"] ul[aria-label="Proposed changes"] li')].find((e) => e.innerText.includes(${JSON.stringify(label)}) && e.querySelector("button:not([disabled])")); const b = li?.querySelector("button"); if (!b) return null; b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
-    if (!r) return false;
-    await page.click(r.x, r.y);
-    return true;
+    const receipt = await clickVisibleButton(page, { chipLabel: label });
+    log.pointerActions.push({ chipLabel: label, ...receipt });
+    return receipt.clicked;
   };
   const say = async (text) => {
     const ok = await page.eval(`(() => { const el = document.querySelector('[role="dialog"] form input'); if (!el) return false; el.focus(); el.select?.(); return true; })()`);
