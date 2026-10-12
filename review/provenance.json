@@ -6736,7 +6736,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-inventory.json",
-        "revision": "sha256:40ada81dc113c5f1ef008346b0734c4797fa71e81295e35e7cd270eb0b271e2c",
+        "revision": "sha256:7ad4af7137c91c85431d832f109a0f9cbcd357213a497719743507fa46bf013b",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -6794,7 +6794,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "40ada81dc113c5f1ef008346b0734c4797fa71e81295e35e7cd270eb0b271e2c",
+        "value": "7ad4af7137c91c85431d832f109a0f9cbcd357213a497719743507fa46bf013b",
         "status": "Exact SHA-256 content digest of current inventory bytes; the register is external to this source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
