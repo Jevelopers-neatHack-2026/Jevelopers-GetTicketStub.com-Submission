@@ -1,0 +1,1 @@
+FAIL brand: required validator unavailable. Implement scripts/suites/brand.mjs under its LP issue; this check is not a pass.

@@ -1,0 +1,102 @@
+✔ actual illustrated source builds reproducibly with every asset and no repository documents (150.488536ms)
+✔ validator detects missing referenced assets, tampering, stale manifests and unexpected files (32.696881ms)
+✔ build refuses symlinks, unreviewed asset types and unsafe output destinations (8.168982ms)
+✔ preview serves homepage and every actual asset; unknown and app routes cannot fall back to landing (180.167531ms)
+✔ dispatcher rejects invalid arguments and no-argument validation fails for unavailable required suites (646.100137ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1153.259944
+PASS_LOCAL foundation
+content: PASS_DRAFT; 65 entries; product/marketing approvals PENDING
+PASS_DRAFT content
+✔ actual source config, no-JS markup and local editor boundary are explicit (16.831617ms)
+✔ no-JS escape is explicit, query-free and uses the same approved native destination (5.284565ms)
+✔ a mismatched or hidden duplicate static fallback link cannot escape the approved config (39.307551ms)
+✔ duplicate mixed-case href attributes are rejected instead of choosing one (7.146325ms)
+✔ withdrawn config requires static no-JS navigation to be withdrawn too (6.683619ms)
+✔ missing/invalid config cannot expose any external navigation (25.456014ms)
+✔ approved-shaped link fixtures carry only exact owner-allowlisted URL in each environment (24.06978ms)
+✔ unavailable service, pending owner or absent/nonimmutable/mismatched approval receipts disable the link (39.693752ms)
+✔ invalid scheme/origin/path, queries, fragments, credentials and private destinations fail closed (57.234515ms)
+✔ real pointer/Enter/preview/example/navigation handlers keep synthetic input local with reduced motion and blocked surfaces (7.10364ms)
+✔ tampered source config, named input and sending confirmation are rejected (3.368845ms)
+✔ limited thread receipt rejects malformed observation/approval scope and cannot migrate to another environment (25.597127ms)
+✔ actual live navigation target stays byte-identical after editing, chips, button clicks and Enter (1.512565ms)
+✔ invalid config must remove the real pre-existing native href; deletion mutant fails the safety assertion (4.697083ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 399.335054
+cta: local input stays local; no form/query handoff; owner-approved Open studio navigation only; deployment/release/browser evidence PENDING
+PASS_DRAFT cta
+proof: PASS_DRAFT; 10 assets; publication/visual review PENDING
+PASS_DRAFT proof
+✔ wheel keeps moving forward/backward after the 3D loop exits on context loss (2.488262ms)
+✔ an animation exception cannot strand wheel input and starts readable static art (0.921405ms)
+✔ display-only rail tracks native scrolling/resizing without rendering frames (0.719221ms)
+✔ rail is decorative and passes pointer input through (0.449275ms)
+✔ switching to static art restores scene copy hidden by an interrupted 3D frame (1.024561ms)
+✔ native navigation reaches scenes and maker, with reduced motion false (1.547487ms)
+✔ native navigation reaches scenes and maker, with reduced motion true (0.806353ms)
+✔ user wheel input cancels pending maker focus (1.062708ms)
+✔ seamless hero wrap uses an immediate native jump (0.816077ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 108.594037
+ux: source checks and real-handler scroll tests passed; 5 unresolved review/evidence items; browser/WCAG/lab performance not certified
+PASS_DRAFT ux
+privacy: 2 audited scripts; real local editor/link handlers exercised; CDN/browser certification and owner approvals PENDING
+PASS_DRAFT privacy
+✔ actual static HTML has one valid head and consistent inventoried preview/social copy (2.610786ms)
+✔ preview, demo and staging never inherit production canonical, indexing or sitemap (0.379651ms)
+✔ synthetic approved production index/noindex fixtures enforce exact origin and real homepage inventory (0.919833ms)
+✔ production rejects missing origin, undecided indexing and every pending/missing owner receipt (0.989778ms)
+✔ production origin rejects preview hosts, private addresses and malformed/credential/query/path URLs (0.341474ms)
+✔ private app routes, aliases and section anchors cannot become indexable pages (1.034665ms)
+✔ head placement, duplicate and missing metadata regression fixtures fail (2.576153ms)
+✔ canonical/image/structured data leakage and missing ledger entries fail (4.626557ms)
+✔ invalid environments and unsupported image/structured decisions fail (0.389055ms)
+✔ loopback served artifact contains static metadata without JS and exposes no sitemap/robots/private route (63.353695ms)
+✔ approval receipts cannot silently authorize a changed origin or indexing decision (0.39222ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 222.302297
+metadata: static preview head verified; canonical/image/structured data omitted; production origin/indexing/copy/social approvals PENDING
+PASS_DRAFT metadata
+✔ LP-09 supported update: replay the retained physical-to-illustrative correction as a pending draft (153.668963ms)
+✔ LP-09 unsupported/stale update: rehashing or changing an approval label cannot publish a claim (21.528344ms)
+✔ LP-09 withdrawal: real built claim/asset disappear, a safe local replacement is present, rollback restores exact bytes (325.032872ms)
+✔ withdrawal rejects stale active inventories and hiding content in comments (198.313118ms)
+✔ withdrawal rejects original asset bytes under a renamed file and a stale scene reference (178.347323ms)
+✔ withdrawal requires an immutable known nonempty selection and rejects still-packaged media (299.769452ms)
+✔ changed destination dry run withdraws both native and no-JavaScript links (9.661326ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1291.963897
+governance: supported historical update replayed as draft; unsupported/stale evidence rejected; synthetic local withdrawal/replacement/rollback exercised; release acceptance PENDING
+PASS_DRAFT governance
+FAIL brand: required validator unavailable. Implement scripts/suites/brand.mjs under its LP issue; this check is not a pass.
