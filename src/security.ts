@@ -1134,9 +1134,17 @@ export interface TombstoneFingerprint {
   readonly digest: string;
 }
 
+/** A freshly issued fingerprint. `maxRetainUntil` is the latest `retainUntil` (ms since the epoch)
+ * a tombstone storing it may use: the issuing key version stays verifiable at least that long.
+ * Tombstones expire exclusively at `retainUntil`. The bound is not stored in the tombstone. */
+export interface IssuedTombstoneFingerprint extends TombstoneFingerprint {
+  readonly maxRetainUntil: number;
+}
+
 export interface TombstoneFingerprinter {
-  /** Use a stable server-held key distinct from rotating provider API credentials. */
-  fingerprint(purpose: "authorization_action" | "idempotency_key", canonicalIdentity: string): Promise<TombstoneFingerprint>;
+  /** Use a stable server-held key distinct from rotating provider API credentials. The result must
+   * carry the retention bound of the issuing key version; `purgeSensitiveRecord` requires it. */
+  fingerprint(purpose: "authorization_action" | "idempotency_key", canonicalIdentity: string): Promise<IssuedTombstoneFingerprint>;
 }
 
 export interface IdempotencyTombstone {
@@ -1161,12 +1169,18 @@ function canonicalIdentity(parts: readonly string[]): string {
   return JSON.stringify(parts);
 }
 
-function snapshotFingerprint(value: unknown, diagnosticReference?: unknown): TombstoneFingerprint {
+function snapshotFingerprint(value: unknown, diagnosticReference?: unknown): { readonly fingerprint: TombstoneFingerprint; readonly maxRetainUntil: number } {
   const fields = snapshotRecord(value, "retention_unavailable", diagnosticReference);
-  if (!validIdentifier(fields.keyVersion) || typeof fields.digest !== "string" || !/^[A-Za-z0-9_-]{32,128}$/.test(fields.digest)) {
+  if (
+    !validIdentifier(fields.keyVersion) || typeof fields.digest !== "string" || !/^[A-Za-z0-9_-]{32,128}$/.test(fields.digest) ||
+    !Number.isSafeInteger(fields.maxRetainUntil)
+  ) {
     throw failure("retention_unavailable", diagnosticReference);
   }
-  return Object.freeze({ keyVersion: fields.keyVersion, digest: fields.digest });
+  return {
+    fingerprint: Object.freeze({ keyVersion: fields.keyVersion, digest: fields.digest }),
+    maxRetainUntil: fields.maxRetainUntil as number
+  };
 }
 
 export async function purgeSensitiveRecord(input: {
@@ -1200,11 +1214,6 @@ export async function purgeSensitiveRecord(input: {
   ) {
     throw failure("retention_policy_invalid", diagnosticReference);
   }
-  const retentionGuard = keyringRetentionGuards.get(fields.fingerprinter as object);
-  if (retentionGuard !== undefined && !retentionGuard(retainUntil as number)) {
-    // A tombstone must not outlive the retention window of the key version that fingerprints it.
-    throw failure("retention_policy_invalid", diagnosticReference);
-  }
   const fingerprint = captureMethod(fields.fingerprinter, "fingerprint", "retention_unavailable", diagnosticReference);
   const purge = captureMethod(fields.retentionPort, "purgePersonalDataAndRetainTombstone", "retention_unavailable", diagnosticReference);
 
@@ -1224,11 +1233,21 @@ export async function purgeSensitiveRecord(input: {
   } catch {
     throw failure("retention_unavailable", diagnosticReference);
   }
+  let maxRetainUntil: number;
   try {
-    actionFingerprint = snapshotFingerprint(actionFingerprint, diagnosticReference);
-    idempotencyFingerprint = snapshotFingerprint(idempotencyFingerprint, diagnosticReference);
+    const action = snapshotFingerprint(actionFingerprint, diagnosticReference);
+    const idempotency = snapshotFingerprint(idempotencyFingerprint, diagnosticReference);
+    actionFingerprint = action.fingerprint;
+    idempotencyFingerprint = idempotency.fingerprint;
+    maxRetainUntil = Math.min(action.maxRetainUntil, idempotency.maxRetainUntil);
   } catch {
     throw failure("retention_unavailable", diagnosticReference);
+  }
+  if ((retainUntil as number) > maxRetainUntil) {
+    // A tombstone must not outlive the retention window of the key version that fingerprinted it.
+    // The bound travels with the issued fingerprint, so a wrapped fingerprinter keeps the guard and
+    // one that drops the bound fails closed above.
+    throw failure("retention_policy_invalid", diagnosticReference);
   }
 
   const tombstone: IdempotencyTombstone = Object.freeze({
@@ -1256,40 +1275,60 @@ export async function purgeSensitiveRecord(input: {
 // ---------------------------------------------------------------------------
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 
-/** Documented policy defaults. Retired-key retention has no default: it must cover the
+/** Overridable policy defaults. Retired-key retention has no default: it must cover the
  * longest approved tombstone retention period, which this package does not invent. */
 export const TOMBSTONE_FINGERPRINT_KEY_POLICY_DEFAULTS = Object.freeze({
   rotationIntervalMs: 90 * DAY_MS,
   maxActiveKeyAgeMs: 180 * DAY_MS,
-  minKeyBytes: 32,
-  maxKeyBytes: 1024,
-  maxKeyVersions: 16
+  maxKeyVersions: 64,
+  maxClockSkewMs: 5 * MINUTE_MS
 });
 
-const FINGERPRINT_KEY_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+/** Hard limits. A policy cannot override them. */
+export const TOMBSTONE_FINGERPRINT_KEY_LIMITS = Object.freeze({
+  minKeyBytes: 32,
+  maxKeyBytes: 1024,
+  /** A key with this many or fewer distinct byte values is rejected as degenerate (all-same bytes, ASCII hex). */
+  maxDegenerateDistinctKeyBytes: 16,
+  /** Upper bound for `policy.maxKeyVersions` and for any loaded key set. */
+  maxKeyVersions: 256,
+  minKeyVersions: 2,
+  /** Upper bound for `policy.maxClockSkewMs`. */
+  maxClockSkewMs: 60 * MINUTE_MS
+});
+
+/** `<label>-g<generation>`: the generation is a positive integer that only ever increases. */
+const FINGERPRINT_KEY_VERSION_PATTERN = /^([A-Za-z0-9][A-Za-z0-9._-]{0,47})-g([1-9][0-9]{0,14})$/;
+const FINGERPRINT_KEY_LABEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$/;
 const FINGERPRINT_DIGEST_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const FINGERPRINT_DOMAIN = "fulfillment-connectors/tombstone-fingerprint/v1";
 const FINGERPRINT_PURPOSES: ReadonlySet<string> = new Set(["authorization_action", "idempotency_key"]);
 const MAX_CANONICAL_IDENTITY_LENGTH = 8192;
 const KEY_MATERIAL_FIELDS: ReadonlySet<string> = new Set(["keyVersion", "key", "state", "activatedAt", "retiredAt"]);
 const KEY_METADATA_FIELDS: ReadonlySet<string> = new Set(["keyVersion", "state", "activatedAt", "retiredAt"]);
-const KEY_POLICY_FIELDS: ReadonlySet<string> = new Set(["rotationIntervalMs", "maxActiveKeyAgeMs", "retiredKeyRetentionMs"]);
+const KEY_POLICY_FIELDS: ReadonlySet<string> = new Set([
+  "rotationIntervalMs", "maxActiveKeyAgeMs", "retiredKeyRetentionMs", "maxKeyVersions", "maxClockSkewMs"
+]);
+const stringIsWellFormed = (String.prototype as unknown as { isWellFormed?: (this: string) => boolean }).isWellFormed;
 
 export type TombstoneFingerprintPurpose = "authorization_action" | "idempotency_key";
 export type FingerprintKeyState = "active" | "retired";
 
 export interface FingerprintKeyMetadata {
+  /** `<label>-g<generation>`, for example `tombstone-g7`. Generations strictly increase with activation. */
   readonly keyVersion: string;
   readonly state: FingerprintKeyState;
   /** Milliseconds since the epoch. */
   readonly activatedAt: number;
-  /** Required for retired keys; absent for the active key. */
+  /** Required for retired keys, absent for the active key. Equals the successor's `activatedAt`. */
   readonly retiredAt?: number;
 }
 
 export interface FingerprintKeyMaterial extends FingerprintKeyMetadata {
-  /** At least 32 random bytes from the server-side secret manager. Never a supplier credential. */
+  /** At least 32 random bytes from the server-side secret manager, already decoded from any
+   * hex or base64 text encoding. Never a supplier credential. */
   readonly key: Uint8Array;
 }
 
@@ -1310,6 +1349,11 @@ export interface TombstoneFingerprintKeyPolicy {
   readonly maxActiveKeyAgeMs?: number;
   /** Required. How long a retired key stays verifiable; at least the longest approved tombstone retention. */
   readonly retiredKeyRetentionMs: number;
+  /** Retained versions a scheduled rotation may produce. Default 64, at most 256. Creation fails when
+   * `ceil((retiredKeyRetentionMs + maxClockSkewMs) / rotationIntervalMs) + 2` exceeds it. */
+  readonly maxKeyVersions?: number;
+  /** Tolerated clock difference between hosts. Default 5 minutes, at most 60 minutes. */
+  readonly maxClockSkewMs?: number;
 }
 
 export interface FingerprintKeyringStatus {
@@ -1327,11 +1371,13 @@ export interface FingerprintKeyringStatus {
 }
 
 export interface TombstoneFingerprintKeyring extends TombstoneFingerprinter {
-  /** HMAC-SHA256 with the active key; the key version is part of the HMAC input and the result. */
-  fingerprint(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string): Promise<TombstoneFingerprint>;
+  /** HMAC-SHA256 with the active key; the key version is part of the HMAC input and the result.
+   * `maxRetainUntil` is the latest `retainUntil` a tombstone storing this fingerprint may use. */
+  fingerprint(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string): Promise<IssuedTombstoneFingerprint>;
   /** One fingerprint per verifiable key version, for a store lookup across every retained version. */
   candidates(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string): Promise<readonly TombstoneFingerprint[]>;
-  /** Constant-time check of a stored fingerprint. Throws (never returns false) for an unknown key version. */
+  /** Constant-time check of a stored fingerprint. Throws (never returns false) for a key version that
+   * is unknown or past its retention window. */
   matches(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string, stored: TombstoneFingerprint): Promise<boolean>;
   /** Key versions and rotation state only; never key material. */
   status(): Promise<FingerprintKeyringStatus>;
@@ -1341,6 +1387,8 @@ interface ResolvedKeyPolicy {
   readonly rotationIntervalMs: number;
   readonly maxActiveKeyAgeMs: number;
   readonly retiredKeyRetentionMs: number;
+  readonly maxKeyVersions: number;
+  readonly maxClockSkewMs: number;
 }
 
 type HmacKey = Awaited<ReturnType<typeof globalThis.crypto.subtle.importKey>>;
@@ -1358,13 +1406,9 @@ interface LoadedFingerprintKeySet {
   readonly purgeable: readonly string[];
 }
 
-/** Genuine keyrings and their retention guard, so purgeSensitiveRecord can refuse a
- * tombstone that would outlive the key version that fingerprinted it. */
-const keyringRetentionGuards = new WeakMap<object, (retainUntil: number) => boolean>();
-
-function positiveDuration(value: unknown, fallback: number | undefined, diagnosticReference?: unknown): number {
+function boundedInteger(value: unknown, fallback: number | undefined, min: number, max: number, diagnosticReference?: unknown): number {
   const resolved = value === undefined ? fallback : value;
-  if (!Number.isSafeInteger(resolved) || (resolved as number) <= 0) {
+  if (!Number.isSafeInteger(resolved) || (resolved as number) < min || (resolved as number) > max) {
     throw failure("retention_policy_invalid", diagnosticReference);
   }
   return resolved as number;
@@ -1376,42 +1420,113 @@ function resolveKeyPolicy(value: unknown, diagnosticReference?: unknown): Resolv
     if (!KEY_POLICY_FIELDS.has(key)) throw failure("retention_policy_invalid", diagnosticReference);
   }
   const defaults = TOMBSTONE_FINGERPRINT_KEY_POLICY_DEFAULTS;
-  const rotationIntervalMs = positiveDuration(fields.rotationIntervalMs, defaults.rotationIntervalMs, diagnosticReference);
-  const maxActiveKeyAgeMs = positiveDuration(fields.maxActiveKeyAgeMs, defaults.maxActiveKeyAgeMs, diagnosticReference);
-  const retiredKeyRetentionMs = positiveDuration(fields.retiredKeyRetentionMs, undefined, diagnosticReference);
-  if (rotationIntervalMs > maxActiveKeyAgeMs) throw failure("retention_policy_invalid", diagnosticReference);
-  return Object.freeze({ rotationIntervalMs, maxActiveKeyAgeMs, retiredKeyRetentionMs });
+  const limits = TOMBSTONE_FINGERPRINT_KEY_LIMITS;
+  const max = Number.MAX_SAFE_INTEGER;
+  const rotationIntervalMs = boundedInteger(fields.rotationIntervalMs, defaults.rotationIntervalMs, 1, max, diagnosticReference);
+  const maxActiveKeyAgeMs = boundedInteger(fields.maxActiveKeyAgeMs, defaults.maxActiveKeyAgeMs, 1, max, diagnosticReference);
+  const retiredKeyRetentionMs = boundedInteger(fields.retiredKeyRetentionMs, undefined, 1, max, diagnosticReference);
+  const maxKeyVersions = boundedInteger(
+    fields.maxKeyVersions, defaults.maxKeyVersions, limits.minKeyVersions, limits.maxKeyVersions, diagnosticReference
+  );
+  const maxClockSkewMs = boundedInteger(fields.maxClockSkewMs, defaults.maxClockSkewMs, 0, limits.maxClockSkewMs, diagnosticReference);
+  if (rotationIntervalMs > maxActiveKeyAgeMs || retiredKeyRetentionMs <= maxClockSkewMs) {
+    throw failure("retention_policy_invalid", diagnosticReference);
+  }
+  // Scheduled rotation keeps every retired version for retention + skew, plus the active key and
+  // one version of headroom for an incident rotation. A policy whose cadence cannot fit under the
+  // version cap is a configuration fault today, not an outage years from now.
+  const retainedAtCadence = Math.ceil((retiredKeyRetentionMs + maxClockSkewMs) / rotationIntervalMs) + 2;
+  if (retainedAtCadence > maxKeyVersions) throw failure("retention_policy_invalid", diagnosticReference);
+  return Object.freeze({ rotationIntervalMs, maxActiveKeyAgeMs, retiredKeyRetentionMs, maxKeyVersions, maxClockSkewMs });
+}
+
+function keyVersionGeneration(keyVersion: unknown): { readonly label: string; readonly generation: number } | undefined {
+  if (typeof keyVersion !== "string") return undefined;
+  const match = FINGERPRINT_KEY_VERSION_PATTERN.exec(keyVersion);
+  if (match === null) return undefined;
+  const generation = Number(match[2]);
+  if (!Number.isSafeInteger(generation)) return undefined;
+  return { label: match[1] as string, generation };
 }
 
 function snapshotKeyMetadata(
   value: unknown,
   allowedFields: ReadonlySet<string>,
-  now: number,
+  latestAllowed: number,
+  code: SecurityErrorCode,
   diagnosticReference?: unknown
-): { readonly metadata: FingerprintKeyMetadata; readonly fields: Record<string, unknown> } {
-  const fields = snapshotRecord(value, "retention_unavailable", diagnosticReference);
+): { readonly metadata: FingerprintKeyMetadata; readonly generation: number; readonly fields: Record<string, unknown> } {
+  const fields = snapshotRecord(value, code, diagnosticReference);
   for (const key of Object.keys(fields)) {
-    if (!allowedFields.has(key)) throw failure("retention_unavailable", diagnosticReference);
+    if (!allowedFields.has(key)) throw failure(code, diagnosticReference);
   }
   const { keyVersion, state, activatedAt, retiredAt } = fields;
+  const parsedVersion = keyVersionGeneration(keyVersion);
   if (
-    typeof keyVersion !== "string" || !FINGERPRINT_KEY_VERSION_PATTERN.test(keyVersion) ||
-    (state !== "active" && state !== "retired") ||
-    !Number.isSafeInteger(activatedAt) || (activatedAt as number) < 0 || (activatedAt as number) > now
+    parsedVersion === undefined || (state !== "active" && state !== "retired") ||
+    !Number.isSafeInteger(activatedAt) || (activatedAt as number) < 0 || (activatedAt as number) > latestAllowed
   ) {
-    throw failure("retention_unavailable", diagnosticReference);
+    throw failure(code, diagnosticReference);
   }
   if (state === "active") {
-    if (Object.hasOwn(fields, "retiredAt")) throw failure("retention_unavailable", diagnosticReference);
-    return { metadata: Object.freeze({ keyVersion, state, activatedAt: activatedAt as number }), fields };
+    if (Object.hasOwn(fields, "retiredAt")) throw failure(code, diagnosticReference);
+    return {
+      metadata: Object.freeze({ keyVersion: keyVersion as string, state, activatedAt: activatedAt as number }),
+      generation: parsedVersion.generation,
+      fields
+    };
   }
-  if (!Number.isSafeInteger(retiredAt) || (retiredAt as number) < (activatedAt as number) || (retiredAt as number) > now) {
-    throw failure("retention_unavailable", diagnosticReference);
+  if (!Number.isSafeInteger(retiredAt) || (retiredAt as number) <= (activatedAt as number) || (retiredAt as number) > latestAllowed) {
+    throw failure(code, diagnosticReference);
   }
   return {
-    metadata: Object.freeze({ keyVersion, state, activatedAt: activatedAt as number, retiredAt: retiredAt as number }),
+    metadata: Object.freeze({ keyVersion: keyVersion as string, state, activatedAt: activatedAt as number, retiredAt: retiredAt as number }),
+    generation: parsedVersion.generation,
     fields
   };
+}
+
+/**
+ * The key set is a rotation chain. Ordered by generation: generations are unique, activation times
+ * strictly increase, exactly the newest key is active, and every retired key's `retiredAt` equals its
+ * successor's `activatedAt`. A backdated `retiredAt` (earlier than the successor took over) or a
+ * reissued older generation therefore fails closed. Returns the entries oldest first.
+ */
+function validateKeyChain<T extends { readonly metadata: FingerprintKeyMetadata; readonly generation: number }>(
+  entries: readonly T[],
+  code: SecurityErrorCode,
+  diagnosticReference?: unknown
+): readonly T[] {
+  if (entries.length === 0) throw failure(code, diagnosticReference);
+  const ordered = [...entries].sort((left, right) => left.generation - right.generation);
+  for (let index = 0; index < ordered.length; index += 1) {
+    const entry = ordered[index] as T;
+    const newest = index === ordered.length - 1;
+    if (newest !== (entry.metadata.state === "active")) throw failure(code, diagnosticReference);
+    if (newest) continue;
+    const successor = ordered[index + 1] as T;
+    if (
+      successor.generation === entry.generation ||
+      successor.metadata.activatedAt <= entry.metadata.activatedAt ||
+      entry.metadata.retiredAt !== successor.metadata.activatedAt
+    ) {
+      throw failure(code, diagnosticReference);
+    }
+  }
+  return ordered;
+}
+
+function retiredKeyPurgeable(metadata: FingerprintKeyMetadata, now: number, policy: ResolvedKeyPolicy): boolean {
+  // Verification keeps a retired key for one extra clock skew so a host behind the rotating host
+  // never treats a version as gone early. Issuance subtracts one skew (see `fingerprint`).
+  return metadata.state === "retired" &&
+    now >= (metadata.retiredAt as number) + policy.retiredKeyRetentionMs + policy.maxClockSkewMs;
+}
+
+function degenerateKey(bytes: Uint8Array): boolean {
+  const seen = new Set<number>();
+  for (let index = 0; index < bytes.byteLength; index += 1) seen.add(bytes[index] as number);
+  return seen.size <= TOMBSTONE_FINGERPRINT_KEY_LIMITS.maxDegenerateDistinctKeyBytes;
 }
 
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
@@ -1445,7 +1560,9 @@ function validFingerprintInput(purpose: unknown, canonicalIdentity: unknown, dia
   if (
     typeof purpose !== "string" || !FINGERPRINT_PURPOSES.has(purpose) ||
     typeof canonicalIdentity !== "string" || canonicalIdentity.length === 0 ||
-    canonicalIdentity.length > MAX_CANONICAL_IDENTITY_LENGTH || canonicalIdentity.includes("\u0000")
+    canonicalIdentity.length > MAX_CANONICAL_IDENTITY_LENGTH || canonicalIdentity.includes("\u0000") ||
+    // Lone surrogates encode to U+FFFD, so two distinct identities would share one fingerprint.
+    stringIsWellFormed === undefined || !Reflect.apply(stringIsWellFormed, canonicalIdentity, [])
   ) {
     throw failure("retention_unavailable", diagnosticReference);
   }
@@ -1454,8 +1571,9 @@ function validFingerprintInput(purpose: unknown, canonicalIdentity: unknown, dia
 /**
  * A stable, server-held, versioned HMAC keyring for idempotency tombstone fingerprints.
  * Key material is resolved through the injected source on every operation and is never
- * returned. Every failure (no source, no key set, no or several active keys, short or
- * duplicate keys, an over-age active key, an unknown stored version) fails closed.
+ * returned. Every failure (no source, no key set, no or several active keys, short, degenerate
+ * or duplicate keys, a broken rotation chain, an over-age active key, an unknown or purgeable
+ * stored version) fails closed.
  */
 export function createTombstoneFingerprintKeyring(input: {
   readonly keyringReference: unknown;
@@ -1494,28 +1612,27 @@ export function createTombstoneFingerprintKeyring(input: {
       throw failure("retention_unavailable", diagnosticReference);
     }
     const set = snapshotRecord(raw, "retention_unavailable", diagnosticReference);
-    const entries = snapshotDataArray(
-      set.keys, TOMBSTONE_FINGERPRINT_KEY_POLICY_DEFAULTS.maxKeyVersions, "retention_unavailable", diagnosticReference
-    );
-    if (entries.length === 0) throw failure("retention_unavailable", diagnosticReference);
+    // Only the hard limit applies here: the policy cap never stops verification.
+    const entries = snapshotDataArray(set.keys, TOMBSTONE_FINGERPRINT_KEY_LIMITS.maxKeyVersions, "retention_unavailable", diagnosticReference);
 
-    const parsed: { metadata: FingerprintKeyMetadata; bytes: Uint8Array }[] = [];
-    const versions = new Set<string>();
+    const parsed: { metadata: FingerprintKeyMetadata; generation: number; bytes: Uint8Array }[] = [];
     try {
       for (const entry of entries) {
-        const { metadata, fields: keyFields } = snapshotKeyMetadata(entry, KEY_MATERIAL_FIELDS, now, diagnosticReference);
-        const bytes = copyBytes(keyFields.key, TOMBSTONE_FINGERPRINT_KEY_POLICY_DEFAULTS.maxKeyBytes, "retention_unavailable", diagnosticReference);
-        if (bytes.byteLength < TOMBSTONE_FINGERPRINT_KEY_POLICY_DEFAULTS.minKeyBytes || versions.has(metadata.keyVersion)) {
+        const { metadata, generation, fields: keyFields } = snapshotKeyMetadata(
+          entry, KEY_MATERIAL_FIELDS, now + policy.maxClockSkewMs, "retention_unavailable", diagnosticReference
+        );
+        const bytes = copyBytes(keyFields.key, TOMBSTONE_FINGERPRINT_KEY_LIMITS.maxKeyBytes, "retention_unavailable", diagnosticReference);
+        parsed.push({ metadata, generation, bytes });
+        if (bytes.byteLength < TOMBSTONE_FINGERPRINT_KEY_LIMITS.minKeyBytes || degenerateKey(bytes)) {
           throw failure("retention_unavailable", diagnosticReference);
         }
         for (const other of parsed) {
-          if (sameBytes(other.bytes, bytes)) throw failure("retention_unavailable", diagnosticReference);
+          if (other.bytes !== bytes && (other.metadata.keyVersion === metadata.keyVersion || sameBytes(other.bytes, bytes))) {
+            throw failure("retention_unavailable", diagnosticReference);
+          }
         }
-        versions.add(metadata.keyVersion);
-        parsed.push({ metadata, bytes });
       }
-      const activeEntries = parsed.filter((entry) => entry.metadata.state === "active");
-      if (activeEntries.length !== 1) throw failure("retention_unavailable", diagnosticReference);
+      const ordered = validateKeyChain(parsed, "retention_unavailable", diagnosticReference);
 
       const importKey = async (entry: { metadata: FingerprintKeyMetadata; bytes: Uint8Array }): Promise<LoadedFingerprintKey> => {
         let cryptoKey: HmacKey;
@@ -1529,18 +1646,13 @@ export function createTombstoneFingerprintKeyring(input: {
         return Object.freeze({ keyVersion: entry.metadata.keyVersion, activatedAt: entry.metadata.activatedAt, cryptoKey });
       };
 
-      const active = await importKey(activeEntries[0] as { metadata: FingerprintKeyMetadata; bytes: Uint8Array });
+      const newestFirst = [...ordered].reverse();
+      const active = await importKey(newestFirst[0] as (typeof parsed)[number]);
       const verifiable: LoadedFingerprintKey[] = [active];
       const purgeable: string[] = [];
-      const retired = parsed
-        .filter((entry) => entry.metadata.state === "retired")
-        .sort((left, right) => (right.metadata.retiredAt as number) - (left.metadata.retiredAt as number));
-      for (const entry of retired) {
-        if (now >= (entry.metadata.retiredAt as number) + policy.retiredKeyRetentionMs) {
-          purgeable.push(entry.metadata.keyVersion);
-        } else {
-          verifiable.push(await importKey(entry));
-        }
+      for (const entry of newestFirst.slice(1)) {
+        if (retiredKeyPurgeable(entry.metadata, now, policy)) purgeable.push(entry.metadata.keyVersion);
+        else verifiable.push(await importKey(entry));
       }
       return Object.freeze({ now, active, verifiable: Object.freeze(verifiable), purgeable: Object.freeze(purgeable) });
     } finally {
@@ -1558,12 +1670,19 @@ export function createTombstoneFingerprintKeyring(input: {
     return Object.freeze({ keyVersion: key.keyVersion, digest: toBase64Url(new Uint8Array(signature)) });
   }
 
-  const keyring: TombstoneFingerprintKeyring = Object.freeze({
-    async fingerprint(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string): Promise<TombstoneFingerprint> {
+  return Object.freeze({
+    async fingerprint(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string): Promise<IssuedTombstoneFingerprint> {
       validFingerprintInput(purpose, canonicalIdentity, diagnosticReference);
       const set = await loadKeySet();
       if (set.now - set.active.activatedAt > policy.maxActiveKeyAgeMs) throw failure("retention_unavailable", diagnosticReference);
-      return sign(set.active, purpose, canonicalIdentity);
+      const signed = await sign(set.active, purpose, canonicalIdentity);
+      // The active key retires no earlier than now (minus one skew), so it stays verifiable at least
+      // until now + retention - skew. Every issued fingerprint carries that bound as data.
+      return Object.freeze({
+        keyVersion: signed.keyVersion,
+        digest: signed.digest,
+        maxRetainUntil: set.now + policy.retiredKeyRetentionMs - policy.maxClockSkewMs
+      });
     },
     async candidates(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string): Promise<readonly TombstoneFingerprint[]> {
       validFingerprintInput(purpose, canonicalIdentity, diagnosticReference);
@@ -1578,23 +1697,24 @@ export function createTombstoneFingerprintKeyring(input: {
       const keyVersion = storedFields.keyVersion;
       const digest = storedFields.digest;
       if (
-        typeof keyVersion !== "string" || !FINGERPRINT_KEY_VERSION_PATTERN.test(keyVersion) ||
+        keyVersionGeneration(keyVersion) === undefined ||
         typeof digest !== "string" || !FINGERPRINT_DIGEST_PATTERN.test(digest)
       ) {
         throw failure("retention_unavailable", diagnosticReference);
       }
+      const digestBytes = fromBase64Url(digest);
+      // Only the canonical encoding is accepted, so a store keyed by digest agrees with `matches`.
+      if (toBase64Url(digestBytes) !== digest) throw failure("retention_unavailable", diagnosticReference);
       const set = await loadKeySet();
       const key = set.verifiable.find((candidate) => candidate.keyVersion === keyVersion);
       if (key === undefined) {
-        // Past retention every tombstone made with this version has expired; a version the
-        // secret manager no longer returns at all is a configuration fault and fails closed.
-        if (set.purgeable.includes(keyVersion)) return false;
+        // An unknown version, or one past retention, means a tombstone outlived its key. That
+        // breaks an invariant and is never read as "no tombstone".
         throw failure("retention_unavailable", diagnosticReference);
       }
-      const digestBytes = fromBase64Url(digest);
       try {
         return await globalThis.crypto.subtle.verify(
-          "HMAC", key.cryptoKey, digestBytes.buffer as ArrayBuffer, fingerprintMessage(keyVersion, purpose, canonicalIdentity)
+          "HMAC", key.cryptoKey, digestBytes.buffer as ArrayBuffer, fingerprintMessage(keyVersion as string, purpose, canonicalIdentity)
         );
       } catch {
         throw failure("retention_unavailable", diagnosticReference);
@@ -1602,7 +1722,7 @@ export function createTombstoneFingerprintKeyring(input: {
     },
     async status(): Promise<FingerprintKeyringStatus> {
       const set = await loadKeySet();
-      const activeKeyAgeMs = set.now - set.active.activatedAt;
+      const activeKeyAgeMs = Math.max(0, set.now - set.active.activatedAt);
       return Object.freeze({
         keyringReference: keyringReference as string,
         activeKeyVersion: set.active.keyVersion,
@@ -1614,77 +1734,91 @@ export function createTombstoneFingerprintKeyring(input: {
       });
     }
   });
-  keyringRetentionGuards.set(keyring, (retainUntil) => retainUntil <= readClock() + policy.retiredKeyRetentionMs);
-  return keyring;
 }
 
 export interface FingerprintKeyRotationPlan {
   readonly reason: "scheduled" | "incident";
   readonly retiringKeyVersion: string;
   readonly newActiveKeyVersion: string;
-  /** The next key set metadata. The host adds the new key's random bytes in the secret manager. */
+  /** Generation of `newActiveKeyVersion`. Persist it and pass it back as `highWaterGeneration`. */
+  readonly highWaterGeneration: number;
+  /** The next key set metadata, newest first. It keeps removable versions (still `retired`). The host
+   * adds the new key's random bytes in the secret manager and writes this set atomically. */
   readonly keys: readonly FingerprintKeyMetadata[];
-  /** Retired versions past retention, dropped from `keys`. Delete their tombstones before the key. */
+  /** Retired versions past retention. Drop them from the key set in a separate step, only after every
+   * tombstone with that version is deleted or confirmed expired. */
   readonly removableKeyVersions: readonly string[];
 }
 
 /**
- * Plan a rotation from key metadata only (no key bytes). The current active key becomes
- * retired at `now`, the new version becomes active, retired versions past retention are
- * listed as removable, and a key version is never reused.
+ * Plan a rotation from key metadata only (no key bytes). The current active key becomes retired at
+ * `now` and a new version with the next generation becomes active. Generations only increase: the new
+ * one exceeds every generation in the set and the persisted `highWaterGeneration`, so a removed
+ * version is never reissued. A scheduled rotation is refused above `policy.maxKeyVersions` retained
+ * versions; an incident rotation is refused only above the hard limit.
  */
 export function planTombstoneFingerprintKeyRotation(input: {
   readonly keys: unknown;
-  readonly newKeyVersion: unknown;
   readonly reason: unknown;
   readonly now: unknown;
   readonly policy: TombstoneFingerprintKeyPolicy;
+  readonly keyVersionLabel?: unknown;
+  readonly highWaterGeneration?: unknown;
   readonly diagnosticReference?: unknown;
 }): FingerprintKeyRotationPlan {
   const fields = snapshotRecord(input, "retention_policy_invalid");
   const diagnosticReference = fields.diagnosticReference;
   const policy = resolveKeyPolicy(fields.policy, diagnosticReference);
-  const { newKeyVersion, reason, now } = fields;
+  const { reason, now, keyVersionLabel, highWaterGeneration } = fields;
   if (
-    typeof newKeyVersion !== "string" || !FINGERPRINT_KEY_VERSION_PATTERN.test(newKeyVersion) ||
-    (reason !== "scheduled" && reason !== "incident") || !Number.isSafeInteger(now) || (now as number) < 0
+    (reason !== "scheduled" && reason !== "incident") || !Number.isSafeInteger(now) || (now as number) < 0 ||
+    (keyVersionLabel !== undefined && (typeof keyVersionLabel !== "string" || !FINGERPRINT_KEY_LABEL_PATTERN.test(keyVersionLabel))) ||
+    (highWaterGeneration !== undefined && (!Number.isSafeInteger(highWaterGeneration) || (highWaterGeneration as number) < 1))
   ) {
     throw failure("retention_policy_invalid", diagnosticReference);
   }
-  const entries = snapshotDataArray(fields.keys, TOMBSTONE_FINGERPRINT_KEY_POLICY_DEFAULTS.maxKeyVersions, "retention_policy_invalid", diagnosticReference);
-  const metadata: FingerprintKeyMetadata[] = [];
+  const entries = snapshotDataArray(fields.keys, TOMBSTONE_FINGERPRINT_KEY_LIMITS.maxKeyVersions, "retention_policy_invalid", diagnosticReference);
+  const parsed: { metadata: FingerprintKeyMetadata; generation: number }[] = [];
   const versions = new Set<string>();
-  try {
-    for (const entry of entries) {
-      const parsed = snapshotKeyMetadata(entry, KEY_METADATA_FIELDS, now as number, diagnosticReference).metadata;
-      if (versions.has(parsed.keyVersion)) throw new Error();
-      versions.add(parsed.keyVersion);
-      metadata.push(parsed);
-    }
-  } catch {
+  for (const entry of entries) {
+    // The rotating host's clock must be past every recorded timestamp: the new activation is `now`.
+    const { metadata, generation } = snapshotKeyMetadata(entry, KEY_METADATA_FIELDS, now as number, "retention_policy_invalid", diagnosticReference);
+    if (versions.has(metadata.keyVersion)) throw failure("retention_policy_invalid", diagnosticReference);
+    versions.add(metadata.keyVersion);
+    parsed.push({ metadata, generation });
+  }
+  const ordered = validateKeyChain(parsed, "retention_policy_invalid", diagnosticReference);
+  const retiring = ordered[ordered.length - 1] as (typeof parsed)[number];
+  if (retiring.metadata.activatedAt >= (now as number)) throw failure("retention_policy_invalid", diagnosticReference);
+  if (highWaterGeneration !== undefined && (highWaterGeneration as number) < retiring.generation) {
+    // The persisted high-water mark is behind the key set: the history is inconsistent.
     throw failure("retention_policy_invalid", diagnosticReference);
   }
-  const active = metadata.filter((entry) => entry.state === "active");
-  if (active.length !== 1 || versions.has(newKeyVersion)) throw failure("retention_policy_invalid", diagnosticReference);
-  const retiring = active[0] as FingerprintKeyMetadata;
+  const nextGeneration = Math.max(retiring.generation, (highWaterGeneration as number | undefined) ?? 0) + 1;
+  const label = (keyVersionLabel as string | undefined) ?? (keyVersionGeneration(retiring.metadata.keyVersion) as { label: string }).label;
+  const newKeyVersion = `${label}-g${nextGeneration}`;
+  if (!Number.isSafeInteger(nextGeneration) || keyVersionGeneration(newKeyVersion) === undefined) {
+    throw failure("retention_policy_invalid", diagnosticReference);
+  }
 
   const next: FingerprintKeyMetadata[] = [
     Object.freeze({ keyVersion: newKeyVersion, state: "active", activatedAt: now as number }),
-    Object.freeze({ keyVersion: retiring.keyVersion, state: "retired", activatedAt: retiring.activatedAt, retiredAt: now as number })
+    Object.freeze({ keyVersion: retiring.metadata.keyVersion, state: "retired", activatedAt: retiring.metadata.activatedAt, retiredAt: now as number })
   ];
   const removable: string[] = [];
-  for (const entry of metadata) {
-    if (entry.state !== "retired") continue;
-    if ((now as number) >= (entry.retiredAt as number) + policy.retiredKeyRetentionMs) removable.push(entry.keyVersion);
-    else next.push(entry);
+  for (const entry of [...ordered].reverse().slice(1)) {
+    next.push(entry.metadata);
+    if (retiredKeyPurgeable(entry.metadata, now as number, policy)) removable.push(entry.metadata.keyVersion);
   }
-  if (next.length > TOMBSTONE_FINGERPRINT_KEY_POLICY_DEFAULTS.maxKeyVersions) {
+  if (next.length > TOMBSTONE_FINGERPRINT_KEY_LIMITS.maxKeyVersions) throw failure("retention_policy_invalid", diagnosticReference);
+  if (reason === "scheduled" && next.length - removable.length > policy.maxKeyVersions) {
     throw failure("retention_policy_invalid", diagnosticReference);
   }
   return Object.freeze({
     reason,
-    retiringKeyVersion: retiring.keyVersion,
+    retiringKeyVersion: retiring.metadata.keyVersion,
     newActiveKeyVersion: newKeyVersion,
+    highWaterGeneration: nextGeneration,
     keys: Object.freeze(next),
     removableKeyVersions: Object.freeze(removable)
   });
