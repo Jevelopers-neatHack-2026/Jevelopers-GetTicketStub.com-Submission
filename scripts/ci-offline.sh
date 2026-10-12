@@ -20,6 +20,7 @@ if [[ -e out/ci-workload-request.json ]]; then
   phase launch-probe node --test scripts/security/browser-launch-probe.test.mjs
   phase launch-diagnostic node scripts/security/launch-diagnostic.mjs
   phase pdf-position npm exec --offline -- node dist/scripts/diagnostics/pdf-position.js out/pdf-linux-position
+  phase pp16-bundle-handoff bash -c 'rm -rf out/pp16-bundle-handoff && PP_CANONICAL_EVIDENCE_DIR=out/pp16-bundle-handoff/bundle node --test --test-concurrency=1 dist/tests/integration/canonical-production-flow.test.js && node dist/scripts/diagnostics/pp16-bundle-handoff.js out/pp16-bundle-handoff'
   phase tests npm exec --offline -- node scripts/ci-workload.mjs run
   phase linux-browser node --test scripts/security/linux-browser.test.mjs
   phase calibration npm run verify -- --suite runtime --mode offline --evidence-dir out/evidence/linux-ci

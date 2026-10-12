@@ -84,3 +84,11 @@ jobs:
           name: pdf-position-aggregate-${{ github.run_attempt }}
           path: out/pdf-linux-position/
           if-no-files-found: error
+      - name: Preserve synthetic unapproved PP-16 bundle handoff corpus
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pp16-bundle-handoff-${{ github.run_attempt }}
+          path: out/pp16-bundle-handoff/
+          retention-days: 30
+          if-no-files-found: error
