@@ -1,5 +1,6 @@
 """Offline regression tests for snapshot fidelity and safe updates."""
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -81,6 +82,23 @@ class SnapshotTests(unittest.TestCase):
                  {'name': sync.TARGET, 'private': False, 'visibility': 'public'}]
         with patch.object(sync, 'run', return_value=json.dumps([repos])):
             self.assertEqual([r['name'] for r in sync.discover()], ['new-project'])
+
+    def test_public_api_sends_no_credentials(self):
+        with patch.object(sync, 'PUBLIC_API', True), patch.object(sync, 'urlopen', return_value=io.BytesIO(b'{"private":false}')) as request:
+            self.assertFalse(sync.api('repos/example/public')['private'])
+            self.assertNotIn('Authorization', request.call_args.args[0].headers)
+            self.assertEqual(request.call_args.args[0].full_url, 'https://api.github.com/repos/example/public')
+
+    def test_public_discovery_paginates_and_keeps_private_filter(self):
+        first = [{'name': f'project-{i}', 'private': False} for i in range(99)]
+        first.append({'name': 'checkpoint', 'private': True})
+        second = [{'name': 'new-project', 'private': False}, {'name': sync.TARGET, 'private': False}]
+        with patch.object(sync, 'PUBLIC_API', True), patch.object(sync, 'api', side_effect=[first, second]) as api:
+            names = [r['name'] for r in sync.discover()]
+            self.assertEqual(len(names), 100)
+            self.assertIn('new-project', names)
+            self.assertNotIn('checkpoint', names)
+            self.assertIn('page=2', api.call_args.args[0])
 
     def test_update_deletes_removed_files_and_unchanged_snapshot_is_noop(self):
         (self.source / 'README.md').write_text('handwritten guide')

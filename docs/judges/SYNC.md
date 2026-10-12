@@ -15,6 +15,14 @@ python3 scripts/sync_submission.py --publish
 
 The script discovers all public repositories in `Jevelopers-neatHack-2026` except this submission repository, fetches each default branch, scans the complete staged snapshot for secrets, verifies each copied Git tree against its source, refreshes the index and manifest, and commits and pushes only when something changed. New public repositories are picked up automatically. Files removed upstream are removed from the next snapshot. Refresh after merging the work you want judges to see.
 
+If the signed-in account has used its GitHub API quota, public metadata can use the separate unauthenticated quota:
+
+```sh
+python3 scripts/sync_submission.py --publish --public-api
+```
+
+This mode still checks each repository’s public visibility, excludes private projects, scans secrets, and verifies exact source trees. Git push still uses your normal authentication. The public quota is lower; if it is exhausted too, wait until the reported reset time and rerun. A rate-limit failure leaves the existing snapshots intact.
+
 To inspect an update before publishing:
 
 ```sh

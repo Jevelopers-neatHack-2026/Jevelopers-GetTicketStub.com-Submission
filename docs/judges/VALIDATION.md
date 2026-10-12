@@ -4,7 +4,7 @@
 
 Checked October 12, 2026. These are engineering checks, not organizer approval.
 
-- **Sync tests:** all nine tests pass. The update test also checks that judge documents and presentation graphics survive a refresh. Private exclusion, exact exports, unsafe paths, scan failures, and changed scan exceptions are covered.
+- **Sync tests:** all 11 tests pass. The update test also checks that judge documents and presentation graphics survive a refresh. Private exclusion, exact exports, unsafe paths, scan failures, changed scan exceptions, public API pagination, and credential-free public metadata are covered.
 - **Links:** the [public HTTP report](LINK-CHECK.json) records an unauthenticated check of every external link in the maintained judge pages. Relative files and Markdown heading links are checked by the command below. A working URL does not verify the claim on a page or prove submission.
 - **Words:** the root guide has about 620 words, including image descriptions and excluding code. It uses a short example, defines trace and runway, and separates samples from live evidence.
 - **Graphics:** both generated illustrations were visually inspected. Editable diagrams were checked at 390 pixels wide, in their light and dark variants. Labels, arrows, sponsor marks, and contrast were readable. Main explanations also remain ordinary text.

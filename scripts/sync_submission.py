@@ -11,12 +11,16 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 ORG = 'Jevelopers-neatHack-2026'
 TARGET = 'Jevelopers-GetTicketStub.com-Submission'
 REMOTE = f'https://github.com/{ORG}/{TARGET}.git'
 MANAGED = ('repositories', 'sources.json', 'REPOSITORIES.md')
+PUBLIC_API = False
 
 
 def run(*args, cwd=None, data=None, binary=False):
@@ -28,13 +32,34 @@ def run(*args, cwd=None, data=None, binary=False):
 
 
 def api(endpoint):
+    if PUBLIC_API:
+        # Public-only metadata needs no token. Git pushes still use normal Git authentication.
+        request = Request(f'https://api.github.com/{endpoint}', headers={
+            'Accept': 'application/vnd.github+json', 'User-Agent': 'TicketStub-submission-sync'})
+        try:
+            with urlopen(request, timeout=30) as response:
+                return json.load(response)
+        except HTTPError as error:
+            reset = error.headers.get('X-RateLimit-Reset')
+            when = f"; quota resets {datetime.fromtimestamp(int(reset), timezone.utc).isoformat()}" if reset and reset.isdigit() else ''
+            raise RuntimeError(f'Public GitHub API returned HTTP {error.code}{when}; no snapshot published') from None
     return json.loads(run('gh', 'api', '--hostname', 'github.com', endpoint))
 
 
 def discover():
     # Paginate the REST endpoint: no fixed repository-count ceiling.
-    pages = json.loads(run('gh', 'api', '--hostname', 'github.com', '--paginate', '--slurp',
-                          f'orgs/{ORG}/repos?per_page=100&type=all'))
+    if PUBLIC_API:
+        pages = []
+        page = 1
+        while True:
+            items = api(f'orgs/{ORG}/repos?per_page=100&type=public&page={page}')
+            pages.append(items)
+            if len(items) < 100:
+                break
+            page += 1
+    else:
+        pages = json.loads(run('gh', 'api', '--hostname', 'github.com', '--paginate', '--slurp',
+                              f'orgs/{ORG}/repos?per_page=100&type=all'))
     repos = []
     for repo in (item for page in pages for item in page):
         if repo['name'].lower() == TARGET.lower():
@@ -232,10 +257,15 @@ def apply_snapshot(stage):
 
 
 def main():
+    global PUBLIC_API
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--publish', action='store_true', help='commit the snapshot and push main')
     parser.add_argument('--dry-run', action='store_true', help='download, validate and scan without changing the checkout')
+    parser.add_argument('--public-api', action='store_true', help='read public metadata without a token (separate, lower API quota)')
     args = parser.parse_args()
+    PUBLIC_API = args.public_api
+    if PUBLIC_API:
+        print('Using unauthenticated public metadata; private repositories remain excluded.', flush=True)
     if args.publish and args.dry_run:
         parser.error('--publish and --dry-run are mutually exclusive')
     for tool in ('git', 'gh', 'gitleaks'):
