@@ -1,6 +1,6 @@
 # `shared-contracts`
 
-**Repository status:** Public GitHub repository, checked 2026-10-12 against [main at `7251a09c4eaddbb1232d444fd931a01c266095ac`](https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/7251a09c4eaddbb1232d444fd931a01c266095ac). This visibility check documents repository metadata; it does not change visibility or imply publication.
+**Repository status:** Public GitHub repository, checked 2026-10-12 against [main at `91736a026c02a3206cb7666ebfbe6134692e5a24`](https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/91736a026c02a3206cb7666ebfbe6134692e5a24). This visibility check documents repository metadata; it does not change visibility or imply publication.
 **Proposed owner:** Agent and research (repository role; named contract owners and reviewers remain unassigned).
 **Delivery state:** Main contains maintained interface-design documentation, an offline consumer-receipt metadata checker, and isolated Finance reporting proposal schemas and fixtures. It does not contain a canonical shared-contracts package, generated consumer SDK, or release artifact. Current implementation, consumer receipts, and release blockers are summarized in [MVP readiness](../mvp-readiness.md); individual issue and PR records remain authoritative.
 
