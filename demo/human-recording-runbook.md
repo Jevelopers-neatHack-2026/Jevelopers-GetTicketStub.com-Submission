@@ -8,8 +8,9 @@
 
 | Role | Who | State |
 | --- | --- | --- |
-| Recorder | **Crystal** | **Confirmed** in the owner relay, [issue 22 comment 6118253750](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118253750). No GitHub handle is recorded and none is needed to record. |
-| Editor | Not confirmed | The same relay says editing ownership is not separately confirmed. Open: is the editor Crystal or someone else. |
+| Video contributors | **Crystal and Lars**, a team effort | Owner-relayed correction, [issue 22 comment 6118435312](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118435312): Crystal and Lars are each doing a video, and both contributions are preserved. It supersedes the earlier [comment 6118253750](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118253750) reading of Crystal as sole recorder. No GitHub handle is recorded and none is needed to record. Lars is offline; no response is expected and this is not a new blocker. |
+| Final assembly / editing | Not confirmed | Open. No assignment is invented. |
+| Selected submission video(s) | Not confirmed | Open until the owner chooses. Both individual videos are not required if the owner's final selection is unknown; the final human receipt is chosen later. |
 | Submitter (human X account) | Not confirmed | The user's reply "likely lejefa/completedotech" is tentative. No role mapping is recorded and no handle is inferred. Whoever submits uses their own X account and name for the entry. |
 | Product / deployment owner | Product owner | Confirms the deployed build (section 3). |
 | Source owners | Per sponsor, section 6 | Keep evidence, finance, brand, rights and destination authority. |
@@ -40,12 +41,12 @@ Checked 2026-10-12 at [neatlogs.com/hackathon](https://neatlogs.com/hackathon): 
 | Item | Value | Source |
 | --- | --- | --- |
 | Product source reviewed by the ledger | `getticketstub.com` `eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073` | `CLAIM-PRODUCT-CAPABILITY-001` limitations; source availability only |
-| Newer product source reported | `6daa197` (merged #56 agent actions with the `ask_user` fix, and #61 exact download) | [issue 22 comment 6118271571](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118271571): **not published** at that time and `/api/health` had no commit field. Not in the claim ledger. |
+| Newer product source reported | `6daa197` (merged #56 agent actions with the `ask_user` fix, and #61 exact download) | [issue 22 comment 6118271571](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118271571): **not published** at that time and `/api/health` had no commit field. The later public receipt [comment 6118956932](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118956932) knows the live deployment is the old build versus the local production `6daa` build, with the deployment still missing the health commit (product #82), so the deployed build stays unproven. Product PR 89 checkout is not needed for the take and PR 90 additional styles is not needed before it; the guide sets no gate on either. Not in the claim ledger. |
 | Style set | Current 5 editions versus 8 new SVG templates, undecided | [issue 22 comment 6118297805](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118297805). The style count may be omitted until the owner confirms the deployed set. |
 | Neatlogs source | integration-evals [`31b4f53b46a584c4b5b4a6a7076f6800c37b00e5`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/31b4f53b46a584c4b5b4a6a7076f6800c37b00e5/evidence/neatlogs/2026-10-11) (PR [#35](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/35)) | `CLAIM-SPN-01-NEATLOGS-001` |
 | Entire source | integration-evals [`a9d68ef0116b1c20f7d70e0161016e21b4bb13b7`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/a9d68ef0116b1c20f7d70e0161016e21b4bb13b7/evidence/entire/2026-10-11) (PR [#31](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/31)) | `CLAIM-SPN-02-ENTIRE-001` |
 | CFO.ai source | integration-evals r2 [`6420af494a5276f69c337f47dac3ad4c1854d524`](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2), merged `f375fcf20584f5c98dbd4f3b69f884c52994224e` (PR [#24](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/24)) | `CLAIM-SPN-03-CFO-001` |
-| CFO.ai workbook to show | **Reviewer** workbook [`cfo-native-export.xlsx`](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx), SHA-256 `43884eafc91bd84b6dd4970a893e084c09f4759ea566f4864f1b95268ba12a14`, blank-safe opening-cash guards | Selected by the owner in [issue 22 comment 6118253750](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118253750): "Yes to the CFO.ai segment", with exact revision/hash, hypothetical labels and the generic-export limitation disclosed |
+| CFO.ai workbook to show | **Reviewer** workbook [`cfo-native-export.xlsx`](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx), SHA-256 `43884eafc91bd84b6dd4970a893e084c09f4759ea566f4864f1b95268ba12a14`, blank-safe opening-cash guards | Selected by the owner in [issue 22 comment 6118253750](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118253750): "Yes to the CFO.ai segment", with exact revision/hash, hypothetical labels and the generic-export limitation disclosed; re-affirmed in [comment 6118435312](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22#issuecomment-6118435312). A segment choice only, not Finance or package approval |
 | Generic workbook | [`cfo-native-export-generic.xlsx`](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/cfo-native-export-generic.xlsx), `969941bac6f07d9678bb04238f0d5167baab9956f5e320bb33b77841be809416` | **Not an accepted editable forecast.** Finance finding [`CFO-R2-001`](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20#issuecomment-6112840013) is unresolved. |
 
 **Must be confirmed before recording (all open blockers):**
@@ -53,7 +54,7 @@ Checked 2026-10-12 at [neatlogs.com/hackathon](https://neatlogs.com/hackathon): 
 1. The exact deployed product commit and URL, from the product owner (say whether it is `6daa197` or another).
 2. A human producer rehearsal of that exact build. Do not record the final take against an unrehearsed build.
 3. The deployed style set, if any style count will be shown or said.
-4. The editor (if separate from Crystal) and the human submitter, with the submitter's own account and name.
+4. Who does final assembly and editing, which video or videos are selected for submission, and the human submitter, with the submitter's own account and name.
 5. The cleared example input (section 4).
 6. Whether a recovery moment is selected (section 5).
 7. The Discord cutoff, official post URL, demo URL and posted URL (section 2).
@@ -181,11 +182,11 @@ Do not say or caption: the brand slogan, "Every …" claims about tracing or che
 - [ ] CFO.ai page, if opened live, is the owner-authorised plan only, with login, credentials, workspace list and unapproved content redacted; otherwise the public screenshot is used.
 - [ ] Recovery decision made; if selected, labelled `DEMO`.
 - [ ] Every spoken line is an approved line or has its own claim row for that destination; the four runbook rows are not speech or caption approval. Product beats stay silent until a product row exists.
-- [ ] Editor and submitter confirmed; submitter uses their own X account and name.
+- [ ] Final assembly owner, selected submission video(s) and submitter confirmed; submitter uses their own X account and name.
 - [ ] Official post URL and Discord cutoff rechecked just before submission.
 - [ ] Team, project, repository and plan link entered by the human submitter; the demo URL is added after publishing.
 - [ ] Real runtime measured and under 180 seconds; captions and transcript match the audio; redaction checked on rendered pixels.
 
 ## 9. After the take
 
-The recorder reviews the export end to end and records the real runtime. A human does any posting, upload or submission. Nothing in this runbook shows that a recording, QA, a teammate dry run or a submission has happened.
+The video contributors review the export end to end and records the real runtime. A human does any posting, upload or submission. Nothing in this runbook shows that a recording, QA, a teammate dry run or a submission has happened.
