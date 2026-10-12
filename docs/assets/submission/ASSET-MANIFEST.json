@@ -92,6 +92,11 @@
       "sha256": "cdeb5c5d47db1a11ce920bc490e36a899e87ce8ed2113b998e58c4ddf764f3b9"
     },
     {
+      "file": "timothy-wayne-gregg-token-usage-2026-10-12-173441.pdf",
+      "bytes": 580211,
+      "sha256": "3f4dd41d1fe5e1f79b155fceda6ed7faed0fb735159c03335bcc1b85bc5435e5"
+    },
+    {
       "file": "timothy-wayne-gregg-token-usage-2026-10-12.pdf",
       "bytes": 580145,
       "sha256": "a082e23edce207de1121656f44a6993ca64d7ae6204bb864910007fadf5c486a"
@@ -105,6 +110,16 @@
       "file": "timothy-wayne-gregg-usage-2026-10-12-143507.zip",
       "bytes": 32140712,
       "sha256": "68c36f9826713926085713a182cdb7b4cd2d19b0555ea9c1ae09e27f46181536"
+    },
+    {
+      "file": "timothy-wayne-gregg-usage-2026-10-12-173441.html",
+      "bytes": 646231,
+      "sha256": "63747b6fba71203385fc296e864287139c6d31dc776a1078cb6fc85fd83a2823"
+    },
+    {
+      "file": "timothy-wayne-gregg-usage-2026-10-12-173441.zip",
+      "bytes": 32173741,
+      "sha256": "82c505c2976f483216e37dbafe6af96734f0961889fcee957aa7fc7d1dc98f0d"
     },
     {
       "file": "tools-dark.svg",
