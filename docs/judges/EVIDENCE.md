@@ -75,7 +75,7 @@ The reviewer workbook has four blank-safe formula corrections made through the C
 
 ## Building in public
 
-**Verified build posts:** [Day 1 · October 10](https://x.com/CompleteTechLLC/status/2109089580159004778) introduces TicketStub. [Day 2 · October 11](https://x.com/CompleteTechLLC/status/2109407386289189284) shares the product and a stream link. Both use #neatHack and name @neatlogs, @EntireHQ, and @arithecfo. We opened each exact post in Chrome on October 12. Their URLs also returned HTTP 200 without authentication. Full signed-out X rendering was not separately checked.
+**Verified build posts:** [Team kickoff · October 10](https://x.com/CompleteTechLLC/status/2108906067060990141) opens the event. [Day 1 · October 10](https://x.com/CompleteTechLLC/status/2109089580159004778) introduces TicketStub. [Day 2 · October 11](https://x.com/CompleteTechLLC/status/2109407964784382285) shares the product and a stream link ([text-only copy](https://x.com/CompleteTechLLC/status/2109407386289189284)). On October 12, a [demo video post](https://x.com/CompleteTechLLC/status/2109753079604166718) and the [submission quote-post](https://x.com/CompleteTechLLC/status/2109758479720231135) followed. All use #neatHack or #neatHack2026; the build and submission posts name @neatlogs, @EntireHQ, and @arithecfo. We opened each post in signed-in Chrome on October 12 at 5:45 PM Eastern; every URL also returned HTTP 200 without authentication. Full signed-out X rendering was not separately checked. A search of X the same evening found no event posts from other team members.
 
 The posts prove public updates, not every product claim in their copy. Day 1’s printing language is not proof of physical fulfillment. Day 2’s usage and cost figures are owner reports, not audited metrics. We did not verify the linked stream or its recordings and do not count them as the final demo.
 
@@ -91,7 +91,7 @@ Timothy's [searchable report and complete CSV bundle](USAGE.md#explore-the-repor
 
 The [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46), and [Entire graph Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) also expose work and discussion.
 
-**Still missing:** a verified final demo quote-post of the official launch post. The two build posts predate that launch and do not satisfy this step. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. No engagement or customer-demand score is claimed here.
+**Submission quote-post:** [posted October 12 at 5:29 PM Eastern](https://x.com/CompleteTechLLC/status/2109758479720231135). It quotes the [official launch post](https://x.com/bettersayAJ/status/2109639214723932495), attaches the 2:56 demo video, and tags @neatlogs, @EntireHQ, and @arithecfo. The video uses the sample flow; it does not prove a complete live journey. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. Engagement counts are snapshots; no customer-demand score is claimed here.
 
 ## Code history
 

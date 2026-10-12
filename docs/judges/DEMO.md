@@ -32,7 +32,7 @@ The times below match the supplied storyboard. They are **not timestamps of veri
 - A retained complete live run if claiming live completion: input, source commit, trace identifiers, tool choices, checks, result, and any recovery.
 - A neatlogs view tied to that same run; mask credentials and personal data.
 - Tool footage for all three sponsors. Existing screenshots and graph files can support it; they do not create a live-demo claim.
-- The final quote-post URL and official form confirmation.
+- The official form confirmation. The [final quote-post](https://x.com/CompleteTechLLC/status/2109758479720231135) is public.
 
 ## Replay the sample
 
