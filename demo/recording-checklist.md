@@ -30,6 +30,17 @@ Do not turn the rehearsal into a final demo until each item below has a pinned, 
 - **Brand and exact claims:** approved brand subset and candidate review; supervisor joins any proposed scene wording to the exact claim ledger and obtains source-owner and destination decisions. Any source, wording, evidence, crop, or destination change triggers review again.
 - **Submission details:** current organizer page, official X post URL, actual Discord cutoff, accountable submitter authorization, final team/name/project fields, public project-repository URL, public demo URL, and supporting evidence links. Verify those values immediately before submission.
 
+## Human recording runbook
+
+The planned, timed human handoff is [`human-recording-runbook.md`](human-recording-runbook.md) (suggested ID `DEMO-HUMAN-RECORDING-RUNBOOK-001`, internal and not an approved final v1). It is a plan only: no dry run, phone QA, teammate rehearsal or recording has happened. Use it with the sources below; it does not make any pending item complete.
+
+Newer available sources recorded since the blockers above were written (availability only, not approval):
+
+- **Neatlogs / SPN-01:** public source at integration-evals `31b4f53b46a584c4b5b4a6a7076f6800c37b00e5` (PR #35, corrects PR #33). Owner acceptance was relayed in chat; the independent `NL-R1/2/3` `REQUEST_CHANGES` history stays. SPN-01 remains `PENDING`.
+- **CFO.ai / SPN-03 Crystal record:** owner relay 6118253750, as captured by root in `issue22-premerge-comments-refresh.json`, records the CFO segment as Yes and the **reviewer** workbook (`43884eafc91bd84b6dd4970a893e084c09f4759ea566f4864f1b95268ba12a14`, guarded blank cash) as selected, against public r2 `6420af49…` (merged `f375fcf2…`). The relay names Crystal; no GitHub handle or role is inferred. This does not resolve `CFO-R2-001`, does not waive Finance review, and every forecast stays hypothetical.
+- **Recorder:** the owner relay approving a recorder does not reauthorize agent capture. The user's reply, "likely lejefa/completedotech", is tentative; no handle or role mapping is inferred. Editor, submitter, Discord cutoff, official post, demo URL and posted URL are still pending.
+- **Product build:** a newer source (`6daa197`) was reported but not published per the last deployment receipt (6118271571). The exact approved deployed commit and a producer rehearsal are needed before the final take.
+
 ## Capture status and roles
 
 Agent capture is cancelled and stays stopped. Restarting any agent capture requires a separate, fresh, explicit authorization. The recorder and the submitter are human teammates, and no agent posts, uploads, or submits.
