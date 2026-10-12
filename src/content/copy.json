@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "Safe provisional copy draft; not approved public release",
-  "pageSha256": "a078774df18e59b884bdff968f2bec3e4a5b2a009458d30c8320242f595858f6",
+  "pageSha256": "2f0bab2b5638c21c5bba27a7a85b0f3c536259ed7b3b366757fff2a5bbf17de6",
   "visibleTextSha256": "fa8589d48462ce281ccf259f9f5267f3d5a9050e6d75164af43be242e02ef705",
   "source": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
@@ -1252,8 +1252,16 @@
   ],
   "auditedSource": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
-    "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
-    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html"
+    "revision": "b5205f0c749ec81e1d75e3da75cc236dd79f692e",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b5205f0c749ec81e1d75e3da75cc236dd79f692e/site/index.html"
   },
-  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval."
+  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval.",
+  "historicalSourceReferences": [
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html",
+      "relationship": "Previous verified immutable author audit before the CSS-only maker reading surface; preserved without upgrading owner or publication approval."
+    }
+  ]
 }
