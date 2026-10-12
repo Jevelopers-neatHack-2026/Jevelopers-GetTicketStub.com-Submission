@@ -412,3 +412,48 @@ test("ORDER_AUTH_SIGNING_KEYS fails closed in live mode when unset or invalid, a
   // Invalid outside live mode is still refused: a misconfigured secret is never silently replaced.
   await withEnv({ ORDER_AUTH_SIGNING_KEYS: "{nope" }, async ({ orderAuthKeyring }) => assert.equal(orderAuthKeyring(), null));
 });
+
+// ---- Review fixes (#76 review M1, L3, N2)
+import { withSigningEnv } from "./lib/load-server.mjs";
+
+test("M1: the same string pasted into ORDER_AUTH_SIGNING_KEYS and CONTEXT_SECRET, ORDER_AUTH_CONSUMER_KEY or APPROVAL_SIGNING_KEYS is refused", async () => {
+  const s = b64k();
+  for (const [label, env] of [
+    ["CONTEXT_SECRET", { CONTEXT_SECRET: s }],
+    ["ORDER_AUTH_CONSUMER_KEY", { ORDER_AUTH_CONSUMER_KEY: s }],
+    ["APPROVAL_SIGNING_KEYS", { APPROVAL_SIGNING_KEYS: keyset(entry("approval-g1", s)) }],
+  ]) {
+    await withSigningEnv({ TICKETSTUB_RUNTIME_MODE: "live", ORDER_AUTH_SIGNING_KEYS: keyset(entry("order-auth-g1", s)), ...env }, async ({ orderAuthKeyring, approvalKeyring }, lines) => {
+      assert.equal(orderAuthKeyring(), null, `${label} reused as an order-authorization key must be refused`);
+      if (label === "APPROVAL_SIGNING_KEYS") assert.equal(approvalKeyring(), null, "and the approval set refuses the order key in turn");
+      assert.ok(lines.every((l) => !l.includes(s)));
+    });
+  }
+  await withSigningEnv({ TICKETSTUB_RUNTIME_MODE: "live", ORDER_AUTH_SIGNING_KEYS: keyset(entry("order-auth-g1", b64k())), APPROVAL_SIGNING_KEYS: keyset(entry("approval-g1", b64k())), CONTEXT_SECRET: b64k(), ORDER_AUTH_CONSUMER_KEY: b64k() }, async ({ orderAuthKeyring, approvalKeyring }) => {
+    assert.equal(orderAuthKeyring()?.mode, "live");
+    assert.equal(approvalKeyring()?.mode, "live");
+  });
+});
+
+test("L3: a production build outside live runtime warns once when it falls back to a per-process order-authorization key", async () => {
+  await withSigningEnv({ NODE_ENV: "production" }, async ({ orderAuthKeyring }, lines) => {
+    assert.equal(orderAuthKeyring().signer().kid, "sandbox");
+    orderAuthKeyring();
+    assert.equal(lines.filter((l) => l.includes("ORDER_AUTH_SIGNING_KEYS") && /not "live" in a production build/.test(l)).length, 1, lines.join("\n"));
+  });
+});
+
+test("N2: a retired order-authorization key refuses a token issued after its retirement plus skew", async () => {
+  const [k1, k2] = [b64k(), b64k()];
+  const retiredAt = NOW - 60_000;
+  const set = keyset(entry("order-auth-g2", k2, { activatedAt: new Date(retiredAt).toISOString() }), entry("order-auth-g1", k1, { state: "retired", activatedAt: new Date(NOW - 86400_000).toISOString(), retiredAt: new Date(retiredAt).toISOString() }));
+  await withSigningEnv({ TICKETSTUB_RUNTIME_MODE: "live", ORDER_AUTH_SIGNING_KEYS: set }, async ({ orderAuthKeyring }) => {
+    const kr = orderAuthKeyring();
+    const keys = (kid, issuedAt) => kr.lookup(kid, NOW + 60_000, issuedAt);
+    const old = { kid: "order-auth-g1", key: Buffer.from(k1, "base64url") };
+    const at = (issued) => signOrderAuthorization(record({ issuedAt: new Date(issued).toISOString(), expiresAt: new Date(issued + 15 * 60_000).toISOString() }), old);
+    assert.equal(verifyOrderAuthorization(at(retiredAt - 60_000), keys, expect(), NOW + 60_000).ok, true, "issued before retirement");
+    assert.equal(verifyOrderAuthorization(at(retiredAt + 5 * 60_000), keys, expect(), NOW + 60_000).ok, true, "inside the skew");
+    assert.equal(verifyOrderAuthorization(at(retiredAt + 5 * 60_000 + 1), keys, expect(), NOW + 60_000).reason, "forged", "issued after retirement");
+  });
+});

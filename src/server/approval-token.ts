@@ -185,11 +185,12 @@ export interface ApprovalSigningKey {
  * The keys a verifier accepts, by kid: a lookup function (the server's keyring) or a plain { kid: key } map (a consumer,
  * the fixtures). A kid the lookup does not know verifies nothing.
  */
-export type ApprovalKeys = ((kid: string) => string | Buffer | null | undefined) | Readonly<Record<string, string | Buffer>>;
+export type ApprovalKeys = ((kid: string, issuedAtMs: number) => string | Buffer | null | undefined) | Readonly<Record<string, string | Buffer>>;
 const KID = /^[A-Za-z0-9._-]{1,64}$/;
 
-function keyFor(keys: ApprovalKeys, kid: string): string | Buffer | null {
-  const k = typeof keys === "function" ? keys(kid) : Object.hasOwn(keys, kid) ? keys[kid] : null;
+/** issuedAtMs: the token's claimed issue time (NaN when unreadable), so a keyring can refuse a retired key signing after retirement. */
+function keyFor(keys: ApprovalKeys, kid: string, issuedAtMs: number): string | Buffer | null {
+  const k = typeof keys === "function" ? keys(kid, issuedAtMs) : Object.hasOwn(keys, kid) ? keys[kid] : null;
   return (typeof k === "string" && k.length > 0) || (Buffer.isBuffer(k) && k.length > 0) ? k : null;
 }
 
@@ -247,7 +248,8 @@ export function verifyApproval(token: string, keys: ApprovalKeys, expect: Approv
     return { ok: false, reason: "unknown" };
   }
   if (!isObj(head) || head.alg !== HEADER.alg || head.typ !== HEADER.typ || typeof head.kid !== "string" || !KID.test(head.kid) || !isObj(body)) return { ok: false, reason: "unknown" };
-  const key = keyFor(keys, head.kid);
+  const claimedIssue = isObj(body.approval) && typeof body.approval.issuedAt === "string" ? Date.parse(body.approval.issuedAt) : Number.NaN;
+  const key = keyFor(keys, head.kid, claimedIssue);
   if (!key) return { ok: false, reason: "forged" }; // an unknown kid, or a retired key past retention: no key we hold signed it
   const want = createHmac("sha256", key).update(`${parts[0]}.${parts[1]}`).digest();
   const got = unb64(parts[2]);

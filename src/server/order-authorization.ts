@@ -109,7 +109,7 @@ async function viewOf(row: OrderAuthRow, keys: Keyring, now: number): Promise<Or
   if (row.revokedAt !== null) status = "revoked";
   else if (snap.claim) status = "claimed";
   else {
-    const r = verifyOrderAuthorization(token, (kid) => keys.lookup(kid, now), selfExpect(rec), now, stateOf(snap, rec, null, now), "verify");
+    const r = verifyOrderAuthorization(token, (kid, issuedAt) => keys.lookup(kid, now, issuedAt), selfExpect(rec), now, stateOf(snap, rec, null, now), "verify");
     status = r.ok ? "active" : r.reason === "expired" ? "expired" : r.reason === "revoked" ? "revoked" : "stale";
   }
   return { authorization: rec, status, revokedAt: row.revokedAt === null ? null : iso(row.revokedAt), claimedAt: snap.claim ? iso(snap.claim.claimedAt) : null, token };
@@ -330,7 +330,7 @@ export const ORDER_AUTH_REASON_STATUS: Record<string, number> = { already_claime
 async function preflight(token: string, expect: OrderAuthExpectation, now: number, intent: OrderAuthIntent): Promise<{ key: OrderAuthKeys; id: string } | { fail: OrderAuthVerifyResult & { ok: false } }> {
   const keyring = orderAuthKeyring();
   if (!keyring) return { fail: { ok: false, reason: "forged" } }; // no usable key set, nothing can be valid
-  const key: OrderAuthKeys = (kid) => keyring.lookup(kid, now);
+  const key: OrderAuthKeys = (kid, issuedAt) => keyring.lookup(kid, now, issuedAt);
   const first = verifyOrderAuthorization(token, key, expect, now, undefined, intent);
   if (!first.ok && (first.reason === "unknown" || first.reason === "forged" || first.reason === "unsupported_version")) return { fail: first };
   const id = orderAuthIdOf(token);
@@ -417,7 +417,7 @@ export async function lookupOrderClaim(tenant: string, stubId: string, idemKey: 
     const rec = parseRecord(snap.auth as OrderAuthRow);
     const keyring = orderAuthKeyring();
     if (!keyring) return { found: true, claim: claimResult(hit.claim), authority: { ok: false, reason: "forged" } };
-    const r = verifyOrderAuthorization(signOrderAuthorization(rec, keyring.signer()), (kid) => keyring.lookup(kid, now), { ...selfExpect(rec), claimReference: hit.claim.claimRef }, now, stateOf(snap, rec, { consumer: CONSUMER_ID, idemKey }, now), "revalidate");
+    const r = verifyOrderAuthorization(signOrderAuthorization(rec, keyring.signer()), (kid, issuedAt) => keyring.lookup(kid, now, issuedAt), { ...selfExpect(rec), claimReference: hit.claim.claimRef }, now, stateOf(snap, rec, { consumer: CONSUMER_ID, idemKey }, now), "revalidate");
     return { found: true, claim: claimResult(hit.claim), authority: r.ok ? { ok: true } : { ok: false, reason: r.reason } };
   }
   if (authorizationId) {
