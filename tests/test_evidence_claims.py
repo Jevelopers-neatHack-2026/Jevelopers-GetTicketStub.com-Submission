@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -118,7 +119,26 @@ def test_evidence_retains_when_temporary_staging_is_removed(tmp_path: Path) -> N
     assert (context.settings.artifacts / kept[0].path).read_bytes() == b'{"result":"controlled"}'
 
 
+def payload_id(payload: bytes) -> str:
+    return f"{len(payload)}b-{digest(payload)[:8]}"
+
+
+HUGE = "1" * 5000
+ESCAPED_KEY = '{"\\u0061pi_key":"fictional-long-credential-123","n":'
+RESOURCE_PAYLOADS = (
+    (ESCAPED_KEY + HUGE + "}").encode(),
+    json.dumps({"body": ESCAPED_KEY + HUGE + "}"}).encode(),
+    json.dumps({"body": '{"n":' + HUGE + "}"}).encode(),
+    b"[" * 256 + b"]" * 256,
+    b"[" * 512 + b"]" * 512,
+    json.dumps({"body": "[" * 256 + "]" * 256}).encode(),
+    b'{"a":{"api_key":"fictional-long-credential-123"},"a":{}}',
+    b'{"a":{"\\u0061pi_key":"fictional-long-credential-123"},"a":{"api_key":""}}',
+)
+
+
 LEAKY_JSON = (
+    *RESOURCE_PAYLOADS,
     b'{"api_key": "fictional-key-value-1234"}',
     b'{"password": "fictional-password-1234"}',
     b'{"Authorization": "Bearer fictional-token-1234"}',
@@ -131,7 +151,7 @@ LEAKY_JSON = (
 )
 
 
-@pytest.mark.parametrize("payload", LEAKY_JSON)
+@pytest.mark.parametrize("payload", LEAKY_JSON, ids=payload_id)
 def test_retain_rejects_quoted_or_bearer_credentials_without_echo(
     tmp_path: Path, payload: bytes
 ) -> None:
@@ -150,7 +170,7 @@ def test_retain_rejects_quoted_or_bearer_credentials_without_echo(
     assert not (context.settings.artifacts / context.run_id / case.id / "output.json").exists()
 
 
-@pytest.mark.parametrize("payload", LEAKY_JSON)
+@pytest.mark.parametrize("payload", LEAKY_JSON, ids=payload_id)
 def test_archive_copy_rejects_quoted_or_bearer_credentials_without_echo(
     tmp_path: Path, payload: bytes
 ) -> None:

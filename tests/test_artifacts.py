@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -6,6 +7,24 @@ import pytest
 from integration_evals import artifacts
 from integration_evals.artifacts import confined_path, digest, read_bytes, reject_leaks
 from integration_evals.errors import InvalidArtifactError
+
+
+def payload_id(payload: bytes) -> str:
+    return f"{len(payload)}b-{digest(payload)[:8]}"
+
+
+HUGE = "1" * 5000
+ESCAPED_KEY = '{"\\u0061pi_key":"fictional-long-credential-123","n":'
+RESOURCE_PAYLOADS = (
+    (ESCAPED_KEY + HUGE + "}").encode(),
+    json.dumps({"body": ESCAPED_KEY + HUGE + "}"}).encode(),
+    json.dumps({"body": '{"n":' + HUGE + "}"}).encode(),
+    b"[" * 256 + b"]" * 256,
+    b"[" * 512 + b"]" * 512,
+    json.dumps({"body": "[" * 256 + "]" * 256}).encode(),
+    b'{"a":{"api_key":"fictional-long-credential-123"},"a":{}}',
+    b'{"a":{"\\u0061pi_key":"fictional-long-credential-123"},"a":{"api_key":""}}',
+)
 
 
 @pytest.mark.parametrize("reference", ["../outside", "/outside"])
@@ -113,3 +132,26 @@ def test_read_bytes_bounds_actual_bytes(tmp_path: Path, monkeypatch: pytest.Monk
         _ = read_bytes(big)
     # Then only the oversized one is rejected and the exact-limit file is read whole.
     assert read_bytes(exact) == b"y" * 16
+
+
+@pytest.mark.parametrize("payload", RESOURCE_PAYLOADS, ids=payload_id)
+def test_rejects_export_when_json_resource_limit_or_overwrite_could_hide_credential(
+    payload: bytes,
+) -> None:
+    # Given JSON whose parsing limits or duplicate parents could mask a credential.
+    # When scanning it.
+    with pytest.raises(InvalidArtifactError, match="sensitive_content") as caught:
+        reject_leaks(payload, "fixture")
+    # Then it fails closed without echoing content.
+    assert "fictional" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b"plain text, not json", b"\xff\xfe binary", b'{"truncated": ', b'{"n": ' + b"1" * 50 + b"}"],
+)
+def test_accepts_ordinary_non_json_and_bounded_json(payload: bytes) -> None:
+    # Given trusted text, binary or invalid-JSON bytes and an ordinary bounded number.
+    # When scanning them.
+    reject_leaks(payload, "fixture")
+    # Then normal non-JSON handling is preserved.

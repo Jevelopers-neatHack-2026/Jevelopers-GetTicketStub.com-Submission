@@ -106,8 +106,8 @@ def _text_leak(value: str, depth: int) -> bool:
         return False
     try:
         nested = _decode(value)
-    except ValueError:
-        return False
+    except json.JSONDecodeError:
+        return False  # Text, not JSON. Other ValueErrors (resource limits) propagate.
     return _json_leak(nested, depth + 1)
 
 
@@ -134,10 +134,10 @@ def _document_leaks(data: bytes) -> bool:
     """Scan JSON documents; ambiguous or pathological structure is treated as a leak."""
     try:
         return _json_leak(_decode(data))
-    except ValueError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return False  # Not a JSON document; the byte patterns already applied.
-    except (_AmbiguousJsonError, RecursionError):
-        return True
+    except (ValueError, _AmbiguousJsonError, RecursionError):
+        return True  # Resource limits and ambiguity fail closed.
 
 
 def reject_leaks(data: bytes, reference: str) -> None:
