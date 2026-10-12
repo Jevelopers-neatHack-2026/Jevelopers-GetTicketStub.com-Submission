@@ -5,7 +5,7 @@
       "provider": "github",
       "repo": "Jevelopers-neatHack-2026/entire-checkpoints"
     },
-    "push_sessions": true
+    "push_sessions": false
   },
   "telemetry": false,
   "checkpoints": {

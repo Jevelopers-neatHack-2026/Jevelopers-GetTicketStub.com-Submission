@@ -54,6 +54,8 @@ Product funnel counts (visits, studio starts, paid orders) are **not** finance m
 
 CSV consumers must treat any text cell beginning with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed as data, including their full-width forms and when they follow leading whitespace. The internal encoder in `src/integrations/csv.ts` (CI-08X.3) prefixes such cells with `'`; rejects the byte-order mark, C1 and bidirectional control characters, and a `sep=` directive in the first header cell (upstream must strip direction marks from right-to-left names); and writes RFC 4180 CSV with CRLF records and no byte-order mark, keeps money as exact decimals at a fixed scale and rejects amounts more precise than that scale instead of rounding them, and writes unknown values as empty cells rather than `0`. It is not yet wired into `exportSummary`.
 
+The public summary serializer reuses the hardened text-cell encoder. The exportSummary operation remains unavailable until its reviewed summary and export adapter are delivered.
+
 ## Compatibility
 
 This document adds no schema, and the `ExportRequest` and `ExportManifest` 1.0.0 shapes are unchanged. Renaming a metric key after first use needs a new `definition_ref` version and an entry in [compatibility.md](./compatibility.md).

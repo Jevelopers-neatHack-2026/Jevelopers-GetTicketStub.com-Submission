@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +12,59 @@ import { requiredFilesHavePassingEvidence, runTestFile } from '../../scripts/tes
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const evidenceFixtureDirectory = await mkdtemp(join(tmpdir(), 'ci01-test-evidence-'));
 after(async () => rm(evidenceFixtureDirectory, { recursive: true, force: true }));
+
+test('Entire graph checkpoint and workflow permissions fail closed', async () => {
+  const settings = JSON.parse(await readFile(join(root, '.entire/settings.json'), 'utf8'));
+  assert.equal(settings.strategy_options.push_sessions, false);
+  const workflow = await readFile(join(root, '.github/workflows/entire-graph.yml'), 'utf8');
+  assert.match(workflow, /type: boolean\s+default: false/);
+  assert.match(workflow, /persist-credentials: false/);
+  assert.match(workflow, /contents: write/);
+  assert.match(workflow, /github\.event_name == 'workflow_dispatch'.*inputs\.push_branch == true.*refs\/heads\/main/);
+  assert.match(workflow, /Gate graph execution until plugin is pinned/);
+  assert.match(workflow, /plugin_ready=false/);
+  assert.match(workflow, /needs\.graph\.outputs\.plugin_ready == 'true'/);
+  assert.doesNotMatch(workflow, /entire plugin install graph/);
+  assert.match(workflow, /git add -- \.entire\/graph-agent\.md AGENTS\.md CLAUDE\.md/);
+  const writer = workflow.slice(workflow.indexOf('  publish:'));
+  assert.match(writer, /persist-credentials: true/);
+  assert.doesNotMatch(writer, /github-token:|secrets\.GITHUB_TOKEN/);
+  for (const name of ['AGENTS.md', 'CLAUDE.md']) {
+    const instructions = await readFile(join(root, name), 'utf8');
+    const generatedEnd = instructions.indexOf('<!-- entire-graph:end -->');
+    const fallback = instructions.indexOf('Repository-owned fallback when Entire graph is unavailable');
+    assert.ok(generatedEnd >= 0 && fallback > generatedEnd, name + ' fallback must live outside the generated block');
+  }
+});
+
+test('generated graph artifact validator rejects extra files and symbolic links', async () => {
+  const artifact = join(evidenceFixtureDirectory, 'graph-artifact');
+  const hidden = join(artifact, '.entire');
+  await mkdir(hidden, { recursive: true });
+  const fallback = await readFile(join(root, 'docs/api/entire-graph-agent-fallback.md'));
+  await writeFile(join(hidden, 'graph-agent.md'), 'synthetic graph instructions\n');
+  const generatedBlock = Buffer.from('<!-- entire-graph:begin -->\nmanaged\n<!-- entire-graph:end -->');
+  for (const name of ['AGENTS.md', 'CLAUDE.md']) {
+    await writeFile(join(artifact, name), Buffer.concat([generatedBlock, fallback]));
+  }
+  const runValidator = () => spawnSync(process.execPath, ['scripts/validate-entire-graph-artifact.mjs', artifact], {
+    cwd: root, encoding: 'utf8',
+  });
+  const accepted = runValidator();
+  assert.equal(accepted.status, 0, accepted.stderr);
+
+  await writeFile(join(artifact, 'unexpected.txt'), 'not allowlisted');
+  const extraFile = runValidator();
+  assert.equal(extraFile.status, 1);
+  assert.match(extraFile.stderr, /Unexpected artifact file/);
+  await unlink(join(artifact, 'unexpected.txt'));
+
+  await unlink(join(hidden, 'graph-agent.md'));
+  await symlink(join(artifact, 'AGENTS.md'), join(hidden, 'graph-agent.md'));
+  const linkedFile = runValidator();
+  assert.equal(linkedFile.status, 1);
+  assert.match(linkedFile.stderr, /symlink/);
+});
 
 async function writeTestFixture(name, source) {
   const path = join(evidenceFixtureDirectory, name);
