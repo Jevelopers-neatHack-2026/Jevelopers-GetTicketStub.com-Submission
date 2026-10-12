@@ -76,6 +76,7 @@ function copyPublicApiJourneyFixtures() {
   cpSync(join(repoRoot, "fixtures/contracts/creative"), join(consumerDir, "fixtures/contracts/creative"), { recursive: true });
   mkdirSync(join(consumerDir, "fixtures/models"), { recursive: true });
   copyFileSync(join(repoRoot, "fixtures/models/png.mjs"), join(consumerDir, "fixtures/models/png.mjs"));
+  copyFileSync(join(repoRoot, "fixtures/models/creative-api-fixture.mjs"), join(consumerDir, "fixtures/models/creative-api-fixture.mjs"));
   copyFileSync(join(repoRoot, "fixtures/models/valid-16x16.jpg"), join(consumerDir, "fixtures/models/valid-16x16.jpg"));
   copyFileSync(join(repoRoot, "fixtures/models/valid-16x16.webp"), join(consumerDir, "fixtures/models/valid-16x16.webp"));
   mkdirSync(join(consumerDir, "fixtures/planning"), { recursive: true });
@@ -85,13 +86,10 @@ function copyPublicApiJourneyFixtures() {
   mkdirSync(testDir, { recursive: true });
   let integration = readFileSync(join(repoRoot, "tests/models/creative-api-integration.test.mjs"), "utf8");
   for (const [before, after, label] of [
-    ['"../../src/api/v1.mjs"', '"creative-engine/api/v1"', "installed API import"],
     ['"../../src/contracts/index.mjs"', '"creative-engine/contracts"', "installed contracts import"],
     ['"../../src/contracts/composition-authority.mjs"', '"creative-engine/contracts/composition-authority"', "installed composition contract import"],
     ['"../../src/contracts/approval-handoff.mjs"', '"creative-engine/contracts/approval-handoff"', "installed approval handoff import"],
-    ['"../../src/versions/api-ports.mjs"', '"creative-engine/versions"', "installed version ports import"],
     ['"../../src/versions/store.mjs"', '"creative-engine/versions"', "installed version store import"],
-    ['"../../src/telemetry/index.mjs"', '"creative-engine/telemetry"', "installed telemetry import"],
   ]) integration = replaceOnce(integration, before, after, label);
   integration = replaceOnce(integration,
     '  assert.equal(context.counters.provider_posts - countersBeforeConcepts.provider_posts, 2,\n' +
