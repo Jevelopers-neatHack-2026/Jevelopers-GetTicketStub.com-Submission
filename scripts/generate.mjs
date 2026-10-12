@@ -123,6 +123,7 @@ export async function outputs() {
   const names = Object.keys(versions);
   result.set('index.mjs', "export { validateContract, validateContractVersion, parseContract, parseContractVersion, validatePrimitive, checkTrustedContext, projectEvidence, canonicalJson, hashManifest, hashBytes, ContractError } from '../tooling/runtime.mjs';\nexport * from '../tooling/operations.mjs';\nexport * from '../tooling/research-creative.mjs';\nexport * from '../tooling/commerce-evidence.mjs';\nexport * from '../tooling/finance-v2.mjs';\nexport * from '../tooling/capability.mjs';\nexport { versions } from './registry.mjs';\n");
   result.set('operations.d.ts', (await readFile(root + 'tooling/operations-api.d.ts', 'utf8')).replace('../generated/index.js', './index.js'));
+  result.set('usage-reported-unsettled.d.ts', (await readFile(root + 'tooling/usage-reported-unsettled-api.d.ts', 'utf8')).replace('../generated/index.js', './index.js'));
   result.set('research-creative.d.ts', (await readFile(root + 'tooling/research-creative-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   result.set('commerce-evidence.d.ts', (await readFile(root + 'tooling/commerce-evidence-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   result.set('finance-v2.d.ts', (await readFile(root + 'tooling/finance-v2-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
@@ -133,7 +134,7 @@ export async function outputs() {
   result.set('error-registry.mjs', 'const records = ' + JSON.stringify(errorRegistry, null, 2) + ';\nfor (const record of Object.values(records)) Object.freeze(record);\nexport const errorRegistry = Object.freeze(records);\n');
   result.set('fixture-harness.d.ts', `export type FixtureExpectation = { readonly ok: boolean; readonly code?: string; readonly path?: string; readonly value?: unknown; readonly canonical_sha256?: string };
 export type FixtureCase = { readonly id: string; readonly category: string; readonly policy_version: string; readonly consumer_version?: string; readonly mode?: string; readonly remove?: readonly string[]; readonly set?: Readonly<Record<string, unknown>>; readonly context?: unknown; readonly expected_context?: unknown; readonly prior?: unknown; readonly json?: string; readonly expected: FixtureExpectation };
-export type FixtureManifest = { readonly contract: string; readonly schema_version: string; readonly policy_version: string; readonly valid: unknown; readonly cases: readonly FixtureCase[] };
+export type FixtureManifest = { readonly contract: string; readonly schema_version: string; readonly policy_version: string; readonly valid: unknown; readonly context?: unknown; readonly cases: readonly FixtureCase[] };
 export type FixtureIssue = { readonly code: string; readonly contract: string; readonly case?: string | null; readonly category?: string };
 export type FixtureRecord = { readonly contract: string; readonly version: string; readonly case: string; readonly category: string; readonly policy_version: string; readonly mode: string; readonly expected: FixtureExpectation; readonly profile?: 'historical_finance_characterization'; readonly operational_authority?: false; readonly canonical_sha256: string | null };
 export declare const fixtureCategories: readonly string[];

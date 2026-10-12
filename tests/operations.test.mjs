@@ -22,6 +22,9 @@ for (const entry of entries) {
     switch (fixture.mode) {
       case 'semantic': result = evaluateFixture(entry.name, manifest, fixture); break;
       case 'relationship': result = compareUsageIdentity(fixture.prior, payload); break;
+      case 'provider_reported_cost_evidence':
+      case 'usage_reported_unsettled':
+      case 'usage_reported_unsettled_relationship': result = evaluateFixture(entry.name, manifest, fixture); break;
       case 'parse': result = evaluateFixture(entry.name, manifest, fixture); break;
       case undefined: result = evaluateFixture(entry.name, manifest, fixture); break;
       default: throw new Error('Unknown fixture mode');

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { catalog, contractVersions, classifications } from '../scripts/contracts.mjs';
-import { consumerChecks, readPackageArchive } from '../scripts/consumer-checks.mjs';
+import { consumerChecks, readPackageArchive, requiredConsumerCoverage } from '../scripts/consumer-checks.mjs';
 import { root, readJson, versionTypeHeader } from '../scripts/generate.mjs';
 import ts from 'typescript';
 import { packageContents, verifyPackageContents } from '../scripts/package-content.mjs';
@@ -115,9 +115,9 @@ async function manifestFor({ all = false, mode = 'source', mutate = () => {}, sc
   const manifest = structuredClone(await readJson('compatibility/consumers.json'));
   for (const entry of manifest.repositories) {
     if (!all && entry.repository !== 'agent-harness') continue;
-    const required = entries.filter(row => row.producers.includes(entry.repository) || row.consumers.includes(entry.repository));
-    entry.roles = required.map(row => ({ contract: row.name, producer: row.producers.includes(entry.repository), consumer: row.consumers.includes(entry.repository) }));
-    Object.assign(entry, { source_sha: consumerSha, local_path: consumer, dependency_mode: 'offline', shared_source_revision: sourceRevision, package_content_digest: packageManifest.digest, package_integrity: mode === 'artifact' ? archive.integrity : null, shared_binding: { mode, local_path: mode === 'artifact' ? join(directory, archive.filename) : shared }, command: ['node', script], schema_pins: schemaManifest.schemas.filter(row => required.some(c => c.name === row.contract)).map(row => ({ contract: row.contract, version: row.version, schema_id: row.schema_id, sha256: row.sha256 })), fixture_digest: fixtureManifest.digest });
+    const required = requiredConsumerCoverage(entries, entry.repository);
+    entry.roles = required.requiredRoles;
+    Object.assign(entry, { source_sha: consumerSha, local_path: consumer, dependency_mode: 'offline', shared_source_revision: sourceRevision, package_content_digest: packageManifest.digest, package_integrity: mode === 'artifact' ? archive.integrity : null, shared_binding: { mode, local_path: mode === 'artifact' ? join(directory, archive.filename) : shared }, command: ['node', script], schema_pins: schemaManifest.schemas.filter(row => required.requiredFixtures.some(c => c.contract === row.contract && c.version === row.version)).map(row => ({ contract: row.contract, version: row.version, schema_id: row.schema_id, sha256: row.sha256 })), fixture_digest: fixtureManifest.digest });
     mutate(entry);
     const acknowledgement = { status: 'accepted', consumer_sha: entry.source_sha, shared_source_revision: entry.shared_source_revision, package_content_digest: entry.package_content_digest, package_integrity: entry.package_integrity, schema_pins_digest: hashManifest(entry.schema_pins), fixture_digest: entry.fixture_digest, command_digest: hashManifest(entry.command), reviewer: 'synthetic-fixture-reviewer', reviewed_at: '2026-10-10T12:00:00Z', record_ref: 'https://github.com/example/synthetic-fixture/pull/1' };
     const ackPath = join(directory, entry.repository + '-ack-' + Math.random().toString(36).slice(2) + '.json');
@@ -127,6 +127,58 @@ async function manifestFor({ all = false, mode = 'source', mutate = () => {}, sc
   return manifest;
 }
 const failureFor = (result, repository = 'agent-harness') => result.failures.find(row => row.repository === repository)?.code;
+test('intended evidence roles stay separate from current per-version pins and roles', async () => {
+  const evidence = entries.find(entry => entry.name === 'ProviderReportedCostEvidence');
+  assert.deepEqual(evidence.producers, ['cost-intelligence']);
+  assert.deepEqual(evidence.consumers, ['cost-intelligence', 'integration-evals']);
+  assert.equal(evidence.role_status, 'intended_role_only');
+  assert.equal(evidence.named_owner, null);
+  assert.equal(evidence.reviewer, null);
+  assert.equal(evidence.owner_acknowledgement, null);
+  assert.deepEqual(evidence.versions[0].producers, []);
+  assert.deepEqual(evidence.versions[0].consumers, []);
+  assert.equal(evidence.versions[0].role_status, 'opt_in_candidate_no_current_assignment');
+
+  const usage = entries.find(entry => entry.name === 'UsageEvent');
+  const existingUsage = requiredConsumerCoverage(entries, 'cost-intelligence').requiredFixtures;
+  assert.ok(existingUsage.some(row => row.contract === 'UsageEvent' && row.version === '1.0.0'));
+  assert.ok(!existingUsage.some(row => row.contract === 'UsageEvent' && row.version === '2.0.0'));
+  assert.equal(usage.versions.find(version => version.schema_version === '2.0.0').role_status, 'opt_in_candidate_no_current_assignment');
+
+  const manifest = await readJson('compatibility/consumers.json');
+  for (const repository of ['cost-intelligence', 'integration-evals']) {
+    const current = requiredConsumerCoverage(entries, repository);
+    const existingEntries = entries.filter(entry => entry.name !== 'ProviderReportedCostEvidence' && (entry.producers.includes(repository) || entry.consumers.includes(repository)));
+    assert.ok(!current.requiredNames.includes('ProviderReportedCostEvidence'));
+    assert.ok(!current.requiredFixtures.some(row => row.contract === 'ProviderReportedCostEvidence'));
+    assert.ok(!current.requiredRoles.some(row => row.contract === 'ProviderReportedCostEvidence'));
+    assert.ok(current.requiredNames.includes('UsageEvent'));
+    assert.deepEqual(current.requiredNames, existingEntries.map(entry => entry.name));
+    assert.deepEqual(
+      current.requiredFixtures.filter(row => row.contract !== 'ProviderReportedCostEvidence').map(row => row.contract + '@' + row.version),
+      existingEntries.flatMap(entry => (entry.versions ?? [entry])
+        .map(version => ({ ...entry, ...version }))
+        .filter(version => version.producers?.includes(repository) || version.consumers?.includes(repository))
+        .map(version => entry.name + '@' + version.schema_version))
+    );
+    assert.deepEqual(
+      current.requiredRoles.filter(row => row.contract !== 'ProviderReportedCostEvidence'),
+      existingEntries.map(entry => ({
+        contract: entry.name,
+        producer: entry.producers.includes(repository),
+        consumer: entry.consumers.includes(repository)
+      }))
+    );
+    const declared = manifest.repositories.find(row => row.repository === repository);
+    assert.ok(!declared.roles.some(row => row.contract === 'ProviderReportedCostEvidence'));
+    assert.ok(!declared.schema_pins.some(row => row.contract === 'ProviderReportedCostEvidence'));
+    assert.ok(!declared.schema_pins.some(row => row.contract === 'UsageEvent' && row.version === '2.0.0'));
+  }
+
+  const printProduction = requiredConsumerCoverage(entries, 'print-production');
+  assert.ok(printProduction.requiredFixtures.some(row => row.contract === 'ProductionBundle' && row.version === '2.0.0'));
+  assert.ok(printProduction.requiredRoles.some(row => row.contract === 'ProductionBundle' && row.producer && !row.consumer));
+});
 test('nine synthetic adapters bind real imported source code and all catalog roles', async () => {
   const result = await consumerChecks(await manifestFor({ all: true }));
   assert.deepEqual(result.failures, []);
@@ -134,6 +186,14 @@ test('nine synthetic adapters bind real imported source code and all catalog rol
   assert.equal(result.checkout_records.length, 9);
   const application = result.records.find(row => row.repository === 'getticketstub.com');
   for (const contract of ['ProjectRequest', 'ApprovalReceipt', 'ApprovalReference', 'OrderAuthorization', 'FulfillmentQuote', 'FulfillmentStatus']) assert.ok(application.observed_contracts.includes(contract));
+});
+test('unaccepted usage candidates do not expand existing consumer pins', async () => {
+  const manifest = await manifestFor({ all: true });
+  for (const entry of manifest.repositories) {
+    assert.equal(entry.schema_pins.some(pin => pin.contract === 'UsageEvent' && pin.version === '2.0.0'), false);
+    assert.equal(entry.schema_pins.some(pin => pin.contract === 'ProviderReportedCostEvidence'), false);
+    assert.equal(entry.roles.some(role => role.contract === 'ProviderReportedCostEvidence'), false);
+  }
 });
 test('integrity-locked actual archive binds imports independently of source checkout', async () => {
   const result = await consumerChecks(await manifestFor({ mode: 'artifact' }));

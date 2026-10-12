@@ -30,13 +30,13 @@ var require_ucs2length = __commonJS({
 });
 
 // production-validators.mjs
-var ArtifactFile_2_0_0 = validate2773;
-var schema466 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ArtifactFile/2.0.0", "title": "ArtifactFile", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "artifact_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "filename": { "type": "string", "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?![\\s\\S])", "x-classification": "restricted" }, "role": { "type": "string", "enum": ["source_artwork", "display_preview", "composed_preview", "print_output", "preflight_report", "profile", "lineage", "manifest", "archive", "detached"], "x-classification": "restricted" }, "byte_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "byte_size": { "type": "integer", "minimum": 0, "maximum": 67108864, "x-classification": "restricted" }, "media_type": { "type": "string", "enum": ["image/svg+xml", "image/png", "image/jpeg", "image/webp", "application/pdf", "application/json", "application/zip", "application/vnd.iccprofile"], "x-classification": "restricted" }, "geometry": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "width_px": { "anyOf": [{ "type": "integer", "minimum": 1, "maximum": 1e6, "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "height_px": { "anyOf": [{ "type": "integer", "minimum": 1, "maximum": 1e6, "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "effective_dpi": { "anyOf": [{ "type": "number", "exclusiveMinimum": 0, "maximum": 9600, "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["width_nm", "height_nm", "width_px", "height_px", "effective_dpi"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "profile_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "characteristics": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "raster_artwork": { "type": "boolean", "x-classification": "restricted" }, "text": { "type": "string", "enum": ["embedded", "rasterized", "none"], "x-classification": "restricted" }, "vector_content": { "type": "boolean", "x-classification": "restricted" }, "alpha": { "type": "boolean", "x-classification": "restricted" } }, "required": ["raster_artwork", "text", "vector_content", "alpha"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "semantic_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "artifact_id", "filename", "role", "byte_hash", "byte_size", "media_type", "geometry", "profile_ref", "characteristics", "semantic_hash"], "x-classification": "restricted" };
+var ArtifactFile_2_0_0 = validate2831;
+var schema471 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ArtifactFile/2.0.0", "title": "ArtifactFile", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "artifact_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "filename": { "type": "string", "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?![\\s\\S])", "x-classification": "restricted" }, "role": { "type": "string", "enum": ["source_artwork", "display_preview", "composed_preview", "print_output", "preflight_report", "profile", "lineage", "manifest", "archive", "detached"], "x-classification": "restricted" }, "byte_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "byte_size": { "type": "integer", "minimum": 0, "maximum": 67108864, "x-classification": "restricted" }, "media_type": { "type": "string", "enum": ["image/svg+xml", "image/png", "image/jpeg", "image/webp", "application/pdf", "application/json", "application/zip", "application/vnd.iccprofile"], "x-classification": "restricted" }, "geometry": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "width_px": { "anyOf": [{ "type": "integer", "minimum": 1, "maximum": 1e6, "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "height_px": { "anyOf": [{ "type": "integer", "minimum": 1, "maximum": 1e6, "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "effective_dpi": { "anyOf": [{ "type": "number", "exclusiveMinimum": 0, "maximum": 9600, "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["width_nm", "height_nm", "width_px", "height_px", "effective_dpi"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "profile_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "characteristics": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "raster_artwork": { "type": "boolean", "x-classification": "restricted" }, "text": { "type": "string", "enum": ["embedded", "rasterized", "none"], "x-classification": "restricted" }, "vector_content": { "type": "boolean", "x-classification": "restricted" }, "alpha": { "type": "boolean", "x-classification": "restricted" } }, "required": ["raster_artwork", "text", "vector_content", "alpha"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "semantic_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "artifact_id", "filename", "role", "byte_hash", "byte_size", "media_type", "geometry", "profile_ref", "characteristics", "semantic_hash"], "x-classification": "restricted" };
 var func0 = Object.prototype.hasOwnProperty;
 var func126 = require_ucs2length().default;
 var formats0 = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-var pattern1364 = new RegExp("^[A-Za-z0-9][A-Za-z0-9._-]*(?![\\s\\S])", "u");
-var pattern1365 = new RegExp("^[1-9][0-9]{0,9}(?![\\s\\S])", "u");
+var pattern1381 = new RegExp("^[A-Za-z0-9][A-Za-z0-9._-]*(?![\\s\\S])", "u");
+var pattern1382 = new RegExp("^[1-9][0-9]{0,9}(?![\\s\\S])", "u");
 var pattern7 = new RegExp("^sha256:[a-f0-9]{64}$", "u");
 function validate761(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
@@ -71,11 +71,11 @@ function validate761(data, { instancePath = "", parentData, parentDataProperty, 
   return errors === 0;
 }
 validate761.evaluated = { "dynamicProps": false, "dynamicItems": false };
-var schema468 = { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["DesignVersion", "ArtifactHandoffManifest", "ApprovalReceipt", "PrintSpec", "FulfillmentCapabilitySnapshot", "EventIntelligencePackage", "JobStatus", "UsageEvent", "DecisionReceipt", "EvaluationEvidence", "TemplateSpec", "Composition", "PersonalizationSchema", "ProductionPolicy", "ProductionRuntime", "ProductionResource", "PreflightReport", "ProductionDiagnostic", "CsvDialect", "CsvMapping", "CsvCheckpoint", "BatchResult"], "x-classification": "restricted" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["ArtifactFile", "ProductionBundle"], "x-classification": "restricted" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundleDetached", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }], "x-classification": "restricted" };
-function validate2779(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+var schema473 = { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["DesignVersion", "ArtifactHandoffManifest", "ApprovalReceipt", "PrintSpec", "FulfillmentCapabilitySnapshot", "EventIntelligencePackage", "JobStatus", "UsageEvent", "DecisionReceipt", "EvaluationEvidence", "TemplateSpec", "Composition", "PersonalizationSchema", "ProductionPolicy", "ProductionRuntime", "ProductionResource", "PreflightReport", "ProductionDiagnostic", "CsvDialect", "CsvMapping", "CsvCheckpoint", "BatchResult"], "x-classification": "restricted" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["ArtifactFile", "ProductionBundle"], "x-classification": "restricted" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundleDetached", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }], "x-classification": "restricted" };
+function validate2837(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2779.evaluated;
+  const evaluated0 = validate2837.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -155,7 +155,7 @@ function validate2779(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -367,7 +367,7 @@ function validate2779(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -743,16 +743,16 @@ function validate2779(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2779.errors = vErrors;
+  validate2837.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2779.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2773(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2837.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2831(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2773.evaluated;
+  const evaluated0 = validate2831.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -878,7 +878,7 @@ function validate2773(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema466.properties, key0)) {
+      if (!func0.call(schema471.properties, key0)) {
         const err13 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err13];
@@ -973,7 +973,7 @@ function validate2773(data, { instancePath = "", parentData, parentDataProperty,
           }
           errors++;
         }
-        if (!pattern1364.test(data4)) {
+        if (!pattern1381.test(data4)) {
           const err22 = { instancePath: instancePath + "/filename", schemaPath: "#/properties/filename/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9][A-Za-z0-9._-]*(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err22];
@@ -1004,7 +1004,7 @@ function validate2773(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "source_artwork" || data5 === "display_preview" || data5 === "composed_preview" || data5 === "print_output" || data5 === "preflight_report" || data5 === "profile" || data5 === "lineage" || data5 === "manifest" || data5 === "archive" || data5 === "detached")) {
-        const err25 = { instancePath: instancePath + "/role", schemaPath: "#/properties/role/enum", keyword: "enum", params: { allowedValues: schema466.properties.role.enum }, message: "must be equal to one of the allowed values" };
+        const err25 = { instancePath: instancePath + "/role", schemaPath: "#/properties/role/enum", keyword: "enum", params: { allowedValues: schema471.properties.role.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err25];
         } else {
@@ -1092,7 +1092,7 @@ function validate2773(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data8 === "image/svg+xml" || data8 === "image/png" || data8 === "image/jpeg" || data8 === "image/webp" || data8 === "application/pdf" || data8 === "application/json" || data8 === "application/zip" || data8 === "application/vnd.iccprofile")) {
-        const err33 = { instancePath: instancePath + "/media_type", schemaPath: "#/properties/media_type/enum", keyword: "enum", params: { allowedValues: schema466.properties.media_type.enum }, message: "must be equal to one of the allowed values" };
+        const err33 = { instancePath: instancePath + "/media_type", schemaPath: "#/properties/media_type/enum", keyword: "enum", params: { allowedValues: schema471.properties.media_type.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err33];
         } else {
@@ -1166,7 +1166,7 @@ function validate2773(data, { instancePath = "", parentData, parentDataProperty,
         if (data9.width_nm !== void 0 && func0.call(data9, "width_nm")) {
           let data10 = data9.width_nm;
           if (typeof data10 === "string") {
-            if (!pattern1365.test(data10)) {
+            if (!pattern1382.test(data10)) {
               const err40 = { instancePath: instancePath + "/geometry/width_nm", schemaPath: "#/properties/geometry/anyOf/0/properties/width_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
               if (vErrors === null) {
                 vErrors = [err40];
@@ -1188,7 +1188,7 @@ function validate2773(data, { instancePath = "", parentData, parentDataProperty,
         if (data9.height_nm !== void 0 && func0.call(data9, "height_nm")) {
           let data11 = data9.height_nm;
           if (typeof data11 === "string") {
-            if (!pattern1365.test(data11)) {
+            if (!pattern1382.test(data11)) {
               const err42 = { instancePath: instancePath + "/geometry/height_nm", schemaPath: "#/properties/geometry/anyOf/0/properties/height_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
               if (vErrors === null) {
                 vErrors = [err42];
@@ -1454,11 +1454,11 @@ function validate2773(data, { instancePath = "", parentData, parentDataProperty,
       const _errs67 = errors;
       let valid6 = false;
       const _errs68 = errors;
-      if (!validate2779(data15, { instancePath: instancePath + "/profile_ref", parentData: data, parentDataProperty: "profile_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2779.errors : vErrors.concat(validate2779.errors);
+      if (!validate2837(data15, { instancePath: instancePath + "/profile_ref", parentData: data, parentDataProperty: "profile_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2837.errors : vErrors.concat(validate2837.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate2779.evaluated.props;
+        var props1 = validate2837.evaluated.props;
       }
       if (data15 && typeof data15 == "object" && !Array.isArray(data15)) {
         if (data15.contract === void 0 || !func0.call(data15, "contract")) {
@@ -1624,7 +1624,7 @@ function validate2773(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data20 === "embedded" || data20 === "rasterized" || data20 === "none")) {
-            const err76 = { instancePath: instancePath + "/characteristics/text", schemaPath: "#/properties/characteristics/anyOf/0/properties/text/enum", keyword: "enum", params: { allowedValues: schema466.properties.characteristics.anyOf[0].properties.text.enum }, message: "must be equal to one of the allowed values" };
+            const err76 = { instancePath: instancePath + "/characteristics/text", schemaPath: "#/properties/characteristics/anyOf/0/properties/text/enum", keyword: "enum", params: { allowedValues: schema471.properties.characteristics.anyOf[0].properties.text.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err76];
             } else {
@@ -1776,17 +1776,17 @@ function validate2773(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2773.errors = vErrors;
+  validate2831.errors = vErrors;
   return errors === 0;
 }
-validate2773.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ArtifactManifestStatus_1_0_0 = validate2785;
-var schema469 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ArtifactManifestStatus/1.0.0", "title": "ArtifactManifestStatus", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ArtifactManifestStatus", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "target": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "artifact", "x-classification": "public" }, "artifact_ref": { "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" } }, "required": ["kind", "artifact_ref"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "job", "x-classification": "public" }, "job_ref": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" } }, "required": ["kind", "job_ref"], "x-classification": "restricted" }], "x-classification": "restricted" }, "status": { "type": "string", "enum": ["processing", "failed", "partial", "completed", "cancelled"], "x-classification": "restricted" }, "bundle_ref": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionBundleRef/1.0.0", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "batch": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/BatchResult/1.0.0", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "integrity": { "type": "string", "enum": ["passed", "failed", "unknown"], "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" }, "evidence_refs": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "target", "status", "bundle_ref", "batch", "integrity", "eligibility", "evidence_refs"], "x-classification": "restricted" };
-var schema470 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "title": "ArtifactRef", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ArtifactRef", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "artifact_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "private_revision_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "source_artwork_hashes": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "render_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "preview_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "artifact_ref", "composition_ref", "private_revision_hash", "source_artwork_hashes", "render_hash", "preview_ref"], "x-classification": "restricted" };
-function validate2787(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2831.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ArtifactManifestStatus_1_0_0 = validate2843;
+var schema474 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ArtifactManifestStatus/1.0.0", "title": "ArtifactManifestStatus", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ArtifactManifestStatus", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "target": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "artifact", "x-classification": "public" }, "artifact_ref": { "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" } }, "required": ["kind", "artifact_ref"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "job", "x-classification": "public" }, "job_ref": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" } }, "required": ["kind", "job_ref"], "x-classification": "restricted" }], "x-classification": "restricted" }, "status": { "type": "string", "enum": ["processing", "failed", "partial", "completed", "cancelled"], "x-classification": "restricted" }, "bundle_ref": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionBundleRef/1.0.0", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "batch": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/BatchResult/1.0.0", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "integrity": { "type": "string", "enum": ["passed", "failed", "unknown"], "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" }, "evidence_refs": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "target", "status", "bundle_ref", "batch", "integrity", "eligibility", "evidence_refs"], "x-classification": "restricted" };
+var schema475 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "title": "ArtifactRef", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ArtifactRef", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "artifact_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "private_revision_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "source_artwork_hashes": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "render_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "preview_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "artifact_ref", "composition_ref", "private_revision_hash", "source_artwork_hashes", "render_hash", "preview_ref"], "x-classification": "restricted" };
+function validate2845(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2787.evaluated;
+  const evaluated0 = validate2845.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -1866,7 +1866,7 @@ function validate2787(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -2078,7 +2078,7 @@ function validate2787(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -2454,16 +2454,16 @@ function validate2787(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2787.errors = vErrors;
+  validate2845.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2787.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2786(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2845.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2844(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2786.evaluated;
+  const evaluated0 = validate2844.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -2553,7 +2553,7 @@ function validate2786(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema470.properties, key0)) {
+      if (!func0.call(schema475.properties, key0)) {
         const err9 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err9];
@@ -2598,11 +2598,11 @@ function validate2786(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.artifact_ref !== void 0 && func0.call(data, "artifact_ref")) {
       let data3 = data.artifact_ref;
-      if (!validate2787(data3, { instancePath: instancePath + "/artifact_ref", parentData: data, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2787.errors : vErrors.concat(validate2787.errors);
+      if (!validate2845(data3, { instancePath: instancePath + "/artifact_ref", parentData: data, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2845.errors : vErrors.concat(validate2845.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2787.evaluated.props;
+        var props0 = validate2845.evaluated.props;
       }
       if (data3 && typeof data3 == "object" && !Array.isArray(data3)) {
         if (data3.contract === void 0 || !func0.call(data3, "contract")) {
@@ -2662,11 +2662,11 @@ function validate2786(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.composition_ref !== void 0 && func0.call(data, "composition_ref")) {
       let data6 = data.composition_ref;
-      if (!validate2787(data6, { instancePath: instancePath + "/composition_ref", parentData: data, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2787.errors : vErrors.concat(validate2787.errors);
+      if (!validate2845(data6, { instancePath: instancePath + "/composition_ref", parentData: data, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2845.errors : vErrors.concat(validate2845.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate2787.evaluated.props;
+        var props1 = validate2845.evaluated.props;
       }
       if (data6 && typeof data6 == "object" && !Array.isArray(data6)) {
         if (data6.contract === void 0 || !func0.call(data6, "contract")) {
@@ -2866,11 +2866,11 @@ function validate2786(data, { instancePath = "", parentData, parentDataProperty,
       const _errs42 = errors;
       let valid7 = false;
       const _errs43 = errors;
-      if (!validate2787(data13, { instancePath: instancePath + "/preview_ref", parentData: data, parentDataProperty: "preview_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2787.errors : vErrors.concat(validate2787.errors);
+      if (!validate2845(data13, { instancePath: instancePath + "/preview_ref", parentData: data, parentDataProperty: "preview_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2845.errors : vErrors.concat(validate2845.errors);
         errors = vErrors.length;
       } else {
-        var props2 = validate2787.evaluated.props;
+        var props2 = validate2845.evaluated.props;
       }
       if (data13 && typeof data13 == "object" && !Array.isArray(data13)) {
         if (data13.contract === void 0 || !func0.call(data13, "contract")) {
@@ -2969,14 +2969,14 @@ function validate2786(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2786.errors = vErrors;
+  validate2844.errors = vErrors;
   return errors === 0;
 }
-validate2786.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate2799(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2844.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate2857(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2799.evaluated;
+  const evaluated0 = validate2857.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -3056,7 +3056,7 @@ function validate2799(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -3268,7 +3268,7 @@ function validate2799(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -3644,16 +3644,16 @@ function validate2799(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2799.errors = vErrors;
+  validate2857.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2799.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2798(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2857.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2856(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2798.evaluated;
+  const evaluated0 = validate2856.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -3752,11 +3752,11 @@ function validate2798(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.job_ref !== void 0 && func0.call(data, "job_ref")) {
       let data3 = data.job_ref;
-      if (!validate2799(data3, { instancePath: instancePath + "/job_ref", parentData: data, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2799.errors : vErrors.concat(validate2799.errors);
+      if (!validate2857(data3, { instancePath: instancePath + "/job_ref", parentData: data, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2857.errors : vErrors.concat(validate2857.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2799.evaluated.props;
+        var props0 = validate2857.evaluated.props;
       }
       if (data3 && typeof data3 == "object" && !Array.isArray(data3)) {
         if (data3.contract === void 0 || !func0.call(data3, "contract")) {
@@ -3858,15 +3858,15 @@ function validate2798(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2798.errors = vErrors;
+  validate2856.errors = vErrors;
   return errors === 0;
 }
-validate2798.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema474 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionBundleRef/1.0.0", "title": "ProductionBundleRef", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundleRef", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "bundle_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionBundle", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "file_set": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ArtifactFile/2.0.0", "x-classification": "restricted" }, "minItems": 4, "maxItems": 100, "x-classification": "restricted" }, "detached_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionBundleDetached", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "row_scope": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "job_ref": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" }, "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "ordinal": { "type": "integer", "minimum": 0, "maximum": 9999, "x-classification": "restricted" }, "input_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["job_ref", "row_id", "ordinal", "input_hash"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "bundle_ref", "file_set", "detached_ref", "row_scope", "composition_ref", "eligibility"], "x-classification": "restricted" };
-function validate2807(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2856.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema479 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionBundleRef/1.0.0", "title": "ProductionBundleRef", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundleRef", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "bundle_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionBundle", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "file_set": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ArtifactFile/2.0.0", "x-classification": "restricted" }, "minItems": 4, "maxItems": 100, "x-classification": "restricted" }, "detached_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionBundleDetached", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "row_scope": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "job_ref": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" }, "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "ordinal": { "type": "integer", "minimum": 0, "maximum": 9999, "x-classification": "restricted" }, "input_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["job_ref", "row_id", "ordinal", "input_hash"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "bundle_ref", "file_set", "detached_ref", "row_scope", "composition_ref", "eligibility"], "x-classification": "restricted" };
+function validate2865(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2807.evaluated;
+  const evaluated0 = validate2865.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -3946,7 +3946,7 @@ function validate2807(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -4158,7 +4158,7 @@ function validate2807(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -4534,12 +4534,12 @@ function validate2807(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2807.errors = vErrors;
+  validate2865.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2807.evaluated = { "dynamicProps": true, "dynamicItems": false };
-var schema476 = { "type": "object", "additionalProperties": false, "properties": { "state": { "type": "string", "enum": ["eligible", "blocked", "unknown"], "x-classification": "restricted" }, "reason_codes": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "checked_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "restricted", "type": "string", "pattern": "Z(?![\\s\\S])" }, "evidence_mode": { "type": "string", "enum": ["simulated", "offline", "sandbox", "live"], "x-classification": "restricted" }, "handoff_eligible": { "type": "boolean", "x-classification": "restricted" } }, "required": ["state", "reason_codes", "checked_at", "evidence_mode", "handoff_eligible"], "x-classification": "restricted" };
+validate2865.evaluated = { "dynamicProps": true, "dynamicItems": false };
+var schema481 = { "type": "object", "additionalProperties": false, "properties": { "state": { "type": "string", "enum": ["eligible", "blocked", "unknown"], "x-classification": "restricted" }, "reason_codes": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "checked_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "restricted", "type": "string", "pattern": "Z(?![\\s\\S])" }, "evidence_mode": { "type": "string", "enum": ["simulated", "offline", "sandbox", "live"], "x-classification": "restricted" }, "handoff_eligible": { "type": "boolean", "x-classification": "restricted" } }, "required": ["state", "reason_codes", "checked_at", "evidence_mode", "handoff_eligible"], "x-classification": "restricted" };
 var formats36 = /^(?:(?:[0-9]{4})-(?:(?:01|03|05|07|08|10|12)-(?:0[1-9]|[12][0-9]|3[01])|(?:04|06|09|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-8]))|(?:[0-9]{2}(?:0[48]|[2468][048]|[13579][26])|(?:[02468][048]|[13579][26])00)-02-29)T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]{3})?Z$/;
 function validate760(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
@@ -4575,10 +4575,10 @@ function validate760(data, { instancePath = "", parentData, parentDataProperty, 
 }
 validate760.evaluated = { "dynamicProps": false, "dynamicItems": false };
 var pattern17 = new RegExp("Z(?![\\s\\S])", "u");
-function validate2817(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+function validate2875(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2817.evaluated;
+  const evaluated0 = validate2875.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -4654,7 +4654,7 @@ function validate2817(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "eligible" || data0 === "blocked" || data0 === "unknown")) {
-        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema476.properties.state.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema481.properties.state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -4697,7 +4697,7 @@ function validate2817(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data2 === "APPROVAL_INVALID" || data2 === "APPROVAL_REVOKED" || data2 === "APPROVAL_UNAVAILABLE" || data2 === "SPEC_UNKNOWN" || data2 === "PRODUCT_MISMATCH" || data2 === "DIMENSIONS_MISMATCH" || data2 === "BLEED_MISMATCH" || data2 === "SAFE_MISMATCH" || data2 === "DPI_MISMATCH" || data2 === "PROFILE_UNSUPPORTED" || data2 === "EXPORT_UNSUPPORTED" || data2 === "FONT_UNSUPPORTED" || data2 === "TRANSPARENCY_MISMATCH" || data2 === "ASPECT_MISMATCH" || data2 === "SURFACE_UNSUPPORTED" || data2 === "FACTS_UNSUPPORTED" || data2 === "PREFLIGHT_FAILED" || data2 === "PREVIEW_UNKNOWN" || data2 === "ROW_BINDING_MISMATCH" || data2 === "SOURCE_MISMATCH" || data2 === "POLICY_MISMATCH" || data2 === "CALIBRATION_ONLY" || data2 === "OWNER_ACCEPTANCE_PENDING" || data2 === "CANCELLED" || data2 === "SKIPPED_POLICY" || data2 === "SKIPPED_CANCELLED" || data2 === "INVALID_INPUT" || data2 === "HASH_MISMATCH" || data2 === "STORAGE_UNAVAILABLE" || data2 === "RENDER_UNAVAILABLE" || data2 === "EXPIRED" || data2 === "STALE" || data2 === "NOT_FOUND")) {
-            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema476.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
+            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema481.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err11];
             } else {
@@ -4754,7 +4754,7 @@ function validate2817(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data4 === "simulated" || data4 === "offline" || data4 === "sandbox" || data4 === "live")) {
-        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema476.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
+        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema481.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err16];
         } else {
@@ -4783,16 +4783,16 @@ function validate2817(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2817.errors = vErrors;
+  validate2875.errors = vErrors;
   return errors === 0;
 }
-validate2817.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var pattern1367 = new RegExp("^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "u");
-function validate2806(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2875.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var pattern1384 = new RegExp("^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "u");
+function validate2864(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2806.evaluated;
+  const evaluated0 = validate2864.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -4882,7 +4882,7 @@ function validate2806(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema474.properties, key0)) {
+      if (!func0.call(schema479.properties, key0)) {
         const err9 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err9];
@@ -4927,11 +4927,11 @@ function validate2806(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.bundle_ref !== void 0 && func0.call(data, "bundle_ref")) {
       let data3 = data.bundle_ref;
-      if (!validate2807(data3, { instancePath: instancePath + "/bundle_ref", parentData: data, parentDataProperty: "bundle_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2807.errors : vErrors.concat(validate2807.errors);
+      if (!validate2865(data3, { instancePath: instancePath + "/bundle_ref", parentData: data, parentDataProperty: "bundle_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2865.errors : vErrors.concat(validate2865.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2807.evaluated.props;
+        var props0 = validate2865.evaluated.props;
       }
       if (data3 && typeof data3 == "object" && !Array.isArray(data3)) {
         if (data3.contract === void 0 || !func0.call(data3, "contract")) {
@@ -5012,8 +5012,8 @@ function validate2806(data, { instancePath = "", parentData, parentDataProperty,
         }
         const len0 = data6.length;
         for (let i0 = 0; i0 < len0; i0++) {
-          if (!validate2773(data6[i0], { instancePath: instancePath + "/file_set/" + i0, parentData: data6, parentDataProperty: i0, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2773.errors : vErrors.concat(validate2773.errors);
+          if (!validate2831(data6[i0], { instancePath: instancePath + "/file_set/" + i0, parentData: data6, parentDataProperty: i0, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2831.errors : vErrors.concat(validate2831.errors);
             errors = vErrors.length;
           }
         }
@@ -5029,11 +5029,11 @@ function validate2806(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.detached_ref !== void 0 && func0.call(data, "detached_ref")) {
       let data8 = data.detached_ref;
-      if (!validate2807(data8, { instancePath: instancePath + "/detached_ref", parentData: data, parentDataProperty: "detached_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2807.errors : vErrors.concat(validate2807.errors);
+      if (!validate2865(data8, { instancePath: instancePath + "/detached_ref", parentData: data, parentDataProperty: "detached_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2865.errors : vErrors.concat(validate2865.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate2807.evaluated.props;
+        var props1 = validate2865.evaluated.props;
       }
       if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
         if (data8.contract === void 0 || !func0.call(data8, "contract")) {
@@ -5145,15 +5145,15 @@ function validate2806(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         if (data11.job_ref !== void 0 && func0.call(data11, "job_ref")) {
-          if (!validate2798(data11.job_ref, { instancePath: instancePath + "/row_scope/job_ref", parentData: data11, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2798.errors : vErrors.concat(validate2798.errors);
+          if (!validate2856(data11.job_ref, { instancePath: instancePath + "/row_scope/job_ref", parentData: data11, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2856.errors : vErrors.concat(validate2856.errors);
             errors = vErrors.length;
           }
         }
         if (data11.row_id !== void 0 && func0.call(data11, "row_id")) {
           let data13 = data11.row_id;
           if (typeof data13 === "string") {
-            if (!pattern1367.test(data13)) {
+            if (!pattern1384.test(data13)) {
               const err31 = { instancePath: instancePath + "/row_scope/row_id", schemaPath: "#/properties/row_scope/anyOf/0/properties/row_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
               if (vErrors === null) {
                 vErrors = [err31];
@@ -5283,11 +5283,11 @@ function validate2806(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.composition_ref !== void 0 && func0.call(data, "composition_ref")) {
       let data16 = data.composition_ref;
-      if (!validate2807(data16, { instancePath: instancePath + "/composition_ref", parentData: data, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2807.errors : vErrors.concat(validate2807.errors);
+      if (!validate2865(data16, { instancePath: instancePath + "/composition_ref", parentData: data, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2865.errors : vErrors.concat(validate2865.errors);
         errors = vErrors.length;
       } else {
-        var props3 = validate2807.evaluated.props;
+        var props3 = validate2865.evaluated.props;
       }
       if (data16 && typeof data16 == "object" && !Array.isArray(data16)) {
         if (data16.contract === void 0 || !func0.call(data16, "contract")) {
@@ -5346,8 +5346,8 @@ function validate2806(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.eligibility !== void 0 && func0.call(data, "eligibility")) {
-      if (!validate2817(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2817.errors : vErrors.concat(validate2817.errors);
+      if (!validate2875(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2875.errors : vErrors.concat(validate2875.errors);
         errors = vErrors.length;
       }
     }
@@ -5360,11 +5360,11 @@ function validate2806(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2806.errors = vErrors;
+  validate2864.errors = vErrors;
   return errors === 0;
 }
-validate2806.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema477 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/BatchResult/1.0.0", "title": "BatchResult", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "BatchResult", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "job": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" }, "acceptance_policy": { "type": "string", "enum": ["atomic", "allow_partial"], "x-classification": "restricted" }, "status": { "type": "string", "enum": ["queued", "running", "succeeded", "failed", "cancelled", "partially_succeeded"], "x-classification": "restricted" }, "counts": { "type": "object", "additionalProperties": false, "properties": { "submitted": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "succeeded": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "failed": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "cancelled": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "skipped": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "pending": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" } }, "required": ["submitted", "succeeded", "failed", "cancelled", "skipped", "pending"], "x-classification": "restricted" }, "published_count": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "rows": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/RowResult/1.0.0", "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" }, "page_start": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "next_cursor": { "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 1024, "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "batch_manifest_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "BatchResult", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "cancel_requested": { "type": "boolean", "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "job", "acceptance_policy", "status", "counts", "published_count", "rows", "page_start", "next_cursor", "batch_manifest_ref", "cancel_requested", "eligibility"], "x-classification": "restricted" };
+validate2864.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var schema482 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/BatchResult/1.0.0", "title": "BatchResult", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "BatchResult", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "job": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" }, "acceptance_policy": { "type": "string", "enum": ["atomic", "allow_partial"], "x-classification": "restricted" }, "status": { "type": "string", "enum": ["queued", "running", "succeeded", "failed", "cancelled", "partially_succeeded"], "x-classification": "restricted" }, "counts": { "type": "object", "additionalProperties": false, "properties": { "submitted": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "succeeded": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "failed": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "cancelled": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "skipped": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "pending": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" } }, "required": ["submitted", "succeeded", "failed", "cancelled", "skipped", "pending"], "x-classification": "restricted" }, "published_count": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "rows": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/RowResult/1.0.0", "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" }, "page_start": { "type": "integer", "minimum": 0, "maximum": 1e4, "x-classification": "restricted" }, "next_cursor": { "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 1024, "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "batch_manifest_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "BatchResult", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "cancel_requested": { "type": "boolean", "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "job", "acceptance_policy", "status", "counts", "published_count", "rows", "page_start", "next_cursor", "batch_manifest_ref", "cancel_requested", "eligibility"], "x-classification": "restricted" };
 function validate740(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -5431,12 +5431,12 @@ function validate741(data, { instancePath = "", parentData, parentDataProperty, 
   return errors === 0;
 }
 validate741.evaluated = { "dynamicProps": false, "dynamicItems": false };
-var schema478 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/RowResult/1.0.0", "title": "RowResult", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "RowResult", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "job": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" }, "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "ordinal": { "type": "integer", "minimum": 0, "maximum": 9999, "x-classification": "restricted" }, "input_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "status": { "type": "string", "enum": ["queued", "running", "succeeded", "failed", "cancelled", "skipped"], "x-classification": "restricted" }, "skip_reason": { "anyOf": [{ "type": "string", "enum": ["SKIPPED_POLICY", "SKIPPED_CANCELLED"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "artifact_ref": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "bundle_ref": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionBundleRef/1.0.0", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "errors": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ProductionError/1.0.0", "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "source_position": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "file_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "logical_record": { "type": "integer", "minimum": 1, "maximum": 10001, "x-classification": "restricted" }, "physical_line": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "source_paths": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "type": "string", "maxLength": 256, "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["file_hash", "logical_record", "physical_line", "source_paths"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "job", "row_id", "ordinal", "input_hash", "status", "skip_reason", "artifact_ref", "bundle_ref", "errors", "source_position", "eligibility"], "x-classification": "restricted" };
-var schema479 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionError/1.0.0", "title": "ProductionError", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionError", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "module": { "const": "print-production", "x-classification": "public" }, "operation": { "type": "string", "enum": ["composeArtifact", "personalizeArtifactBatch", "inspectArtifact", "exportArtifactBundle", "compareTemplateCompatibility", "getArtifactManifestStatus"], "x-classification": "restricted" }, "code": { "type": "string", "enum": ["INVALID_INPUT", "UNSUPPORTED_VERSION", "UNSUPPORTED_PRODUCT", "INCOMPATIBLE_TEMPLATE", "APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "ASSET_MISSING", "HASH_MISMATCH", "PREFLIGHT_FAILED", "IDEMPOTENCY_CONFLICT", "NOT_FOUND", "FORBIDDEN", "RETRYABLE_STORAGE_FAILURE", "RETRYABLE_RENDER_FAILURE", "OUTPUT_UNSUPPORTED", "ROW_SCHEMA", "ROW_DUPLICATE", "CAPABILITY_DISABLED", "CANCELLED", "INTEGRITY_FAILURE"], "x-classification": "restricted" }, "retryable": { "type": "boolean", "x-classification": "restricted" }, "safe_message": { "type": "string", "maxLength": 128, "x-classification": "restricted" }, "diagnostic_ref": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "state": { "const": "persisted", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "reference": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionDiagnostic", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["state", "tenant_id", "project_id", "reference"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "state": { "const": "unavailable", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "reason_code": { "const": "STORAGE_UNAVAILABLE", "x-classification": "public" } }, "required": ["state", "tenant_id", "project_id", "correlation_id", "reason_code"], "x-classification": "restricted" }], "x-classification": "restricted" }, "blocking_condition": { "type": "string", "enum": ["input", "version", "product", "template", "approval", "asset", "preflight", "conflict", "access", "storage", "render", "output", "row", "capability", "cancelled", "integrity"], "x-classification": "restricted" }, "side_effects": { "type": "string", "enum": ["none", "possible", "confirmed", "unknown"], "x-classification": "restricted" }, "usage_state": { "type": "string", "enum": ["unknown", "incomplete", "complete"], "x-classification": "restricted" }, "field_path": { "type": "string", "enum": ["", "/contract", "/schema_version", "/policy_version", "/binding", "/input", "/input/rows", "/formats", "/artifact_ref", "/target", "/files", "/preflight", "/coordinate_geometry", "/slots", "/values", "/row_scope", "/counts", "/diagnostic_ref"], "x-classification": "restricted" }, "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "details": { "type": "object", "additionalProperties": false, "properties": { "reason_codes": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "expected_contract": { "type": "string", "enum": ["DesignVersion", "ArtifactHandoffManifest", "ApprovalReceipt", "PrintSpec", "FulfillmentCapabilitySnapshot", "EventIntelligencePackage", "JobStatus", "UsageEvent", "DecisionReceipt", "EvaluationEvidence", "TemplateSpec", "Composition", "PersonalizationSchema", "ProductionPolicy", "ProductionRuntime", "ProductionResource", "PreflightReport", "ProductionDiagnostic", "CsvDialect", "CsvMapping", "CsvCheckpoint", "BatchResult", "ArtifactFile", "ProductionBundle", "ProductionBundleDetached"], "x-classification": "restricted" }, "expected_version": { "type": "string", "enum": ["1.0.0", "2.0.0"], "x-classification": "restricted" } }, "required": ["reason_codes"], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "module", "operation", "code", "retryable", "safe_message", "diagnostic_ref", "blocking_condition", "side_effects", "usage_state"], "x-classification": "restricted", "allOf": [{ "if": { "properties": { "code": { "const": "INVALID_INPUT", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The production input is invalid.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "UNSUPPORTED_VERSION", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The production version is unsupported.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "UNSUPPORTED_PRODUCT", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The product is unsupported.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "INCOMPATIBLE_TEMPLATE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The template is incompatible.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "APPROVAL_INVALID", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The approval is invalid.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "APPROVAL_REVOKED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The approval is revoked.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "APPROVAL_UNAVAILABLE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "Approval verification is unavailable.", "x-classification": "public" }, "retryable": { "const": true, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "ASSET_MISSING", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "A required asset is missing.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "HASH_MISMATCH", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "A commitment does not match.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "PREFLIGHT_FAILED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "Mandatory preflight checks did not pass.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "IDEMPOTENCY_CONFLICT", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The operation key binds different inputs.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "NOT_FOUND", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The requested value is unavailable.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "FORBIDDEN", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The operation capability is denied.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "RETRYABLE_STORAGE_FAILURE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "Production storage is temporarily unavailable.", "x-classification": "public" }, "retryable": { "const": true, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "RETRYABLE_RENDER_FAILURE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "Production rendering is temporarily unavailable.", "x-classification": "public" }, "retryable": { "const": true, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "OUTPUT_UNSUPPORTED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The output format or profile is unsupported.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "ROW_SCHEMA", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The row fields do not match the policy.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "ROW_DUPLICATE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "A row identifier is duplicated.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "CAPABILITY_DISABLED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The production capability is disabled.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "CANCELLED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The operation was cancelled.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "INTEGRITY_FAILURE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The file inventory failed integrity checks.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }] };
-function validate2835(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+var schema483 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/RowResult/1.0.0", "title": "RowResult", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "RowResult", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "job": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" }, "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "ordinal": { "type": "integer", "minimum": 0, "maximum": 9999, "x-classification": "restricted" }, "input_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "status": { "type": "string", "enum": ["queued", "running", "succeeded", "failed", "cancelled", "skipped"], "x-classification": "restricted" }, "skip_reason": { "anyOf": [{ "type": "string", "enum": ["SKIPPED_POLICY", "SKIPPED_CANCELLED"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "artifact_ref": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "bundle_ref": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionBundleRef/1.0.0", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "errors": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ProductionError/1.0.0", "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "source_position": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "file_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "logical_record": { "type": "integer", "minimum": 1, "maximum": 10001, "x-classification": "restricted" }, "physical_line": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "source_paths": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "type": "string", "maxLength": 256, "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["file_hash", "logical_record", "physical_line", "source_paths"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "job", "row_id", "ordinal", "input_hash", "status", "skip_reason", "artifact_ref", "bundle_ref", "errors", "source_position", "eligibility"], "x-classification": "restricted" };
+var schema484 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionError/1.0.0", "title": "ProductionError", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionError", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "module": { "const": "print-production", "x-classification": "public" }, "operation": { "type": "string", "enum": ["composeArtifact", "personalizeArtifactBatch", "inspectArtifact", "exportArtifactBundle", "compareTemplateCompatibility", "getArtifactManifestStatus"], "x-classification": "restricted" }, "code": { "type": "string", "enum": ["INVALID_INPUT", "UNSUPPORTED_VERSION", "UNSUPPORTED_PRODUCT", "INCOMPATIBLE_TEMPLATE", "APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "ASSET_MISSING", "HASH_MISMATCH", "PREFLIGHT_FAILED", "IDEMPOTENCY_CONFLICT", "NOT_FOUND", "FORBIDDEN", "RETRYABLE_STORAGE_FAILURE", "RETRYABLE_RENDER_FAILURE", "OUTPUT_UNSUPPORTED", "ROW_SCHEMA", "ROW_DUPLICATE", "CAPABILITY_DISABLED", "CANCELLED", "INTEGRITY_FAILURE"], "x-classification": "restricted" }, "retryable": { "type": "boolean", "x-classification": "restricted" }, "safe_message": { "type": "string", "maxLength": 128, "x-classification": "restricted" }, "diagnostic_ref": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "state": { "const": "persisted", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "reference": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionDiagnostic", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["state", "tenant_id", "project_id", "reference"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "state": { "const": "unavailable", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "reason_code": { "const": "STORAGE_UNAVAILABLE", "x-classification": "public" } }, "required": ["state", "tenant_id", "project_id", "correlation_id", "reason_code"], "x-classification": "restricted" }], "x-classification": "restricted" }, "blocking_condition": { "type": "string", "enum": ["input", "version", "product", "template", "approval", "asset", "preflight", "conflict", "access", "storage", "render", "output", "row", "capability", "cancelled", "integrity"], "x-classification": "restricted" }, "side_effects": { "type": "string", "enum": ["none", "possible", "confirmed", "unknown"], "x-classification": "restricted" }, "usage_state": { "type": "string", "enum": ["unknown", "incomplete", "complete"], "x-classification": "restricted" }, "field_path": { "type": "string", "enum": ["", "/contract", "/schema_version", "/policy_version", "/binding", "/input", "/input/rows", "/formats", "/artifact_ref", "/target", "/files", "/preflight", "/coordinate_geometry", "/slots", "/values", "/row_scope", "/counts", "/diagnostic_ref"], "x-classification": "restricted" }, "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "details": { "type": "object", "additionalProperties": false, "properties": { "reason_codes": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "expected_contract": { "type": "string", "enum": ["DesignVersion", "ArtifactHandoffManifest", "ApprovalReceipt", "PrintSpec", "FulfillmentCapabilitySnapshot", "EventIntelligencePackage", "JobStatus", "UsageEvent", "DecisionReceipt", "EvaluationEvidence", "TemplateSpec", "Composition", "PersonalizationSchema", "ProductionPolicy", "ProductionRuntime", "ProductionResource", "PreflightReport", "ProductionDiagnostic", "CsvDialect", "CsvMapping", "CsvCheckpoint", "BatchResult", "ArtifactFile", "ProductionBundle", "ProductionBundleDetached"], "x-classification": "restricted" }, "expected_version": { "type": "string", "enum": ["1.0.0", "2.0.0"], "x-classification": "restricted" } }, "required": ["reason_codes"], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "module", "operation", "code", "retryable", "safe_message", "diagnostic_ref", "blocking_condition", "side_effects", "usage_state"], "x-classification": "restricted", "allOf": [{ "if": { "properties": { "code": { "const": "INVALID_INPUT", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The production input is invalid.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "UNSUPPORTED_VERSION", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The production version is unsupported.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "UNSUPPORTED_PRODUCT", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The product is unsupported.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "INCOMPATIBLE_TEMPLATE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The template is incompatible.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "APPROVAL_INVALID", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The approval is invalid.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "APPROVAL_REVOKED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The approval is revoked.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "APPROVAL_UNAVAILABLE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "Approval verification is unavailable.", "x-classification": "public" }, "retryable": { "const": true, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "ASSET_MISSING", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "A required asset is missing.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "HASH_MISMATCH", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "A commitment does not match.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "PREFLIGHT_FAILED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "Mandatory preflight checks did not pass.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "IDEMPOTENCY_CONFLICT", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The operation key binds different inputs.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "NOT_FOUND", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The requested value is unavailable.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "FORBIDDEN", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The operation capability is denied.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "RETRYABLE_STORAGE_FAILURE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "Production storage is temporarily unavailable.", "x-classification": "public" }, "retryable": { "const": true, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "RETRYABLE_RENDER_FAILURE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "Production rendering is temporarily unavailable.", "x-classification": "public" }, "retryable": { "const": true, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "OUTPUT_UNSUPPORTED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The output format or profile is unsupported.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "ROW_SCHEMA", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The row fields do not match the policy.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "ROW_DUPLICATE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "A row identifier is duplicated.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "CAPABILITY_DISABLED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The production capability is disabled.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "CANCELLED", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The operation was cancelled.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }, { "if": { "properties": { "code": { "const": "INTEGRITY_FAILURE", "x-classification": "public" } }, "required": ["code"] }, "then": { "properties": { "safe_message": { "const": "The file inventory failed integrity checks.", "x-classification": "public" }, "retryable": { "const": false, "x-classification": "internal" } } } }] };
+function validate2893(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2835.evaluated;
+  const evaluated0 = validate2893.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -5516,7 +5516,7 @@ function validate2835(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -5728,7 +5728,7 @@ function validate2835(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -6104,11 +6104,11 @@ function validate2835(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2835.errors = vErrors;
+  validate2893.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2835.evaluated = { "dynamicProps": true, "dynamicItems": false };
+validate2893.evaluated = { "dynamicProps": true, "dynamicItems": false };
 function validate751(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -6142,11 +6142,11 @@ function validate751(data, { instancePath = "", parentData, parentDataProperty, 
   return errors === 0;
 }
 validate751.evaluated = { "dynamicProps": false, "dynamicItems": false };
-function validate2832(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+function validate2890(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2832.evaluated;
+  const evaluated0 = validate2890.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -8103,7 +8103,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema479.properties, key0)) {
+      if (!func0.call(schema484.properties, key0)) {
         const err117 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err117];
@@ -8169,7 +8169,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data67 === "composeArtifact" || data67 === "personalizeArtifactBatch" || data67 === "inspectArtifact" || data67 === "exportArtifactBundle" || data67 === "compareTemplateCompatibility" || data67 === "getArtifactManifestStatus")) {
-        const err123 = { instancePath: instancePath + "/operation", schemaPath: "#/properties/operation/enum", keyword: "enum", params: { allowedValues: schema479.properties.operation.enum }, message: "must be equal to one of the allowed values" };
+        const err123 = { instancePath: instancePath + "/operation", schemaPath: "#/properties/operation/enum", keyword: "enum", params: { allowedValues: schema484.properties.operation.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err123];
         } else {
@@ -8190,7 +8190,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data68 === "INVALID_INPUT" || data68 === "UNSUPPORTED_VERSION" || data68 === "UNSUPPORTED_PRODUCT" || data68 === "INCOMPATIBLE_TEMPLATE" || data68 === "APPROVAL_INVALID" || data68 === "APPROVAL_REVOKED" || data68 === "APPROVAL_UNAVAILABLE" || data68 === "ASSET_MISSING" || data68 === "HASH_MISMATCH" || data68 === "PREFLIGHT_FAILED" || data68 === "IDEMPOTENCY_CONFLICT" || data68 === "NOT_FOUND" || data68 === "FORBIDDEN" || data68 === "RETRYABLE_STORAGE_FAILURE" || data68 === "RETRYABLE_RENDER_FAILURE" || data68 === "OUTPUT_UNSUPPORTED" || data68 === "ROW_SCHEMA" || data68 === "ROW_DUPLICATE" || data68 === "CAPABILITY_DISABLED" || data68 === "CANCELLED" || data68 === "INTEGRITY_FAILURE")) {
-        const err125 = { instancePath: instancePath + "/code", schemaPath: "#/properties/code/enum", keyword: "enum", params: { allowedValues: schema479.properties.code.enum }, message: "must be equal to one of the allowed values" };
+        const err125 = { instancePath: instancePath + "/code", schemaPath: "#/properties/code/enum", keyword: "enum", params: { allowedValues: schema484.properties.code.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err125];
         } else {
@@ -8311,11 +8311,11 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data71.reference !== void 0 && func0.call(data71, "reference")) {
           let data75 = data71.reference;
-          if (!validate2835(data75, { instancePath: instancePath + "/diagnostic_ref/reference", parentData: data71, parentDataProperty: "reference", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2835.errors : vErrors.concat(validate2835.errors);
+          if (!validate2893(data75, { instancePath: instancePath + "/diagnostic_ref/reference", parentData: data71, parentDataProperty: "reference", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2893.errors : vErrors.concat(validate2893.errors);
             errors = vErrors.length;
           } else {
-            var props21 = validate2835.evaluated.props;
+            var props21 = validate2893.evaluated.props;
           }
           if (data75 && typeof data75 == "object" && !Array.isArray(data75)) {
             if (data75.contract === void 0 || !func0.call(data75, "contract")) {
@@ -8539,7 +8539,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data83 === "input" || data83 === "version" || data83 === "product" || data83 === "template" || data83 === "approval" || data83 === "asset" || data83 === "preflight" || data83 === "conflict" || data83 === "access" || data83 === "storage" || data83 === "render" || data83 === "output" || data83 === "row" || data83 === "capability" || data83 === "cancelled" || data83 === "integrity")) {
-        const err152 = { instancePath: instancePath + "/blocking_condition", schemaPath: "#/properties/blocking_condition/enum", keyword: "enum", params: { allowedValues: schema479.properties.blocking_condition.enum }, message: "must be equal to one of the allowed values" };
+        const err152 = { instancePath: instancePath + "/blocking_condition", schemaPath: "#/properties/blocking_condition/enum", keyword: "enum", params: { allowedValues: schema484.properties.blocking_condition.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err152];
         } else {
@@ -8560,7 +8560,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data84 === "none" || data84 === "possible" || data84 === "confirmed" || data84 === "unknown")) {
-        const err154 = { instancePath: instancePath + "/side_effects", schemaPath: "#/properties/side_effects/enum", keyword: "enum", params: { allowedValues: schema479.properties.side_effects.enum }, message: "must be equal to one of the allowed values" };
+        const err154 = { instancePath: instancePath + "/side_effects", schemaPath: "#/properties/side_effects/enum", keyword: "enum", params: { allowedValues: schema484.properties.side_effects.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err154];
         } else {
@@ -8581,7 +8581,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data85 === "unknown" || data85 === "incomplete" || data85 === "complete")) {
-        const err156 = { instancePath: instancePath + "/usage_state", schemaPath: "#/properties/usage_state/enum", keyword: "enum", params: { allowedValues: schema479.properties.usage_state.enum }, message: "must be equal to one of the allowed values" };
+        const err156 = { instancePath: instancePath + "/usage_state", schemaPath: "#/properties/usage_state/enum", keyword: "enum", params: { allowedValues: schema484.properties.usage_state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err156];
         } else {
@@ -8602,7 +8602,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data86 === "" || data86 === "/contract" || data86 === "/schema_version" || data86 === "/policy_version" || data86 === "/binding" || data86 === "/input" || data86 === "/input/rows" || data86 === "/formats" || data86 === "/artifact_ref" || data86 === "/target" || data86 === "/files" || data86 === "/preflight" || data86 === "/coordinate_geometry" || data86 === "/slots" || data86 === "/values" || data86 === "/row_scope" || data86 === "/counts" || data86 === "/diagnostic_ref")) {
-        const err158 = { instancePath: instancePath + "/field_path", schemaPath: "#/properties/field_path/enum", keyword: "enum", params: { allowedValues: schema479.properties.field_path.enum }, message: "must be equal to one of the allowed values" };
+        const err158 = { instancePath: instancePath + "/field_path", schemaPath: "#/properties/field_path/enum", keyword: "enum", params: { allowedValues: schema484.properties.field_path.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err158];
         } else {
@@ -8614,7 +8614,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
     if (data.row_id !== void 0 && func0.call(data, "row_id")) {
       let data87 = data.row_id;
       if (typeof data87 === "string") {
-        if (!pattern1367.test(data87)) {
+        if (!pattern1384.test(data87)) {
           const err159 = { instancePath: instancePath + "/row_id", schemaPath: "#/properties/row_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err159];
@@ -8690,7 +8690,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
                 errors++;
               }
               if (!(data90 === "APPROVAL_INVALID" || data90 === "APPROVAL_REVOKED" || data90 === "APPROVAL_UNAVAILABLE" || data90 === "SPEC_UNKNOWN" || data90 === "PRODUCT_MISMATCH" || data90 === "DIMENSIONS_MISMATCH" || data90 === "BLEED_MISMATCH" || data90 === "SAFE_MISMATCH" || data90 === "DPI_MISMATCH" || data90 === "PROFILE_UNSUPPORTED" || data90 === "EXPORT_UNSUPPORTED" || data90 === "FONT_UNSUPPORTED" || data90 === "TRANSPARENCY_MISMATCH" || data90 === "ASPECT_MISMATCH" || data90 === "SURFACE_UNSUPPORTED" || data90 === "FACTS_UNSUPPORTED" || data90 === "PREFLIGHT_FAILED" || data90 === "PREVIEW_UNKNOWN" || data90 === "ROW_BINDING_MISMATCH" || data90 === "SOURCE_MISMATCH" || data90 === "POLICY_MISMATCH" || data90 === "CALIBRATION_ONLY" || data90 === "OWNER_ACCEPTANCE_PENDING" || data90 === "CANCELLED" || data90 === "SKIPPED_POLICY" || data90 === "SKIPPED_CANCELLED" || data90 === "INVALID_INPUT" || data90 === "HASH_MISMATCH" || data90 === "STORAGE_UNAVAILABLE" || data90 === "RENDER_UNAVAILABLE" || data90 === "EXPIRED" || data90 === "STALE" || data90 === "NOT_FOUND")) {
-                const err166 = { instancePath: instancePath + "/details/reason_codes/" + i0, schemaPath: "#/properties/details/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema479.properties.details.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
+                const err166 = { instancePath: instancePath + "/details/reason_codes/" + i0, schemaPath: "#/properties/details/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema484.properties.details.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err166];
                 } else {
@@ -8721,7 +8721,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data91 === "DesignVersion" || data91 === "ArtifactHandoffManifest" || data91 === "ApprovalReceipt" || data91 === "PrintSpec" || data91 === "FulfillmentCapabilitySnapshot" || data91 === "EventIntelligencePackage" || data91 === "JobStatus" || data91 === "UsageEvent" || data91 === "DecisionReceipt" || data91 === "EvaluationEvidence" || data91 === "TemplateSpec" || data91 === "Composition" || data91 === "PersonalizationSchema" || data91 === "ProductionPolicy" || data91 === "ProductionRuntime" || data91 === "ProductionResource" || data91 === "PreflightReport" || data91 === "ProductionDiagnostic" || data91 === "CsvDialect" || data91 === "CsvMapping" || data91 === "CsvCheckpoint" || data91 === "BatchResult" || data91 === "ArtifactFile" || data91 === "ProductionBundle" || data91 === "ProductionBundleDetached")) {
-            const err169 = { instancePath: instancePath + "/details/expected_contract", schemaPath: "#/properties/details/properties/expected_contract/enum", keyword: "enum", params: { allowedValues: schema479.properties.details.properties.expected_contract.enum }, message: "must be equal to one of the allowed values" };
+            const err169 = { instancePath: instancePath + "/details/expected_contract", schemaPath: "#/properties/details/properties/expected_contract/enum", keyword: "enum", params: { allowedValues: schema484.properties.details.properties.expected_contract.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err169];
             } else {
@@ -8742,7 +8742,7 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data92 === "1.0.0" || data92 === "2.0.0")) {
-            const err171 = { instancePath: instancePath + "/details/expected_version", schemaPath: "#/properties/details/properties/expected_version/enum", keyword: "enum", params: { allowedValues: schema479.properties.details.properties.expected_version.enum }, message: "must be equal to one of the allowed values" };
+            const err171 = { instancePath: instancePath + "/details/expected_version", schemaPath: "#/properties/details/properties/expected_version/enum", keyword: "enum", params: { allowedValues: schema484.properties.details.properties.expected_version.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err171];
             } else {
@@ -8770,14 +8770,14 @@ function validate2832(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2832.errors = vErrors;
+  validate2890.errors = vErrors;
   return errors === 0;
 }
-validate2832.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate2845(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2890.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate2903(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2845.evaluated;
+  const evaluated0 = validate2903.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -8853,7 +8853,7 @@ function validate2845(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "eligible" || data0 === "blocked" || data0 === "unknown")) {
-        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema476.properties.state.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema481.properties.state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -8896,7 +8896,7 @@ function validate2845(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data2 === "APPROVAL_INVALID" || data2 === "APPROVAL_REVOKED" || data2 === "APPROVAL_UNAVAILABLE" || data2 === "SPEC_UNKNOWN" || data2 === "PRODUCT_MISMATCH" || data2 === "DIMENSIONS_MISMATCH" || data2 === "BLEED_MISMATCH" || data2 === "SAFE_MISMATCH" || data2 === "DPI_MISMATCH" || data2 === "PROFILE_UNSUPPORTED" || data2 === "EXPORT_UNSUPPORTED" || data2 === "FONT_UNSUPPORTED" || data2 === "TRANSPARENCY_MISMATCH" || data2 === "ASPECT_MISMATCH" || data2 === "SURFACE_UNSUPPORTED" || data2 === "FACTS_UNSUPPORTED" || data2 === "PREFLIGHT_FAILED" || data2 === "PREVIEW_UNKNOWN" || data2 === "ROW_BINDING_MISMATCH" || data2 === "SOURCE_MISMATCH" || data2 === "POLICY_MISMATCH" || data2 === "CALIBRATION_ONLY" || data2 === "OWNER_ACCEPTANCE_PENDING" || data2 === "CANCELLED" || data2 === "SKIPPED_POLICY" || data2 === "SKIPPED_CANCELLED" || data2 === "INVALID_INPUT" || data2 === "HASH_MISMATCH" || data2 === "STORAGE_UNAVAILABLE" || data2 === "RENDER_UNAVAILABLE" || data2 === "EXPIRED" || data2 === "STALE" || data2 === "NOT_FOUND")) {
-            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema476.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
+            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema481.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err11];
             } else {
@@ -8953,7 +8953,7 @@ function validate2845(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data4 === "simulated" || data4 === "offline" || data4 === "sandbox" || data4 === "live")) {
-        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema476.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
+        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema481.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err16];
         } else {
@@ -8982,16 +8982,16 @@ function validate2845(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2845.errors = vErrors;
+  validate2903.errors = vErrors;
   return errors === 0;
 }
-validate2845.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var pattern1371 = new RegExp("^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])", "u");
-function validate2825(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2903.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var pattern1388 = new RegExp("^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])", "u");
+function validate2883(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2825.evaluated;
+  const evaluated0 = validate2883.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -9144,7 +9144,7 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema478.properties, key0)) {
+      if (!func0.call(schema483.properties, key0)) {
         const err16 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err16];
@@ -9200,15 +9200,15 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.job !== void 0 && func0.call(data, "job")) {
-      if (!validate2798(data.job, { instancePath: instancePath + "/job", parentData: data, parentDataProperty: "job", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2798.errors : vErrors.concat(validate2798.errors);
+      if (!validate2856(data.job, { instancePath: instancePath + "/job", parentData: data, parentDataProperty: "job", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2856.errors : vErrors.concat(validate2856.errors);
         errors = vErrors.length;
       }
     }
     if (data.row_id !== void 0 && func0.call(data, "row_id")) {
       let data6 = data.row_id;
       if (typeof data6 === "string") {
-        if (!pattern1367.test(data6)) {
+        if (!pattern1384.test(data6)) {
           const err20 = { instancePath: instancePath + "/row_id", schemaPath: "#/properties/row_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err20];
@@ -9306,7 +9306,7 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data9 === "queued" || data9 === "running" || data9 === "succeeded" || data9 === "failed" || data9 === "cancelled" || data9 === "skipped")) {
-        const err29 = { instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema478.properties.status.enum }, message: "must be equal to one of the allowed values" };
+        const err29 = { instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema483.properties.status.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err29];
         } else {
@@ -9330,7 +9330,7 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data10 === "SKIPPED_POLICY" || data10 === "SKIPPED_CANCELLED")) {
-        const err31 = { instancePath: instancePath + "/skip_reason", schemaPath: "#/properties/skip_reason/anyOf/0/enum", keyword: "enum", params: { allowedValues: schema478.properties.skip_reason.anyOf[0].enum }, message: "must be equal to one of the allowed values" };
+        const err31 = { instancePath: instancePath + "/skip_reason", schemaPath: "#/properties/skip_reason/anyOf/0/enum", keyword: "enum", params: { allowedValues: schema483.properties.skip_reason.anyOf[0].enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err31];
         } else {
@@ -9376,8 +9376,8 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
       const _errs36 = errors;
       let valid2 = false;
       const _errs37 = errors;
-      if (!validate2786(data11, { instancePath: instancePath + "/artifact_ref", parentData: data, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2786.errors : vErrors.concat(validate2786.errors);
+      if (!validate2844(data11, { instancePath: instancePath + "/artifact_ref", parentData: data, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2844.errors : vErrors.concat(validate2844.errors);
         errors = vErrors.length;
       }
       var _valid1 = _errs37 === errors;
@@ -9418,8 +9418,8 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
       const _errs43 = errors;
       let valid3 = false;
       const _errs44 = errors;
-      if (!validate2806(data12, { instancePath: instancePath + "/bundle_ref", parentData: data, parentDataProperty: "bundle_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2806.errors : vErrors.concat(validate2806.errors);
+      if (!validate2864(data12, { instancePath: instancePath + "/bundle_ref", parentData: data, parentDataProperty: "bundle_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2864.errors : vErrors.concat(validate2864.errors);
         errors = vErrors.length;
       }
       var _valid2 = _errs44 === errors;
@@ -9478,8 +9478,8 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
         }
         const len0 = data13.length;
         for (let i0 = 0; i0 < len0; i0++) {
-          if (!validate2832(data13[i0], { instancePath: instancePath + "/errors/" + i0, parentData: data13, parentDataProperty: i0, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2832.errors : vErrors.concat(validate2832.errors);
+          if (!validate2890(data13[i0], { instancePath: instancePath + "/errors/" + i0, parentData: data13, parentDataProperty: i0, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2890.errors : vErrors.concat(validate2890.errors);
             errors = vErrors.length;
           }
         }
@@ -9660,7 +9660,7 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
             for (const key2 of Object.keys(data19)) {
               const _errs72 = errors;
               if (typeof key2 === "string") {
-                if (!pattern1371.test(key2)) {
+                if (!pattern1388.test(key2)) {
                   const err56 = { instancePath: instancePath + "/source_position/source_paths", schemaPath: "#/properties/source_position/anyOf/0/properties/source_paths/propertyNames/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])"', propertyName: key2 };
                   if (vErrors === null) {
                     vErrors = [err56];
@@ -9764,8 +9764,8 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.eligibility !== void 0 && func0.call(data, "eligibility")) {
-      if (!validate2845(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2845.errors : vErrors.concat(validate2845.errors);
+      if (!validate2903(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2903.errors : vErrors.concat(validate2903.errors);
         errors = vErrors.length;
       }
     }
@@ -9778,14 +9778,14 @@ function validate2825(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2825.errors = vErrors;
+  validate2883.errors = vErrors;
   return errors === 0;
 }
-validate2825.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate2849(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2883.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate2907(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2849.evaluated;
+  const evaluated0 = validate2907.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -9865,7 +9865,7 @@ function validate2849(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -10077,7 +10077,7 @@ function validate2849(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -10453,15 +10453,15 @@ function validate2849(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2849.errors = vErrors;
+  validate2907.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2849.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2854(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2907.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2912(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2854.evaluated;
+  const evaluated0 = validate2912.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -10537,7 +10537,7 @@ function validate2854(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "eligible" || data0 === "blocked" || data0 === "unknown")) {
-        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema476.properties.state.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema481.properties.state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -10580,7 +10580,7 @@ function validate2854(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data2 === "APPROVAL_INVALID" || data2 === "APPROVAL_REVOKED" || data2 === "APPROVAL_UNAVAILABLE" || data2 === "SPEC_UNKNOWN" || data2 === "PRODUCT_MISMATCH" || data2 === "DIMENSIONS_MISMATCH" || data2 === "BLEED_MISMATCH" || data2 === "SAFE_MISMATCH" || data2 === "DPI_MISMATCH" || data2 === "PROFILE_UNSUPPORTED" || data2 === "EXPORT_UNSUPPORTED" || data2 === "FONT_UNSUPPORTED" || data2 === "TRANSPARENCY_MISMATCH" || data2 === "ASPECT_MISMATCH" || data2 === "SURFACE_UNSUPPORTED" || data2 === "FACTS_UNSUPPORTED" || data2 === "PREFLIGHT_FAILED" || data2 === "PREVIEW_UNKNOWN" || data2 === "ROW_BINDING_MISMATCH" || data2 === "SOURCE_MISMATCH" || data2 === "POLICY_MISMATCH" || data2 === "CALIBRATION_ONLY" || data2 === "OWNER_ACCEPTANCE_PENDING" || data2 === "CANCELLED" || data2 === "SKIPPED_POLICY" || data2 === "SKIPPED_CANCELLED" || data2 === "INVALID_INPUT" || data2 === "HASH_MISMATCH" || data2 === "STORAGE_UNAVAILABLE" || data2 === "RENDER_UNAVAILABLE" || data2 === "EXPIRED" || data2 === "STALE" || data2 === "NOT_FOUND")) {
-            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema476.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
+            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema481.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err11];
             } else {
@@ -10637,7 +10637,7 @@ function validate2854(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data4 === "simulated" || data4 === "offline" || data4 === "sandbox" || data4 === "live")) {
-        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema476.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
+        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema481.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err16];
         } else {
@@ -10666,15 +10666,15 @@ function validate2854(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2854.errors = vErrors;
+  validate2912.errors = vErrors;
   return errors === 0;
 }
-validate2854.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate2821(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2912.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate2879(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2821.evaluated;
+  const evaluated0 = validate2879.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -10827,7 +10827,7 @@ function validate2821(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema477.properties, key0)) {
+      if (!func0.call(schema482.properties, key0)) {
         const err16 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err16];
@@ -10883,8 +10883,8 @@ function validate2821(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.job !== void 0 && func0.call(data, "job")) {
-      if (!validate2798(data.job, { instancePath: instancePath + "/job", parentData: data, parentDataProperty: "job", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2798.errors : vErrors.concat(validate2798.errors);
+      if (!validate2856(data.job, { instancePath: instancePath + "/job", parentData: data, parentDataProperty: "job", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2856.errors : vErrors.concat(validate2856.errors);
         errors = vErrors.length;
       }
     }
@@ -10900,7 +10900,7 @@ function validate2821(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data6 === "atomic" || data6 === "allow_partial")) {
-        const err21 = { instancePath: instancePath + "/acceptance_policy", schemaPath: "#/properties/acceptance_policy/enum", keyword: "enum", params: { allowedValues: schema477.properties.acceptance_policy.enum }, message: "must be equal to one of the allowed values" };
+        const err21 = { instancePath: instancePath + "/acceptance_policy", schemaPath: "#/properties/acceptance_policy/enum", keyword: "enum", params: { allowedValues: schema482.properties.acceptance_policy.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err21];
         } else {
@@ -10921,7 +10921,7 @@ function validate2821(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data7 === "queued" || data7 === "running" || data7 === "succeeded" || data7 === "failed" || data7 === "cancelled" || data7 === "partially_succeeded")) {
-        const err23 = { instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema477.properties.status.enum }, message: "must be equal to one of the allowed values" };
+        const err23 = { instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema482.properties.status.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err23];
         } else {
@@ -11255,8 +11255,8 @@ function validate2821(data, { instancePath = "", parentData, parentDataProperty,
         }
         const len0 = data16.length;
         for (let i0 = 0; i0 < len0; i0++) {
-          if (!validate2825(data16[i0], { instancePath: instancePath + "/rows/" + i0, parentData: data16, parentDataProperty: i0, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2825.errors : vErrors.concat(validate2825.errors);
+          if (!validate2883(data16[i0], { instancePath: instancePath + "/rows/" + i0, parentData: data16, parentDataProperty: i0, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2883.errors : vErrors.concat(validate2883.errors);
             errors = vErrors.length;
           }
         }
@@ -11373,11 +11373,11 @@ function validate2821(data, { instancePath = "", parentData, parentDataProperty,
       const _errs63 = errors;
       let valid5 = false;
       const _errs64 = errors;
-      if (!validate2849(data20, { instancePath: instancePath + "/batch_manifest_ref", parentData: data, parentDataProperty: "batch_manifest_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2849.errors : vErrors.concat(validate2849.errors);
+      if (!validate2907(data20, { instancePath: instancePath + "/batch_manifest_ref", parentData: data, parentDataProperty: "batch_manifest_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2907.errors : vErrors.concat(validate2907.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2849.evaluated.props;
+        var props0 = validate2907.evaluated.props;
       }
       if (data20 && typeof data20 == "object" && !Array.isArray(data20)) {
         if (data20.contract === void 0 || !func0.call(data20, "contract")) {
@@ -11479,8 +11479,8 @@ function validate2821(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.eligibility !== void 0 && func0.call(data, "eligibility")) {
-      if (!validate2854(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2854.errors : vErrors.concat(validate2854.errors);
+      if (!validate2912(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2912.errors : vErrors.concat(validate2912.errors);
         errors = vErrors.length;
       }
     }
@@ -11493,14 +11493,14 @@ function validate2821(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2821.errors = vErrors;
+  validate2879.errors = vErrors;
   return errors === 0;
 }
-validate2821.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate2858(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2879.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate2916(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2858.evaluated;
+  const evaluated0 = validate2916.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -11576,7 +11576,7 @@ function validate2858(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "eligible" || data0 === "blocked" || data0 === "unknown")) {
-        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema476.properties.state.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema481.properties.state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -11619,7 +11619,7 @@ function validate2858(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data2 === "APPROVAL_INVALID" || data2 === "APPROVAL_REVOKED" || data2 === "APPROVAL_UNAVAILABLE" || data2 === "SPEC_UNKNOWN" || data2 === "PRODUCT_MISMATCH" || data2 === "DIMENSIONS_MISMATCH" || data2 === "BLEED_MISMATCH" || data2 === "SAFE_MISMATCH" || data2 === "DPI_MISMATCH" || data2 === "PROFILE_UNSUPPORTED" || data2 === "EXPORT_UNSUPPORTED" || data2 === "FONT_UNSUPPORTED" || data2 === "TRANSPARENCY_MISMATCH" || data2 === "ASPECT_MISMATCH" || data2 === "SURFACE_UNSUPPORTED" || data2 === "FACTS_UNSUPPORTED" || data2 === "PREFLIGHT_FAILED" || data2 === "PREVIEW_UNKNOWN" || data2 === "ROW_BINDING_MISMATCH" || data2 === "SOURCE_MISMATCH" || data2 === "POLICY_MISMATCH" || data2 === "CALIBRATION_ONLY" || data2 === "OWNER_ACCEPTANCE_PENDING" || data2 === "CANCELLED" || data2 === "SKIPPED_POLICY" || data2 === "SKIPPED_CANCELLED" || data2 === "INVALID_INPUT" || data2 === "HASH_MISMATCH" || data2 === "STORAGE_UNAVAILABLE" || data2 === "RENDER_UNAVAILABLE" || data2 === "EXPIRED" || data2 === "STALE" || data2 === "NOT_FOUND")) {
-            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema476.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
+            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema481.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err11];
             } else {
@@ -11676,7 +11676,7 @@ function validate2858(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data4 === "simulated" || data4 === "offline" || data4 === "sandbox" || data4 === "live")) {
-        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema476.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
+        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema481.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err16];
         } else {
@@ -11705,14 +11705,14 @@ function validate2858(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2858.errors = vErrors;
+  validate2916.errors = vErrors;
   return errors === 0;
 }
-validate2858.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate2861(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2916.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate2919(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2861.evaluated;
+  const evaluated0 = validate2919.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -11792,7 +11792,7 @@ function validate2861(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -12004,7 +12004,7 @@ function validate2861(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -12380,16 +12380,16 @@ function validate2861(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2861.errors = vErrors;
+  validate2919.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2861.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2785(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2919.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2843(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2785.evaluated;
+  const evaluated0 = validate2843.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -12488,7 +12488,7 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema469.properties, key0)) {
+      if (!func0.call(schema474.properties, key0)) {
         const err10 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err10];
@@ -12579,8 +12579,8 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         if (data3.artifact_ref !== void 0 && func0.call(data3, "artifact_ref")) {
-          if (!validate2786(data3.artifact_ref, { instancePath: instancePath + "/target/artifact_ref", parentData: data3, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2786.errors : vErrors.concat(validate2786.errors);
+          if (!validate2844(data3.artifact_ref, { instancePath: instancePath + "/target/artifact_ref", parentData: data3, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2844.errors : vErrors.concat(validate2844.errors);
             errors = vErrors.length;
           }
         }
@@ -12642,8 +12642,8 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         if (data3.job_ref !== void 0 && func0.call(data3, "job_ref")) {
-          if (!validate2798(data3.job_ref, { instancePath: instancePath + "/target/job_ref", parentData: data3, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2798.errors : vErrors.concat(validate2798.errors);
+          if (!validate2856(data3.job_ref, { instancePath: instancePath + "/target/job_ref", parentData: data3, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2856.errors : vErrors.concat(validate2856.errors);
             errors = vErrors.length;
           }
         }
@@ -12700,7 +12700,7 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data8 === "processing" || data8 === "failed" || data8 === "partial" || data8 === "completed" || data8 === "cancelled")) {
-        const err26 = { instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema469.properties.status.enum }, message: "must be equal to one of the allowed values" };
+        const err26 = { instancePath: instancePath + "/status", schemaPath: "#/properties/status/enum", keyword: "enum", params: { allowedValues: schema474.properties.status.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err26];
         } else {
@@ -12714,8 +12714,8 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
       const _errs32 = errors;
       let valid4 = false;
       const _errs33 = errors;
-      if (!validate2806(data9, { instancePath: instancePath + "/bundle_ref", parentData: data, parentDataProperty: "bundle_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2806.errors : vErrors.concat(validate2806.errors);
+      if (!validate2864(data9, { instancePath: instancePath + "/bundle_ref", parentData: data, parentDataProperty: "bundle_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2864.errors : vErrors.concat(validate2864.errors);
         errors = vErrors.length;
       }
       var _valid1 = _errs33 === errors;
@@ -12756,8 +12756,8 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
       const _errs39 = errors;
       let valid5 = false;
       const _errs40 = errors;
-      if (!validate2821(data10, { instancePath: instancePath + "/batch", parentData: data, parentDataProperty: "batch", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2821.errors : vErrors.concat(validate2821.errors);
+      if (!validate2879(data10, { instancePath: instancePath + "/batch", parentData: data, parentDataProperty: "batch", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2879.errors : vErrors.concat(validate2879.errors);
         errors = vErrors.length;
       }
       var _valid2 = _errs40 === errors;
@@ -12805,7 +12805,7 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data11 === "passed" || data11 === "failed" || data11 === "unknown")) {
-        const err32 = { instancePath: instancePath + "/integrity", schemaPath: "#/properties/integrity/enum", keyword: "enum", params: { allowedValues: schema469.properties.integrity.enum }, message: "must be equal to one of the allowed values" };
+        const err32 = { instancePath: instancePath + "/integrity", schemaPath: "#/properties/integrity/enum", keyword: "enum", params: { allowedValues: schema474.properties.integrity.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err32];
         } else {
@@ -12815,8 +12815,8 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.eligibility !== void 0 && func0.call(data, "eligibility")) {
-      if (!validate2858(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2858.errors : vErrors.concat(validate2858.errors);
+      if (!validate2916(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2916.errors : vErrors.concat(validate2916.errors);
         errors = vErrors.length;
       }
     }
@@ -12843,8 +12843,8 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
         }
         const len0 = data13.length;
         for (let i0 = 0; i0 < len0; i0++) {
-          if (!validate2861(data13[i0], { instancePath: instancePath + "/evidence_refs/" + i0, parentData: data13, parentDataProperty: i0, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2861.errors : vErrors.concat(validate2861.errors);
+          if (!validate2919(data13[i0], { instancePath: instancePath + "/evidence_refs/" + i0, parentData: data13, parentDataProperty: i0, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2919.errors : vErrors.concat(validate2919.errors);
             errors = vErrors.length;
           }
         }
@@ -12867,12 +12867,12 @@ function validate2785(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2785.errors = vErrors;
+  validate2843.errors = vErrors;
   return errors === 0;
 }
-validate2785.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ArtifactRef_1_0_0 = validate2786;
-var ArtifactStatusRequest_1_0_0 = validate2866;
+validate2843.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ArtifactRef_1_0_0 = validate2844;
+var ArtifactStatusRequest_1_0_0 = validate2924;
 function validate742(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -12906,11 +12906,11 @@ function validate742(data, { instancePath = "", parentData, parentDataProperty, 
   return errors === 0;
 }
 validate742.evaluated = { "dynamicProps": false, "dynamicItems": false };
-function validate2866(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+function validate2924(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2866.evaluated;
+  const evaluated0 = validate2924.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -13076,8 +13076,8 @@ function validate2866(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         if (data5.artifact_ref !== void 0 && func0.call(data5, "artifact_ref")) {
-          if (!validate2786(data5.artifact_ref, { instancePath: instancePath + "/target/artifact_ref", parentData: data5, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2786.errors : vErrors.concat(validate2786.errors);
+          if (!validate2844(data5.artifact_ref, { instancePath: instancePath + "/target/artifact_ref", parentData: data5, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2844.errors : vErrors.concat(validate2844.errors);
             errors = vErrors.length;
           }
         }
@@ -13139,8 +13139,8 @@ function validate2866(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         if (data5.job_ref !== void 0 && func0.call(data5, "job_ref")) {
-          if (!validate2798(data5.job_ref, { instancePath: instancePath + "/target/job_ref", parentData: data5, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2798.errors : vErrors.concat(validate2798.errors);
+          if (!validate2856(data5.job_ref, { instancePath: instancePath + "/target/job_ref", parentData: data5, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2856.errors : vErrors.concat(validate2856.errors);
             errors = vErrors.length;
           }
         }
@@ -13334,17 +13334,17 @@ function validate2866(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2866.errors = vErrors;
+  validate2924.errors = vErrors;
   return errors === 0;
 }
-validate2866.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var BatchResult_1_0_0 = validate2821;
-var CompareTemplateRequest_1_0_0 = validate2871;
-var schema487 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CompareTemplateRequest/1.0.0", "title": "CompareTemplateRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CompareTemplateRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "source_template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "target_template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "source_template_ref", "target_template_ref", "capability_ref", "spec_ref"], "x-classification": "restricted" };
-function validate2874(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2924.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var BatchResult_1_0_0 = validate2879;
+var CompareTemplateRequest_1_0_0 = validate2929;
+var schema492 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CompareTemplateRequest/1.0.0", "title": "CompareTemplateRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CompareTemplateRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "source_template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "target_template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "source_template_ref", "target_template_ref", "capability_ref", "spec_ref"], "x-classification": "restricted" };
+function validate2932(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2874.evaluated;
+  const evaluated0 = validate2932.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -13424,7 +13424,7 @@ function validate2874(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -13636,7 +13636,7 @@ function validate2874(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -14012,16 +14012,16 @@ function validate2874(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2874.errors = vErrors;
+  validate2932.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2874.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2871(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2932.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2929(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2871.evaluated;
+  const evaluated0 = validate2929.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -14111,7 +14111,7 @@ function validate2871(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema487.properties, key0)) {
+      if (!func0.call(schema492.properties, key0)) {
         const err9 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err9];
@@ -14168,11 +14168,11 @@ function validate2871(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.source_template_ref !== void 0 && func0.call(data, "source_template_ref")) {
       let data5 = data.source_template_ref;
-      if (!validate2874(data5, { instancePath: instancePath + "/source_template_ref", parentData: data, parentDataProperty: "source_template_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2874.errors : vErrors.concat(validate2874.errors);
+      if (!validate2932(data5, { instancePath: instancePath + "/source_template_ref", parentData: data, parentDataProperty: "source_template_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2932.errors : vErrors.concat(validate2932.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2874.evaluated.props;
+        var props0 = validate2932.evaluated.props;
       }
       if (data5 && typeof data5 == "object" && !Array.isArray(data5)) {
         if (data5.contract === void 0 || !func0.call(data5, "contract")) {
@@ -14232,11 +14232,11 @@ function validate2871(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.target_template_ref !== void 0 && func0.call(data, "target_template_ref")) {
       let data8 = data.target_template_ref;
-      if (!validate2874(data8, { instancePath: instancePath + "/target_template_ref", parentData: data, parentDataProperty: "target_template_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2874.errors : vErrors.concat(validate2874.errors);
+      if (!validate2932(data8, { instancePath: instancePath + "/target_template_ref", parentData: data, parentDataProperty: "target_template_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2932.errors : vErrors.concat(validate2932.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate2874.evaluated.props;
+        var props1 = validate2932.evaluated.props;
       }
       if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
         if (data8.contract === void 0 || !func0.call(data8, "contract")) {
@@ -14296,11 +14296,11 @@ function validate2871(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.capability_ref !== void 0 && func0.call(data, "capability_ref")) {
       let data11 = data.capability_ref;
-      if (!validate2874(data11, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2874.errors : vErrors.concat(validate2874.errors);
+      if (!validate2932(data11, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2932.errors : vErrors.concat(validate2932.errors);
         errors = vErrors.length;
       } else {
-        var props2 = validate2874.evaluated.props;
+        var props2 = validate2932.evaluated.props;
       }
       if (data11 && typeof data11 == "object" && !Array.isArray(data11)) {
         if (data11.contract === void 0 || !func0.call(data11, "contract")) {
@@ -14360,11 +14360,11 @@ function validate2871(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.spec_ref !== void 0 && func0.call(data, "spec_ref")) {
       let data14 = data.spec_ref;
-      if (!validate2874(data14, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2874.errors : vErrors.concat(validate2874.errors);
+      if (!validate2932(data14, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2932.errors : vErrors.concat(validate2932.errors);
         errors = vErrors.length;
       } else {
-        var props3 = validate2874.evaluated.props;
+        var props3 = validate2932.evaluated.props;
       }
       if (data14 && typeof data14 == "object" && !Array.isArray(data14)) {
         if (data14.contract === void 0 || !func0.call(data14, "contract")) {
@@ -14431,16 +14431,16 @@ function validate2871(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2871.errors = vErrors;
+  validate2929.errors = vErrors;
   return errors === 0;
 }
-validate2871.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var CompatibilityReport_1_0_0 = validate2882;
-var schema489 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CompatibilityReport/1.0.0", "title": "CompatibilityReport", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CompatibilityReport", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "source_template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "target_template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "state": { "type": "string", "enum": ["supported", "unsupported", "unknown"], "x-classification": "restricted" }, "reasons": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "changed_constraints": { "type": "array", "items": { "type": "string", "enum": ["canvas", "trim", "bleed", "safe", "orientation", "dpi", "formats", "fonts", "policies", "spec", "capability", "slots"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "relayout": { "type": "boolean", "x-classification": "restricted" }, "reapproval": { "type": "boolean", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "source_template_ref", "target_template_ref", "capability_ref", "spec_ref", "state", "reasons", "changed_constraints", "relayout", "reapproval"], "x-classification": "restricted" };
-function validate2883(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2929.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var CompatibilityReport_1_0_0 = validate2940;
+var schema494 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CompatibilityReport/1.0.0", "title": "CompatibilityReport", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CompatibilityReport", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "source_template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "target_template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "state": { "type": "string", "enum": ["supported", "unsupported", "unknown"], "x-classification": "restricted" }, "reasons": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "changed_constraints": { "type": "array", "items": { "type": "string", "enum": ["canvas", "trim", "bleed", "safe", "orientation", "dpi", "formats", "fonts", "policies", "spec", "capability", "slots"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "relayout": { "type": "boolean", "x-classification": "restricted" }, "reapproval": { "type": "boolean", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "source_template_ref", "target_template_ref", "capability_ref", "spec_ref", "state", "reasons", "changed_constraints", "relayout", "reapproval"], "x-classification": "restricted" };
+function validate2941(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2883.evaluated;
+  const evaluated0 = validate2941.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -14520,7 +14520,7 @@ function validate2883(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -14732,7 +14732,7 @@ function validate2883(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -15108,16 +15108,16 @@ function validate2883(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2883.errors = vErrors;
+  validate2941.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2883.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2882(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2941.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2940(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2882.evaluated;
+  const evaluated0 = validate2940.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -15234,7 +15234,7 @@ function validate2882(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema489.properties, key0)) {
+      if (!func0.call(schema494.properties, key0)) {
         const err12 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err12];
@@ -15279,11 +15279,11 @@ function validate2882(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.source_template_ref !== void 0 && func0.call(data, "source_template_ref")) {
       let data3 = data.source_template_ref;
-      if (!validate2883(data3, { instancePath: instancePath + "/source_template_ref", parentData: data, parentDataProperty: "source_template_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2883.errors : vErrors.concat(validate2883.errors);
+      if (!validate2941(data3, { instancePath: instancePath + "/source_template_ref", parentData: data, parentDataProperty: "source_template_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2941.errors : vErrors.concat(validate2941.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2883.evaluated.props;
+        var props0 = validate2941.evaluated.props;
       }
       if (data3 && typeof data3 == "object" && !Array.isArray(data3)) {
         if (data3.contract === void 0 || !func0.call(data3, "contract")) {
@@ -15343,11 +15343,11 @@ function validate2882(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.target_template_ref !== void 0 && func0.call(data, "target_template_ref")) {
       let data6 = data.target_template_ref;
-      if (!validate2883(data6, { instancePath: instancePath + "/target_template_ref", parentData: data, parentDataProperty: "target_template_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2883.errors : vErrors.concat(validate2883.errors);
+      if (!validate2941(data6, { instancePath: instancePath + "/target_template_ref", parentData: data, parentDataProperty: "target_template_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2941.errors : vErrors.concat(validate2941.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate2883.evaluated.props;
+        var props1 = validate2941.evaluated.props;
       }
       if (data6 && typeof data6 == "object" && !Array.isArray(data6)) {
         if (data6.contract === void 0 || !func0.call(data6, "contract")) {
@@ -15407,11 +15407,11 @@ function validate2882(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.capability_ref !== void 0 && func0.call(data, "capability_ref")) {
       let data9 = data.capability_ref;
-      if (!validate2883(data9, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2883.errors : vErrors.concat(validate2883.errors);
+      if (!validate2941(data9, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2941.errors : vErrors.concat(validate2941.errors);
         errors = vErrors.length;
       } else {
-        var props2 = validate2883.evaluated.props;
+        var props2 = validate2941.evaluated.props;
       }
       if (data9 && typeof data9 == "object" && !Array.isArray(data9)) {
         if (data9.contract === void 0 || !func0.call(data9, "contract")) {
@@ -15471,11 +15471,11 @@ function validate2882(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.spec_ref !== void 0 && func0.call(data, "spec_ref")) {
       let data12 = data.spec_ref;
-      if (!validate2883(data12, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2883.errors : vErrors.concat(validate2883.errors);
+      if (!validate2941(data12, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2941.errors : vErrors.concat(validate2941.errors);
         errors = vErrors.length;
       } else {
-        var props3 = validate2883.evaluated.props;
+        var props3 = validate2941.evaluated.props;
       }
       if (data12 && typeof data12 == "object" && !Array.isArray(data12)) {
         if (data12.contract === void 0 || !func0.call(data12, "contract")) {
@@ -15545,7 +15545,7 @@ function validate2882(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data15 === "supported" || data15 === "unsupported" || data15 === "unknown")) {
-        const err37 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema489.properties.state.enum }, message: "must be equal to one of the allowed values" };
+        const err37 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema494.properties.state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err37];
         } else {
@@ -15588,7 +15588,7 @@ function validate2882(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data17 === "APPROVAL_INVALID" || data17 === "APPROVAL_REVOKED" || data17 === "APPROVAL_UNAVAILABLE" || data17 === "SPEC_UNKNOWN" || data17 === "PRODUCT_MISMATCH" || data17 === "DIMENSIONS_MISMATCH" || data17 === "BLEED_MISMATCH" || data17 === "SAFE_MISMATCH" || data17 === "DPI_MISMATCH" || data17 === "PROFILE_UNSUPPORTED" || data17 === "EXPORT_UNSUPPORTED" || data17 === "FONT_UNSUPPORTED" || data17 === "TRANSPARENCY_MISMATCH" || data17 === "ASPECT_MISMATCH" || data17 === "SURFACE_UNSUPPORTED" || data17 === "FACTS_UNSUPPORTED" || data17 === "PREFLIGHT_FAILED" || data17 === "PREVIEW_UNKNOWN" || data17 === "ROW_BINDING_MISMATCH" || data17 === "SOURCE_MISMATCH" || data17 === "POLICY_MISMATCH" || data17 === "CALIBRATION_ONLY" || data17 === "OWNER_ACCEPTANCE_PENDING" || data17 === "CANCELLED" || data17 === "SKIPPED_POLICY" || data17 === "SKIPPED_CANCELLED" || data17 === "INVALID_INPUT" || data17 === "HASH_MISMATCH" || data17 === "STORAGE_UNAVAILABLE" || data17 === "RENDER_UNAVAILABLE" || data17 === "EXPIRED" || data17 === "STALE" || data17 === "NOT_FOUND")) {
-            const err41 = { instancePath: instancePath + "/reasons/" + i0, schemaPath: "#/properties/reasons/items/enum", keyword: "enum", params: { allowedValues: schema489.properties.reasons.items.enum }, message: "must be equal to one of the allowed values" };
+            const err41 = { instancePath: instancePath + "/reasons/" + i0, schemaPath: "#/properties/reasons/items/enum", keyword: "enum", params: { allowedValues: schema494.properties.reasons.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err41];
             } else {
@@ -15641,7 +15641,7 @@ function validate2882(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data19 === "canvas" || data19 === "trim" || data19 === "bleed" || data19 === "safe" || data19 === "orientation" || data19 === "dpi" || data19 === "formats" || data19 === "fonts" || data19 === "policies" || data19 === "spec" || data19 === "capability" || data19 === "slots")) {
-            const err46 = { instancePath: instancePath + "/changed_constraints/" + i1, schemaPath: "#/properties/changed_constraints/items/enum", keyword: "enum", params: { allowedValues: schema489.properties.changed_constraints.items.enum }, message: "must be equal to one of the allowed values" };
+            const err46 = { instancePath: instancePath + "/changed_constraints/" + i1, schemaPath: "#/properties/changed_constraints/items/enum", keyword: "enum", params: { allowedValues: schema494.properties.changed_constraints.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err46];
             } else {
@@ -15691,16 +15691,16 @@ function validate2882(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2882.errors = vErrors;
+  validate2940.errors = vErrors;
   return errors === 0;
 }
-validate2882.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ComposeArtifactRequest_1_0_0 = validate2891;
-var schema491 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ComposeArtifactRequest/1.0.0", "title": "ComposeArtifactRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ComposeArtifactRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "binding": { "type": "object", "additionalProperties": false, "properties": { "design_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "DesignVersion", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "handoff_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactHandoffManifest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "facts_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "asset_refs": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "asset_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "permission_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "purpose": { "type": "string", "enum": ["artwork", "overlay"], "x-classification": "restricted" }, "normalization_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["asset_ref", "permission_ref", "purpose", "normalization_policy_ref"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "approval_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "formatting_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "repair_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "values": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/ExactValue", "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["design_ref", "handoff_ref", "facts_ref", "asset_refs", "approval_ref", "template_ref", "spec_ref", "capability_ref", "composition_ref", "formatting_policy_ref", "repair_policy_ref", "values"], "x-classification": "restricted" }, "idempotency_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,256}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "binding", "idempotency_key"], "x-classification": "restricted" };
-function validate2894(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2940.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ComposeArtifactRequest_1_0_0 = validate2949;
+var schema496 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ComposeArtifactRequest/1.0.0", "title": "ComposeArtifactRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ComposeArtifactRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "binding": { "type": "object", "additionalProperties": false, "properties": { "design_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "DesignVersion", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "handoff_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactHandoffManifest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "facts_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "asset_refs": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "asset_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "permission_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "purpose": { "type": "string", "enum": ["artwork", "overlay"], "x-classification": "restricted" }, "normalization_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["asset_ref", "permission_ref", "purpose", "normalization_policy_ref"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "approval_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "formatting_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "repair_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "values": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/ExactValue", "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["design_ref", "handoff_ref", "facts_ref", "asset_refs", "approval_ref", "template_ref", "spec_ref", "capability_ref", "composition_ref", "formatting_policy_ref", "repair_policy_ref", "values"], "x-classification": "restricted" }, "idempotency_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,256}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "binding", "idempotency_key"], "x-classification": "restricted" };
+function validate2952(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2894.evaluated;
+  const evaluated0 = validate2952.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -15780,7 +15780,7 @@ function validate2894(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -15992,7 +15992,7 @@ function validate2894(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -16368,18 +16368,18 @@ function validate2894(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2894.errors = vErrors;
+  validate2952.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2894.evaluated = { "dynamicProps": true, "dynamicItems": false };
-var pattern1376 = new RegExp("^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])", "u");
-var pattern1378 = new RegExp("^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])", "u");
-var pattern1379 = new RegExp("^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])", "u");
-function validate2913(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2952.evaluated = { "dynamicProps": true, "dynamicItems": false };
+var pattern1393 = new RegExp("^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])", "u");
+var pattern1395 = new RegExp("^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])", "u");
+var pattern1396 = new RegExp("^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])", "u");
+function validate2971(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2913.evaluated;
+  const evaluated0 = validate2971.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -16459,7 +16459,7 @@ function validate2913(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -16671,7 +16671,7 @@ function validate2913(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -17047,15 +17047,15 @@ function validate2913(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2913.errors = vErrors;
+  validate2971.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2913.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2911(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2971.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2969(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2911.evaluated;
+  const evaluated0 = validate2969.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -17119,7 +17119,7 @@ function validate2911(data, { instancePath = "", parentData, parentDataProperty,
           }
           errors++;
         }
-        if (!pattern1376.test(data1)) {
+        if (!pattern1393.test(data1)) {
           const err5 = { instancePath: instancePath + "/value", schemaPath: "#/oneOf/0/properties/value/pattern", keyword: "pattern", params: { pattern: "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])" }, message: 'must match pattern "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err5];
@@ -17260,7 +17260,7 @@ function validate2911(data, { instancePath = "", parentData, parentDataProperty,
           }
           errors++;
         }
-        if (!pattern1378.test(data4)) {
+        if (!pattern1395.test(data4)) {
           const err18 = { instancePath: instancePath + "/timezone", schemaPath: "#/oneOf/1/properties/timezone/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err18];
@@ -17282,7 +17282,7 @@ function validate2911(data, { instancePath = "", parentData, parentDataProperty,
     if (data.locale !== void 0 && func0.call(data, "locale")) {
       let data5 = data.locale;
       if (typeof data5 === "string") {
-        if (!pattern1379.test(data5)) {
+        if (!pattern1396.test(data5)) {
           const err20 = { instancePath: instancePath + "/locale", schemaPath: "#/oneOf/1/properties/locale/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err20];
@@ -17302,8 +17302,8 @@ function validate2911(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.format_policy_ref !== void 0 && func0.call(data, "format_policy_ref")) {
-      if (!validate2913(data.format_policy_ref, { instancePath: instancePath + "/format_policy_ref", parentData: data, parentDataProperty: "format_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2913.errors : vErrors.concat(validate2913.errors);
+      if (!validate2971(data.format_policy_ref, { instancePath: instancePath + "/format_policy_ref", parentData: data, parentDataProperty: "format_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2971.errors : vErrors.concat(validate2971.errors);
         errors = vErrors.length;
       }
     }
@@ -17347,17 +17347,17 @@ function validate2911(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2911.errors = vErrors;
+  validate2969.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2911.evaluated = { "dynamicProps": true, "dynamicItems": false };
+validate2969.evaluated = { "dynamicProps": true, "dynamicItems": false };
 var pattern20 = new RegExp("^[A-Za-z0-9_.:-]{1,256}(?![\\s\\S])", "u");
-function validate2891(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+function validate2949(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2891.evaluated;
+  const evaluated0 = validate2949.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -17596,7 +17596,7 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
           errors++;
         }
         for (const key1 of Object.keys(data5)) {
-          if (!func0.call(schema491.properties.binding.properties, key1)) {
+          if (!func0.call(schema496.properties.binding.properties, key1)) {
             const err23 = { instancePath: instancePath + "/binding", schemaPath: "#/properties/binding/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key1 }, message: "must NOT have additional properties" };
             if (vErrors === null) {
               vErrors = [err23];
@@ -17608,11 +17608,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.design_ref !== void 0 && func0.call(data5, "design_ref")) {
           let data6 = data5.design_ref;
-          if (!validate2894(data6, { instancePath: instancePath + "/binding/design_ref", parentData: data5, parentDataProperty: "design_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data6, { instancePath: instancePath + "/binding/design_ref", parentData: data5, parentDataProperty: "design_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           } else {
-            var props0 = validate2894.evaluated.props;
+            var props0 = validate2952.evaluated.props;
           }
           if (data6 && typeof data6 == "object" && !Array.isArray(data6)) {
             if (data6.contract === void 0 || !func0.call(data6, "contract")) {
@@ -17672,11 +17672,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.handoff_ref !== void 0 && func0.call(data5, "handoff_ref")) {
           let data9 = data5.handoff_ref;
-          if (!validate2894(data9, { instancePath: instancePath + "/binding/handoff_ref", parentData: data5, parentDataProperty: "handoff_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data9, { instancePath: instancePath + "/binding/handoff_ref", parentData: data5, parentDataProperty: "handoff_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           } else {
-            var props1 = validate2894.evaluated.props;
+            var props1 = validate2952.evaluated.props;
           }
           if (data9 && typeof data9 == "object" && !Array.isArray(data9)) {
             if (data9.contract === void 0 || !func0.call(data9, "contract")) {
@@ -17735,8 +17735,8 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         if (data5.facts_ref !== void 0 && func0.call(data5, "facts_ref")) {
-          if (!validate2894(data5.facts_ref, { instancePath: instancePath + "/binding/facts_ref", parentData: data5, parentDataProperty: "facts_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data5.facts_ref, { instancePath: instancePath + "/binding/facts_ref", parentData: data5, parentDataProperty: "facts_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           }
         }
@@ -17814,11 +17814,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
                 }
                 if (data14.asset_ref !== void 0 && func0.call(data14, "asset_ref")) {
                   let data15 = data14.asset_ref;
-                  if (!validate2894(data15, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/asset_ref", parentData: data14, parentDataProperty: "asset_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+                  if (!validate2952(data15, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/asset_ref", parentData: data14, parentDataProperty: "asset_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
                     errors = vErrors.length;
                   } else {
-                    var props3 = validate2894.evaluated.props;
+                    var props3 = validate2952.evaluated.props;
                   }
                   if (data15 && typeof data15 == "object" && !Array.isArray(data15)) {
                     if (data15.contract === void 0 || !func0.call(data15, "contract")) {
@@ -17878,11 +17878,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
                 }
                 if (data14.permission_ref !== void 0 && func0.call(data14, "permission_ref")) {
                   let data18 = data14.permission_ref;
-                  if (!validate2894(data18, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/permission_ref", parentData: data14, parentDataProperty: "permission_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+                  if (!validate2952(data18, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/permission_ref", parentData: data14, parentDataProperty: "permission_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
                     errors = vErrors.length;
                   } else {
-                    var props4 = validate2894.evaluated.props;
+                    var props4 = validate2952.evaluated.props;
                   }
                   if (data18 && typeof data18 == "object" && !Array.isArray(data18)) {
                     if (data18.contract === void 0 || !func0.call(data18, "contract")) {
@@ -17952,7 +17952,7 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
                     errors++;
                   }
                   if (!(data21 === "artwork" || data21 === "overlay")) {
-                    const err52 = { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/purpose", schemaPath: "#/properties/binding/properties/asset_refs/items/properties/purpose/enum", keyword: "enum", params: { allowedValues: schema491.properties.binding.properties.asset_refs.items.properties.purpose.enum }, message: "must be equal to one of the allowed values" };
+                    const err52 = { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/purpose", schemaPath: "#/properties/binding/properties/asset_refs/items/properties/purpose/enum", keyword: "enum", params: { allowedValues: schema496.properties.binding.properties.asset_refs.items.properties.purpose.enum }, message: "must be equal to one of the allowed values" };
                     if (vErrors === null) {
                       vErrors = [err52];
                     } else {
@@ -17966,11 +17966,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
                   const _errs70 = errors;
                   let valid13 = false;
                   const _errs71 = errors;
-                  if (!validate2894(data22, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/normalization_policy_ref", parentData: data14, parentDataProperty: "normalization_policy_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+                  if (!validate2952(data22, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/normalization_policy_ref", parentData: data14, parentDataProperty: "normalization_policy_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
                     errors = vErrors.length;
                   } else {
-                    var props5 = validate2894.evaluated.props;
+                    var props5 = validate2952.evaluated.props;
                   }
                   if (data22 && typeof data22 == "object" && !Array.isArray(data22)) {
                     if (data22.contract === void 0 || !func0.call(data22, "contract")) {
@@ -18082,11 +18082,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.approval_ref !== void 0 && func0.call(data5, "approval_ref")) {
           let data25 = data5.approval_ref;
-          if (!validate2894(data25, { instancePath: instancePath + "/binding/approval_ref", parentData: data5, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data25, { instancePath: instancePath + "/binding/approval_ref", parentData: data5, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           } else {
-            var props6 = validate2894.evaluated.props;
+            var props6 = validate2952.evaluated.props;
           }
           if (data25 && typeof data25 == "object" && !Array.isArray(data25)) {
             if (data25.contract === void 0 || !func0.call(data25, "contract")) {
@@ -18146,11 +18146,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.template_ref !== void 0 && func0.call(data5, "template_ref")) {
           let data28 = data5.template_ref;
-          if (!validate2894(data28, { instancePath: instancePath + "/binding/template_ref", parentData: data5, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data28, { instancePath: instancePath + "/binding/template_ref", parentData: data5, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           } else {
-            var props7 = validate2894.evaluated.props;
+            var props7 = validate2952.evaluated.props;
           }
           if (data28 && typeof data28 == "object" && !Array.isArray(data28)) {
             if (data28.contract === void 0 || !func0.call(data28, "contract")) {
@@ -18210,11 +18210,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.spec_ref !== void 0 && func0.call(data5, "spec_ref")) {
           let data31 = data5.spec_ref;
-          if (!validate2894(data31, { instancePath: instancePath + "/binding/spec_ref", parentData: data5, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data31, { instancePath: instancePath + "/binding/spec_ref", parentData: data5, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           } else {
-            var props8 = validate2894.evaluated.props;
+            var props8 = validate2952.evaluated.props;
           }
           if (data31 && typeof data31 == "object" && !Array.isArray(data31)) {
             if (data31.contract === void 0 || !func0.call(data31, "contract")) {
@@ -18274,11 +18274,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.capability_ref !== void 0 && func0.call(data5, "capability_ref")) {
           let data34 = data5.capability_ref;
-          if (!validate2894(data34, { instancePath: instancePath + "/binding/capability_ref", parentData: data5, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data34, { instancePath: instancePath + "/binding/capability_ref", parentData: data5, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           } else {
-            var props9 = validate2894.evaluated.props;
+            var props9 = validate2952.evaluated.props;
           }
           if (data34 && typeof data34 == "object" && !Array.isArray(data34)) {
             if (data34.contract === void 0 || !func0.call(data34, "contract")) {
@@ -18338,11 +18338,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.composition_ref !== void 0 && func0.call(data5, "composition_ref")) {
           let data37 = data5.composition_ref;
-          if (!validate2894(data37, { instancePath: instancePath + "/binding/composition_ref", parentData: data5, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data37, { instancePath: instancePath + "/binding/composition_ref", parentData: data5, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           } else {
-            var props10 = validate2894.evaluated.props;
+            var props10 = validate2952.evaluated.props;
           }
           if (data37 && typeof data37 == "object" && !Array.isArray(data37)) {
             if (data37.contract === void 0 || !func0.call(data37, "contract")) {
@@ -18402,11 +18402,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.formatting_policy_ref !== void 0 && func0.call(data5, "formatting_policy_ref")) {
           let data40 = data5.formatting_policy_ref;
-          if (!validate2894(data40, { instancePath: instancePath + "/binding/formatting_policy_ref", parentData: data5, parentDataProperty: "formatting_policy_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data40, { instancePath: instancePath + "/binding/formatting_policy_ref", parentData: data5, parentDataProperty: "formatting_policy_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           } else {
-            var props11 = validate2894.evaluated.props;
+            var props11 = validate2952.evaluated.props;
           }
           if (data40 && typeof data40 == "object" && !Array.isArray(data40)) {
             if (data40.contract === void 0 || !func0.call(data40, "contract")) {
@@ -18469,11 +18469,11 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
           const _errs145 = errors;
           let valid28 = false;
           const _errs146 = errors;
-          if (!validate2894(data43, { instancePath: instancePath + "/binding/repair_policy_ref", parentData: data5, parentDataProperty: "repair_policy_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2894.errors : vErrors.concat(validate2894.errors);
+          if (!validate2952(data43, { instancePath: instancePath + "/binding/repair_policy_ref", parentData: data5, parentDataProperty: "repair_policy_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2952.errors : vErrors.concat(validate2952.errors);
             errors = vErrors.length;
           } else {
-            var props12 = validate2894.evaluated.props;
+            var props12 = validate2952.evaluated.props;
           }
           if (data43 && typeof data43 == "object" && !Array.isArray(data43)) {
             if (data43.contract === void 0 || !func0.call(data43, "contract")) {
@@ -18578,7 +18578,7 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
             for (const key3 of Object.keys(data46)) {
               const _errs162 = errors;
               if (typeof key3 === "string") {
-                if (!pattern1371.test(key3)) {
+                if (!pattern1388.test(key3)) {
                   const err100 = { instancePath: instancePath + "/binding/values", schemaPath: "#/properties/binding/properties/values/propertyNames/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])"', propertyName: key3 };
                   if (vErrors === null) {
                     vErrors = [err100];
@@ -18608,8 +18608,8 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
               }
             }
             for (const key4 of Object.keys(data46)) {
-              if (!validate2911(data46[key4], { instancePath: instancePath + "/binding/values/" + key4.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data46, parentDataProperty: key4, rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate2911.errors : vErrors.concat(validate2911.errors);
+              if (!validate2969(data46[key4], { instancePath: instancePath + "/binding/values/" + key4.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data46, parentDataProperty: key4, rootData, dynamicAnchors })) {
+                vErrors = vErrors === null ? validate2969.errors : vErrors.concat(validate2969.errors);
                 errors = vErrors.length;
               }
             }
@@ -18664,16 +18664,16 @@ function validate2891(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2891.errors = vErrors;
+  validate2949.errors = vErrors;
   return errors === 0;
 }
-validate2891.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var Composition_1_0_0 = validate2919;
-var schema495 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/Composition/1.0.0", "title": "Composition", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "composition_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "design_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "DesignVersion", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "handoff_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactHandoffManifest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "facts_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "asset_uses": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "asset_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "permission_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "purpose": { "type": "string", "enum": ["artwork", "overlay"], "x-classification": "restricted" }, "normalization_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["asset_ref", "permission_ref", "purpose", "normalization_policy_ref"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "values": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/ExactValue", "x-classification": "restricted" }, "x-classification": "restricted" }, "fact_bindings": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "fact_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "value_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["slot_id", "fact_key", "value_hash"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "policy_refs": { "type": "object", "additionalProperties": false, "properties": { "formatting": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "layout": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "output": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "repair": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["formatting", "layout", "output", "repair"], "x-classification": "restricted" }, "font_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 1, "maxItems": 16, "x-classification": "restricted" }, "runtime_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionRuntime", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "resolved_layout_commitment": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "input_binding_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "barcode": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "state": { "const": "absent", "x-classification": "public" }, "reason": { "type": "string", "enum": ["not_applicable", "not_requested"], "x-classification": "restricted" } }, "required": ["state", "reason"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "state": { "const": "bound", "x-classification": "public" }, "symbology": { "type": "string", "enum": ["qr", "code128"], "x-classification": "restricted" }, "input_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["state", "symbology", "input_hash", "slot_id"], "x-classification": "restricted" }], "x-classification": "restricted" }, "slot_bindings": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "type": "object", "additionalProperties": false, "properties": { "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "source": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "asset", "x-classification": "restricted" }, "asset_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["kind", "asset_ref"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "value", "x-classification": "restricted" }, "field_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["kind", "field_id"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "fact", "x-classification": "restricted" }, "fact_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["kind", "fact_key"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "policy", "x-classification": "restricted" }, "policy_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["kind", "policy_ref"], "x-classification": "restricted" }], "x-classification": "restricted" } }, "required": ["slot_id", "source"], "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "composition_id", "revision", "content_hash", "design_ref", "handoff_ref", "facts_ref", "template_ref", "spec_ref", "capability_ref", "asset_uses", "values", "fact_bindings", "policy_refs", "font_refs", "runtime_ref", "resolved_layout_commitment", "input_binding_hash", "barcode", "slot_bindings"], "x-classification": "restricted" };
-function validate2923(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2949.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var Composition_1_0_0 = validate2977;
+var schema500 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/Composition/1.0.0", "title": "Composition", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "composition_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "design_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "DesignVersion", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "handoff_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactHandoffManifest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "facts_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "asset_uses": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "asset_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "permission_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "purpose": { "type": "string", "enum": ["artwork", "overlay"], "x-classification": "restricted" }, "normalization_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["asset_ref", "permission_ref", "purpose", "normalization_policy_ref"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "values": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/ExactValue", "x-classification": "restricted" }, "x-classification": "restricted" }, "fact_bindings": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "fact_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "value_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["slot_id", "fact_key", "value_hash"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "policy_refs": { "type": "object", "additionalProperties": false, "properties": { "formatting": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "layout": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "output": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "repair": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["formatting", "layout", "output", "repair"], "x-classification": "restricted" }, "font_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 1, "maxItems": 16, "x-classification": "restricted" }, "runtime_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionRuntime", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "resolved_layout_commitment": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "input_binding_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "barcode": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "state": { "const": "absent", "x-classification": "public" }, "reason": { "type": "string", "enum": ["not_applicable", "not_requested"], "x-classification": "restricted" } }, "required": ["state", "reason"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "state": { "const": "bound", "x-classification": "public" }, "symbology": { "type": "string", "enum": ["qr", "code128"], "x-classification": "restricted" }, "input_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["state", "symbology", "input_hash", "slot_id"], "x-classification": "restricted" }], "x-classification": "restricted" }, "slot_bindings": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "type": "object", "additionalProperties": false, "properties": { "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "source": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "asset", "x-classification": "restricted" }, "asset_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["kind", "asset_ref"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "value", "x-classification": "restricted" }, "field_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["kind", "field_id"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "fact", "x-classification": "restricted" }, "fact_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["kind", "fact_key"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "policy", "x-classification": "restricted" }, "policy_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["kind", "policy_ref"], "x-classification": "restricted" }], "x-classification": "restricted" } }, "required": ["slot_id", "source"], "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "composition_id", "revision", "content_hash", "design_ref", "handoff_ref", "facts_ref", "template_ref", "spec_ref", "capability_ref", "asset_uses", "values", "fact_bindings", "policy_refs", "font_refs", "runtime_ref", "resolved_layout_commitment", "input_binding_hash", "barcode", "slot_bindings"], "x-classification": "restricted" };
+function validate2981(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2923.evaluated;
+  const evaluated0 = validate2981.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -18753,7 +18753,7 @@ function validate2923(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -18965,7 +18965,7 @@ function validate2923(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -19341,15 +19341,15 @@ function validate2923(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2923.errors = vErrors;
+  validate2981.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2923.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2936(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2981.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2994(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2936.evaluated;
+  const evaluated0 = validate2994.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -19413,7 +19413,7 @@ function validate2936(data, { instancePath = "", parentData, parentDataProperty,
           }
           errors++;
         }
-        if (!pattern1376.test(data1)) {
+        if (!pattern1393.test(data1)) {
           const err5 = { instancePath: instancePath + "/value", schemaPath: "#/oneOf/0/properties/value/pattern", keyword: "pattern", params: { pattern: "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])" }, message: 'must match pattern "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err5];
@@ -19554,7 +19554,7 @@ function validate2936(data, { instancePath = "", parentData, parentDataProperty,
           }
           errors++;
         }
-        if (!pattern1378.test(data4)) {
+        if (!pattern1395.test(data4)) {
           const err18 = { instancePath: instancePath + "/timezone", schemaPath: "#/oneOf/1/properties/timezone/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err18];
@@ -19576,7 +19576,7 @@ function validate2936(data, { instancePath = "", parentData, parentDataProperty,
     if (data.locale !== void 0 && func0.call(data, "locale")) {
       let data5 = data.locale;
       if (typeof data5 === "string") {
-        if (!pattern1379.test(data5)) {
+        if (!pattern1396.test(data5)) {
           const err20 = { instancePath: instancePath + "/locale", schemaPath: "#/oneOf/1/properties/locale/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err20];
@@ -19596,8 +19596,8 @@ function validate2936(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.format_policy_ref !== void 0 && func0.call(data, "format_policy_ref")) {
-      if (!validate2913(data.format_policy_ref, { instancePath: instancePath + "/format_policy_ref", parentData: data, parentDataProperty: "format_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2913.errors : vErrors.concat(validate2913.errors);
+      if (!validate2971(data.format_policy_ref, { instancePath: instancePath + "/format_policy_ref", parentData: data, parentDataProperty: "format_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2971.errors : vErrors.concat(validate2971.errors);
         errors = vErrors.length;
       }
     }
@@ -19641,16 +19641,16 @@ function validate2936(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2936.errors = vErrors;
+  validate2994.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2936.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2919(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2994.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate2977(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2919.evaluated;
+  const evaluated0 = validate2977.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -19875,7 +19875,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema495.properties, key0)) {
+      if (!func0.call(schema500.properties, key0)) {
         const err24 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err24];
@@ -20039,11 +20039,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.design_ref !== void 0 && func0.call(data, "design_ref")) {
       let data8 = data.design_ref;
-      if (!validate2923(data8, { instancePath: instancePath + "/design_ref", parentData: data, parentDataProperty: "design_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+      if (!validate2981(data8, { instancePath: instancePath + "/design_ref", parentData: data, parentDataProperty: "design_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2923.evaluated.props;
+        var props0 = validate2981.evaluated.props;
       }
       if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
         if (data8.contract === void 0 || !func0.call(data8, "contract")) {
@@ -20103,11 +20103,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.handoff_ref !== void 0 && func0.call(data, "handoff_ref")) {
       let data11 = data.handoff_ref;
-      if (!validate2923(data11, { instancePath: instancePath + "/handoff_ref", parentData: data, parentDataProperty: "handoff_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+      if (!validate2981(data11, { instancePath: instancePath + "/handoff_ref", parentData: data, parentDataProperty: "handoff_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate2923.evaluated.props;
+        var props1 = validate2981.evaluated.props;
       }
       if (data11 && typeof data11 == "object" && !Array.isArray(data11)) {
         if (data11.contract === void 0 || !func0.call(data11, "contract")) {
@@ -20166,18 +20166,18 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.facts_ref !== void 0 && func0.call(data, "facts_ref")) {
-      if (!validate2923(data.facts_ref, { instancePath: instancePath + "/facts_ref", parentData: data, parentDataProperty: "facts_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+      if (!validate2981(data.facts_ref, { instancePath: instancePath + "/facts_ref", parentData: data, parentDataProperty: "facts_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
         errors = vErrors.length;
       }
     }
     if (data.template_ref !== void 0 && func0.call(data, "template_ref")) {
       let data15 = data.template_ref;
-      if (!validate2923(data15, { instancePath: instancePath + "/template_ref", parentData: data, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+      if (!validate2981(data15, { instancePath: instancePath + "/template_ref", parentData: data, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
         errors = vErrors.length;
       } else {
-        var props3 = validate2923.evaluated.props;
+        var props3 = validate2981.evaluated.props;
       }
       if (data15 && typeof data15 == "object" && !Array.isArray(data15)) {
         if (data15.contract === void 0 || !func0.call(data15, "contract")) {
@@ -20237,11 +20237,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.spec_ref !== void 0 && func0.call(data, "spec_ref")) {
       let data18 = data.spec_ref;
-      if (!validate2923(data18, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+      if (!validate2981(data18, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
         errors = vErrors.length;
       } else {
-        var props4 = validate2923.evaluated.props;
+        var props4 = validate2981.evaluated.props;
       }
       if (data18 && typeof data18 == "object" && !Array.isArray(data18)) {
         if (data18.contract === void 0 || !func0.call(data18, "contract")) {
@@ -20301,11 +20301,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.capability_ref !== void 0 && func0.call(data, "capability_ref")) {
       let data21 = data.capability_ref;
-      if (!validate2923(data21, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+      if (!validate2981(data21, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
         errors = vErrors.length;
       } else {
-        var props5 = validate2923.evaluated.props;
+        var props5 = validate2981.evaluated.props;
       }
       if (data21 && typeof data21 == "object" && !Array.isArray(data21)) {
         if (data21.contract === void 0 || !func0.call(data21, "contract")) {
@@ -20437,11 +20437,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
             }
             if (data25.asset_ref !== void 0 && func0.call(data25, "asset_ref")) {
               let data26 = data25.asset_ref;
-              if (!validate2923(data26, { instancePath: instancePath + "/asset_uses/" + i0 + "/asset_ref", parentData: data25, parentDataProperty: "asset_ref", rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+              if (!validate2981(data26, { instancePath: instancePath + "/asset_uses/" + i0 + "/asset_ref", parentData: data25, parentDataProperty: "asset_ref", rootData, dynamicAnchors })) {
+                vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
                 errors = vErrors.length;
               } else {
-                var props6 = validate2923.evaluated.props;
+                var props6 = validate2981.evaluated.props;
               }
               if (data26 && typeof data26 == "object" && !Array.isArray(data26)) {
                 if (data26.contract === void 0 || !func0.call(data26, "contract")) {
@@ -20501,11 +20501,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
             }
             if (data25.permission_ref !== void 0 && func0.call(data25, "permission_ref")) {
               let data29 = data25.permission_ref;
-              if (!validate2923(data29, { instancePath: instancePath + "/asset_uses/" + i0 + "/permission_ref", parentData: data25, parentDataProperty: "permission_ref", rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+              if (!validate2981(data29, { instancePath: instancePath + "/asset_uses/" + i0 + "/permission_ref", parentData: data25, parentDataProperty: "permission_ref", rootData, dynamicAnchors })) {
+                vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
                 errors = vErrors.length;
               } else {
-                var props7 = validate2923.evaluated.props;
+                var props7 = validate2981.evaluated.props;
               }
               if (data29 && typeof data29 == "object" && !Array.isArray(data29)) {
                 if (data29.contract === void 0 || !func0.call(data29, "contract")) {
@@ -20575,7 +20575,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
                 errors++;
               }
               if (!(data32 === "artwork" || data32 === "overlay")) {
-                const err81 = { instancePath: instancePath + "/asset_uses/" + i0 + "/purpose", schemaPath: "#/properties/asset_uses/items/properties/purpose/enum", keyword: "enum", params: { allowedValues: schema495.properties.asset_uses.items.properties.purpose.enum }, message: "must be equal to one of the allowed values" };
+                const err81 = { instancePath: instancePath + "/asset_uses/" + i0 + "/purpose", schemaPath: "#/properties/asset_uses/items/properties/purpose/enum", keyword: "enum", params: { allowedValues: schema500.properties.asset_uses.items.properties.purpose.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err81];
                 } else {
@@ -20589,11 +20589,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
               const _errs105 = errors;
               let valid18 = false;
               const _errs106 = errors;
-              if (!validate2923(data33, { instancePath: instancePath + "/asset_uses/" + i0 + "/normalization_policy_ref", parentData: data25, parentDataProperty: "normalization_policy_ref", rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+              if (!validate2981(data33, { instancePath: instancePath + "/asset_uses/" + i0 + "/normalization_policy_ref", parentData: data25, parentDataProperty: "normalization_policy_ref", rootData, dynamicAnchors })) {
+                vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
                 errors = vErrors.length;
               } else {
-                var props8 = validate2923.evaluated.props;
+                var props8 = validate2981.evaluated.props;
               }
               if (data33 && typeof data33 == "object" && !Array.isArray(data33)) {
                 if (data33.contract === void 0 || !func0.call(data33, "contract")) {
@@ -20718,7 +20718,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
         for (const key2 of Object.keys(data36)) {
           const _errs122 = errors;
           if (typeof key2 === "string") {
-            if (!pattern1371.test(key2)) {
+            if (!pattern1388.test(key2)) {
               const err92 = { instancePath: instancePath + "/values", schemaPath: "#/properties/values/propertyNames/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])"', propertyName: key2 };
               if (vErrors === null) {
                 vErrors = [err92];
@@ -20748,8 +20748,8 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         for (const key3 of Object.keys(data36)) {
-          if (!validate2936(data36[key3], { instancePath: instancePath + "/values/" + key3.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data36, parentDataProperty: key3, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2936.errors : vErrors.concat(validate2936.errors);
+          if (!validate2994(data36[key3], { instancePath: instancePath + "/values/" + key3.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data36, parentDataProperty: key3, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2994.errors : vErrors.concat(validate2994.errors);
             errors = vErrors.length;
           }
         }
@@ -20829,7 +20829,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
             if (data39.slot_id !== void 0 && func0.call(data39, "slot_id")) {
               let data40 = data39.slot_id;
               if (typeof data40 === "string") {
-                if (!pattern1367.test(data40)) {
+                if (!pattern1384.test(data40)) {
                   const err102 = { instancePath: instancePath + "/fact_bindings/" + i1 + "/slot_id", schemaPath: "#/properties/fact_bindings/items/properties/slot_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err102];
@@ -20851,7 +20851,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
             if (data39.fact_key !== void 0 && func0.call(data39, "fact_key")) {
               let data41 = data39.fact_key;
               if (typeof data41 === "string") {
-                if (!pattern1367.test(data41)) {
+                if (!pattern1384.test(data41)) {
                   const err104 = { instancePath: instancePath + "/fact_bindings/" + i1 + "/fact_key", schemaPath: "#/properties/fact_bindings/items/properties/fact_key/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err104];
@@ -20977,11 +20977,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data43.formatting !== void 0 && func0.call(data43, "formatting")) {
           let data44 = data43.formatting;
-          if (!validate2923(data44, { instancePath: instancePath + "/policy_refs/formatting", parentData: data43, parentDataProperty: "formatting", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+          if (!validate2981(data44, { instancePath: instancePath + "/policy_refs/formatting", parentData: data43, parentDataProperty: "formatting", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
             errors = vErrors.length;
           } else {
-            var props10 = validate2923.evaluated.props;
+            var props10 = validate2981.evaluated.props;
           }
           if (data44 && typeof data44 == "object" && !Array.isArray(data44)) {
             if (data44.contract === void 0 || !func0.call(data44, "contract")) {
@@ -21041,11 +21041,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data43.layout !== void 0 && func0.call(data43, "layout")) {
           let data47 = data43.layout;
-          if (!validate2923(data47, { instancePath: instancePath + "/policy_refs/layout", parentData: data43, parentDataProperty: "layout", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+          if (!validate2981(data47, { instancePath: instancePath + "/policy_refs/layout", parentData: data43, parentDataProperty: "layout", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
             errors = vErrors.length;
           } else {
-            var props11 = validate2923.evaluated.props;
+            var props11 = validate2981.evaluated.props;
           }
           if (data47 && typeof data47 == "object" && !Array.isArray(data47)) {
             if (data47.contract === void 0 || !func0.call(data47, "contract")) {
@@ -21105,11 +21105,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data43.output !== void 0 && func0.call(data43, "output")) {
           let data50 = data43.output;
-          if (!validate2923(data50, { instancePath: instancePath + "/policy_refs/output", parentData: data43, parentDataProperty: "output", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+          if (!validate2981(data50, { instancePath: instancePath + "/policy_refs/output", parentData: data43, parentDataProperty: "output", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
             errors = vErrors.length;
           } else {
-            var props12 = validate2923.evaluated.props;
+            var props12 = validate2981.evaluated.props;
           }
           if (data50 && typeof data50 == "object" && !Array.isArray(data50)) {
             if (data50.contract === void 0 || !func0.call(data50, "contract")) {
@@ -21172,11 +21172,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
           const _errs178 = errors;
           let valid33 = false;
           const _errs179 = errors;
-          if (!validate2923(data53, { instancePath: instancePath + "/policy_refs/repair", parentData: data43, parentDataProperty: "repair", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+          if (!validate2981(data53, { instancePath: instancePath + "/policy_refs/repair", parentData: data43, parentDataProperty: "repair", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
             errors = vErrors.length;
           } else {
-            var props13 = validate2923.evaluated.props;
+            var props13 = validate2981.evaluated.props;
           }
           if (data53 && typeof data53 == "object" && !Array.isArray(data53)) {
             if (data53.contract === void 0 || !func0.call(data53, "contract")) {
@@ -21300,11 +21300,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
         const len2 = data56.length;
         for (let i2 = 0; i2 < len2; i2++) {
           let data57 = data56[i2];
-          if (!validate2923(data57, { instancePath: instancePath + "/font_refs/" + i2, parentData: data56, parentDataProperty: i2, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+          if (!validate2981(data57, { instancePath: instancePath + "/font_refs/" + i2, parentData: data56, parentDataProperty: i2, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
             errors = vErrors.length;
           } else {
-            var props14 = validate2923.evaluated.props;
+            var props14 = validate2981.evaluated.props;
           }
           if (data57 && typeof data57 == "object" && !Array.isArray(data57)) {
             if (data57.contract === void 0 || !func0.call(data57, "contract")) {
@@ -21374,11 +21374,11 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.runtime_ref !== void 0 && func0.call(data, "runtime_ref")) {
       let data60 = data.runtime_ref;
-      if (!validate2923(data60, { instancePath: instancePath + "/runtime_ref", parentData: data, parentDataProperty: "runtime_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+      if (!validate2981(data60, { instancePath: instancePath + "/runtime_ref", parentData: data, parentDataProperty: "runtime_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
         errors = vErrors.length;
       } else {
-        var props15 = validate2923.evaluated.props;
+        var props15 = validate2981.evaluated.props;
       }
       if (data60 && typeof data60 == "object" && !Array.isArray(data60)) {
         if (data60.contract === void 0 || !func0.call(data60, "contract")) {
@@ -21565,7 +21565,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data67 === "not_applicable" || data67 === "not_requested")) {
-            const err163 = { instancePath: instancePath + "/barcode/reason", schemaPath: "#/properties/barcode/oneOf/0/properties/reason/enum", keyword: "enum", params: { allowedValues: schema495.properties.barcode.oneOf[0].properties.reason.enum }, message: "must be equal to one of the allowed values" };
+            const err163 = { instancePath: instancePath + "/barcode/reason", schemaPath: "#/properties/barcode/oneOf/0/properties/reason/enum", keyword: "enum", params: { allowedValues: schema500.properties.barcode.oneOf[0].properties.reason.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err163];
             } else {
@@ -21661,7 +21661,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data69 === "qr" || data69 === "code128")) {
-            const err172 = { instancePath: instancePath + "/barcode/symbology", schemaPath: "#/properties/barcode/oneOf/1/properties/symbology/enum", keyword: "enum", params: { allowedValues: schema495.properties.barcode.oneOf[1].properties.symbology.enum }, message: "must be equal to one of the allowed values" };
+            const err172 = { instancePath: instancePath + "/barcode/symbology", schemaPath: "#/properties/barcode/oneOf/1/properties/symbology/enum", keyword: "enum", params: { allowedValues: schema500.properties.barcode.oneOf[1].properties.symbology.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err172];
             } else {
@@ -21708,7 +21708,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
         if (data65.slot_id !== void 0 && func0.call(data65, "slot_id")) {
           let data71 = data65.slot_id;
           if (typeof data71 === "string") {
-            if (!pattern1367.test(data71)) {
+            if (!pattern1384.test(data71)) {
               const err176 = { instancePath: instancePath + "/barcode/slot_id", schemaPath: "#/properties/barcode/oneOf/1/properties/slot_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
               if (vErrors === null) {
                 vErrors = [err176];
@@ -21825,7 +21825,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
             if (data73.slot_id !== void 0 && func0.call(data73, "slot_id")) {
               let data74 = data73.slot_id;
               if (typeof data74 === "string") {
-                if (!pattern1367.test(data74)) {
+                if (!pattern1384.test(data74)) {
                   const err185 = { instancePath: instancePath + "/slot_bindings/" + i3 + "/slot_id", schemaPath: "#/properties/slot_bindings/items/properties/slot_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err185];
@@ -21892,8 +21892,8 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
                   }
                 }
                 if (data75.asset_ref !== void 0 && func0.call(data75, "asset_ref")) {
-                  if (!validate2923(data75.asset_ref, { instancePath: instancePath + "/slot_bindings/" + i3 + "/source/asset_ref", parentData: data75, parentDataProperty: "asset_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+                  if (!validate2981(data75.asset_ref, { instancePath: instancePath + "/slot_bindings/" + i3 + "/source/asset_ref", parentData: data75, parentDataProperty: "asset_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
                     errors = vErrors.length;
                   }
                 }
@@ -21957,7 +21957,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
                 if (data75.field_id !== void 0 && func0.call(data75, "field_id")) {
                   let data79 = data75.field_id;
                   if (typeof data79 === "string") {
-                    if (!pattern1367.test(data79)) {
+                    if (!pattern1384.test(data79)) {
                       const err196 = { instancePath: instancePath + "/slot_bindings/" + i3 + "/source/field_id", schemaPath: "#/properties/slot_bindings/items/properties/source/oneOf/1/properties/field_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                       if (vErrors === null) {
                         vErrors = [err196];
@@ -22042,7 +22042,7 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
                   if (data75.fact_key !== void 0 && func0.call(data75, "fact_key")) {
                     let data81 = data75.fact_key;
                     if (typeof data81 === "string") {
-                      if (!pattern1367.test(data81)) {
+                      if (!pattern1384.test(data81)) {
                         const err203 = { instancePath: instancePath + "/slot_bindings/" + i3 + "/source/fact_key", schemaPath: "#/properties/slot_bindings/items/properties/source/oneOf/2/properties/fact_key/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                         if (vErrors === null) {
                           vErrors = [err203];
@@ -22125,8 +22125,8 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
                       }
                     }
                     if (data75.policy_ref !== void 0 && func0.call(data75, "policy_ref")) {
-                      if (!validate2923(data75.policy_ref, { instancePath: instancePath + "/slot_bindings/" + i3 + "/source/policy_ref", parentData: data75, parentDataProperty: "policy_ref", rootData, dynamicAnchors })) {
-                        vErrors = vErrors === null ? validate2923.errors : vErrors.concat(validate2923.errors);
+                      if (!validate2981(data75.policy_ref, { instancePath: instancePath + "/slot_bindings/" + i3 + "/source/policy_ref", parentData: data75, parentDataProperty: "policy_ref", rootData, dynamicAnchors })) {
+                        vErrors = vErrors === null ? validate2981.errors : vErrors.concat(validate2981.errors);
                         errors = vErrors.length;
                       }
                     }
@@ -22202,16 +22202,16 @@ function validate2919(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2919.errors = vErrors;
+  validate2977.errors = vErrors;
   return errors === 0;
 }
-validate2919.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var CsvCheckpoint_1_0_0 = validate2952;
-var schema498 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CsvCheckpoint/1.0.0", "title": "CsvCheckpoint", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CsvCheckpoint", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "file_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "dialect_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvDialect", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "mapping_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvMapping", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "byte_offset": { "type": "integer", "minimum": 0, "maximum": 67108864, "x-classification": "restricted" }, "logical_record": { "type": "integer", "minimum": 1, "maximum": 10001, "x-classification": "restricted" }, "physical_line": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "complete_record": { "const": true, "x-classification": "public" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "file_ref", "dialect_ref", "mapping_ref", "byte_offset", "logical_record", "physical_line", "complete_record"], "x-classification": "restricted" };
-function validate2955(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2977.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var CsvCheckpoint_1_0_0 = validate3010;
+var schema503 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CsvCheckpoint/1.0.0", "title": "CsvCheckpoint", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CsvCheckpoint", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "file_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "dialect_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvDialect", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "mapping_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvMapping", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "byte_offset": { "type": "integer", "minimum": 0, "maximum": 67108864, "x-classification": "restricted" }, "logical_record": { "type": "integer", "minimum": 1, "maximum": 10001, "x-classification": "restricted" }, "physical_line": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "complete_record": { "const": true, "x-classification": "public" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "file_ref", "dialect_ref", "mapping_ref", "byte_offset", "logical_record", "physical_line", "complete_record"], "x-classification": "restricted" };
+function validate3013(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2955.evaluated;
+  const evaluated0 = validate3013.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -22291,7 +22291,7 @@ function validate2955(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -22503,7 +22503,7 @@ function validate2955(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -22879,16 +22879,16 @@ function validate2955(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2955.errors = vErrors;
+  validate3013.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2955.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2952(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3013.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3010(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2952.evaluated;
+  const evaluated0 = validate3010.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -23005,7 +23005,7 @@ function validate2952(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema498.properties, key0)) {
+      if (!func0.call(schema503.properties, key0)) {
         const err12 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err12];
@@ -23062,11 +23062,11 @@ function validate2952(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.file_ref !== void 0 && func0.call(data, "file_ref")) {
       let data5 = data.file_ref;
-      if (!validate2955(data5, { instancePath: instancePath + "/file_ref", parentData: data, parentDataProperty: "file_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2955.errors : vErrors.concat(validate2955.errors);
+      if (!validate3013(data5, { instancePath: instancePath + "/file_ref", parentData: data, parentDataProperty: "file_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3013.errors : vErrors.concat(validate3013.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2955.evaluated.props;
+        var props0 = validate3013.evaluated.props;
       }
       if (data5 && typeof data5 == "object" && !Array.isArray(data5)) {
         if (data5.contract === void 0 || !func0.call(data5, "contract")) {
@@ -23126,11 +23126,11 @@ function validate2952(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.dialect_ref !== void 0 && func0.call(data, "dialect_ref")) {
       let data8 = data.dialect_ref;
-      if (!validate2955(data8, { instancePath: instancePath + "/dialect_ref", parentData: data, parentDataProperty: "dialect_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2955.errors : vErrors.concat(validate2955.errors);
+      if (!validate3013(data8, { instancePath: instancePath + "/dialect_ref", parentData: data, parentDataProperty: "dialect_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3013.errors : vErrors.concat(validate3013.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate2955.evaluated.props;
+        var props1 = validate3013.evaluated.props;
       }
       if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
         if (data8.contract === void 0 || !func0.call(data8, "contract")) {
@@ -23190,11 +23190,11 @@ function validate2952(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.mapping_ref !== void 0 && func0.call(data, "mapping_ref")) {
       let data11 = data.mapping_ref;
-      if (!validate2955(data11, { instancePath: instancePath + "/mapping_ref", parentData: data, parentDataProperty: "mapping_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2955.errors : vErrors.concat(validate2955.errors);
+      if (!validate3013(data11, { instancePath: instancePath + "/mapping_ref", parentData: data, parentDataProperty: "mapping_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3013.errors : vErrors.concat(validate3013.errors);
         errors = vErrors.length;
       } else {
-        var props2 = validate2955.evaluated.props;
+        var props2 = validate3013.evaluated.props;
       }
       if (data11 && typeof data11 == "object" && !Array.isArray(data11)) {
         if (data11.contract === void 0 || !func0.call(data11, "contract")) {
@@ -23368,17 +23368,17 @@ function validate2952(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2952.errors = vErrors;
+  validate3010.errors = vErrors;
   return errors === 0;
 }
-validate2952.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var CsvDialect_1_0_0 = validate2962;
-var schema500 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CsvDialect/1.0.0", "title": "CsvDialect", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CsvDialect", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "encoding": { "const": "utf-8", "x-classification": "public" }, "bom": { "type": "string", "enum": ["forbidden", "optional", "required"], "x-classification": "restricted" }, "delimiter": { "type": "string", "enum": [",", ";", "	"], "x-classification": "restricted" }, "quote": { "const": '"', "x-classification": "public" }, "newline": { "type": "string", "enum": ["lf", "crlf"], "x-classification": "restricted" }, "header": { "const": "required", "x-classification": "public" }, "maximum_record_bytes": { "type": "integer", "minimum": 1, "maximum": 131072, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "encoding", "bom", "delimiter", "quote", "newline", "header", "maximum_record_bytes"], "x-classification": "restricted" };
-function validate2962(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3010.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var CsvDialect_1_0_0 = validate3020;
+var schema505 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CsvDialect/1.0.0", "title": "CsvDialect", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CsvDialect", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "encoding": { "const": "utf-8", "x-classification": "public" }, "bom": { "type": "string", "enum": ["forbidden", "optional", "required"], "x-classification": "restricted" }, "delimiter": { "type": "string", "enum": [",", ";", "	"], "x-classification": "restricted" }, "quote": { "const": '"', "x-classification": "public" }, "newline": { "type": "string", "enum": ["lf", "crlf"], "x-classification": "restricted" }, "header": { "const": "required", "x-classification": "public" }, "maximum_record_bytes": { "type": "integer", "minimum": 1, "maximum": 131072, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "encoding", "bom", "delimiter", "quote", "newline", "header", "maximum_record_bytes"], "x-classification": "restricted" };
+function validate3020(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2962.evaluated;
+  const evaluated0 = validate3020.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -23522,7 +23522,7 @@ function validate2962(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema500.properties, key0)) {
+      if (!func0.call(schema505.properties, key0)) {
         const err15 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err15];
@@ -23707,7 +23707,7 @@ function validate2962(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data9 === "forbidden" || data9 === "optional" || data9 === "required")) {
-        const err31 = { instancePath: instancePath + "/bom", schemaPath: "#/properties/bom/enum", keyword: "enum", params: { allowedValues: schema500.properties.bom.enum }, message: "must be equal to one of the allowed values" };
+        const err31 = { instancePath: instancePath + "/bom", schemaPath: "#/properties/bom/enum", keyword: "enum", params: { allowedValues: schema505.properties.bom.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err31];
         } else {
@@ -23728,7 +23728,7 @@ function validate2962(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data10 === "," || data10 === ";" || data10 === "	")) {
-        const err33 = { instancePath: instancePath + "/delimiter", schemaPath: "#/properties/delimiter/enum", keyword: "enum", params: { allowedValues: schema500.properties.delimiter.enum }, message: "must be equal to one of the allowed values" };
+        const err33 = { instancePath: instancePath + "/delimiter", schemaPath: "#/properties/delimiter/enum", keyword: "enum", params: { allowedValues: schema505.properties.delimiter.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err33];
         } else {
@@ -23760,7 +23760,7 @@ function validate2962(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data12 === "lf" || data12 === "crlf")) {
-        const err36 = { instancePath: instancePath + "/newline", schemaPath: "#/properties/newline/enum", keyword: "enum", params: { allowedValues: schema500.properties.newline.enum }, message: "must be equal to one of the allowed values" };
+        const err36 = { instancePath: instancePath + "/newline", schemaPath: "#/properties/newline/enum", keyword: "enum", params: { allowedValues: schema505.properties.newline.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err36];
         } else {
@@ -23821,16 +23821,16 @@ function validate2962(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2962.errors = vErrors;
+  validate3020.errors = vErrors;
   return errors === 0;
 }
-validate2962.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var CsvMapping_1_0_0 = validate2966;
-var schema501 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CsvMapping/1.0.0", "title": "CsvMapping", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CsvMapping", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "row_schema_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PersonalizationSchema", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "headers": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 64, "x-classification": "restricted" }, "minItems": 1, "maxItems": 32, "x-classification": "restricted" }, "field_mapping": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "x-classification": "restricted" }, "row_id_header": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "row_schema_ref", "headers", "field_mapping", "row_id_header"], "x-classification": "restricted" };
-function validate2970(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3020.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var CsvMapping_1_0_0 = validate3024;
+var schema506 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/CsvMapping/1.0.0", "title": "CsvMapping", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "CsvMapping", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "row_schema_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PersonalizationSchema", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "headers": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 64, "x-classification": "restricted" }, "minItems": 1, "maxItems": 32, "x-classification": "restricted" }, "field_mapping": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "x-classification": "restricted" }, "row_id_header": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "row_schema_ref", "headers", "field_mapping", "row_id_header"], "x-classification": "restricted" };
+function validate3028(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2970.evaluated;
+  const evaluated0 = validate3028.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -23910,7 +23910,7 @@ function validate2970(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -24122,7 +24122,7 @@ function validate2970(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -24498,16 +24498,16 @@ function validate2970(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2970.errors = vErrors;
+  validate3028.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2970.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2966(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3028.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3024(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2966.evaluated;
+  const evaluated0 = validate3024.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -24624,7 +24624,7 @@ function validate2966(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema501.properties, key0)) {
+      if (!func0.call(schema506.properties, key0)) {
         const err12 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err12];
@@ -24788,11 +24788,11 @@ function validate2966(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.row_schema_ref !== void 0 && func0.call(data, "row_schema_ref")) {
       let data8 = data.row_schema_ref;
-      if (!validate2970(data8, { instancePath: instancePath + "/row_schema_ref", parentData: data, parentDataProperty: "row_schema_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2970.errors : vErrors.concat(validate2970.errors);
+      if (!validate3028(data8, { instancePath: instancePath + "/row_schema_ref", parentData: data, parentDataProperty: "row_schema_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3028.errors : vErrors.concat(validate3028.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2970.evaluated.props;
+        var props0 = validate3028.evaluated.props;
       }
       if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
         if (data8.contract === void 0 || !func0.call(data8, "contract")) {
@@ -24928,7 +24928,7 @@ function validate2966(data, { instancePath = "", parentData, parentDataProperty,
         for (const key1 of Object.keys(data13)) {
           const _errs41 = errors;
           if (typeof key1 === "string") {
-            if (!pattern1371.test(key1)) {
+            if (!pattern1388.test(key1)) {
               const err38 = { instancePath: instancePath + "/field_mapping", schemaPath: "#/properties/field_mapping/propertyNames/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])"', propertyName: key1 };
               if (vErrors === null) {
                 vErrors = [err38];
@@ -24960,7 +24960,7 @@ function validate2966(data, { instancePath = "", parentData, parentDataProperty,
         for (const key2 of Object.keys(data13)) {
           let data14 = data13[key2];
           if (typeof data14 === "string") {
-            if (!pattern1367.test(data14)) {
+            if (!pattern1384.test(data14)) {
               const err41 = { instancePath: instancePath + "/field_mapping/" + key2.replace(/~/g, "~0").replace(/\//g, "~1"), schemaPath: "#/properties/field_mapping/additionalProperties/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
               if (vErrors === null) {
                 vErrors = [err41];
@@ -24992,7 +24992,7 @@ function validate2966(data, { instancePath = "", parentData, parentDataProperty,
     if (data.row_id_header !== void 0 && func0.call(data, "row_id_header")) {
       let data15 = data.row_id_header;
       if (typeof data15 === "string") {
-        if (!pattern1367.test(data15)) {
+        if (!pattern1384.test(data15)) {
           const err44 = { instancePath: instancePath + "/row_id_header", schemaPath: "#/properties/row_id_header/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err44];
@@ -25020,16 +25020,16 @@ function validate2966(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2966.errors = vErrors;
+  validate3024.errors = vErrors;
   return errors === 0;
 }
-validate2966.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ExportBundleRequest_1_0_0 = validate2975;
-var schema503 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ExportBundleRequest/1.0.0", "title": "ExportBundleRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ExportBundleRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "artifact_ref": { "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "approval_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "formats": { "type": "array", "items": { "type": "string", "enum": ["svg", "png", "pdf"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 3, "x-classification": "restricted", "uniqueItems": true }, "output_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "idempotency_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,256}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "artifact_ref", "spec_ref", "capability_ref", "approval_ref", "formats", "output_policy_ref", "idempotency_key"], "x-classification": "restricted" };
-function validate2979(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3024.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ExportBundleRequest_1_0_0 = validate3033;
+var schema508 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ExportBundleRequest/1.0.0", "title": "ExportBundleRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ExportBundleRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "artifact_ref": { "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "approval_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "formats": { "type": "array", "items": { "type": "string", "enum": ["svg", "png", "pdf"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 3, "x-classification": "restricted", "uniqueItems": true }, "output_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "idempotency_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,256}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "artifact_ref", "spec_ref", "capability_ref", "approval_ref", "formats", "output_policy_ref", "idempotency_key"], "x-classification": "restricted" };
+function validate3037(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2979.evaluated;
+  const evaluated0 = validate3037.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -25109,7 +25109,7 @@ function validate2979(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -25321,7 +25321,7 @@ function validate2979(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -25697,16 +25697,16 @@ function validate2979(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2979.errors = vErrors;
+  validate3037.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2979.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2975(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3037.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3033(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2975.evaluated;
+  const evaluated0 = validate3033.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -25823,7 +25823,7 @@ function validate2975(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema503.properties, key0)) {
+      if (!func0.call(schema508.properties, key0)) {
         const err12 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err12];
@@ -25879,18 +25879,18 @@ function validate2975(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.artifact_ref !== void 0 && func0.call(data, "artifact_ref")) {
-      if (!validate2786(data.artifact_ref, { instancePath: instancePath + "/artifact_ref", parentData: data, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2786.errors : vErrors.concat(validate2786.errors);
+      if (!validate2844(data.artifact_ref, { instancePath: instancePath + "/artifact_ref", parentData: data, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2844.errors : vErrors.concat(validate2844.errors);
         errors = vErrors.length;
       }
     }
     if (data.spec_ref !== void 0 && func0.call(data, "spec_ref")) {
       let data6 = data.spec_ref;
-      if (!validate2979(data6, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2979.errors : vErrors.concat(validate2979.errors);
+      if (!validate3037(data6, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3037.errors : vErrors.concat(validate3037.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2979.evaluated.props;
+        var props0 = validate3037.evaluated.props;
       }
       if (data6 && typeof data6 == "object" && !Array.isArray(data6)) {
         if (data6.contract === void 0 || !func0.call(data6, "contract")) {
@@ -25950,11 +25950,11 @@ function validate2975(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.capability_ref !== void 0 && func0.call(data, "capability_ref")) {
       let data9 = data.capability_ref;
-      if (!validate2979(data9, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2979.errors : vErrors.concat(validate2979.errors);
+      if (!validate3037(data9, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3037.errors : vErrors.concat(validate3037.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate2979.evaluated.props;
+        var props1 = validate3037.evaluated.props;
       }
       if (data9 && typeof data9 == "object" && !Array.isArray(data9)) {
         if (data9.contract === void 0 || !func0.call(data9, "contract")) {
@@ -26014,11 +26014,11 @@ function validate2975(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.approval_ref !== void 0 && func0.call(data, "approval_ref")) {
       let data12 = data.approval_ref;
-      if (!validate2979(data12, { instancePath: instancePath + "/approval_ref", parentData: data, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2979.errors : vErrors.concat(validate2979.errors);
+      if (!validate3037(data12, { instancePath: instancePath + "/approval_ref", parentData: data, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3037.errors : vErrors.concat(validate3037.errors);
         errors = vErrors.length;
       } else {
-        var props2 = validate2979.evaluated.props;
+        var props2 = validate3037.evaluated.props;
       }
       if (data12 && typeof data12 == "object" && !Array.isArray(data12)) {
         if (data12.contract === void 0 || !func0.call(data12, "contract")) {
@@ -26110,7 +26110,7 @@ function validate2975(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data16 === "svg" || data16 === "png" || data16 === "pdf")) {
-            const err34 = { instancePath: instancePath + "/formats/" + i0, schemaPath: "#/properties/formats/items/enum", keyword: "enum", params: { allowedValues: schema503.properties.formats.items.enum }, message: "must be equal to one of the allowed values" };
+            const err34 = { instancePath: instancePath + "/formats/" + i0, schemaPath: "#/properties/formats/items/enum", keyword: "enum", params: { allowedValues: schema508.properties.formats.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err34];
             } else {
@@ -26154,11 +26154,11 @@ function validate2975(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.output_policy_ref !== void 0 && func0.call(data, "output_policy_ref")) {
       let data17 = data.output_policy_ref;
-      if (!validate2979(data17, { instancePath: instancePath + "/output_policy_ref", parentData: data, parentDataProperty: "output_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2979.errors : vErrors.concat(validate2979.errors);
+      if (!validate3037(data17, { instancePath: instancePath + "/output_policy_ref", parentData: data, parentDataProperty: "output_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3037.errors : vErrors.concat(validate3037.errors);
         errors = vErrors.length;
       } else {
-        var props3 = validate2979.evaluated.props;
+        var props3 = validate3037.evaluated.props;
       }
       if (data17 && typeof data17 == "object" && !Array.isArray(data17)) {
         if (data17.contract === void 0 || !func0.call(data17, "contract")) {
@@ -26247,16 +26247,16 @@ function validate2975(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2975.errors = vErrors;
+  validate3033.errors = vErrors;
   return errors === 0;
 }
-validate2975.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var InspectArtifactRequest_1_0_0 = validate2987;
-var schema505 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/InspectArtifactRequest/1.0.0", "title": "InspectArtifactRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "InspectArtifactRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "artifact_ref": { "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "inspection_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "artifact_ref", "spec_ref", "capability_ref", "inspection_policy_ref"], "x-classification": "restricted" };
-function validate2991(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3033.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var InspectArtifactRequest_1_0_0 = validate3045;
+var schema510 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/InspectArtifactRequest/1.0.0", "title": "InspectArtifactRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "InspectArtifactRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "artifact_ref": { "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "inspection_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "artifact_ref", "spec_ref", "capability_ref", "inspection_policy_ref"], "x-classification": "restricted" };
+function validate3049(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2991.evaluated;
+  const evaluated0 = validate3049.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -26336,7 +26336,7 @@ function validate2991(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -26548,7 +26548,7 @@ function validate2991(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -26924,16 +26924,16 @@ function validate2991(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate2991.errors = vErrors;
+  validate3049.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate2991.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate2987(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3049.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3045(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2987.evaluated;
+  const evaluated0 = validate3045.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -27023,7 +27023,7 @@ function validate2987(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema505.properties, key0)) {
+      if (!func0.call(schema510.properties, key0)) {
         const err9 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err9];
@@ -27079,18 +27079,18 @@ function validate2987(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.artifact_ref !== void 0 && func0.call(data, "artifact_ref")) {
-      if (!validate2786(data.artifact_ref, { instancePath: instancePath + "/artifact_ref", parentData: data, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2786.errors : vErrors.concat(validate2786.errors);
+      if (!validate2844(data.artifact_ref, { instancePath: instancePath + "/artifact_ref", parentData: data, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2844.errors : vErrors.concat(validate2844.errors);
         errors = vErrors.length;
       }
     }
     if (data.spec_ref !== void 0 && func0.call(data, "spec_ref")) {
       let data6 = data.spec_ref;
-      if (!validate2991(data6, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2991.errors : vErrors.concat(validate2991.errors);
+      if (!validate3049(data6, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3049.errors : vErrors.concat(validate3049.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate2991.evaluated.props;
+        var props0 = validate3049.evaluated.props;
       }
       if (data6 && typeof data6 == "object" && !Array.isArray(data6)) {
         if (data6.contract === void 0 || !func0.call(data6, "contract")) {
@@ -27150,11 +27150,11 @@ function validate2987(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.capability_ref !== void 0 && func0.call(data, "capability_ref")) {
       let data9 = data.capability_ref;
-      if (!validate2991(data9, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2991.errors : vErrors.concat(validate2991.errors);
+      if (!validate3049(data9, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3049.errors : vErrors.concat(validate3049.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate2991.evaluated.props;
+        var props1 = validate3049.evaluated.props;
       }
       if (data9 && typeof data9 == "object" && !Array.isArray(data9)) {
         if (data9.contract === void 0 || !func0.call(data9, "contract")) {
@@ -27214,11 +27214,11 @@ function validate2987(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.inspection_policy_ref !== void 0 && func0.call(data, "inspection_policy_ref")) {
       let data12 = data.inspection_policy_ref;
-      if (!validate2991(data12, { instancePath: instancePath + "/inspection_policy_ref", parentData: data, parentDataProperty: "inspection_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2991.errors : vErrors.concat(validate2991.errors);
+      if (!validate3049(data12, { instancePath: instancePath + "/inspection_policy_ref", parentData: data, parentDataProperty: "inspection_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3049.errors : vErrors.concat(validate3049.errors);
         errors = vErrors.length;
       } else {
-        var props2 = validate2991.evaluated.props;
+        var props2 = validate3049.evaluated.props;
       }
       if (data12 && typeof data12 == "object" && !Array.isArray(data12)) {
         if (data12.contract === void 0 || !func0.call(data12, "contract")) {
@@ -27285,18 +27285,18 @@ function validate2987(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2987.errors = vErrors;
+  validate3045.errors = vErrors;
   return errors === 0;
 }
-validate2987.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var JobRef_1_0_0 = validate2798;
-var PersonalizationSchema_1_0_0 = validate2998;
-var schema507 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/PersonalizationSchema/1.0.0", "title": "PersonalizationSchema", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "PersonalizationSchema", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "schema_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "fields": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "field_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "required": { "type": "boolean", "x-classification": "restricted" }, "maximum_utf16_units": { "type": "integer", "minimum": 1, "maximum": 4096, "x-classification": "restricted" }, "source_policy": { "type": "string", "enum": ["row_display", "approved_fact_readonly"], "x-classification": "restricted" } }, "required": ["field_id", "slot_id", "required", "maximum_utf16_units", "source_policy"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 32, "x-classification": "restricted" }, "limits": { "type": "object", "additionalProperties": false, "properties": { "maximum_rows": { "type": "integer", "minimum": 1, "maximum": 1e4, "x-classification": "restricted" }, "maximum_canonical_bytes": { "type": "integer", "minimum": 1, "maximum": 4e6, "x-classification": "restricted" }, "maximum_fields": { "type": "integer", "minimum": 1, "maximum": 32, "x-classification": "restricted" } }, "required": ["maximum_rows", "maximum_canonical_bytes", "maximum_fields"], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "schema_id", "revision", "content_hash", "fields", "limits"], "x-classification": "restricted" };
-function validate2998(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3045.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var JobRef_1_0_0 = validate2856;
+var PersonalizationSchema_1_0_0 = validate3056;
+var schema512 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/PersonalizationSchema/1.0.0", "title": "PersonalizationSchema", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "PersonalizationSchema", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "schema_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "fields": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "field_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "required": { "type": "boolean", "x-classification": "restricted" }, "maximum_utf16_units": { "type": "integer", "minimum": 1, "maximum": 4096, "x-classification": "restricted" }, "source_policy": { "type": "string", "enum": ["row_display", "approved_fact_readonly"], "x-classification": "restricted" } }, "required": ["field_id", "slot_id", "required", "maximum_utf16_units", "source_policy"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 32, "x-classification": "restricted" }, "limits": { "type": "object", "additionalProperties": false, "properties": { "maximum_rows": { "type": "integer", "minimum": 1, "maximum": 1e4, "x-classification": "restricted" }, "maximum_canonical_bytes": { "type": "integer", "minimum": 1, "maximum": 4e6, "x-classification": "restricted" }, "maximum_fields": { "type": "integer", "minimum": 1, "maximum": 32, "x-classification": "restricted" } }, "required": ["maximum_rows", "maximum_canonical_bytes", "maximum_fields"], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "schema_id", "revision", "content_hash", "fields", "limits"], "x-classification": "restricted" };
+function validate3056(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2998.evaluated;
+  const evaluated0 = validate3056.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -27395,7 +27395,7 @@ function validate2998(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema507.properties, key0)) {
+      if (!func0.call(schema512.properties, key0)) {
         const err10 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err10];
@@ -27641,7 +27641,7 @@ function validate2998(data, { instancePath = "", parentData, parentDataProperty,
             if (data9.field_id !== void 0 && func0.call(data9, "field_id")) {
               let data10 = data9.field_id;
               if (typeof data10 === "string") {
-                if (!pattern1367.test(data10)) {
+                if (!pattern1384.test(data10)) {
                   const err32 = { instancePath: instancePath + "/fields/" + i0 + "/field_id", schemaPath: "#/properties/fields/items/properties/field_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err32];
@@ -27663,7 +27663,7 @@ function validate2998(data, { instancePath = "", parentData, parentDataProperty,
             if (data9.slot_id !== void 0 && func0.call(data9, "slot_id")) {
               let data11 = data9.slot_id;
               if (typeof data11 === "string") {
-                if (!pattern1367.test(data11)) {
+                if (!pattern1384.test(data11)) {
                   const err34 = { instancePath: instancePath + "/fields/" + i0 + "/slot_id", schemaPath: "#/properties/fields/items/properties/slot_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err34];
@@ -27737,7 +27737,7 @@ function validate2998(data, { instancePath = "", parentData, parentDataProperty,
                 errors++;
               }
               if (!(data14 === "row_display" || data14 === "approved_fact_readonly")) {
-                const err41 = { instancePath: instancePath + "/fields/" + i0 + "/source_policy", schemaPath: "#/properties/fields/items/properties/source_policy/enum", keyword: "enum", params: { allowedValues: schema507.properties.fields.items.properties.source_policy.enum }, message: "must be equal to one of the allowed values" };
+                const err41 = { instancePath: instancePath + "/fields/" + i0 + "/source_policy", schemaPath: "#/properties/fields/items/properties/source_policy/enum", keyword: "enum", params: { allowedValues: schema512.properties.fields.items.properties.source_policy.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err41];
                 } else {
@@ -27922,16 +27922,16 @@ function validate2998(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2998.errors = vErrors;
+  validate3056.errors = vErrors;
   return errors === 0;
 }
-validate2998.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var PersonalizeBatchRequest_1_0_0 = validate3002;
-var schema508 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/PersonalizeBatchRequest/1.0.0", "title": "PersonalizeBatchRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "PersonalizeBatchRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "binding": { "type": "object", "additionalProperties": false, "properties": { "design_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "DesignVersion", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "handoff_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactHandoffManifest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "facts_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "asset_refs": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "asset_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "permission_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "purpose": { "type": "string", "enum": ["artwork", "overlay"], "x-classification": "restricted" }, "normalization_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["asset_ref", "permission_ref", "purpose", "normalization_policy_ref"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "approval_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "formatting_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "repair_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "values": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/ExactValue", "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["design_ref", "handoff_ref", "facts_ref", "asset_refs", "approval_ref", "template_ref", "spec_ref", "capability_ref", "composition_ref", "formatting_policy_ref", "repair_policy_ref", "values"], "x-classification": "restricted" }, "input": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "structured", "x-classification": "public" }, "row_schema_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PersonalizationSchema", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "rows": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "fields": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "type": "string", "maxLength": 4096, "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["row_id", "fields"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 1e4, "x-classification": "restricted" } }, "required": ["kind", "row_schema_ref", "rows"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "csv", "x-classification": "public" }, "file_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "dialect_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvDialect", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "mapping_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvMapping", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "checkpoint_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvCheckpoint", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["kind", "file_ref", "dialect_ref", "mapping_ref"], "x-classification": "restricted" }], "x-classification": "restricted" }, "acceptance_policy": { "type": "string", "enum": ["atomic", "allow_partial"], "x-classification": "restricted" }, "idempotency_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,256}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "binding", "input", "idempotency_key"], "x-classification": "restricted" };
-function validate3005(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3056.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var PersonalizeBatchRequest_1_0_0 = validate3060;
+var schema513 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/PersonalizeBatchRequest/1.0.0", "title": "PersonalizeBatchRequest", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "PersonalizeBatchRequest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "restricted" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "restricted" }, "binding": { "type": "object", "additionalProperties": false, "properties": { "design_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "DesignVersion", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "handoff_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactHandoffManifest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "facts_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "asset_refs": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "asset_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "permission_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "purpose": { "type": "string", "enum": ["artwork", "overlay"], "x-classification": "restricted" }, "normalization_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["asset_ref", "permission_ref", "purpose", "normalization_policy_ref"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "approval_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "formatting_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "repair_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "values": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/ExactValue", "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["design_ref", "handoff_ref", "facts_ref", "asset_refs", "approval_ref", "template_ref", "spec_ref", "capability_ref", "composition_ref", "formatting_policy_ref", "repair_policy_ref", "values"], "x-classification": "restricted" }, "input": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "structured", "x-classification": "public" }, "row_schema_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PersonalizationSchema", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "rows": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "fields": { "type": "object", "maxProperties": 32, "propertyNames": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, "additionalProperties": { "type": "string", "maxLength": 4096, "x-classification": "restricted" }, "x-classification": "restricted" } }, "required": ["row_id", "fields"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 1e4, "x-classification": "restricted" } }, "required": ["kind", "row_schema_ref", "rows"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "csv", "x-classification": "public" }, "file_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "dialect_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvDialect", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "mapping_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvMapping", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "checkpoint_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "CsvCheckpoint", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["kind", "file_ref", "dialect_ref", "mapping_ref"], "x-classification": "restricted" }], "x-classification": "restricted" }, "acceptance_policy": { "type": "string", "enum": ["atomic", "allow_partial"], "x-classification": "restricted" }, "idempotency_key": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,256}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "request_id", "correlation_id", "binding", "input", "idempotency_key"], "x-classification": "restricted" };
+function validate3063(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3005.evaluated;
+  const evaluated0 = validate3063.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -28011,7 +28011,7 @@ function validate3005(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -28223,7 +28223,7 @@ function validate3005(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -28599,15 +28599,15 @@ function validate3005(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate3005.errors = vErrors;
+  validate3063.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate3005.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate3022(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3063.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3080(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3022.evaluated;
+  const evaluated0 = validate3080.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -28671,7 +28671,7 @@ function validate3022(data, { instancePath = "", parentData, parentDataProperty,
           }
           errors++;
         }
-        if (!pattern1376.test(data1)) {
+        if (!pattern1393.test(data1)) {
           const err5 = { instancePath: instancePath + "/value", schemaPath: "#/oneOf/0/properties/value/pattern", keyword: "pattern", params: { pattern: "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])" }, message: 'must match pattern "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err5];
@@ -28812,7 +28812,7 @@ function validate3022(data, { instancePath = "", parentData, parentDataProperty,
           }
           errors++;
         }
-        if (!pattern1378.test(data4)) {
+        if (!pattern1395.test(data4)) {
           const err18 = { instancePath: instancePath + "/timezone", schemaPath: "#/oneOf/1/properties/timezone/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err18];
@@ -28834,7 +28834,7 @@ function validate3022(data, { instancePath = "", parentData, parentDataProperty,
     if (data.locale !== void 0 && func0.call(data, "locale")) {
       let data5 = data.locale;
       if (typeof data5 === "string") {
-        if (!pattern1379.test(data5)) {
+        if (!pattern1396.test(data5)) {
           const err20 = { instancePath: instancePath + "/locale", schemaPath: "#/oneOf/1/properties/locale/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])"' };
           if (vErrors === null) {
             vErrors = [err20];
@@ -28854,8 +28854,8 @@ function validate3022(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.format_policy_ref !== void 0 && func0.call(data, "format_policy_ref")) {
-      if (!validate2913(data.format_policy_ref, { instancePath: instancePath + "/format_policy_ref", parentData: data, parentDataProperty: "format_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2913.errors : vErrors.concat(validate2913.errors);
+      if (!validate2971(data.format_policy_ref, { instancePath: instancePath + "/format_policy_ref", parentData: data, parentDataProperty: "format_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2971.errors : vErrors.concat(validate2971.errors);
         errors = vErrors.length;
       }
     }
@@ -28899,16 +28899,16 @@ function validate3022(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate3022.errors = vErrors;
+  validate3080.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate3022.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate3002(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3080.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3060(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3002.evaluated;
+  const evaluated0 = validate3060.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -28989,7 +28989,7 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema508.properties, key0)) {
+      if (!func0.call(schema513.properties, key0)) {
         const err8 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err8];
@@ -29156,7 +29156,7 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
           errors++;
         }
         for (const key1 of Object.keys(data5)) {
-          if (!func0.call(schema508.properties.binding.properties, key1)) {
+          if (!func0.call(schema513.properties.binding.properties, key1)) {
             const err24 = { instancePath: instancePath + "/binding", schemaPath: "#/properties/binding/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key1 }, message: "must NOT have additional properties" };
             if (vErrors === null) {
               vErrors = [err24];
@@ -29168,11 +29168,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.design_ref !== void 0 && func0.call(data5, "design_ref")) {
           let data6 = data5.design_ref;
-          if (!validate3005(data6, { instancePath: instancePath + "/binding/design_ref", parentData: data5, parentDataProperty: "design_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data6, { instancePath: instancePath + "/binding/design_ref", parentData: data5, parentDataProperty: "design_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props0 = validate3005.evaluated.props;
+            var props0 = validate3063.evaluated.props;
           }
           if (data6 && typeof data6 == "object" && !Array.isArray(data6)) {
             if (data6.contract === void 0 || !func0.call(data6, "contract")) {
@@ -29232,11 +29232,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.handoff_ref !== void 0 && func0.call(data5, "handoff_ref")) {
           let data9 = data5.handoff_ref;
-          if (!validate3005(data9, { instancePath: instancePath + "/binding/handoff_ref", parentData: data5, parentDataProperty: "handoff_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data9, { instancePath: instancePath + "/binding/handoff_ref", parentData: data5, parentDataProperty: "handoff_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props1 = validate3005.evaluated.props;
+            var props1 = validate3063.evaluated.props;
           }
           if (data9 && typeof data9 == "object" && !Array.isArray(data9)) {
             if (data9.contract === void 0 || !func0.call(data9, "contract")) {
@@ -29295,8 +29295,8 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         if (data5.facts_ref !== void 0 && func0.call(data5, "facts_ref")) {
-          if (!validate3005(data5.facts_ref, { instancePath: instancePath + "/binding/facts_ref", parentData: data5, parentDataProperty: "facts_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data5.facts_ref, { instancePath: instancePath + "/binding/facts_ref", parentData: data5, parentDataProperty: "facts_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           }
         }
@@ -29374,11 +29374,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
                 }
                 if (data14.asset_ref !== void 0 && func0.call(data14, "asset_ref")) {
                   let data15 = data14.asset_ref;
-                  if (!validate3005(data15, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/asset_ref", parentData: data14, parentDataProperty: "asset_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+                  if (!validate3063(data15, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/asset_ref", parentData: data14, parentDataProperty: "asset_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
                     errors = vErrors.length;
                   } else {
-                    var props3 = validate3005.evaluated.props;
+                    var props3 = validate3063.evaluated.props;
                   }
                   if (data15 && typeof data15 == "object" && !Array.isArray(data15)) {
                     if (data15.contract === void 0 || !func0.call(data15, "contract")) {
@@ -29438,11 +29438,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
                 }
                 if (data14.permission_ref !== void 0 && func0.call(data14, "permission_ref")) {
                   let data18 = data14.permission_ref;
-                  if (!validate3005(data18, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/permission_ref", parentData: data14, parentDataProperty: "permission_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+                  if (!validate3063(data18, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/permission_ref", parentData: data14, parentDataProperty: "permission_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
                     errors = vErrors.length;
                   } else {
-                    var props4 = validate3005.evaluated.props;
+                    var props4 = validate3063.evaluated.props;
                   }
                   if (data18 && typeof data18 == "object" && !Array.isArray(data18)) {
                     if (data18.contract === void 0 || !func0.call(data18, "contract")) {
@@ -29512,7 +29512,7 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
                     errors++;
                   }
                   if (!(data21 === "artwork" || data21 === "overlay")) {
-                    const err53 = { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/purpose", schemaPath: "#/properties/binding/properties/asset_refs/items/properties/purpose/enum", keyword: "enum", params: { allowedValues: schema508.properties.binding.properties.asset_refs.items.properties.purpose.enum }, message: "must be equal to one of the allowed values" };
+                    const err53 = { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/purpose", schemaPath: "#/properties/binding/properties/asset_refs/items/properties/purpose/enum", keyword: "enum", params: { allowedValues: schema513.properties.binding.properties.asset_refs.items.properties.purpose.enum }, message: "must be equal to one of the allowed values" };
                     if (vErrors === null) {
                       vErrors = [err53];
                     } else {
@@ -29526,11 +29526,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
                   const _errs70 = errors;
                   let valid13 = false;
                   const _errs71 = errors;
-                  if (!validate3005(data22, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/normalization_policy_ref", parentData: data14, parentDataProperty: "normalization_policy_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+                  if (!validate3063(data22, { instancePath: instancePath + "/binding/asset_refs/" + i0 + "/normalization_policy_ref", parentData: data14, parentDataProperty: "normalization_policy_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
                     errors = vErrors.length;
                   } else {
-                    var props5 = validate3005.evaluated.props;
+                    var props5 = validate3063.evaluated.props;
                   }
                   if (data22 && typeof data22 == "object" && !Array.isArray(data22)) {
                     if (data22.contract === void 0 || !func0.call(data22, "contract")) {
@@ -29642,11 +29642,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.approval_ref !== void 0 && func0.call(data5, "approval_ref")) {
           let data25 = data5.approval_ref;
-          if (!validate3005(data25, { instancePath: instancePath + "/binding/approval_ref", parentData: data5, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data25, { instancePath: instancePath + "/binding/approval_ref", parentData: data5, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props6 = validate3005.evaluated.props;
+            var props6 = validate3063.evaluated.props;
           }
           if (data25 && typeof data25 == "object" && !Array.isArray(data25)) {
             if (data25.contract === void 0 || !func0.call(data25, "contract")) {
@@ -29706,11 +29706,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.template_ref !== void 0 && func0.call(data5, "template_ref")) {
           let data28 = data5.template_ref;
-          if (!validate3005(data28, { instancePath: instancePath + "/binding/template_ref", parentData: data5, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data28, { instancePath: instancePath + "/binding/template_ref", parentData: data5, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props7 = validate3005.evaluated.props;
+            var props7 = validate3063.evaluated.props;
           }
           if (data28 && typeof data28 == "object" && !Array.isArray(data28)) {
             if (data28.contract === void 0 || !func0.call(data28, "contract")) {
@@ -29770,11 +29770,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.spec_ref !== void 0 && func0.call(data5, "spec_ref")) {
           let data31 = data5.spec_ref;
-          if (!validate3005(data31, { instancePath: instancePath + "/binding/spec_ref", parentData: data5, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data31, { instancePath: instancePath + "/binding/spec_ref", parentData: data5, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props8 = validate3005.evaluated.props;
+            var props8 = validate3063.evaluated.props;
           }
           if (data31 && typeof data31 == "object" && !Array.isArray(data31)) {
             if (data31.contract === void 0 || !func0.call(data31, "contract")) {
@@ -29834,11 +29834,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.capability_ref !== void 0 && func0.call(data5, "capability_ref")) {
           let data34 = data5.capability_ref;
-          if (!validate3005(data34, { instancePath: instancePath + "/binding/capability_ref", parentData: data5, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data34, { instancePath: instancePath + "/binding/capability_ref", parentData: data5, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props9 = validate3005.evaluated.props;
+            var props9 = validate3063.evaluated.props;
           }
           if (data34 && typeof data34 == "object" && !Array.isArray(data34)) {
             if (data34.contract === void 0 || !func0.call(data34, "contract")) {
@@ -29898,11 +29898,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.composition_ref !== void 0 && func0.call(data5, "composition_ref")) {
           let data37 = data5.composition_ref;
-          if (!validate3005(data37, { instancePath: instancePath + "/binding/composition_ref", parentData: data5, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data37, { instancePath: instancePath + "/binding/composition_ref", parentData: data5, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props10 = validate3005.evaluated.props;
+            var props10 = validate3063.evaluated.props;
           }
           if (data37 && typeof data37 == "object" && !Array.isArray(data37)) {
             if (data37.contract === void 0 || !func0.call(data37, "contract")) {
@@ -29962,11 +29962,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data5.formatting_policy_ref !== void 0 && func0.call(data5, "formatting_policy_ref")) {
           let data40 = data5.formatting_policy_ref;
-          if (!validate3005(data40, { instancePath: instancePath + "/binding/formatting_policy_ref", parentData: data5, parentDataProperty: "formatting_policy_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data40, { instancePath: instancePath + "/binding/formatting_policy_ref", parentData: data5, parentDataProperty: "formatting_policy_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props11 = validate3005.evaluated.props;
+            var props11 = validate3063.evaluated.props;
           }
           if (data40 && typeof data40 == "object" && !Array.isArray(data40)) {
             if (data40.contract === void 0 || !func0.call(data40, "contract")) {
@@ -30029,11 +30029,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
           const _errs145 = errors;
           let valid28 = false;
           const _errs146 = errors;
-          if (!validate3005(data43, { instancePath: instancePath + "/binding/repair_policy_ref", parentData: data5, parentDataProperty: "repair_policy_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data43, { instancePath: instancePath + "/binding/repair_policy_ref", parentData: data5, parentDataProperty: "repair_policy_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props12 = validate3005.evaluated.props;
+            var props12 = validate3063.evaluated.props;
           }
           if (data43 && typeof data43 == "object" && !Array.isArray(data43)) {
             if (data43.contract === void 0 || !func0.call(data43, "contract")) {
@@ -30138,7 +30138,7 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
             for (const key3 of Object.keys(data46)) {
               const _errs162 = errors;
               if (typeof key3 === "string") {
-                if (!pattern1371.test(key3)) {
+                if (!pattern1388.test(key3)) {
                   const err101 = { instancePath: instancePath + "/binding/values", schemaPath: "#/properties/binding/properties/values/propertyNames/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])"', propertyName: key3 };
                   if (vErrors === null) {
                     vErrors = [err101];
@@ -30168,8 +30168,8 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
               }
             }
             for (const key4 of Object.keys(data46)) {
-              if (!validate3022(data46[key4], { instancePath: instancePath + "/binding/values/" + key4.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data46, parentDataProperty: key4, rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate3022.errors : vErrors.concat(validate3022.errors);
+              if (!validate3080(data46[key4], { instancePath: instancePath + "/binding/values/" + key4.replace(/~/g, "~0").replace(/\//g, "~1"), parentData: data46, parentDataProperty: key4, rootData, dynamicAnchors })) {
+                vErrors = vErrors === null ? validate3080.errors : vErrors.concat(validate3080.errors);
                 errors = vErrors.length;
               }
             }
@@ -30251,11 +30251,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data48.row_schema_ref !== void 0 && func0.call(data48, "row_schema_ref")) {
           let data50 = data48.row_schema_ref;
-          if (!validate3005(data50, { instancePath: instancePath + "/input/row_schema_ref", parentData: data48, parentDataProperty: "row_schema_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data50, { instancePath: instancePath + "/input/row_schema_ref", parentData: data48, parentDataProperty: "row_schema_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props14 = validate3005.evaluated.props;
+            var props14 = validate3063.evaluated.props;
           }
           if (data50 && typeof data50 == "object" && !Array.isArray(data50)) {
             if (data50.contract === void 0 || !func0.call(data50, "contract")) {
@@ -30370,7 +30370,7 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
                 if (data54.row_id !== void 0 && func0.call(data54, "row_id")) {
                   let data55 = data54.row_id;
                   if (typeof data55 === "string") {
-                    if (!pattern1367.test(data55)) {
+                    if (!pattern1384.test(data55)) {
                       const err121 = { instancePath: instancePath + "/input/rows/" + i1 + "/row_id", schemaPath: "#/properties/input/oneOf/0/properties/rows/items/properties/row_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                       if (vErrors === null) {
                         vErrors = [err121];
@@ -30404,7 +30404,7 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
                     for (const key7 of Object.keys(data56)) {
                       const _errs198 = errors;
                       if (typeof key7 === "string") {
-                        if (!pattern1371.test(key7)) {
+                        if (!pattern1388.test(key7)) {
                           const err124 = { instancePath: instancePath + "/input/rows/" + i1 + "/fields", schemaPath: "#/properties/input/oneOf/0/properties/rows/items/properties/fields/propertyNames/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z][A-Za-z0-9_.-]{0,63}(?![\\s\\S])"', propertyName: key7 };
                           if (vErrors === null) {
                             vErrors = [err124];
@@ -30562,11 +30562,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data48.file_ref !== void 0 && func0.call(data48, "file_ref")) {
           let data59 = data48.file_ref;
-          if (!validate3005(data59, { instancePath: instancePath + "/input/file_ref", parentData: data48, parentDataProperty: "file_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data59, { instancePath: instancePath + "/input/file_ref", parentData: data48, parentDataProperty: "file_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props16 = validate3005.evaluated.props;
+            var props16 = validate3063.evaluated.props;
           }
           if (data59 && typeof data59 == "object" && !Array.isArray(data59)) {
             if (data59.contract === void 0 || !func0.call(data59, "contract")) {
@@ -30626,11 +30626,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data48.dialect_ref !== void 0 && func0.call(data48, "dialect_ref")) {
           let data62 = data48.dialect_ref;
-          if (!validate3005(data62, { instancePath: instancePath + "/input/dialect_ref", parentData: data48, parentDataProperty: "dialect_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data62, { instancePath: instancePath + "/input/dialect_ref", parentData: data48, parentDataProperty: "dialect_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props17 = validate3005.evaluated.props;
+            var props17 = validate3063.evaluated.props;
           }
           if (data62 && typeof data62 == "object" && !Array.isArray(data62)) {
             if (data62.contract === void 0 || !func0.call(data62, "contract")) {
@@ -30690,11 +30690,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data48.mapping_ref !== void 0 && func0.call(data48, "mapping_ref")) {
           let data65 = data48.mapping_ref;
-          if (!validate3005(data65, { instancePath: instancePath + "/input/mapping_ref", parentData: data48, parentDataProperty: "mapping_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data65, { instancePath: instancePath + "/input/mapping_ref", parentData: data48, parentDataProperty: "mapping_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props18 = validate3005.evaluated.props;
+            var props18 = validate3063.evaluated.props;
           }
           if (data65 && typeof data65 == "object" && !Array.isArray(data65)) {
             if (data65.contract === void 0 || !func0.call(data65, "contract")) {
@@ -30754,11 +30754,11 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data48.checkpoint_ref !== void 0 && func0.call(data48, "checkpoint_ref")) {
           let data68 = data48.checkpoint_ref;
-          if (!validate3005(data68, { instancePath: instancePath + "/input/checkpoint_ref", parentData: data48, parentDataProperty: "checkpoint_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3005.errors : vErrors.concat(validate3005.errors);
+          if (!validate3063(data68, { instancePath: instancePath + "/input/checkpoint_ref", parentData: data48, parentDataProperty: "checkpoint_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3063.errors : vErrors.concat(validate3063.errors);
             errors = vErrors.length;
           } else {
-            var props19 = validate3005.evaluated.props;
+            var props19 = validate3063.evaluated.props;
           }
           if (data68 && typeof data68 == "object" && !Array.isArray(data68)) {
             if (data68.contract === void 0 || !func0.call(data68, "contract")) {
@@ -30869,7 +30869,7 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data71 === "atomic" || data71 === "allow_partial")) {
-        const err162 = { instancePath: instancePath + "/acceptance_policy", schemaPath: "#/properties/acceptance_policy/enum", keyword: "enum", params: { allowedValues: schema508.properties.acceptance_policy.enum }, message: "must be equal to one of the allowed values" };
+        const err162 = { instancePath: instancePath + "/acceptance_policy", schemaPath: "#/properties/acceptance_policy/enum", keyword: "enum", params: { allowedValues: schema513.properties.acceptance_policy.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err162];
         } else {
@@ -30909,16 +30909,16 @@ function validate3002(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3002.errors = vErrors;
+  validate3060.errors = vErrors;
   return errors === 0;
 }
-validate3002.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var PreflightReport_1_0_0 = validate3031;
-var schema511 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/PreflightReport/1.0.0", "title": "PreflightReport", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "PreflightReport", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "report_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PreflightReport", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "body": { "type": "object", "additionalProperties": false, "properties": { "artifact_ref": { "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "rule_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "status": { "type": "string", "enum": ["passed", "failed", "unsupported", "unknown"], "x-classification": "restricted" }, "checked_files": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "file_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "parser_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionRuntime", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "checks": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string", "enum": ["dimensions", "content", "fonts", "container", "profile"], "x-classification": "restricted" }, "state": { "type": "string", "enum": ["passed", "failed", "unsupported", "unknown"], "x-classification": "restricted" }, "evidence_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["name", "state", "evidence_ref"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 5, "x-classification": "restricted" }, "composition_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "render_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "semantic_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["file_hash", "parser_ref", "checks", "composition_hash", "render_hash", "semantic_hash"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" }, "findings": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "code": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "severity": { "type": "string", "enum": ["hard_failure", "repairable", "warning", "information"], "x-classification": "restricted" }, "state": { "type": "string", "enum": ["passed", "failed", "unsupported", "unknown"], "x-classification": "restricted" }, "field_path": { "type": "string", "enum": ["", "/contract", "/schema_version", "/policy_version", "/binding", "/input", "/input/rows", "/formats", "/artifact_ref", "/target", "/files", "/preflight", "/coordinate_geometry", "/slots", "/values", "/row_scope", "/counts", "/diagnostic_ref"], "x-classification": "restricted" }, "rule_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "unit": { "type": "string", "enum": ["nm", "dpi", "count", "digest", "state"], "x-classification": "restricted" }, "observed": { "anyOf": [{ "oneOf": [{ "type": "number" }, { "type": "string", "maxLength": 128 }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "expected": { "oneOf": [{ "type": "number" }, { "type": "string", "maxLength": 128 }], "x-classification": "restricted" }, "repair_eligible": { "type": "boolean", "x-classification": "restricted" }, "evidence_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["code", "severity", "state", "field_path", "rule_ref", "spec_ref", "unit", "observed", "expected", "repair_eligible", "evidence_ref"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 1e3, "x-classification": "restricted" }, "model_ready": { "type": "boolean", "x-classification": "restricted" }, "files_ready": { "type": "boolean", "x-classification": "restricted" } }, "required": ["artifact_ref", "spec_ref", "rule_ref", "status", "checked_files", "findings", "model_ready", "files_ready"], "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "report_ref", "body", "eligibility"], "x-classification": "restricted" };
-function validate3032(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3060.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var PreflightReport_1_0_0 = validate3089;
+var schema516 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/PreflightReport/1.0.0", "title": "PreflightReport", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "PreflightReport", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "report_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PreflightReport", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "body": { "type": "object", "additionalProperties": false, "properties": { "artifact_ref": { "$ref": "https://schemas.jevelopers.org/ArtifactRef/1.0.0", "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "rule_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "status": { "type": "string", "enum": ["passed", "failed", "unsupported", "unknown"], "x-classification": "restricted" }, "checked_files": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "file_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "parser_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionRuntime", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "checks": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "name": { "type": "string", "enum": ["dimensions", "content", "fonts", "container", "profile"], "x-classification": "restricted" }, "state": { "type": "string", "enum": ["passed", "failed", "unsupported", "unknown"], "x-classification": "restricted" }, "evidence_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["name", "state", "evidence_ref"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 5, "x-classification": "restricted" }, "composition_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "render_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "semantic_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["file_hash", "parser_ref", "checks", "composition_hash", "render_hash", "semantic_hash"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" }, "findings": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "code": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "severity": { "type": "string", "enum": ["hard_failure", "repairable", "warning", "information"], "x-classification": "restricted" }, "state": { "type": "string", "enum": ["passed", "failed", "unsupported", "unknown"], "x-classification": "restricted" }, "field_path": { "type": "string", "enum": ["", "/contract", "/schema_version", "/policy_version", "/binding", "/input", "/input/rows", "/formats", "/artifact_ref", "/target", "/files", "/preflight", "/coordinate_geometry", "/slots", "/values", "/row_scope", "/counts", "/diagnostic_ref"], "x-classification": "restricted" }, "rule_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "unit": { "type": "string", "enum": ["nm", "dpi", "count", "digest", "state"], "x-classification": "restricted" }, "observed": { "anyOf": [{ "oneOf": [{ "type": "number" }, { "type": "string", "maxLength": 128 }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "expected": { "oneOf": [{ "type": "number" }, { "type": "string", "maxLength": 128 }], "x-classification": "restricted" }, "repair_eligible": { "type": "boolean", "x-classification": "restricted" }, "evidence_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["code", "severity", "state", "field_path", "rule_ref", "spec_ref", "unit", "observed", "expected", "repair_eligible", "evidence_ref"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 1e3, "x-classification": "restricted" }, "model_ready": { "type": "boolean", "x-classification": "restricted" }, "files_ready": { "type": "boolean", "x-classification": "restricted" } }, "required": ["artifact_ref", "spec_ref", "rule_ref", "status", "checked_files", "findings", "model_ready", "files_ready"], "x-classification": "restricted" }, "eligibility": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Eligibility", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "report_ref", "body", "eligibility"], "x-classification": "restricted" };
+function validate3090(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3032.evaluated;
+  const evaluated0 = validate3090.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -30998,7 +30998,7 @@ function validate3032(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -31210,7 +31210,7 @@ function validate3032(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -31586,15 +31586,15 @@ function validate3032(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate3032.errors = vErrors;
+  validate3090.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate3032.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate3049(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3090.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3107(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3049.evaluated;
+  const evaluated0 = validate3107.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -31670,7 +31670,7 @@ function validate3049(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "eligible" || data0 === "blocked" || data0 === "unknown")) {
-        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema476.properties.state.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/state", schemaPath: "#/properties/state/enum", keyword: "enum", params: { allowedValues: schema481.properties.state.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -31713,7 +31713,7 @@ function validate3049(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data2 === "APPROVAL_INVALID" || data2 === "APPROVAL_REVOKED" || data2 === "APPROVAL_UNAVAILABLE" || data2 === "SPEC_UNKNOWN" || data2 === "PRODUCT_MISMATCH" || data2 === "DIMENSIONS_MISMATCH" || data2 === "BLEED_MISMATCH" || data2 === "SAFE_MISMATCH" || data2 === "DPI_MISMATCH" || data2 === "PROFILE_UNSUPPORTED" || data2 === "EXPORT_UNSUPPORTED" || data2 === "FONT_UNSUPPORTED" || data2 === "TRANSPARENCY_MISMATCH" || data2 === "ASPECT_MISMATCH" || data2 === "SURFACE_UNSUPPORTED" || data2 === "FACTS_UNSUPPORTED" || data2 === "PREFLIGHT_FAILED" || data2 === "PREVIEW_UNKNOWN" || data2 === "ROW_BINDING_MISMATCH" || data2 === "SOURCE_MISMATCH" || data2 === "POLICY_MISMATCH" || data2 === "CALIBRATION_ONLY" || data2 === "OWNER_ACCEPTANCE_PENDING" || data2 === "CANCELLED" || data2 === "SKIPPED_POLICY" || data2 === "SKIPPED_CANCELLED" || data2 === "INVALID_INPUT" || data2 === "HASH_MISMATCH" || data2 === "STORAGE_UNAVAILABLE" || data2 === "RENDER_UNAVAILABLE" || data2 === "EXPIRED" || data2 === "STALE" || data2 === "NOT_FOUND")) {
-            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema476.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
+            const err11 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema481.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err11];
             } else {
@@ -31770,7 +31770,7 @@ function validate3049(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data4 === "simulated" || data4 === "offline" || data4 === "sandbox" || data4 === "live")) {
-        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema476.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
+        const err16 = { instancePath: instancePath + "/evidence_mode", schemaPath: "#/properties/evidence_mode/enum", keyword: "enum", params: { allowedValues: schema481.properties.evidence_mode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err16];
         } else {
@@ -31799,15 +31799,15 @@ function validate3049(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3049.errors = vErrors;
+  validate3107.errors = vErrors;
   return errors === 0;
 }
-validate3049.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-function validate3031(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3107.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+function validate3089(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3031.evaluated;
+  const evaluated0 = validate3089.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -31915,11 +31915,11 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.report_ref !== void 0 && func0.call(data, "report_ref")) {
       let data3 = data.report_ref;
-      if (!validate3032(data3, { instancePath: instancePath + "/report_ref", parentData: data, parentDataProperty: "report_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3032.errors : vErrors.concat(validate3032.errors);
+      if (!validate3090(data3, { instancePath: instancePath + "/report_ref", parentData: data, parentDataProperty: "report_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3090.errors : vErrors.concat(validate3090.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate3032.evaluated.props;
+        var props0 = validate3090.evaluated.props;
       }
       if (data3 && typeof data3 == "object" && !Array.isArray(data3)) {
         if (data3.contract === void 0 || !func0.call(data3, "contract")) {
@@ -32064,18 +32064,18 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         if (data6.artifact_ref !== void 0 && func0.call(data6, "artifact_ref")) {
-          if (!validate2786(data6.artifact_ref, { instancePath: instancePath + "/body/artifact_ref", parentData: data6, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2786.errors : vErrors.concat(validate2786.errors);
+          if (!validate2844(data6.artifact_ref, { instancePath: instancePath + "/body/artifact_ref", parentData: data6, parentDataProperty: "artifact_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2844.errors : vErrors.concat(validate2844.errors);
             errors = vErrors.length;
           }
         }
         if (data6.spec_ref !== void 0 && func0.call(data6, "spec_ref")) {
           let data8 = data6.spec_ref;
-          if (!validate3032(data8, { instancePath: instancePath + "/body/spec_ref", parentData: data6, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3032.errors : vErrors.concat(validate3032.errors);
+          if (!validate3090(data8, { instancePath: instancePath + "/body/spec_ref", parentData: data6, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3090.errors : vErrors.concat(validate3090.errors);
             errors = vErrors.length;
           } else {
-            var props1 = validate3032.evaluated.props;
+            var props1 = validate3090.evaluated.props;
           }
           if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
             if (data8.contract === void 0 || !func0.call(data8, "contract")) {
@@ -32135,11 +32135,11 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data6.rule_ref !== void 0 && func0.call(data6, "rule_ref")) {
           let data11 = data6.rule_ref;
-          if (!validate3032(data11, { instancePath: instancePath + "/body/rule_ref", parentData: data6, parentDataProperty: "rule_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3032.errors : vErrors.concat(validate3032.errors);
+          if (!validate3090(data11, { instancePath: instancePath + "/body/rule_ref", parentData: data6, parentDataProperty: "rule_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3090.errors : vErrors.concat(validate3090.errors);
             errors = vErrors.length;
           } else {
-            var props2 = validate3032.evaluated.props;
+            var props2 = validate3090.evaluated.props;
           }
           if (data11 && typeof data11 == "object" && !Array.isArray(data11)) {
             if (data11.contract === void 0 || !func0.call(data11, "contract")) {
@@ -32209,7 +32209,7 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data14 === "passed" || data14 === "failed" || data14 === "unsupported" || data14 === "unknown")) {
-            const err35 = { instancePath: instancePath + "/body/status", schemaPath: "#/properties/body/properties/status/enum", keyword: "enum", params: { allowedValues: schema511.properties.body.properties.status.enum }, message: "must be equal to one of the allowed values" };
+            const err35 = { instancePath: instancePath + "/body/status", schemaPath: "#/properties/body/properties/status/enum", keyword: "enum", params: { allowedValues: schema516.properties.body.properties.status.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err35];
             } else {
@@ -32345,11 +32345,11 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                 }
                 if (data16.parser_ref !== void 0 && func0.call(data16, "parser_ref")) {
                   let data18 = data16.parser_ref;
-                  if (!validate3032(data18, { instancePath: instancePath + "/body/checked_files/" + i0 + "/parser_ref", parentData: data16, parentDataProperty: "parser_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate3032.errors : vErrors.concat(validate3032.errors);
+                  if (!validate3090(data18, { instancePath: instancePath + "/body/checked_files/" + i0 + "/parser_ref", parentData: data16, parentDataProperty: "parser_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate3090.errors : vErrors.concat(validate3090.errors);
                     errors = vErrors.length;
                   } else {
-                    var props3 = validate3032.evaluated.props;
+                    var props3 = validate3090.evaluated.props;
                   }
                   if (data18 && typeof data18 == "object" && !Array.isArray(data18)) {
                     if (data18.contract === void 0 || !func0.call(data18, "contract")) {
@@ -32482,7 +32482,7 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                             errors++;
                           }
                           if (!(data23 === "dimensions" || data23 === "content" || data23 === "fonts" || data23 === "container" || data23 === "profile")) {
-                            const err60 = { instancePath: instancePath + "/body/checked_files/" + i0 + "/checks/" + i1 + "/name", schemaPath: "#/properties/body/properties/checked_files/items/properties/checks/items/properties/name/enum", keyword: "enum", params: { allowedValues: schema511.properties.body.properties.checked_files.items.properties.checks.items.properties.name.enum }, message: "must be equal to one of the allowed values" };
+                            const err60 = { instancePath: instancePath + "/body/checked_files/" + i0 + "/checks/" + i1 + "/name", schemaPath: "#/properties/body/properties/checked_files/items/properties/checks/items/properties/name/enum", keyword: "enum", params: { allowedValues: schema516.properties.body.properties.checked_files.items.properties.checks.items.properties.name.enum }, message: "must be equal to one of the allowed values" };
                             if (vErrors === null) {
                               vErrors = [err60];
                             } else {
@@ -32503,7 +32503,7 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                             errors++;
                           }
                           if (!(data24 === "passed" || data24 === "failed" || data24 === "unsupported" || data24 === "unknown")) {
-                            const err62 = { instancePath: instancePath + "/body/checked_files/" + i0 + "/checks/" + i1 + "/state", schemaPath: "#/properties/body/properties/checked_files/items/properties/checks/items/properties/state/enum", keyword: "enum", params: { allowedValues: schema511.properties.body.properties.checked_files.items.properties.checks.items.properties.state.enum }, message: "must be equal to one of the allowed values" };
+                            const err62 = { instancePath: instancePath + "/body/checked_files/" + i0 + "/checks/" + i1 + "/state", schemaPath: "#/properties/body/properties/checked_files/items/properties/checks/items/properties/state/enum", keyword: "enum", params: { allowedValues: schema516.properties.body.properties.checked_files.items.properties.checks.items.properties.state.enum }, message: "must be equal to one of the allowed values" };
                             if (vErrors === null) {
                               vErrors = [err62];
                             } else {
@@ -32513,8 +32513,8 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                           }
                         }
                         if (data22.evidence_ref !== void 0 && func0.call(data22, "evidence_ref")) {
-                          if (!validate3032(data22.evidence_ref, { instancePath: instancePath + "/body/checked_files/" + i0 + "/checks/" + i1 + "/evidence_ref", parentData: data22, parentDataProperty: "evidence_ref", rootData, dynamicAnchors })) {
-                            vErrors = vErrors === null ? validate3032.errors : vErrors.concat(validate3032.errors);
+                          if (!validate3090(data22.evidence_ref, { instancePath: instancePath + "/body/checked_files/" + i0 + "/checks/" + i1 + "/evidence_ref", parentData: data22, parentDataProperty: "evidence_ref", rootData, dynamicAnchors })) {
+                            vErrors = vErrors === null ? validate3090.errors : vErrors.concat(validate3090.errors);
                             errors = vErrors.length;
                           }
                         }
@@ -32823,7 +32823,7 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                   errors++;
                 }
                 for (const key4 of Object.keys(data30)) {
-                  if (!func0.call(schema511.properties.body.properties.findings.items.properties, key4)) {
+                  if (!func0.call(schema516.properties.body.properties.findings.items.properties, key4)) {
                     const err91 = { instancePath: instancePath + "/body/findings/" + i2, schemaPath: "#/properties/body/properties/findings/items/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
                     if (vErrors === null) {
                       vErrors = [err91];
@@ -32845,7 +32845,7 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                     errors++;
                   }
                   if (!(data31 === "APPROVAL_INVALID" || data31 === "APPROVAL_REVOKED" || data31 === "APPROVAL_UNAVAILABLE" || data31 === "SPEC_UNKNOWN" || data31 === "PRODUCT_MISMATCH" || data31 === "DIMENSIONS_MISMATCH" || data31 === "BLEED_MISMATCH" || data31 === "SAFE_MISMATCH" || data31 === "DPI_MISMATCH" || data31 === "PROFILE_UNSUPPORTED" || data31 === "EXPORT_UNSUPPORTED" || data31 === "FONT_UNSUPPORTED" || data31 === "TRANSPARENCY_MISMATCH" || data31 === "ASPECT_MISMATCH" || data31 === "SURFACE_UNSUPPORTED" || data31 === "FACTS_UNSUPPORTED" || data31 === "PREFLIGHT_FAILED" || data31 === "PREVIEW_UNKNOWN" || data31 === "ROW_BINDING_MISMATCH" || data31 === "SOURCE_MISMATCH" || data31 === "POLICY_MISMATCH" || data31 === "CALIBRATION_ONLY" || data31 === "OWNER_ACCEPTANCE_PENDING" || data31 === "CANCELLED" || data31 === "SKIPPED_POLICY" || data31 === "SKIPPED_CANCELLED" || data31 === "INVALID_INPUT" || data31 === "HASH_MISMATCH" || data31 === "STORAGE_UNAVAILABLE" || data31 === "RENDER_UNAVAILABLE" || data31 === "EXPIRED" || data31 === "STALE" || data31 === "NOT_FOUND")) {
-                    const err93 = { instancePath: instancePath + "/body/findings/" + i2 + "/code", schemaPath: "#/properties/body/properties/findings/items/properties/code/enum", keyword: "enum", params: { allowedValues: schema511.properties.body.properties.findings.items.properties.code.enum }, message: "must be equal to one of the allowed values" };
+                    const err93 = { instancePath: instancePath + "/body/findings/" + i2 + "/code", schemaPath: "#/properties/body/properties/findings/items/properties/code/enum", keyword: "enum", params: { allowedValues: schema516.properties.body.properties.findings.items.properties.code.enum }, message: "must be equal to one of the allowed values" };
                     if (vErrors === null) {
                       vErrors = [err93];
                     } else {
@@ -32866,7 +32866,7 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                     errors++;
                   }
                   if (!(data32 === "hard_failure" || data32 === "repairable" || data32 === "warning" || data32 === "information")) {
-                    const err95 = { instancePath: instancePath + "/body/findings/" + i2 + "/severity", schemaPath: "#/properties/body/properties/findings/items/properties/severity/enum", keyword: "enum", params: { allowedValues: schema511.properties.body.properties.findings.items.properties.severity.enum }, message: "must be equal to one of the allowed values" };
+                    const err95 = { instancePath: instancePath + "/body/findings/" + i2 + "/severity", schemaPath: "#/properties/body/properties/findings/items/properties/severity/enum", keyword: "enum", params: { allowedValues: schema516.properties.body.properties.findings.items.properties.severity.enum }, message: "must be equal to one of the allowed values" };
                     if (vErrors === null) {
                       vErrors = [err95];
                     } else {
@@ -32887,7 +32887,7 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                     errors++;
                   }
                   if (!(data33 === "passed" || data33 === "failed" || data33 === "unsupported" || data33 === "unknown")) {
-                    const err97 = { instancePath: instancePath + "/body/findings/" + i2 + "/state", schemaPath: "#/properties/body/properties/findings/items/properties/state/enum", keyword: "enum", params: { allowedValues: schema511.properties.body.properties.findings.items.properties.state.enum }, message: "must be equal to one of the allowed values" };
+                    const err97 = { instancePath: instancePath + "/body/findings/" + i2 + "/state", schemaPath: "#/properties/body/properties/findings/items/properties/state/enum", keyword: "enum", params: { allowedValues: schema516.properties.body.properties.findings.items.properties.state.enum }, message: "must be equal to one of the allowed values" };
                     if (vErrors === null) {
                       vErrors = [err97];
                     } else {
@@ -32908,7 +32908,7 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                     errors++;
                   }
                   if (!(data34 === "" || data34 === "/contract" || data34 === "/schema_version" || data34 === "/policy_version" || data34 === "/binding" || data34 === "/input" || data34 === "/input/rows" || data34 === "/formats" || data34 === "/artifact_ref" || data34 === "/target" || data34 === "/files" || data34 === "/preflight" || data34 === "/coordinate_geometry" || data34 === "/slots" || data34 === "/values" || data34 === "/row_scope" || data34 === "/counts" || data34 === "/diagnostic_ref")) {
-                    const err99 = { instancePath: instancePath + "/body/findings/" + i2 + "/field_path", schemaPath: "#/properties/body/properties/findings/items/properties/field_path/enum", keyword: "enum", params: { allowedValues: schema511.properties.body.properties.findings.items.properties.field_path.enum }, message: "must be equal to one of the allowed values" };
+                    const err99 = { instancePath: instancePath + "/body/findings/" + i2 + "/field_path", schemaPath: "#/properties/body/properties/findings/items/properties/field_path/enum", keyword: "enum", params: { allowedValues: schema516.properties.body.properties.findings.items.properties.field_path.enum }, message: "must be equal to one of the allowed values" };
                     if (vErrors === null) {
                       vErrors = [err99];
                     } else {
@@ -32919,11 +32919,11 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                 }
                 if (data30.rule_ref !== void 0 && func0.call(data30, "rule_ref")) {
                   let data35 = data30.rule_ref;
-                  if (!validate3032(data35, { instancePath: instancePath + "/body/findings/" + i2 + "/rule_ref", parentData: data30, parentDataProperty: "rule_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate3032.errors : vErrors.concat(validate3032.errors);
+                  if (!validate3090(data35, { instancePath: instancePath + "/body/findings/" + i2 + "/rule_ref", parentData: data30, parentDataProperty: "rule_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate3090.errors : vErrors.concat(validate3090.errors);
                     errors = vErrors.length;
                   } else {
-                    var props5 = validate3032.evaluated.props;
+                    var props5 = validate3090.evaluated.props;
                   }
                   if (data35 && typeof data35 == "object" && !Array.isArray(data35)) {
                     if (data35.contract === void 0 || !func0.call(data35, "contract")) {
@@ -32986,11 +32986,11 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                   const _errs127 = errors;
                   let valid22 = false;
                   const _errs128 = errors;
-                  if (!validate3032(data38, { instancePath: instancePath + "/body/findings/" + i2 + "/spec_ref", parentData: data30, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate3032.errors : vErrors.concat(validate3032.errors);
+                  if (!validate3090(data38, { instancePath: instancePath + "/body/findings/" + i2 + "/spec_ref", parentData: data30, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate3090.errors : vErrors.concat(validate3090.errors);
                     errors = vErrors.length;
                   } else {
-                    var props6 = validate3032.evaluated.props;
+                    var props6 = validate3090.evaluated.props;
                   }
                   if (data38 && typeof data38 == "object" && !Array.isArray(data38)) {
                     if (data38.contract === void 0 || !func0.call(data38, "contract")) {
@@ -33092,7 +33092,7 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                     errors++;
                   }
                   if (!(data41 === "nm" || data41 === "dpi" || data41 === "count" || data41 === "digest" || data41 === "state")) {
-                    const err113 = { instancePath: instancePath + "/body/findings/" + i2 + "/unit", schemaPath: "#/properties/body/properties/findings/items/properties/unit/enum", keyword: "enum", params: { allowedValues: schema511.properties.body.properties.findings.items.properties.unit.enum }, message: "must be equal to one of the allowed values" };
+                    const err113 = { instancePath: instancePath + "/body/findings/" + i2 + "/unit", schemaPath: "#/properties/body/properties/findings/items/properties/unit/enum", keyword: "enum", params: { allowedValues: schema516.properties.body.properties.findings.items.properties.unit.enum }, message: "must be equal to one of the allowed values" };
                     if (vErrors === null) {
                       vErrors = [err113];
                     } else {
@@ -33286,8 +33286,8 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
                   }
                 }
                 if (data30.evidence_ref !== void 0 && func0.call(data30, "evidence_ref")) {
-                  if (!validate3032(data30.evidence_ref, { instancePath: instancePath + "/body/findings/" + i2 + "/evidence_ref", parentData: data30, parentDataProperty: "evidence_ref", rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate3032.errors : vErrors.concat(validate3032.errors);
+                  if (!validate3090(data30.evidence_ref, { instancePath: instancePath + "/body/findings/" + i2 + "/evidence_ref", parentData: data30, parentDataProperty: "evidence_ref", rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate3090.errors : vErrors.concat(validate3090.errors);
                     errors = vErrors.length;
                   }
                 }
@@ -33344,8 +33344,8 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.eligibility !== void 0 && func0.call(data, "eligibility")) {
-      if (!validate3049(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3049.errors : vErrors.concat(validate3049.errors);
+      if (!validate3107(data.eligibility, { instancePath: instancePath + "/eligibility", parentData: data, parentDataProperty: "eligibility", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3107.errors : vErrors.concat(validate3107.errors);
         errors = vErrors.length;
       }
     }
@@ -33358,12 +33358,12 @@ function validate3031(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3031.errors = vErrors;
+  validate3089.errors = vErrors;
   return errors === 0;
 }
-validate3031.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ProductionBundle_2_0_0 = validate3052;
-var schema514 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionBundle/2.0.0", "title": "ProductionBundle", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundle", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "event_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "internal" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "workflow_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/WorkflowId", "x-classification": "internal" }, "run_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/RunId", "x-classification": "internal" }, "job_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/JobId", "x-classification": "internal" }, "artifact_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ArtifactId", "x-classification": "restricted" }, "design_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignId", "x-classification": "restricted" }, "design_version_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignVersionId", "x-classification": "restricted" }, "order_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/OrderId", "x-classification": "restricted" }, "trace_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TraceId", "x-classification": "internal" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "internal" }, "evidence_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EvidenceId", "x-classification": "internal" }, "usage_event_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UsageEventId", "x-classification": "internal" }, "logical_operation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/LogicalOperationId", "x-classification": "internal" }, "provider_attempt_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderAttemptId", "x-classification": "internal" }, "billable_attempt_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/BillableAttemptId", "x-classification": "internal" }, "transport_attempt_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TransportAttemptId", "x-classification": "internal" }, "provider_request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderRequestId", "x-classification": "restricted" }, "producer": { "type": "object", "additionalProperties": false, "required": ["module", "source_revision", "build_revision"], "x-classification": "internal", "properties": { "module": { "type": "string", "enum": ["getticketstub.com", "agent-harness", "event-intelligence", "creative-engine", "print-production", "fulfillment-connectors", "cost-intelligence", "team-dashboard", "integration-evals", "shared-contracts"], "x-classification": "public" }, "source_revision": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/SourceRevision", "x-classification": "public" }, "build_revision": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$", "x-classification": "internal" } } }, "occurred_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "internal" }, "observed_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "internal" }, "ingested_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "internal" }, "environment": { "type": "string", "enum": ["development", "test", "production"], "x-classification": "public" }, "billing_mode": { "type": "string", "enum": ["live", "sandbox", "simulated"], "x-classification": "public" }, "source_refs": { "type": "array", "maxItems": 100, "x-classification": "restricted", "items": { "type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": { "kind": { "type": "string", "enum": ["artifact", "evidence", "source_observation", "provider_request", "manifest"], "x-classification": "internal" }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,256}$", "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted" } } } }, "bundle_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "bundle_version": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "bundle_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "handoff_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactHandoffManifest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "approval_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "facts_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "renderer_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionRuntime", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "font_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 1, "maxItems": 16, "x-classification": "restricted" }, "policy_refs": { "type": "object", "additionalProperties": false, "properties": { "formatting": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "layout": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "output": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "repair": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["formatting", "layout", "output", "repair"], "x-classification": "restricted" }, "composition": { "type": "object", "additionalProperties": false, "properties": { "facts_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "composition_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "source_artwork_hashes": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "displayed_preview_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" }, "composed_preview_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" }, "render_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "private_revision_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "input_binding_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "barcode_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["facts_hash", "composition_hash", "source_artwork_hashes", "displayed_preview_hash", "composed_preview_hash", "render_hash", "private_revision_hash", "input_binding_hash", "barcode_hash"], "x-classification": "restricted" }, "files": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ArtifactFile/2.0.0", "x-classification": "restricted" }, "minItems": 1, "maxItems": 97, "x-classification": "restricted" }, "preflight": { "type": "object", "additionalProperties": false, "properties": { "report_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PreflightReport", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "status": { "type": "string", "enum": ["passed", "failed", "unsupported", "unknown"], "x-classification": "restricted" }, "reasons": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" } }, "required": ["report_ref", "status", "reasons"], "x-classification": "restricted" }, "lineage_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "row_scope": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "job_ref": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" }, "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "ordinal": { "type": "integer", "minimum": 0, "maximum": 9999, "x-classification": "restricted" }, "input_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["job_ref", "row_id", "ordinal", "input_hash"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "usage_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "UsageEvent", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" }, "decision_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "DecisionReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "event_id", "tenant_id", "project_id", "correlation_id", "producer", "occurred_at", "observed_at", "ingested_at", "environment", "billing_mode", "source_refs", "bundle_id", "bundle_version", "bundle_hash", "handoff_ref", "approval_ref", "facts_ref", "composition_ref", "template_ref", "spec_ref", "capability_ref", "renderer_ref", "font_refs", "policy_refs", "composition", "files", "preflight", "lineage_ref", "row_scope", "usage_refs", "decision_refs"], "x-classification": "restricted" };
+validate3089.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ProductionBundle_2_0_0 = validate3110;
+var schema519 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionBundle/2.0.0", "title": "ProductionBundle", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundle", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "event_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId", "x-classification": "internal" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "workflow_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/WorkflowId", "x-classification": "internal" }, "run_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/RunId", "x-classification": "internal" }, "job_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/JobId", "x-classification": "internal" }, "artifact_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ArtifactId", "x-classification": "restricted" }, "design_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignId", "x-classification": "restricted" }, "design_version_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignVersionId", "x-classification": "restricted" }, "order_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/OrderId", "x-classification": "restricted" }, "trace_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TraceId", "x-classification": "internal" }, "correlation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId", "x-classification": "internal" }, "evidence_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EvidenceId", "x-classification": "internal" }, "usage_event_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UsageEventId", "x-classification": "internal" }, "logical_operation_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/LogicalOperationId", "x-classification": "internal" }, "provider_attempt_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderAttemptId", "x-classification": "internal" }, "billable_attempt_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/BillableAttemptId", "x-classification": "internal" }, "transport_attempt_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TransportAttemptId", "x-classification": "internal" }, "provider_request_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderRequestId", "x-classification": "restricted" }, "producer": { "type": "object", "additionalProperties": false, "required": ["module", "source_revision", "build_revision"], "x-classification": "internal", "properties": { "module": { "type": "string", "enum": ["getticketstub.com", "agent-harness", "event-intelligence", "creative-engine", "print-production", "fulfillment-connectors", "cost-intelligence", "team-dashboard", "integration-evals", "shared-contracts"], "x-classification": "public" }, "source_revision": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/SourceRevision", "x-classification": "public" }, "build_revision": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$", "x-classification": "internal" } } }, "occurred_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "internal" }, "observed_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "internal" }, "ingested_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "internal" }, "environment": { "type": "string", "enum": ["development", "test", "production"], "x-classification": "public" }, "billing_mode": { "type": "string", "enum": ["live", "sandbox", "simulated"], "x-classification": "public" }, "source_refs": { "type": "array", "maxItems": 100, "x-classification": "restricted", "items": { "type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": { "kind": { "type": "string", "enum": ["artifact", "evidence", "source_observation", "provider_request", "manifest"], "x-classification": "internal" }, "id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,256}$", "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted" } } } }, "bundle_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "bundle_version": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "bundle_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "handoff_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactHandoffManifest", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "approval_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "facts_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "composition_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "Composition", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "template_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "renderer_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionRuntime", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "font_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 1, "maxItems": 16, "x-classification": "restricted" }, "policy_refs": { "type": "object", "additionalProperties": false, "properties": { "formatting": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "layout": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "output": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "repair": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["formatting", "layout", "output", "repair"], "x-classification": "restricted" }, "composition": { "type": "object", "additionalProperties": false, "properties": { "facts_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "composition_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "source_artwork_hashes": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "minItems": 1, "maxItems": 100, "x-classification": "restricted" }, "displayed_preview_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" }, "composed_preview_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" }, "render_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "private_revision_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "input_binding_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "barcode_hash": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["facts_hash", "composition_hash", "source_artwork_hashes", "displayed_preview_hash", "composed_preview_hash", "render_hash", "private_revision_hash", "input_binding_hash", "barcode_hash"], "x-classification": "restricted" }, "files": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ArtifactFile/2.0.0", "x-classification": "restricted" }, "minItems": 1, "maxItems": 97, "x-classification": "restricted" }, "preflight": { "type": "object", "additionalProperties": false, "properties": { "report_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PreflightReport", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "status": { "type": "string", "enum": ["passed", "failed", "unsupported", "unknown"], "x-classification": "restricted" }, "reasons": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" } }, "required": ["report_ref", "status", "reasons"], "x-classification": "restricted" }, "lineage_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "row_scope": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "job_ref": { "$ref": "https://schemas.jevelopers.org/JobRef/1.0.0", "x-classification": "restricted" }, "row_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "ordinal": { "type": "integer", "minimum": 0, "maximum": 9999, "x-classification": "restricted" }, "input_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["job_ref", "row_id", "ordinal", "input_hash"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "usage_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "UsageEvent", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" }, "decision_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "DecisionReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 0, "maxItems": 100, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "event_id", "tenant_id", "project_id", "correlation_id", "producer", "occurred_at", "observed_at", "ingested_at", "environment", "billing_mode", "source_refs", "bundle_id", "bundle_version", "bundle_hash", "handoff_ref", "approval_ref", "facts_ref", "composition_ref", "template_ref", "spec_ref", "capability_ref", "renderer_ref", "font_refs", "policy_refs", "composition", "files", "preflight", "lineage_ref", "row_scope", "usage_refs", "decision_refs"], "x-classification": "restricted" };
 function validate743(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -33914,10 +33914,10 @@ function validate759(data, { instancePath = "", parentData, parentDataProperty, 
   return errors === 0;
 }
 validate759.evaluated = { "dynamicProps": false, "dynamicItems": false };
-function validate3078(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+function validate3136(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3078.evaluated;
+  const evaluated0 = validate3136.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -33997,7 +33997,7 @@ function validate3078(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -34209,7 +34209,7 @@ function validate3078(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -34585,18 +34585,18 @@ function validate3078(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate3078.errors = vErrors;
+  validate3136.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate3078.evaluated = { "dynamicProps": true, "dynamicItems": false };
+validate3136.evaluated = { "dynamicProps": true, "dynamicItems": false };
 var pattern5 = new RegExp("^[A-Za-z0-9_.-]{1,128}$", "u");
 var pattern6 = new RegExp("^[A-Za-z0-9_.:-]{1,256}$", "u");
-function validate3052(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+function validate3110(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3052.evaluated;
+  const evaluated0 = validate3110.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -34911,7 +34911,7 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema514.properties, key0)) {
+      if (!func0.call(schema519.properties, key0)) {
         const err34 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err34];
@@ -35121,7 +35121,7 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data23 === "getticketstub.com" || data23 === "agent-harness" || data23 === "event-intelligence" || data23 === "creative-engine" || data23 === "print-production" || data23 === "fulfillment-connectors" || data23 === "cost-intelligence" || data23 === "team-dashboard" || data23 === "integration-evals" || data23 === "shared-contracts")) {
-            const err43 = { instancePath: instancePath + "/producer/module", schemaPath: "#/properties/producer/properties/module/enum", keyword: "enum", params: { allowedValues: schema514.properties.producer.properties.module.enum }, message: "must be equal to one of the allowed values" };
+            const err43 = { instancePath: instancePath + "/producer/module", schemaPath: "#/properties/producer/properties/module/enum", keyword: "enum", params: { allowedValues: schema519.properties.producer.properties.module.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err43];
             } else {
@@ -35198,7 +35198,7 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data29 === "development" || data29 === "test" || data29 === "production")) {
-        const err48 = { instancePath: instancePath + "/environment", schemaPath: "#/properties/environment/enum", keyword: "enum", params: { allowedValues: schema514.properties.environment.enum }, message: "must be equal to one of the allowed values" };
+        const err48 = { instancePath: instancePath + "/environment", schemaPath: "#/properties/environment/enum", keyword: "enum", params: { allowedValues: schema519.properties.environment.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err48];
         } else {
@@ -35219,7 +35219,7 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data30 === "live" || data30 === "sandbox" || data30 === "simulated")) {
-        const err50 = { instancePath: instancePath + "/billing_mode", schemaPath: "#/properties/billing_mode/enum", keyword: "enum", params: { allowedValues: schema514.properties.billing_mode.enum }, message: "must be equal to one of the allowed values" };
+        const err50 = { instancePath: instancePath + "/billing_mode", schemaPath: "#/properties/billing_mode/enum", keyword: "enum", params: { allowedValues: schema519.properties.billing_mode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err50];
         } else {
@@ -35285,7 +35285,7 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
                 errors++;
               }
               if (!(data33 === "artifact" || data33 === "evidence" || data33 === "source_observation" || data33 === "provider_request" || data33 === "manifest")) {
-                const err56 = { instancePath: instancePath + "/source_refs/" + i0 + "/kind", schemaPath: "#/properties/source_refs/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema514.properties.source_refs.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+                const err56 = { instancePath: instancePath + "/source_refs/" + i0 + "/kind", schemaPath: "#/properties/source_refs/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema519.properties.source_refs.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err56];
                 } else {
@@ -35451,11 +35451,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.handoff_ref !== void 0 && func0.call(data, "handoff_ref")) {
       let data39 = data.handoff_ref;
-      if (!validate3078(data39, { instancePath: instancePath + "/handoff_ref", parentData: data, parentDataProperty: "handoff_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+      if (!validate3136(data39, { instancePath: instancePath + "/handoff_ref", parentData: data, parentDataProperty: "handoff_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate3078.evaluated.props;
+        var props0 = validate3136.evaluated.props;
       }
       if (data39 && typeof data39 == "object" && !Array.isArray(data39)) {
         if (data39.contract === void 0 || !func0.call(data39, "contract")) {
@@ -35515,11 +35515,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.approval_ref !== void 0 && func0.call(data, "approval_ref")) {
       let data42 = data.approval_ref;
-      if (!validate3078(data42, { instancePath: instancePath + "/approval_ref", parentData: data, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+      if (!validate3136(data42, { instancePath: instancePath + "/approval_ref", parentData: data, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate3078.evaluated.props;
+        var props1 = validate3136.evaluated.props;
       }
       if (data42 && typeof data42 == "object" && !Array.isArray(data42)) {
         if (data42.contract === void 0 || !func0.call(data42, "contract")) {
@@ -35578,18 +35578,18 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.facts_ref !== void 0 && func0.call(data, "facts_ref")) {
-      if (!validate3078(data.facts_ref, { instancePath: instancePath + "/facts_ref", parentData: data, parentDataProperty: "facts_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+      if (!validate3136(data.facts_ref, { instancePath: instancePath + "/facts_ref", parentData: data, parentDataProperty: "facts_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
         errors = vErrors.length;
       }
     }
     if (data.composition_ref !== void 0 && func0.call(data, "composition_ref")) {
       let data46 = data.composition_ref;
-      if (!validate3078(data46, { instancePath: instancePath + "/composition_ref", parentData: data, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+      if (!validate3136(data46, { instancePath: instancePath + "/composition_ref", parentData: data, parentDataProperty: "composition_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
         errors = vErrors.length;
       } else {
-        var props3 = validate3078.evaluated.props;
+        var props3 = validate3136.evaluated.props;
       }
       if (data46 && typeof data46 == "object" && !Array.isArray(data46)) {
         if (data46.contract === void 0 || !func0.call(data46, "contract")) {
@@ -35649,11 +35649,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.template_ref !== void 0 && func0.call(data, "template_ref")) {
       let data49 = data.template_ref;
-      if (!validate3078(data49, { instancePath: instancePath + "/template_ref", parentData: data, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+      if (!validate3136(data49, { instancePath: instancePath + "/template_ref", parentData: data, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
         errors = vErrors.length;
       } else {
-        var props4 = validate3078.evaluated.props;
+        var props4 = validate3136.evaluated.props;
       }
       if (data49 && typeof data49 == "object" && !Array.isArray(data49)) {
         if (data49.contract === void 0 || !func0.call(data49, "contract")) {
@@ -35713,11 +35713,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.spec_ref !== void 0 && func0.call(data, "spec_ref")) {
       let data52 = data.spec_ref;
-      if (!validate3078(data52, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+      if (!validate3136(data52, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
         errors = vErrors.length;
       } else {
-        var props5 = validate3078.evaluated.props;
+        var props5 = validate3136.evaluated.props;
       }
       if (data52 && typeof data52 == "object" && !Array.isArray(data52)) {
         if (data52.contract === void 0 || !func0.call(data52, "contract")) {
@@ -35777,11 +35777,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.capability_ref !== void 0 && func0.call(data, "capability_ref")) {
       let data55 = data.capability_ref;
-      if (!validate3078(data55, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+      if (!validate3136(data55, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
         errors = vErrors.length;
       } else {
-        var props6 = validate3078.evaluated.props;
+        var props6 = validate3136.evaluated.props;
       }
       if (data55 && typeof data55 == "object" && !Array.isArray(data55)) {
         if (data55.contract === void 0 || !func0.call(data55, "contract")) {
@@ -35841,11 +35841,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.renderer_ref !== void 0 && func0.call(data, "renderer_ref")) {
       let data58 = data.renderer_ref;
-      if (!validate3078(data58, { instancePath: instancePath + "/renderer_ref", parentData: data, parentDataProperty: "renderer_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+      if (!validate3136(data58, { instancePath: instancePath + "/renderer_ref", parentData: data, parentDataProperty: "renderer_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
         errors = vErrors.length;
       } else {
-        var props7 = validate3078.evaluated.props;
+        var props7 = validate3136.evaluated.props;
       }
       if (data58 && typeof data58 == "object" && !Array.isArray(data58)) {
         if (data58.contract === void 0 || !func0.call(data58, "contract")) {
@@ -35927,11 +35927,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         const len1 = data61.length;
         for (let i1 = 0; i1 < len1; i1++) {
           let data62 = data61[i1];
-          if (!validate3078(data62, { instancePath: instancePath + "/font_refs/" + i1, parentData: data61, parentDataProperty: i1, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+          if (!validate3136(data62, { instancePath: instancePath + "/font_refs/" + i1, parentData: data61, parentDataProperty: i1, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
             errors = vErrors.length;
           } else {
-            var props8 = validate3078.evaluated.props;
+            var props8 = validate3136.evaluated.props;
           }
           if (data62 && typeof data62 == "object" && !Array.isArray(data62)) {
             if (data62.contract === void 0 || !func0.call(data62, "contract")) {
@@ -36051,11 +36051,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data65.formatting !== void 0 && func0.call(data65, "formatting")) {
           let data66 = data65.formatting;
-          if (!validate3078(data66, { instancePath: instancePath + "/policy_refs/formatting", parentData: data65, parentDataProperty: "formatting", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+          if (!validate3136(data66, { instancePath: instancePath + "/policy_refs/formatting", parentData: data65, parentDataProperty: "formatting", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
             errors = vErrors.length;
           } else {
-            var props9 = validate3078.evaluated.props;
+            var props9 = validate3136.evaluated.props;
           }
           if (data66 && typeof data66 == "object" && !Array.isArray(data66)) {
             if (data66.contract === void 0 || !func0.call(data66, "contract")) {
@@ -36115,11 +36115,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data65.layout !== void 0 && func0.call(data65, "layout")) {
           let data69 = data65.layout;
-          if (!validate3078(data69, { instancePath: instancePath + "/policy_refs/layout", parentData: data65, parentDataProperty: "layout", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+          if (!validate3136(data69, { instancePath: instancePath + "/policy_refs/layout", parentData: data65, parentDataProperty: "layout", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
             errors = vErrors.length;
           } else {
-            var props10 = validate3078.evaluated.props;
+            var props10 = validate3136.evaluated.props;
           }
           if (data69 && typeof data69 == "object" && !Array.isArray(data69)) {
             if (data69.contract === void 0 || !func0.call(data69, "contract")) {
@@ -36179,11 +36179,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data65.output !== void 0 && func0.call(data65, "output")) {
           let data72 = data65.output;
-          if (!validate3078(data72, { instancePath: instancePath + "/policy_refs/output", parentData: data65, parentDataProperty: "output", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+          if (!validate3136(data72, { instancePath: instancePath + "/policy_refs/output", parentData: data65, parentDataProperty: "output", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
             errors = vErrors.length;
           } else {
-            var props11 = validate3078.evaluated.props;
+            var props11 = validate3136.evaluated.props;
           }
           if (data72 && typeof data72 == "object" && !Array.isArray(data72)) {
             if (data72.contract === void 0 || !func0.call(data72, "contract")) {
@@ -36246,11 +36246,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
           const _errs214 = errors;
           let valid30 = false;
           const _errs215 = errors;
-          if (!validate3078(data75, { instancePath: instancePath + "/policy_refs/repair", parentData: data65, parentDataProperty: "repair", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+          if (!validate3136(data75, { instancePath: instancePath + "/policy_refs/repair", parentData: data65, parentDataProperty: "repair", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
             errors = vErrors.length;
           } else {
-            var props12 = validate3078.evaluated.props;
+            var props12 = validate3136.evaluated.props;
           }
           if (data75 && typeof data75 == "object" && !Array.isArray(data75)) {
             if (data75.contract === void 0 || !func0.call(data75, "contract")) {
@@ -36435,7 +36435,7 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
           errors++;
         }
         for (const key4 of Object.keys(data78)) {
-          if (!func0.call(schema514.properties.composition.properties, key4)) {
+          if (!func0.call(schema519.properties.composition.properties, key4)) {
             const err151 = { instancePath: instancePath + "/composition", schemaPath: "#/properties/composition/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
             if (vErrors === null) {
               vErrors = [err151];
@@ -36930,8 +36930,8 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         }
         const len3 = data89.length;
         for (let i3 = 0; i3 < len3; i3++) {
-          if (!validate2773(data89[i3], { instancePath: instancePath + "/files/" + i3, parentData: data89, parentDataProperty: i3, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2773.errors : vErrors.concat(validate2773.errors);
+          if (!validate2831(data89[i3], { instancePath: instancePath + "/files/" + i3, parentData: data89, parentDataProperty: i3, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2831.errors : vErrors.concat(validate2831.errors);
             errors = vErrors.length;
           }
         }
@@ -36988,11 +36988,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         }
         if (data91.report_ref !== void 0 && func0.call(data91, "report_ref")) {
           let data92 = data91.report_ref;
-          if (!validate3078(data92, { instancePath: instancePath + "/preflight/report_ref", parentData: data91, parentDataProperty: "report_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+          if (!validate3136(data92, { instancePath: instancePath + "/preflight/report_ref", parentData: data91, parentDataProperty: "report_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
             errors = vErrors.length;
           } else {
-            var props13 = validate3078.evaluated.props;
+            var props13 = validate3136.evaluated.props;
           }
           if (data92 && typeof data92 == "object" && !Array.isArray(data92)) {
             if (data92.contract === void 0 || !func0.call(data92, "contract")) {
@@ -37062,7 +37062,7 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data95 === "passed" || data95 === "failed" || data95 === "unsupported" || data95 === "unknown")) {
-            const err202 = { instancePath: instancePath + "/preflight/status", schemaPath: "#/properties/preflight/properties/status/enum", keyword: "enum", params: { allowedValues: schema514.properties.preflight.properties.status.enum }, message: "must be equal to one of the allowed values" };
+            const err202 = { instancePath: instancePath + "/preflight/status", schemaPath: "#/properties/preflight/properties/status/enum", keyword: "enum", params: { allowedValues: schema519.properties.preflight.properties.status.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err202];
             } else {
@@ -37105,7 +37105,7 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
                 errors++;
               }
               if (!(data97 === "APPROVAL_INVALID" || data97 === "APPROVAL_REVOKED" || data97 === "APPROVAL_UNAVAILABLE" || data97 === "SPEC_UNKNOWN" || data97 === "PRODUCT_MISMATCH" || data97 === "DIMENSIONS_MISMATCH" || data97 === "BLEED_MISMATCH" || data97 === "SAFE_MISMATCH" || data97 === "DPI_MISMATCH" || data97 === "PROFILE_UNSUPPORTED" || data97 === "EXPORT_UNSUPPORTED" || data97 === "FONT_UNSUPPORTED" || data97 === "TRANSPARENCY_MISMATCH" || data97 === "ASPECT_MISMATCH" || data97 === "SURFACE_UNSUPPORTED" || data97 === "FACTS_UNSUPPORTED" || data97 === "PREFLIGHT_FAILED" || data97 === "PREVIEW_UNKNOWN" || data97 === "ROW_BINDING_MISMATCH" || data97 === "SOURCE_MISMATCH" || data97 === "POLICY_MISMATCH" || data97 === "CALIBRATION_ONLY" || data97 === "OWNER_ACCEPTANCE_PENDING" || data97 === "CANCELLED" || data97 === "SKIPPED_POLICY" || data97 === "SKIPPED_CANCELLED" || data97 === "INVALID_INPUT" || data97 === "HASH_MISMATCH" || data97 === "STORAGE_UNAVAILABLE" || data97 === "RENDER_UNAVAILABLE" || data97 === "EXPIRED" || data97 === "STALE" || data97 === "NOT_FOUND")) {
-                const err206 = { instancePath: instancePath + "/preflight/reasons/" + i4, schemaPath: "#/properties/preflight/properties/reasons/items/enum", keyword: "enum", params: { allowedValues: schema514.properties.preflight.properties.reasons.items.enum }, message: "must be equal to one of the allowed values" };
+                const err206 = { instancePath: instancePath + "/preflight/reasons/" + i4, schemaPath: "#/properties/preflight/properties/reasons/items/enum", keyword: "enum", params: { allowedValues: schema519.properties.preflight.properties.reasons.items.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err206];
                 } else {
@@ -37136,11 +37136,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.lineage_ref !== void 0 && func0.call(data, "lineage_ref")) {
       let data98 = data.lineage_ref;
-      if (!validate3078(data98, { instancePath: instancePath + "/lineage_ref", parentData: data, parentDataProperty: "lineage_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+      if (!validate3136(data98, { instancePath: instancePath + "/lineage_ref", parentData: data, parentDataProperty: "lineage_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
         errors = vErrors.length;
       } else {
-        var props14 = validate3078.evaluated.props;
+        var props14 = validate3136.evaluated.props;
       }
       if (data98 && typeof data98 == "object" && !Array.isArray(data98)) {
         if (data98.contract === void 0 || !func0.call(data98, "contract")) {
@@ -37252,15 +37252,15 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
           }
         }
         if (data101.job_ref !== void 0 && func0.call(data101, "job_ref")) {
-          if (!validate2798(data101.job_ref, { instancePath: instancePath + "/row_scope/job_ref", parentData: data101, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate2798.errors : vErrors.concat(validate2798.errors);
+          if (!validate2856(data101.job_ref, { instancePath: instancePath + "/row_scope/job_ref", parentData: data101, parentDataProperty: "job_ref", rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate2856.errors : vErrors.concat(validate2856.errors);
             errors = vErrors.length;
           }
         }
         if (data101.row_id !== void 0 && func0.call(data101, "row_id")) {
           let data103 = data101.row_id;
           if (typeof data103 === "string") {
-            if (!pattern1367.test(data103)) {
+            if (!pattern1384.test(data103)) {
               const err219 = { instancePath: instancePath + "/row_scope/row_id", schemaPath: "#/properties/row_scope/anyOf/0/properties/row_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
               if (vErrors === null) {
                 vErrors = [err219];
@@ -37412,11 +37412,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         const len5 = data106.length;
         for (let i5 = 0; i5 < len5; i5++) {
           let data107 = data106[i5];
-          if (!validate3078(data107, { instancePath: instancePath + "/usage_refs/" + i5, parentData: data106, parentDataProperty: i5, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+          if (!validate3136(data107, { instancePath: instancePath + "/usage_refs/" + i5, parentData: data106, parentDataProperty: i5, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
             errors = vErrors.length;
           } else {
-            var props16 = validate3078.evaluated.props;
+            var props16 = validate3136.evaluated.props;
           }
           if (data107 && typeof data107 == "object" && !Array.isArray(data107)) {
             if (data107.contract === void 0 || !func0.call(data107, "contract")) {
@@ -37508,11 +37508,11 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
         const len6 = data110.length;
         for (let i6 = 0; i6 < len6; i6++) {
           let data111 = data110[i6];
-          if (!validate3078(data111, { instancePath: instancePath + "/decision_refs/" + i6, parentData: data110, parentDataProperty: i6, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3078.errors : vErrors.concat(validate3078.errors);
+          if (!validate3136(data111, { instancePath: instancePath + "/decision_refs/" + i6, parentData: data110, parentDataProperty: i6, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3136.errors : vErrors.concat(validate3136.errors);
             errors = vErrors.length;
           } else {
-            var props17 = validate3078.evaluated.props;
+            var props17 = validate3136.evaluated.props;
           }
           if (data111 && typeof data111 == "object" && !Array.isArray(data111)) {
             if (data111.contract === void 0 || !func0.call(data111, "contract")) {
@@ -37589,15 +37589,15 @@ function validate3052(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3052.errors = vErrors;
+  validate3110.errors = vErrors;
   return errors === 0;
 }
-validate3052.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ProductionBundleDetached_1_0_0 = validate3111;
-function validate3112(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3110.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ProductionBundleDetached_1_0_0 = validate3169;
+function validate3170(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3112.evaluated;
+  const evaluated0 = validate3170.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -37677,7 +37677,7 @@ function validate3112(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -37889,7 +37889,7 @@ function validate3112(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -38265,16 +38265,16 @@ function validate3112(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate3112.errors = vErrors;
+  validate3170.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate3112.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate3111(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3170.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3169(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3111.evaluated;
+  const evaluated0 = validate3169.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -38400,11 +38400,11 @@ function validate3111(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.bundle_ref !== void 0 && func0.call(data, "bundle_ref")) {
       let data3 = data.bundle_ref;
-      if (!validate3112(data3, { instancePath: instancePath + "/bundle_ref", parentData: data, parentDataProperty: "bundle_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3112.errors : vErrors.concat(validate3112.errors);
+      if (!validate3170(data3, { instancePath: instancePath + "/bundle_ref", parentData: data, parentDataProperty: "bundle_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3170.errors : vErrors.concat(validate3170.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate3112.evaluated.props;
+        var props0 = validate3170.evaluated.props;
       }
       if (data3 && typeof data3 == "object" && !Array.isArray(data3)) {
         if (data3.contract === void 0 || !func0.call(data3, "contract")) {
@@ -38463,14 +38463,14 @@ function validate3111(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.manifest !== void 0 && func0.call(data, "manifest")) {
-      if (!validate2773(data.manifest, { instancePath: instancePath + "/manifest", parentData: data, parentDataProperty: "manifest", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2773.errors : vErrors.concat(validate2773.errors);
+      if (!validate2831(data.manifest, { instancePath: instancePath + "/manifest", parentData: data, parentDataProperty: "manifest", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2831.errors : vErrors.concat(validate2831.errors);
         errors = vErrors.length;
       }
     }
     if (data.archive !== void 0 && func0.call(data, "archive")) {
-      if (!validate2773(data.archive, { instancePath: instancePath + "/archive", parentData: data, parentDataProperty: "archive", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate2773.errors : vErrors.concat(validate2773.errors);
+      if (!validate2831(data.archive, { instancePath: instancePath + "/archive", parentData: data, parentDataProperty: "archive", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate2831.errors : vErrors.concat(validate2831.errors);
         errors = vErrors.length;
       }
     }
@@ -38553,18 +38553,18 @@ function validate3111(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3111.errors = vErrors;
+  validate3169.errors = vErrors;
   return errors === 0;
 }
-validate3111.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ProductionBundleRef_1_0_0 = validate2806;
-var ProductionDiagnostic_1_0_0 = validate3121;
-var schema518 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionDiagnostic/1.0.0", "title": "ProductionDiagnostic", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionDiagnostic", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "operation": { "type": "string", "enum": ["composeArtifact", "personalizeArtifactBatch", "inspectArtifact", "exportArtifactBundle", "compareTemplateCompatibility", "getArtifactManifestStatus"], "x-classification": "restricted" }, "reason_codes": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "operation", "reason_codes"], "x-classification": "restricted" };
-function validate3121(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3169.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ProductionBundleRef_1_0_0 = validate2864;
+var ProductionDiagnostic_1_0_0 = validate3179;
+var schema523 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionDiagnostic/1.0.0", "title": "ProductionDiagnostic", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionDiagnostic", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "operation": { "type": "string", "enum": ["composeArtifact", "personalizeArtifactBatch", "inspectArtifact", "exportArtifactBundle", "compareTemplateCompatibility", "getArtifactManifestStatus"], "x-classification": "restricted" }, "reason_codes": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "operation", "reason_codes"], "x-classification": "restricted" };
+function validate3179(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3121.evaluated;
+  const evaluated0 = validate3179.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -38663,7 +38663,7 @@ function validate3121(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema518.properties, key0)) {
+      if (!func0.call(schema523.properties, key0)) {
         const err10 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err10];
@@ -38837,7 +38837,7 @@ function validate3121(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data8 === "composeArtifact" || data8 === "personalizeArtifactBatch" || data8 === "inspectArtifact" || data8 === "exportArtifactBundle" || data8 === "compareTemplateCompatibility" || data8 === "getArtifactManifestStatus")) {
-        const err25 = { instancePath: instancePath + "/operation", schemaPath: "#/properties/operation/enum", keyword: "enum", params: { allowedValues: schema518.properties.operation.enum }, message: "must be equal to one of the allowed values" };
+        const err25 = { instancePath: instancePath + "/operation", schemaPath: "#/properties/operation/enum", keyword: "enum", params: { allowedValues: schema523.properties.operation.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err25];
         } else {
@@ -38880,7 +38880,7 @@ function validate3121(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data10 === "APPROVAL_INVALID" || data10 === "APPROVAL_REVOKED" || data10 === "APPROVAL_UNAVAILABLE" || data10 === "SPEC_UNKNOWN" || data10 === "PRODUCT_MISMATCH" || data10 === "DIMENSIONS_MISMATCH" || data10 === "BLEED_MISMATCH" || data10 === "SAFE_MISMATCH" || data10 === "DPI_MISMATCH" || data10 === "PROFILE_UNSUPPORTED" || data10 === "EXPORT_UNSUPPORTED" || data10 === "FONT_UNSUPPORTED" || data10 === "TRANSPARENCY_MISMATCH" || data10 === "ASPECT_MISMATCH" || data10 === "SURFACE_UNSUPPORTED" || data10 === "FACTS_UNSUPPORTED" || data10 === "PREFLIGHT_FAILED" || data10 === "PREVIEW_UNKNOWN" || data10 === "ROW_BINDING_MISMATCH" || data10 === "SOURCE_MISMATCH" || data10 === "POLICY_MISMATCH" || data10 === "CALIBRATION_ONLY" || data10 === "OWNER_ACCEPTANCE_PENDING" || data10 === "CANCELLED" || data10 === "SKIPPED_POLICY" || data10 === "SKIPPED_CANCELLED" || data10 === "INVALID_INPUT" || data10 === "HASH_MISMATCH" || data10 === "STORAGE_UNAVAILABLE" || data10 === "RENDER_UNAVAILABLE" || data10 === "EXPIRED" || data10 === "STALE" || data10 === "NOT_FOUND")) {
-            const err29 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema518.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
+            const err29 = { instancePath: instancePath + "/reason_codes/" + i0, schemaPath: "#/properties/reason_codes/items/enum", keyword: "enum", params: { allowedValues: schema523.properties.reason_codes.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err29];
             } else {
@@ -38908,17 +38908,17 @@ function validate3121(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3121.errors = vErrors;
+  validate3179.errors = vErrors;
   return errors === 0;
 }
-validate3121.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ProductionError_1_0_0 = validate2832;
-var ProductionExecutionPins_1_0_0 = validate3125;
-var schema519 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionExecutionPins/1.0.0", "title": "ProductionExecutionPins", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionExecutionPins", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "runtime_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "font_refs": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "minItems": 1, "maxItems": 16, "x-classification": "restricted" }, "output_policy_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "template_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "spec_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "capability_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "approval_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "runtime_ref", "font_refs", "output_policy_ref", "template_ref", "spec_ref", "capability_ref", "approval_ref"], "x-classification": "restricted" };
-function validate3128(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3179.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ProductionError_1_0_0 = validate2890;
+var ProductionExecutionPins_1_0_0 = validate3183;
+var schema524 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionExecutionPins/1.0.0", "title": "ProductionExecutionPins", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionExecutionPins", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "runtime_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "font_refs": { "type": "array", "items": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "minItems": 1, "maxItems": 16, "x-classification": "restricted" }, "output_policy_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "template_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "spec_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "capability_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, "approval_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "runtime_ref", "font_refs", "output_policy_ref", "template_ref", "spec_ref", "capability_ref", "approval_ref"], "x-classification": "restricted" };
+function validate3186(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3128.evaluated;
+  const evaluated0 = validate3186.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -38998,7 +38998,7 @@ function validate3128(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -39210,7 +39210,7 @@ function validate3128(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -39586,16 +39586,16 @@ function validate3128(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate3128.errors = vErrors;
+  validate3186.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate3128.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate3125(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3186.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3183(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3125.evaluated;
+  const evaluated0 = validate3183.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -39712,7 +39712,7 @@ function validate3125(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema519.properties, key0)) {
+      if (!func0.call(schema524.properties, key0)) {
         const err12 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err12];
@@ -39768,8 +39768,8 @@ function validate3125(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.runtime_ref !== void 0 && func0.call(data, "runtime_ref")) {
-      if (!validate3128(data.runtime_ref, { instancePath: instancePath + "/runtime_ref", parentData: data, parentDataProperty: "runtime_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3128.errors : vErrors.concat(validate3128.errors);
+      if (!validate3186(data.runtime_ref, { instancePath: instancePath + "/runtime_ref", parentData: data, parentDataProperty: "runtime_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3186.errors : vErrors.concat(validate3186.errors);
         errors = vErrors.length;
       }
     }
@@ -39796,8 +39796,8 @@ function validate3125(data, { instancePath = "", parentData, parentDataProperty,
         }
         const len0 = data6.length;
         for (let i0 = 0; i0 < len0; i0++) {
-          if (!validate3128(data6[i0], { instancePath: instancePath + "/font_refs/" + i0, parentData: data6, parentDataProperty: i0, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3128.errors : vErrors.concat(validate3128.errors);
+          if (!validate3186(data6[i0], { instancePath: instancePath + "/font_refs/" + i0, parentData: data6, parentDataProperty: i0, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3186.errors : vErrors.concat(validate3186.errors);
             errors = vErrors.length;
           }
         }
@@ -39812,32 +39812,32 @@ function validate3125(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
     if (data.output_policy_ref !== void 0 && func0.call(data, "output_policy_ref")) {
-      if (!validate3128(data.output_policy_ref, { instancePath: instancePath + "/output_policy_ref", parentData: data, parentDataProperty: "output_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3128.errors : vErrors.concat(validate3128.errors);
+      if (!validate3186(data.output_policy_ref, { instancePath: instancePath + "/output_policy_ref", parentData: data, parentDataProperty: "output_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3186.errors : vErrors.concat(validate3186.errors);
         errors = vErrors.length;
       }
     }
     if (data.template_ref !== void 0 && func0.call(data, "template_ref")) {
-      if (!validate3128(data.template_ref, { instancePath: instancePath + "/template_ref", parentData: data, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3128.errors : vErrors.concat(validate3128.errors);
+      if (!validate3186(data.template_ref, { instancePath: instancePath + "/template_ref", parentData: data, parentDataProperty: "template_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3186.errors : vErrors.concat(validate3186.errors);
         errors = vErrors.length;
       }
     }
     if (data.spec_ref !== void 0 && func0.call(data, "spec_ref")) {
-      if (!validate3128(data.spec_ref, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3128.errors : vErrors.concat(validate3128.errors);
+      if (!validate3186(data.spec_ref, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3186.errors : vErrors.concat(validate3186.errors);
         errors = vErrors.length;
       }
     }
     if (data.capability_ref !== void 0 && func0.call(data, "capability_ref")) {
-      if (!validate3128(data.capability_ref, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3128.errors : vErrors.concat(validate3128.errors);
+      if (!validate3186(data.capability_ref, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3186.errors : vErrors.concat(validate3186.errors);
         errors = vErrors.length;
       }
     }
     if (data.approval_ref !== void 0 && func0.call(data, "approval_ref")) {
-      if (!validate3128(data.approval_ref, { instancePath: instancePath + "/approval_ref", parentData: data, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3128.errors : vErrors.concat(validate3128.errors);
+      if (!validate3186(data.approval_ref, { instancePath: instancePath + "/approval_ref", parentData: data, parentDataProperty: "approval_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3186.errors : vErrors.concat(validate3186.errors);
         errors = vErrors.length;
       }
     }
@@ -39850,17 +39850,17 @@ function validate3125(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3125.errors = vErrors;
+  validate3183.errors = vErrors;
   return errors === 0;
 }
-validate3125.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ProductionPolicy_1_0_0 = validate3139;
-var schema521 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionPolicy/1.0.0", "title": "ProductionPolicy", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "kind": { "type": "string", "enum": ["formatting", "layout", "output", "repair", "warning", "proof", "inspection"], "x-classification": "restricted" }, "commitment": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "formatting": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "locale": { "type": "string", "maxLength": 64, "x-classification": "restricted" }, "timezone": { "type": "string", "maxLength": 100, "x-classification": "restricted" } }, "required": ["locale", "timezone"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "output": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "color_space": { "const": "sRGB", "x-classification": "public" }, "pdf_profile": { "const": "plain", "x-classification": "public" }, "minimum_dpi": { "type": "integer", "minimum": 1, "maximum": 9600, "x-classification": "restricted" }, "formats": { "type": "array", "items": { "type": "string", "enum": ["svg", "png", "pdf"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 3, "x-classification": "restricted" } }, "required": ["color_space", "pdf_profile", "minimum_dpi", "formats"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "kind", "commitment", "formatting", "output"], "x-classification": "restricted" };
-function validate3139(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3183.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ProductionPolicy_1_0_0 = validate3197;
+var schema526 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionPolicy/1.0.0", "title": "ProductionPolicy", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "kind": { "type": "string", "enum": ["formatting", "layout", "output", "repair", "warning", "proof", "inspection"], "x-classification": "restricted" }, "commitment": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "formatting": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "locale": { "type": "string", "maxLength": 64, "x-classification": "restricted" }, "timezone": { "type": "string", "maxLength": 100, "x-classification": "restricted" } }, "required": ["locale", "timezone"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "output": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "color_space": { "const": "sRGB", "x-classification": "public" }, "pdf_profile": { "const": "plain", "x-classification": "public" }, "minimum_dpi": { "type": "integer", "minimum": 1, "maximum": 9600, "x-classification": "restricted" }, "formats": { "type": "array", "items": { "type": "string", "enum": ["svg", "png", "pdf"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 3, "x-classification": "restricted" } }, "required": ["color_space", "pdf_profile", "minimum_dpi", "formats"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "kind", "commitment", "formatting", "output"], "x-classification": "restricted" };
+function validate3197(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3139.evaluated;
+  const evaluated0 = validate3197.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -39977,7 +39977,7 @@ function validate3139(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema521.properties, key0)) {
+      if (!func0.call(schema526.properties, key0)) {
         const err12 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err12];
@@ -40151,7 +40151,7 @@ function validate3139(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data8 === "formatting" || data8 === "layout" || data8 === "output" || data8 === "repair" || data8 === "warning" || data8 === "proof" || data8 === "inspection")) {
-        const err27 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema521.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema526.properties.kind.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -40457,7 +40457,7 @@ function validate3139(data, { instancePath = "", parentData, parentDataProperty,
                 errors++;
               }
               if (!(data18 === "svg" || data18 === "png" || data18 === "pdf")) {
-                const err54 = { instancePath: instancePath + "/output/formats/" + i0, schemaPath: "#/properties/output/anyOf/0/properties/formats/items/enum", keyword: "enum", params: { allowedValues: schema521.properties.output.anyOf[0].properties.formats.items.enum }, message: "must be equal to one of the allowed values" };
+                const err54 = { instancePath: instancePath + "/output/formats/" + i0, schemaPath: "#/properties/output/anyOf/0/properties/formats/items/enum", keyword: "enum", params: { allowedValues: schema526.properties.output.anyOf[0].properties.formats.items.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err54];
                 } else {
@@ -40527,17 +40527,17 @@ function validate3139(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3139.errors = vErrors;
+  validate3197.errors = vErrors;
   return errors === 0;
 }
-validate3139.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ProductionReference_1_0_0 = validate2775;
-var schema467 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionReference/1.0.0", "title": "ProductionReference", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionReference", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "reference": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["DesignVersion", "ArtifactHandoffManifest", "ApprovalReceipt", "PrintSpec", "FulfillmentCapabilitySnapshot", "EventIntelligencePackage", "JobStatus", "UsageEvent", "DecisionReceipt", "EvaluationEvidence", "TemplateSpec", "Composition", "PersonalizationSchema", "ProductionPolicy", "ProductionRuntime", "ProductionResource", "PreflightReport", "ProductionDiagnostic", "CsvDialect", "CsvMapping", "CsvCheckpoint", "BatchResult"], "x-classification": "restricted" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["ArtifactFile", "ProductionBundle"], "x-classification": "restricted" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundleDetached", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "reference"], "x-classification": "restricted", "$defs": { "Reference": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["DesignVersion", "ArtifactHandoffManifest", "ApprovalReceipt", "PrintSpec", "FulfillmentCapabilitySnapshot", "EventIntelligencePackage", "JobStatus", "UsageEvent", "DecisionReceipt", "EvaluationEvidence", "TemplateSpec", "Composition", "PersonalizationSchema", "ProductionPolicy", "ProductionRuntime", "ProductionResource", "PreflightReport", "ProductionDiagnostic", "CsvDialect", "CsvMapping", "CsvCheckpoint", "BatchResult"], "x-classification": "restricted" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["ArtifactFile", "ProductionBundle"], "x-classification": "restricted" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundleDetached", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }], "x-classification": "restricted" }, "NmRect": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" }, "ExactValue": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "display", "x-classification": "public" }, "value": { "type": "string", "maxLength": 8192, "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["kind", "value"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "datetime", "x-classification": "public" }, "value": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "restricted", "type": "string", "pattern": "Z(?![\\s\\S])" }, "timezone": { "type": "string", "pattern": "^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])", "maxLength": 100, "x-classification": "restricted" }, "locale": { "type": "string", "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])", "x-classification": "restricted" }, "format_policy_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["kind", "value", "timezone", "locale", "format_policy_ref"], "x-classification": "restricted" }], "x-classification": "restricted" }, "AssetUse": { "type": "object", "additionalProperties": false, "properties": { "asset_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "permission_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "purpose": { "type": "string", "enum": ["artwork", "overlay"], "x-classification": "restricted" }, "normalization_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["asset_ref", "permission_ref", "purpose", "normalization_policy_ref"], "x-classification": "restricted" }, "Eligibility": { "type": "object", "additionalProperties": false, "properties": { "state": { "type": "string", "enum": ["eligible", "blocked", "unknown"], "x-classification": "restricted" }, "reason_codes": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "checked_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "restricted", "type": "string", "pattern": "Z(?![\\s\\S])" }, "evidence_mode": { "type": "string", "enum": ["simulated", "offline", "sandbox", "live"], "x-classification": "restricted" }, "handoff_eligible": { "type": "boolean", "x-classification": "restricted" } }, "required": ["state", "reason_codes", "checked_at", "evidence_mode", "handoff_eligible"], "x-classification": "restricted" } } };
-function validate2775(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3197.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ProductionReference_1_0_0 = validate2833;
+var schema472 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionReference/1.0.0", "title": "ProductionReference", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionReference", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "reference": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["DesignVersion", "ArtifactHandoffManifest", "ApprovalReceipt", "PrintSpec", "FulfillmentCapabilitySnapshot", "EventIntelligencePackage", "JobStatus", "UsageEvent", "DecisionReceipt", "EvaluationEvidence", "TemplateSpec", "Composition", "PersonalizationSchema", "ProductionPolicy", "ProductionRuntime", "ProductionResource", "PreflightReport", "ProductionDiagnostic", "CsvDialect", "CsvMapping", "CsvCheckpoint", "BatchResult"], "x-classification": "restricted" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["ArtifactFile", "ProductionBundle"], "x-classification": "restricted" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundleDetached", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "reference"], "x-classification": "restricted", "$defs": { "Reference": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["DesignVersion", "ArtifactHandoffManifest", "ApprovalReceipt", "PrintSpec", "FulfillmentCapabilitySnapshot", "EventIntelligencePackage", "JobStatus", "UsageEvent", "DecisionReceipt", "EvaluationEvidence", "TemplateSpec", "Composition", "PersonalizationSchema", "ProductionPolicy", "ProductionRuntime", "ProductionResource", "PreflightReport", "ProductionDiagnostic", "CsvDialect", "CsvMapping", "CsvCheckpoint", "BatchResult"], "x-classification": "restricted" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "type": "string", "enum": ["ArtifactFile", "ProductionBundle"], "x-classification": "restricted" }, "schema_version": { "const": "2.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionBundleDetached", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "id", "revision", "content_hash"], "x-classification": "restricted" }], "x-classification": "restricted" }, "NmRect": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" }, "ExactValue": { "oneOf": [{ "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "display", "x-classification": "public" }, "value": { "type": "string", "maxLength": 8192, "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["kind", "value"], "x-classification": "restricted" }, { "type": "object", "additionalProperties": false, "properties": { "kind": { "const": "datetime", "x-classification": "public" }, "value": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "restricted", "type": "string", "pattern": "Z(?![\\s\\S])" }, "timezone": { "type": "string", "pattern": "^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+){0,3}(?![\\s\\S])", "maxLength": 100, "x-classification": "restricted" }, "locale": { "type": "string", "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}(?![\\s\\S])", "x-classification": "restricted" }, "format_policy_ref": { "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" } }, "required": ["kind", "value", "timezone", "locale", "format_policy_ref"], "x-classification": "restricted" }], "x-classification": "restricted" }, "AssetUse": { "type": "object", "additionalProperties": false, "properties": { "asset_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ArtifactFile", "x-classification": "public" }, "schema_version": { "const": "2.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "permission_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ApprovalReceipt", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "purpose": { "type": "string", "enum": ["artwork", "overlay"], "x-classification": "restricted" }, "normalization_policy_ref": { "anyOf": [{ "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["asset_ref", "permission_ref", "purpose", "normalization_policy_ref"], "x-classification": "restricted" }, "Eligibility": { "type": "object", "additionalProperties": false, "properties": { "state": { "type": "string", "enum": ["eligible", "blocked", "unknown"], "x-classification": "restricted" }, "reason_codes": { "type": "array", "items": { "type": "string", "enum": ["APPROVAL_INVALID", "APPROVAL_REVOKED", "APPROVAL_UNAVAILABLE", "SPEC_UNKNOWN", "PRODUCT_MISMATCH", "DIMENSIONS_MISMATCH", "BLEED_MISMATCH", "SAFE_MISMATCH", "DPI_MISMATCH", "PROFILE_UNSUPPORTED", "EXPORT_UNSUPPORTED", "FONT_UNSUPPORTED", "TRANSPARENCY_MISMATCH", "ASPECT_MISMATCH", "SURFACE_UNSUPPORTED", "FACTS_UNSUPPORTED", "PREFLIGHT_FAILED", "PREVIEW_UNKNOWN", "ROW_BINDING_MISMATCH", "SOURCE_MISMATCH", "POLICY_MISMATCH", "CALIBRATION_ONLY", "OWNER_ACCEPTANCE_PENDING", "CANCELLED", "SKIPPED_POLICY", "SKIPPED_CANCELLED", "INVALID_INPUT", "HASH_MISMATCH", "STORAGE_UNAVAILABLE", "RENDER_UNAVAILABLE", "EXPIRED", "STALE", "NOT_FOUND"], "x-classification": "restricted" }, "minItems": 0, "maxItems": 32, "x-classification": "restricted" }, "checked_at": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime", "x-classification": "restricted", "type": "string", "pattern": "Z(?![\\s\\S])" }, "evidence_mode": { "type": "string", "enum": ["simulated", "offline", "sandbox", "live"], "x-classification": "restricted" }, "handoff_eligible": { "type": "boolean", "x-classification": "restricted" } }, "required": ["state", "reason_codes", "checked_at", "evidence_mode", "handoff_eligible"], "x-classification": "restricted" } } };
+function validate2833(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate2775.evaluated;
+  const evaluated0 = validate2833.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -40700,7 +40700,7 @@ function validate2775(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data4 === "DesignVersion" || data4 === "ArtifactHandoffManifest" || data4 === "ApprovalReceipt" || data4 === "PrintSpec" || data4 === "FulfillmentCapabilitySnapshot" || data4 === "EventIntelligencePackage" || data4 === "JobStatus" || data4 === "UsageEvent" || data4 === "DecisionReceipt" || data4 === "EvaluationEvidence" || data4 === "TemplateSpec" || data4 === "Composition" || data4 === "PersonalizationSchema" || data4 === "ProductionPolicy" || data4 === "ProductionRuntime" || data4 === "ProductionResource" || data4 === "PreflightReport" || data4 === "ProductionDiagnostic" || data4 === "CsvDialect" || data4 === "CsvMapping" || data4 === "CsvCheckpoint" || data4 === "BatchResult")) {
-            const err15 = { instancePath: instancePath + "/reference/contract", schemaPath: "#/properties/reference/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema467.properties.reference.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+            const err15 = { instancePath: instancePath + "/reference/contract", schemaPath: "#/properties/reference/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema472.properties.reference.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err15];
             } else {
@@ -40912,7 +40912,7 @@ function validate2775(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data9 === "ArtifactFile" || data9 === "ProductionBundle")) {
-            const err35 = { instancePath: instancePath + "/reference/contract", schemaPath: "#/properties/reference/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema467.properties.reference.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+            const err35 = { instancePath: instancePath + "/reference/contract", schemaPath: "#/properties/reference/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema472.properties.reference.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err35];
             } else {
@@ -41298,16 +41298,16 @@ function validate2775(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate2775.errors = vErrors;
+  validate2833.errors = vErrors;
   return errors === 0;
 }
-validate2775.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ProductionResource_1_0_0 = validate3144;
-var schema522 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionResource/1.0.0", "title": "ProductionResource", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "kind": { "type": "string", "enum": ["font", "license", "product", "profile", "asset", "lineage"], "x-classification": "restricted" }, "byte_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "license_ref": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "kind", "byte_hash", "license_ref"], "x-classification": "restricted" };
-function validate3149(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate2833.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ProductionResource_1_0_0 = validate3202;
+var schema527 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionResource/1.0.0", "title": "ProductionResource", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "kind": { "type": "string", "enum": ["font", "license", "product", "profile", "asset", "lineage"], "x-classification": "restricted" }, "byte_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "license_ref": { "anyOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "kind", "byte_hash", "license_ref"], "x-classification": "restricted" };
+function validate3207(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3149.evaluated;
+  const evaluated0 = validate3207.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -41387,7 +41387,7 @@ function validate3149(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -41599,7 +41599,7 @@ function validate3149(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -41975,16 +41975,16 @@ function validate3149(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate3149.errors = vErrors;
+  validate3207.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate3149.evaluated = { "dynamicProps": true, "dynamicItems": false };
-function validate3144(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3207.evaluated = { "dynamicProps": true, "dynamicItems": false };
+function validate3202(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3144.evaluated;
+  const evaluated0 = validate3202.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -42092,7 +42092,7 @@ function validate3144(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema522.properties, key0)) {
+      if (!func0.call(schema527.properties, key0)) {
         const err11 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err11];
@@ -42266,7 +42266,7 @@ function validate3144(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data8 === "font" || data8 === "license" || data8 === "product" || data8 === "profile" || data8 === "asset" || data8 === "lineage")) {
-        const err26 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema522.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+        const err26 = { instancePath: instancePath + "/kind", schemaPath: "#/properties/kind/enum", keyword: "enum", params: { allowedValues: schema527.properties.kind.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err26];
         } else {
@@ -42315,8 +42315,8 @@ function validate3144(data, { instancePath = "", parentData, parentDataProperty,
       const _errs29 = errors;
       let valid1 = false;
       const _errs30 = errors;
-      if (!validate3149(data10, { instancePath: instancePath + "/license_ref", parentData: data, parentDataProperty: "license_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3149.errors : vErrors.concat(validate3149.errors);
+      if (!validate3207(data10, { instancePath: instancePath + "/license_ref", parentData: data, parentDataProperty: "license_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3207.errors : vErrors.concat(validate3207.errors);
         errors = vErrors.length;
       }
       var _valid0 = _errs30 === errors;
@@ -42361,17 +42361,17 @@ function validate3144(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3144.errors = vErrors;
+  validate3202.errors = vErrors;
   return errors === 0;
 }
-validate3144.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var ProductionRuntime_1_0_0 = validate3154;
-var schema524 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionRuntime/1.0.0", "title": "ProductionRuntime", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionRuntime", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "source_revision": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/SourceRevision", "x-classification": "restricted" }, "renderer_commitment": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "parser_commitment": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "source_revision", "renderer_commitment", "parser_commitment"], "x-classification": "restricted" };
-function validate3154(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3202.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var ProductionRuntime_1_0_0 = validate3212;
+var schema529 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/ProductionRuntime/1.0.0", "title": "ProductionRuntime", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "ProductionRuntime", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "source_revision": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/SourceRevision", "x-classification": "restricted" }, "renderer_commitment": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "parser_commitment": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "id", "revision", "content_hash", "source_revision", "renderer_commitment", "parser_commitment"], "x-classification": "restricted" };
+function validate3212(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3154.evaluated;
+  const evaluated0 = validate3212.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -42479,7 +42479,7 @@ function validate3154(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema524.properties, key0)) {
+      if (!func0.call(schema529.properties, key0)) {
         const err11 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err11];
@@ -42726,17 +42726,17 @@ function validate3154(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3154.errors = vErrors;
+  validate3212.errors = vErrors;
   return errors === 0;
 }
-validate3154.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var RowResult_1_0_0 = validate2825;
-var TemplateSpec_1_0_0 = validate3161;
-var schema525 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/TemplateSpec/1.0.0", "title": "TemplateSpec", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "template_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "product_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "layout_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "coordinate_geometry": { "type": "object", "additionalProperties": false, "properties": { "unit": { "const": "nm", "x-classification": "public" }, "origin": { "const": "top-left", "x-classification": "public" }, "canvas": { "type": "object", "additionalProperties": false, "properties": { "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["width_nm", "height_nm"], "x-classification": "restricted" }, "trim": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" }, "bleed": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" }, "safe": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" } }, "required": ["unit", "origin", "canvas", "trim", "bleed", "safe"], "x-classification": "restricted" }, "orientation": { "type": "string", "enum": ["portrait", "landscape", "square"], "x-classification": "restricted" }, "minimum_effective_dpi": { "type": "integer", "minimum": 1, "maximum": 9600, "x-classification": "restricted" }, "color_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "formatting_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "export_formats": { "type": "array", "items": { "type": "string", "enum": ["svg", "png", "pdf"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 3, "x-classification": "restricted", "uniqueItems": true }, "font_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 1, "maxItems": 16, "x-classification": "restricted" }, "slots": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "kind": { "type": "string", "enum": ["artwork", "text", "overlay", "shape", "guide"], "x-classification": "restricted" }, "bounds": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" }, "required": { "type": "boolean", "x-classification": "restricted" }, "font_bounds_nm": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "minimum": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "maximum": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["minimum", "maximum"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "allowed_font_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 0, "maxItems": 16, "x-classification": "restricted" }, "allowed_fits": { "type": "array", "items": { "type": "string", "enum": ["contain", "cover", "exact"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 3, "x-classification": "restricted", "uniqueItems": true }, "allow_crop": { "type": "boolean", "x-classification": "restricted" }, "maximum_rotation_degrees": { "type": "number", "minimum": 0, "maximum": 180, "x-classification": "restricted" }, "field_id": { "anyOf": [{ "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["slot_id", "kind", "bounds", "required", "font_bounds_nm", "allowed_font_refs", "allowed_fits", "allow_crop", "maximum_rotation_degrees", "field_id"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 256, "x-classification": "restricted" }, "personalization_schema_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PersonalizationSchema", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "warning_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "proof_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "template_id", "revision", "content_hash", "product_ref", "spec_ref", "capability_ref", "layout_policy_ref", "coordinate_geometry", "orientation", "minimum_effective_dpi", "color_policy_ref", "formatting_policy_ref", "export_formats", "font_refs", "slots", "personalization_schema_ref", "warning_policy_ref", "proof_policy_ref"], "x-classification": "restricted" };
-function validate3165(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3212.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var RowResult_1_0_0 = validate2883;
+var TemplateSpec_1_0_0 = validate3219;
+var schema530 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://schemas.jevelopers.org/TemplateSpec/1.0.0", "title": "TemplateSpec", "type": "object", "additionalProperties": false, "properties": { "contract": { "const": "TemplateSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" }, "policy_version": { "const": "1.0.0", "x-classification": "public" }, "tenant_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId", "x-classification": "restricted" }, "project_id": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId", "x-classification": "restricted" }, "template_id": { "type": "string", "format": "uuid", "x-classification": "restricted", "minLength": 36, "maxLength": 36 }, "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-classification": "restricted" }, "content_hash": { "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256", "x-classification": "restricted", "type": "string", "minLength": 71, "maxLength": 71 }, "product_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "spec_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PrintSpec", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "capability_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "FulfillmentCapabilitySnapshot", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "layout_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "coordinate_geometry": { "type": "object", "additionalProperties": false, "properties": { "unit": { "const": "nm", "x-classification": "public" }, "origin": { "const": "top-left", "x-classification": "public" }, "canvas": { "type": "object", "additionalProperties": false, "properties": { "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["width_nm", "height_nm"], "x-classification": "restricted" }, "trim": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" }, "bleed": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" }, "safe": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" } }, "required": ["unit", "origin", "canvas", "trim", "bleed", "safe"], "x-classification": "restricted" }, "orientation": { "type": "string", "enum": ["portrait", "landscape", "square"], "x-classification": "restricted" }, "minimum_effective_dpi": { "type": "integer", "minimum": 1, "maximum": 9600, "x-classification": "restricted" }, "color_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "formatting_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "export_formats": { "type": "array", "items": { "type": "string", "enum": ["svg", "png", "pdf"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 3, "x-classification": "restricted", "uniqueItems": true }, "font_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 1, "maxItems": 16, "x-classification": "restricted" }, "slots": { "type": "array", "items": { "type": "object", "additionalProperties": false, "properties": { "slot_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, "kind": { "type": "string", "enum": ["artwork", "text", "overlay", "shape", "guide"], "x-classification": "restricted" }, "bounds": { "type": "object", "additionalProperties": false, "properties": { "x_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "y_nm": { "type": "string", "pattern": "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "x-classification": "restricted" }, "width_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "height_nm": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["x_nm", "y_nm", "width_nm", "height_nm"], "x-classification": "restricted" }, "required": { "type": "boolean", "x-classification": "restricted" }, "font_bounds_nm": { "anyOf": [{ "type": "object", "additionalProperties": false, "properties": { "minimum": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" }, "maximum": { "type": "string", "pattern": "^[1-9][0-9]{0,9}(?![\\s\\S])", "x-classification": "restricted" } }, "required": ["minimum", "maximum"], "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" }, "allowed_font_refs": { "type": "array", "items": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionResource", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "minItems": 0, "maxItems": 16, "x-classification": "restricted" }, "allowed_fits": { "type": "array", "items": { "type": "string", "enum": ["contain", "cover", "exact"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 3, "x-classification": "restricted", "uniqueItems": true }, "allow_crop": { "type": "boolean", "x-classification": "restricted" }, "maximum_rotation_degrees": { "type": "number", "minimum": 0, "maximum": 180, "x-classification": "restricted" }, "field_id": { "anyOf": [{ "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])", "x-classification": "restricted" }, { "type": "null" }], "x-classification": "restricted" } }, "required": ["slot_id", "kind", "bounds", "required", "font_bounds_nm", "allowed_font_refs", "allowed_fits", "allow_crop", "maximum_rotation_degrees", "field_id"], "x-classification": "restricted" }, "minItems": 1, "maxItems": 256, "x-classification": "restricted" }, "personalization_schema_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "PersonalizationSchema", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "warning_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" }, "proof_policy_ref": { "allOf": [{ "$ref": "https://schemas.jevelopers.org/ProductionReference/1.0.0#/$defs/Reference", "x-classification": "restricted" }, { "type": "object", "properties": { "contract": { "const": "ProductionPolicy", "x-classification": "public" }, "schema_version": { "const": "1.0.0", "x-classification": "public" } }, "required": ["contract", "schema_version"] }], "x-classification": "restricted" } }, "required": ["contract", "schema_version", "policy_version", "tenant_id", "project_id", "template_id", "revision", "content_hash", "product_ref", "spec_ref", "capability_ref", "layout_policy_ref", "coordinate_geometry", "orientation", "minimum_effective_dpi", "color_policy_ref", "formatting_policy_ref", "export_formats", "font_refs", "slots", "personalization_schema_ref", "warning_policy_ref", "proof_policy_ref"], "x-classification": "restricted" };
+function validate3223(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3165.evaluated;
+  const evaluated0 = validate3223.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -42816,7 +42816,7 @@ function validate3165(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -43028,7 +43028,7 @@ function validate3165(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -43404,17 +43404,17 @@ function validate3165(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate3165.errors = vErrors;
+  validate3223.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate3165.evaluated = { "dynamicProps": true, "dynamicItems": false };
-var pattern1412 = new RegExp("^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "u");
-function validate3161(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3223.evaluated = { "dynamicProps": true, "dynamicItems": false };
+var pattern1429 = new RegExp("^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])", "u");
+function validate3219(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   ;
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3161.evaluated;
+  const evaluated0 = validate3219.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -43630,7 +43630,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
       errors++;
     }
     for (const key0 of Object.keys(data)) {
-      if (!func0.call(schema525.properties, key0)) {
+      if (!func0.call(schema530.properties, key0)) {
         const err23 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err23];
@@ -43794,11 +43794,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.product_ref !== void 0 && func0.call(data, "product_ref")) {
       let data8 = data.product_ref;
-      if (!validate3165(data8, { instancePath: instancePath + "/product_ref", parentData: data, parentDataProperty: "product_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+      if (!validate3223(data8, { instancePath: instancePath + "/product_ref", parentData: data, parentDataProperty: "product_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
         errors = vErrors.length;
       } else {
-        var props0 = validate3165.evaluated.props;
+        var props0 = validate3223.evaluated.props;
       }
       if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
         if (data8.contract === void 0 || !func0.call(data8, "contract")) {
@@ -43858,11 +43858,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.spec_ref !== void 0 && func0.call(data, "spec_ref")) {
       let data11 = data.spec_ref;
-      if (!validate3165(data11, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+      if (!validate3223(data11, { instancePath: instancePath + "/spec_ref", parentData: data, parentDataProperty: "spec_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
         errors = vErrors.length;
       } else {
-        var props1 = validate3165.evaluated.props;
+        var props1 = validate3223.evaluated.props;
       }
       if (data11 && typeof data11 == "object" && !Array.isArray(data11)) {
         if (data11.contract === void 0 || !func0.call(data11, "contract")) {
@@ -43922,11 +43922,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.capability_ref !== void 0 && func0.call(data, "capability_ref")) {
       let data14 = data.capability_ref;
-      if (!validate3165(data14, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+      if (!validate3223(data14, { instancePath: instancePath + "/capability_ref", parentData: data, parentDataProperty: "capability_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
         errors = vErrors.length;
       } else {
-        var props2 = validate3165.evaluated.props;
+        var props2 = validate3223.evaluated.props;
       }
       if (data14 && typeof data14 == "object" && !Array.isArray(data14)) {
         if (data14.contract === void 0 || !func0.call(data14, "contract")) {
@@ -43986,11 +43986,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.layout_policy_ref !== void 0 && func0.call(data, "layout_policy_ref")) {
       let data17 = data.layout_policy_ref;
-      if (!validate3165(data17, { instancePath: instancePath + "/layout_policy_ref", parentData: data, parentDataProperty: "layout_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+      if (!validate3223(data17, { instancePath: instancePath + "/layout_policy_ref", parentData: data, parentDataProperty: "layout_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
         errors = vErrors.length;
       } else {
-        var props3 = validate3165.evaluated.props;
+        var props3 = validate3223.evaluated.props;
       }
       if (data17 && typeof data17 == "object" && !Array.isArray(data17)) {
         if (data17.contract === void 0 || !func0.call(data17, "contract")) {
@@ -44173,7 +44173,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data23.width_nm !== void 0 && func0.call(data23, "width_nm")) {
               let data24 = data23.width_nm;
               if (typeof data24 === "string") {
-                if (!pattern1365.test(data24)) {
+                if (!pattern1382.test(data24)) {
                   const err69 = { instancePath: instancePath + "/coordinate_geometry/canvas/width_nm", schemaPath: "#/properties/coordinate_geometry/properties/canvas/properties/width_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err69];
@@ -44195,7 +44195,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data23.height_nm !== void 0 && func0.call(data23, "height_nm")) {
               let data25 = data23.height_nm;
               if (typeof data25 === "string") {
-                if (!pattern1365.test(data25)) {
+                if (!pattern1382.test(data25)) {
                   const err71 = { instancePath: instancePath + "/coordinate_geometry/canvas/height_nm", schemaPath: "#/properties/coordinate_geometry/properties/canvas/properties/height_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err71];
@@ -44277,7 +44277,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data26.x_nm !== void 0 && func0.call(data26, "x_nm")) {
               let data27 = data26.x_nm;
               if (typeof data27 === "string") {
-                if (!pattern1412.test(data27)) {
+                if (!pattern1429.test(data27)) {
                   const err79 = { instancePath: instancePath + "/coordinate_geometry/trim/x_nm", schemaPath: "#/properties/coordinate_geometry/properties/trim/properties/x_nm/pattern", keyword: "pattern", params: { pattern: "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])" }, message: 'must match pattern "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err79];
@@ -44299,7 +44299,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data26.y_nm !== void 0 && func0.call(data26, "y_nm")) {
               let data28 = data26.y_nm;
               if (typeof data28 === "string") {
-                if (!pattern1412.test(data28)) {
+                if (!pattern1429.test(data28)) {
                   const err81 = { instancePath: instancePath + "/coordinate_geometry/trim/y_nm", schemaPath: "#/properties/coordinate_geometry/properties/trim/properties/y_nm/pattern", keyword: "pattern", params: { pattern: "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])" }, message: 'must match pattern "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err81];
@@ -44321,7 +44321,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data26.width_nm !== void 0 && func0.call(data26, "width_nm")) {
               let data29 = data26.width_nm;
               if (typeof data29 === "string") {
-                if (!pattern1365.test(data29)) {
+                if (!pattern1382.test(data29)) {
                   const err83 = { instancePath: instancePath + "/coordinate_geometry/trim/width_nm", schemaPath: "#/properties/coordinate_geometry/properties/trim/properties/width_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err83];
@@ -44343,7 +44343,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data26.height_nm !== void 0 && func0.call(data26, "height_nm")) {
               let data30 = data26.height_nm;
               if (typeof data30 === "string") {
-                if (!pattern1365.test(data30)) {
+                if (!pattern1382.test(data30)) {
                   const err85 = { instancePath: instancePath + "/coordinate_geometry/trim/height_nm", schemaPath: "#/properties/coordinate_geometry/properties/trim/properties/height_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err85];
@@ -44425,7 +44425,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data31.x_nm !== void 0 && func0.call(data31, "x_nm")) {
               let data32 = data31.x_nm;
               if (typeof data32 === "string") {
-                if (!pattern1412.test(data32)) {
+                if (!pattern1429.test(data32)) {
                   const err93 = { instancePath: instancePath + "/coordinate_geometry/bleed/x_nm", schemaPath: "#/properties/coordinate_geometry/properties/bleed/properties/x_nm/pattern", keyword: "pattern", params: { pattern: "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])" }, message: 'must match pattern "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err93];
@@ -44447,7 +44447,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data31.y_nm !== void 0 && func0.call(data31, "y_nm")) {
               let data33 = data31.y_nm;
               if (typeof data33 === "string") {
-                if (!pattern1412.test(data33)) {
+                if (!pattern1429.test(data33)) {
                   const err95 = { instancePath: instancePath + "/coordinate_geometry/bleed/y_nm", schemaPath: "#/properties/coordinate_geometry/properties/bleed/properties/y_nm/pattern", keyword: "pattern", params: { pattern: "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])" }, message: 'must match pattern "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err95];
@@ -44469,7 +44469,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data31.width_nm !== void 0 && func0.call(data31, "width_nm")) {
               let data34 = data31.width_nm;
               if (typeof data34 === "string") {
-                if (!pattern1365.test(data34)) {
+                if (!pattern1382.test(data34)) {
                   const err97 = { instancePath: instancePath + "/coordinate_geometry/bleed/width_nm", schemaPath: "#/properties/coordinate_geometry/properties/bleed/properties/width_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err97];
@@ -44491,7 +44491,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data31.height_nm !== void 0 && func0.call(data31, "height_nm")) {
               let data35 = data31.height_nm;
               if (typeof data35 === "string") {
-                if (!pattern1365.test(data35)) {
+                if (!pattern1382.test(data35)) {
                   const err99 = { instancePath: instancePath + "/coordinate_geometry/bleed/height_nm", schemaPath: "#/properties/coordinate_geometry/properties/bleed/properties/height_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err99];
@@ -44573,7 +44573,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data36.x_nm !== void 0 && func0.call(data36, "x_nm")) {
               let data37 = data36.x_nm;
               if (typeof data37 === "string") {
-                if (!pattern1412.test(data37)) {
+                if (!pattern1429.test(data37)) {
                   const err107 = { instancePath: instancePath + "/coordinate_geometry/safe/x_nm", schemaPath: "#/properties/coordinate_geometry/properties/safe/properties/x_nm/pattern", keyword: "pattern", params: { pattern: "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])" }, message: 'must match pattern "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err107];
@@ -44595,7 +44595,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data36.y_nm !== void 0 && func0.call(data36, "y_nm")) {
               let data38 = data36.y_nm;
               if (typeof data38 === "string") {
-                if (!pattern1412.test(data38)) {
+                if (!pattern1429.test(data38)) {
                   const err109 = { instancePath: instancePath + "/coordinate_geometry/safe/y_nm", schemaPath: "#/properties/coordinate_geometry/properties/safe/properties/y_nm/pattern", keyword: "pattern", params: { pattern: "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])" }, message: 'must match pattern "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err109];
@@ -44617,7 +44617,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data36.width_nm !== void 0 && func0.call(data36, "width_nm")) {
               let data39 = data36.width_nm;
               if (typeof data39 === "string") {
-                if (!pattern1365.test(data39)) {
+                if (!pattern1382.test(data39)) {
                   const err111 = { instancePath: instancePath + "/coordinate_geometry/safe/width_nm", schemaPath: "#/properties/coordinate_geometry/properties/safe/properties/width_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err111];
@@ -44639,7 +44639,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data36.height_nm !== void 0 && func0.call(data36, "height_nm")) {
               let data40 = data36.height_nm;
               if (typeof data40 === "string") {
-                if (!pattern1365.test(data40)) {
+                if (!pattern1382.test(data40)) {
                   const err113 = { instancePath: instancePath + "/coordinate_geometry/safe/height_nm", schemaPath: "#/properties/coordinate_geometry/properties/safe/properties/height_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err113];
@@ -44690,7 +44690,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data41 === "portrait" || data41 === "landscape" || data41 === "square")) {
-        const err118 = { instancePath: instancePath + "/orientation", schemaPath: "#/properties/orientation/enum", keyword: "enum", params: { allowedValues: schema525.properties.orientation.enum }, message: "must be equal to one of the allowed values" };
+        const err118 = { instancePath: instancePath + "/orientation", schemaPath: "#/properties/orientation/enum", keyword: "enum", params: { allowedValues: schema530.properties.orientation.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err118];
         } else {
@@ -44733,11 +44733,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.color_policy_ref !== void 0 && func0.call(data, "color_policy_ref")) {
       let data43 = data.color_policy_ref;
-      if (!validate3165(data43, { instancePath: instancePath + "/color_policy_ref", parentData: data, parentDataProperty: "color_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+      if (!validate3223(data43, { instancePath: instancePath + "/color_policy_ref", parentData: data, parentDataProperty: "color_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
         errors = vErrors.length;
       } else {
-        var props4 = validate3165.evaluated.props;
+        var props4 = validate3223.evaluated.props;
       }
       if (data43 && typeof data43 == "object" && !Array.isArray(data43)) {
         if (data43.contract === void 0 || !func0.call(data43, "contract")) {
@@ -44797,11 +44797,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.formatting_policy_ref !== void 0 && func0.call(data, "formatting_policy_ref")) {
       let data46 = data.formatting_policy_ref;
-      if (!validate3165(data46, { instancePath: instancePath + "/formatting_policy_ref", parentData: data, parentDataProperty: "formatting_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+      if (!validate3223(data46, { instancePath: instancePath + "/formatting_policy_ref", parentData: data, parentDataProperty: "formatting_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
         errors = vErrors.length;
       } else {
-        var props5 = validate3165.evaluated.props;
+        var props5 = validate3223.evaluated.props;
       }
       if (data46 && typeof data46 == "object" && !Array.isArray(data46)) {
         if (data46.contract === void 0 || !func0.call(data46, "contract")) {
@@ -44893,7 +44893,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             errors++;
           }
           if (!(data50 === "svg" || data50 === "png" || data50 === "pdf")) {
-            const err135 = { instancePath: instancePath + "/export_formats/" + i0, schemaPath: "#/properties/export_formats/items/enum", keyword: "enum", params: { allowedValues: schema525.properties.export_formats.items.enum }, message: "must be equal to one of the allowed values" };
+            const err135 = { instancePath: instancePath + "/export_formats/" + i0, schemaPath: "#/properties/export_formats/items/enum", keyword: "enum", params: { allowedValues: schema530.properties.export_formats.items.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err135];
             } else {
@@ -44959,11 +44959,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
         const len1 = data51.length;
         for (let i2 = 0; i2 < len1; i2++) {
           let data52 = data51[i2];
-          if (!validate3165(data52, { instancePath: instancePath + "/font_refs/" + i2, parentData: data51, parentDataProperty: i2, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+          if (!validate3223(data52, { instancePath: instancePath + "/font_refs/" + i2, parentData: data51, parentDataProperty: i2, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
             errors = vErrors.length;
           } else {
-            var props6 = validate3165.evaluated.props;
+            var props6 = validate3223.evaluated.props;
           }
           if (data52 && typeof data52 == "object" && !Array.isArray(data52)) {
             if (data52.contract === void 0 || !func0.call(data52, "contract")) {
@@ -45147,7 +45147,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
               errors++;
             }
             for (const key6 of Object.keys(data56)) {
-              if (!func0.call(schema525.properties.slots.items.properties, key6)) {
+              if (!func0.call(schema530.properties.slots.items.properties, key6)) {
                 const err158 = { instancePath: instancePath + "/slots/" + i3, schemaPath: "#/properties/slots/items/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key6 }, message: "must NOT have additional properties" };
                 if (vErrors === null) {
                   vErrors = [err158];
@@ -45160,7 +45160,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
             if (data56.slot_id !== void 0 && func0.call(data56, "slot_id")) {
               let data57 = data56.slot_id;
               if (typeof data57 === "string") {
-                if (!pattern1367.test(data57)) {
+                if (!pattern1384.test(data57)) {
                   const err159 = { instancePath: instancePath + "/slots/" + i3 + "/slot_id", schemaPath: "#/properties/slots/items/properties/slot_id/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err159];
@@ -45191,7 +45191,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
                 errors++;
               }
               if (!(data58 === "artwork" || data58 === "text" || data58 === "overlay" || data58 === "shape" || data58 === "guide")) {
-                const err162 = { instancePath: instancePath + "/slots/" + i3 + "/kind", schemaPath: "#/properties/slots/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema525.properties.slots.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
+                const err162 = { instancePath: instancePath + "/slots/" + i3 + "/kind", schemaPath: "#/properties/slots/items/properties/kind/enum", keyword: "enum", params: { allowedValues: schema530.properties.slots.items.properties.kind.enum }, message: "must be equal to one of the allowed values" };
                 if (vErrors === null) {
                   vErrors = [err162];
                 } else {
@@ -45253,7 +45253,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
                 if (data59.x_nm !== void 0 && func0.call(data59, "x_nm")) {
                   let data60 = data59.x_nm;
                   if (typeof data60 === "string") {
-                    if (!pattern1412.test(data60)) {
+                    if (!pattern1429.test(data60)) {
                       const err168 = { instancePath: instancePath + "/slots/" + i3 + "/bounds/x_nm", schemaPath: "#/properties/slots/items/properties/bounds/properties/x_nm/pattern", keyword: "pattern", params: { pattern: "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])" }, message: 'must match pattern "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])"' };
                       if (vErrors === null) {
                         vErrors = [err168];
@@ -45275,7 +45275,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
                 if (data59.y_nm !== void 0 && func0.call(data59, "y_nm")) {
                   let data61 = data59.y_nm;
                   if (typeof data61 === "string") {
-                    if (!pattern1412.test(data61)) {
+                    if (!pattern1429.test(data61)) {
                       const err170 = { instancePath: instancePath + "/slots/" + i3 + "/bounds/y_nm", schemaPath: "#/properties/slots/items/properties/bounds/properties/y_nm/pattern", keyword: "pattern", params: { pattern: "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])" }, message: 'must match pattern "^(?:0|-?[1-9][0-9]{0,9})(?![\\s\\S])"' };
                       if (vErrors === null) {
                         vErrors = [err170];
@@ -45297,7 +45297,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
                 if (data59.width_nm !== void 0 && func0.call(data59, "width_nm")) {
                   let data62 = data59.width_nm;
                   if (typeof data62 === "string") {
-                    if (!pattern1365.test(data62)) {
+                    if (!pattern1382.test(data62)) {
                       const err172 = { instancePath: instancePath + "/slots/" + i3 + "/bounds/width_nm", schemaPath: "#/properties/slots/items/properties/bounds/properties/width_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                       if (vErrors === null) {
                         vErrors = [err172];
@@ -45319,7 +45319,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
                 if (data59.height_nm !== void 0 && func0.call(data59, "height_nm")) {
                   let data63 = data59.height_nm;
                   if (typeof data63 === "string") {
-                    if (!pattern1365.test(data63)) {
+                    if (!pattern1382.test(data63)) {
                       const err174 = { instancePath: instancePath + "/slots/" + i3 + "/bounds/height_nm", schemaPath: "#/properties/slots/items/properties/bounds/properties/height_nm/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                       if (vErrors === null) {
                         vErrors = [err174];
@@ -45397,7 +45397,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
                 if (data65.minimum !== void 0 && func0.call(data65, "minimum")) {
                   let data66 = data65.minimum;
                   if (typeof data66 === "string") {
-                    if (!pattern1365.test(data66)) {
+                    if (!pattern1382.test(data66)) {
                       const err181 = { instancePath: instancePath + "/slots/" + i3 + "/font_bounds_nm/minimum", schemaPath: "#/properties/slots/items/properties/font_bounds_nm/anyOf/0/properties/minimum/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                       if (vErrors === null) {
                         vErrors = [err181];
@@ -45419,7 +45419,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
                 if (data65.maximum !== void 0 && func0.call(data65, "maximum")) {
                   let data67 = data65.maximum;
                   if (typeof data67 === "string") {
-                    if (!pattern1365.test(data67)) {
+                    if (!pattern1382.test(data67)) {
                       const err183 = { instancePath: instancePath + "/slots/" + i3 + "/font_bounds_nm/maximum", schemaPath: "#/properties/slots/items/properties/font_bounds_nm/anyOf/0/properties/maximum/pattern", keyword: "pattern", params: { pattern: "^[1-9][0-9]{0,9}(?![\\s\\S])" }, message: 'must match pattern "^[1-9][0-9]{0,9}(?![\\s\\S])"' };
                       if (vErrors === null) {
                         vErrors = [err183];
@@ -45504,11 +45504,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
                 const len3 = data68.length;
                 for (let i4 = 0; i4 < len3; i4++) {
                   let data69 = data68[i4];
-                  if (!validate3165(data69, { instancePath: instancePath + "/slots/" + i3 + "/allowed_font_refs/" + i4, parentData: data68, parentDataProperty: i4, rootData, dynamicAnchors })) {
-                    vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+                  if (!validate3223(data69, { instancePath: instancePath + "/slots/" + i3 + "/allowed_font_refs/" + i4, parentData: data68, parentDataProperty: i4, rootData, dynamicAnchors })) {
+                    vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
                     errors = vErrors.length;
                   } else {
-                    var props8 = validate3165.evaluated.props;
+                    var props8 = validate3223.evaluated.props;
                   }
                   if (data69 && typeof data69 == "object" && !Array.isArray(data69)) {
                     if (data69.contract === void 0 || !func0.call(data69, "contract")) {
@@ -45610,7 +45610,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
                     errors++;
                   }
                   if (!(data73 === "contain" || data73 === "cover" || data73 === "exact")) {
-                    const err199 = { instancePath: instancePath + "/slots/" + i3 + "/allowed_fits/" + i5, schemaPath: "#/properties/slots/items/properties/allowed_fits/items/enum", keyword: "enum", params: { allowedValues: schema525.properties.slots.items.properties.allowed_fits.items.enum }, message: "must be equal to one of the allowed values" };
+                    const err199 = { instancePath: instancePath + "/slots/" + i3 + "/allowed_fits/" + i5, schemaPath: "#/properties/slots/items/properties/allowed_fits/items/enum", keyword: "enum", params: { allowedValues: schema530.properties.slots.items.properties.allowed_fits.items.enum }, message: "must be equal to one of the allowed values" };
                     if (vErrors === null) {
                       vErrors = [err199];
                     } else {
@@ -45700,7 +45700,7 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
               let valid38 = false;
               const _errs247 = errors;
               if (typeof data76 === "string") {
-                if (!pattern1367.test(data76)) {
+                if (!pattern1384.test(data76)) {
                   const err206 = { instancePath: instancePath + "/slots/" + i3 + "/field_id", schemaPath: "#/properties/slots/items/properties/field_id/anyOf/0/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])" }, message: 'must match pattern "^[A-Za-z0-9_.:-]{1,100}(?![\\s\\S])"' };
                   if (vErrors === null) {
                     vErrors = [err206];
@@ -45773,11 +45773,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.personalization_schema_ref !== void 0 && func0.call(data, "personalization_schema_ref")) {
       let data77 = data.personalization_schema_ref;
-      if (!validate3165(data77, { instancePath: instancePath + "/personalization_schema_ref", parentData: data, parentDataProperty: "personalization_schema_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+      if (!validate3223(data77, { instancePath: instancePath + "/personalization_schema_ref", parentData: data, parentDataProperty: "personalization_schema_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
         errors = vErrors.length;
       } else {
-        var props9 = validate3165.evaluated.props;
+        var props9 = validate3223.evaluated.props;
       }
       if (data77 && typeof data77 == "object" && !Array.isArray(data77)) {
         if (data77.contract === void 0 || !func0.call(data77, "contract")) {
@@ -45837,11 +45837,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.warning_policy_ref !== void 0 && func0.call(data, "warning_policy_ref")) {
       let data80 = data.warning_policy_ref;
-      if (!validate3165(data80, { instancePath: instancePath + "/warning_policy_ref", parentData: data, parentDataProperty: "warning_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+      if (!validate3223(data80, { instancePath: instancePath + "/warning_policy_ref", parentData: data, parentDataProperty: "warning_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
         errors = vErrors.length;
       } else {
-        var props10 = validate3165.evaluated.props;
+        var props10 = validate3223.evaluated.props;
       }
       if (data80 && typeof data80 == "object" && !Array.isArray(data80)) {
         if (data80.contract === void 0 || !func0.call(data80, "contract")) {
@@ -45901,11 +45901,11 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     if (data.proof_policy_ref !== void 0 && func0.call(data, "proof_policy_ref")) {
       let data83 = data.proof_policy_ref;
-      if (!validate3165(data83, { instancePath: instancePath + "/proof_policy_ref", parentData: data, parentDataProperty: "proof_policy_ref", rootData, dynamicAnchors })) {
-        vErrors = vErrors === null ? validate3165.errors : vErrors.concat(validate3165.errors);
+      if (!validate3223(data83, { instancePath: instancePath + "/proof_policy_ref", parentData: data, parentDataProperty: "proof_policy_ref", rootData, dynamicAnchors })) {
+        vErrors = vErrors === null ? validate3223.errors : vErrors.concat(validate3223.errors);
         errors = vErrors.length;
       } else {
-        var props11 = validate3165.evaluated.props;
+        var props11 = validate3223.evaluated.props;
       }
       if (data83 && typeof data83 == "object" && !Array.isArray(data83)) {
         if (data83.contract === void 0 || !func0.call(data83, "contract")) {
@@ -45972,15 +45972,15 @@ function validate3161(data, { instancePath = "", parentData, parentDataProperty,
     }
     errors++;
   }
-  validate3161.errors = vErrors;
+  validate3219.errors = vErrors;
   return errors === 0;
 }
-validate3161.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var DefinitionProductionReference = validate3180;
-function validate3180(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate3219.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+var DefinitionProductionReference = validate3238;
+function validate3238(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate3180.evaluated;
+  const evaluated0 = validate3238.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -46060,7 +46060,7 @@ function validate3180(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data0 === "DesignVersion" || data0 === "ArtifactHandoffManifest" || data0 === "ApprovalReceipt" || data0 === "PrintSpec" || data0 === "FulfillmentCapabilitySnapshot" || data0 === "EventIntelligencePackage" || data0 === "JobStatus" || data0 === "UsageEvent" || data0 === "DecisionReceipt" || data0 === "EvaluationEvidence" || data0 === "TemplateSpec" || data0 === "Composition" || data0 === "PersonalizationSchema" || data0 === "ProductionPolicy" || data0 === "ProductionRuntime" || data0 === "ProductionResource" || data0 === "PreflightReport" || data0 === "ProductionDiagnostic" || data0 === "CsvDialect" || data0 === "CsvMapping" || data0 === "CsvCheckpoint" || data0 === "BatchResult")) {
-        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/0/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[0].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -46272,7 +46272,7 @@ function validate3180(data, { instancePath = "", parentData, parentDataProperty,
         errors++;
       }
       if (!(data5 === "ArtifactFile" || data5 === "ProductionBundle")) {
-        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema468.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
+        const err27 = { instancePath: instancePath + "/contract", schemaPath: "#/oneOf/1/properties/contract/enum", keyword: "enum", params: { allowedValues: schema473.oneOf[1].properties.contract.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err27];
         } else {
@@ -46648,11 +46648,11 @@ function validate3180(data, { instancePath = "", parentData, parentDataProperty,
       }
     }
   }
-  validate3180.errors = vErrors;
+  validate3238.errors = vErrors;
   evaluated0.props = props0;
   return errors === 0;
 }
-validate3180.evaluated = { "dynamicProps": true, "dynamicItems": false };
+validate3238.evaluated = { "dynamicProps": true, "dynamicItems": false };
 export {
   ArtifactFile_2_0_0,
   ArtifactManifestStatus_1_0_0,

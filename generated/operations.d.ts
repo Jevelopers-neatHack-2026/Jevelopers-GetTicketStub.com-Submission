@@ -1,4 +1,4 @@
-import type { ValidationCode, TrustedContext, ErrorEnvelope, PartialFailure, JobStatus, JobProgress, Cancellation, JobCommandAcknowledgement, UsageEvent, BudgetReservation, ReserveRequest, SettleRequest, ReleaseRequest, QueryRequest, ReserveResult, SettleResult, ReleaseResult, QueryResult, FinancialSummary, DecisionPortRequest, DecisionPortResult, DecisionReceipt, UtcTime } from './index.js';
+import type { ValidationCode, TrustedContext, ErrorEnvelope, PartialFailure, JobStatus, JobProgress, Cancellation, JobCommandAcknowledgement, UsageEvent_1_0_0, BudgetReservation, ReserveRequest, SettleRequest, ReleaseRequest, QueryRequest, ReserveResult, SettleResult, ReleaseResult, QueryResult, FinancialSummary, DecisionPortRequest, DecisionPortResult, DecisionReceipt, UtcTime } from './index.js';
 
 export type OperationCode = ValidationCode | ErrorEnvelope['error']['code'];
 export type OperationResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly errors: readonly { readonly code: OperationCode; readonly path: string; readonly keyword?: string }[] };
@@ -6,7 +6,7 @@ export type VersionedReference = NonNullable<ErrorEnvelope['error']['diagnostic_
 export type OperationContext = { readonly scope: TrustedContext; readonly now: UtcTime; readonly policy_version: '1.0.0'; readonly references: Readonly<Record<string, VersionedReference>> };
 export type BatchContext = OperationContext & { readonly item_ids: readonly string[]; readonly acceptance_policy: PartialFailure['acceptance_policy'] };
 export type JobContext = OperationContext & { readonly prior: JobStatus | JobProgress; readonly lease_attempt_id?: JobStatus['lease_attempt_id']; readonly previous_command?: Cancellation | JobCommandAcknowledgement };
-export type UsageContext = OperationContext & { readonly environment: UsageEvent['environment']; readonly billing_mode: UsageEvent['billing_mode']; readonly prior?: UsageEvent };
+export type UsageContext = OperationContext & { readonly environment: UsageEvent_1_0_0['environment']; readonly billing_mode: UsageEvent_1_0_0['billing_mode']; readonly prior?: UsageEvent_1_0_0 };
 export type ReservationRequest = ReserveRequest | SettleRequest | ReleaseRequest | QueryRequest;
 export type ReservationResult = ReserveResult | SettleResult | ReleaseResult | QueryResult;
 export type FinanceResolution = Pick<BudgetReservation, 'tenant_id' | 'project_id' | 'reservation_id' | 'billable_attempt_id'> & { readonly execution_state: 'finished' | 'not_dispatched'; readonly reference: VersionedReference };
@@ -27,7 +27,7 @@ export declare function checkPartialFailure(value: unknown, context: BatchContex
 export declare function checkJobUpdate(value: unknown, context: JobContext): OperationResult<JobStatus | JobProgress>;
 export declare function checkCancellation(value: unknown, context: JobContext): OperationResult<Cancellation>;
 export declare function checkJobAcknowledgement(value: unknown, context: JobContext): OperationResult<JobCommandAcknowledgement>;
-export declare function checkUsageEvent(value: unknown, context: UsageContext): OperationResult<UsageEvent>;
+export declare function checkUsageEvent(value: unknown, context: UsageContext): OperationResult<UsageEvent_1_0_0>;
 export declare function compareUsageIdentity(left: unknown, right: unknown): OperationResult<UsageRelationship>;
 export declare function checkReservation(value: unknown, context: ReservationContext): OperationResult<BudgetReservation>;
 export declare function checkReservationCommand(value: unknown, context: ReservationContext): OperationResult<ReservationRequest>;
@@ -43,7 +43,7 @@ export declare function checkOperation(contract: 'ErrorEnvelope', value: unknown
 export declare function checkOperation(contract: 'PartialFailure', value: unknown, context: BatchContext): OperationResult<PartialFailure>;
 export declare function checkOperation(contract: 'JobStatus' | 'JobProgress', value: unknown, context: JobContext): OperationResult<JobStatus | JobProgress>;
 export declare function checkOperation(contract: 'Cancellation' | 'JobCommandAcknowledgement', value: unknown, context: JobContext): OperationResult<Cancellation | JobCommandAcknowledgement>;
-export declare function checkOperation(contract: 'UsageEvent', value: unknown, context: UsageContext): OperationResult<UsageEvent>;
+export declare function checkOperation(contract: 'UsageEvent', value: unknown, context: UsageContext): OperationResult<UsageEvent_1_0_0>;
 export declare function checkOperation(contract: 'BudgetReservation', value: unknown, context: ReservationContext): OperationResult<BudgetReservation>;
 export declare function checkOperation(contract: ReservationRequest['contract'], value: unknown, context: ReservationContext): OperationResult<ReservationRequest>;
 export declare function checkOperation(contract: ReservationResult['contract'], value: unknown, context: ReservationContext): OperationResult<ReservationResult>;

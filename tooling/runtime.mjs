@@ -67,12 +67,15 @@ export function hashManifest(value) {
   return hashBytes(new TextEncoder().encode(canonicalJson(value)));
 }
 
-export function validateContract(contract, value) {
-  if (typeof contract !== 'string' || !Object.hasOwn(versions, contract)) return failure('UNKNOWN_CONTRACT', '/contract');
+function canonicalInputFailure(value) {
   try { canonicalJson(value); } catch (error) {
     if (error instanceof ContractError) return failure(error.code, '');
     throw error;
   }
+  return null;
+}
+
+function validateCanonicalContract(contract, value) {
   if (!object(value)) return failure('INVALID_PAYLOAD', '');
   if (typeof value.schema_version !== 'string') return failure('INVALID_PAYLOAD', '/schema_version');
   if (!Object.hasOwn(versions[contract], value.schema_version)) return failure('UNSUPPORTED_VERSION', '/schema_version');
@@ -86,11 +89,20 @@ export function validateContract(contract, value) {
   })) };
 }
 
+export function validateContract(contract, value) {
+  if (typeof contract !== 'string' || !Object.hasOwn(versions, contract)) return failure('UNKNOWN_CONTRACT', '/contract');
+  const invalid = canonicalInputFailure(value);
+  if (invalid) return invalid;
+  return validateCanonicalContract(contract, value);
+}
+
 export function validateContractVersion(contract, version, value) {
   if (typeof contract !== 'string' || !Object.hasOwn(versions, contract)) return failure('UNKNOWN_CONTRACT', '/contract');
   if (typeof version !== 'string' || !Object.hasOwn(versions[contract], version)) return failure('UNSUPPORTED_VERSION', '/schema_version');
+  const invalid = canonicalInputFailure(value);
+  if (invalid) return invalid;
   if (object(value) && typeof value.schema_version === 'string' && value.schema_version !== version) return failure('UNSUPPORTED_VERSION', '/schema_version');
-  return validateContract(contract, value);
+  return validateCanonicalContract(contract, value);
 }
 
 export function parseContractVersion(contract, version, json) {

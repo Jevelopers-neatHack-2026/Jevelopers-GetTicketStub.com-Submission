@@ -2,6 +2,8 @@
 
 This is the maintained inventory. The JSON record below is consumed by `contracts:inventory`. Foundation candidates are implemented locally and await owner review. Operations leaves #9-14 now have local candidates; all planned domain leaves now have local candidates. Paths and versions remain null until artifacts exist; no planned export counts as an implementation.
 
+For versioned entries, consumer checks derive required names, roles, fixture cases, and pins from effective per-version roles: a version-specific `producers` or `consumers` list overrides the top-level list, and an omitted list inherits it. A top-level `role_status: intended_role_only` records expected proposal roles for inventory completeness; it does not create a current version assignment, consumer pin, or acknowledgement.
+
 | Export | Leaf | Producers | Consumers | State |
 | --- | --- | --- | --- | --- |
 | CommonEnvelope | #7 SC-04 | shared-contracts | agent-harness, event-intelligence, creative-engine, print-production, fulfillment-connectors, cost-intelligence, team-dashboard, integration-evals, getticketstub.com | foundation_candidate |
@@ -13,6 +15,8 @@ This is the maintained inventory. The JSON record below is consumed by `contract
 | Cancellation | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | operations_candidate |
 | JobCommandAcknowledgement | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | operations_candidate |
 | UsageEvent | #11 SC-06.USAGE | agent-harness, event-intelligence, creative-engine, print-production, fulfillment-connectors | cost-intelligence, integration-evals | operations_candidate |
+| UsageEvent 2.0.0 | #11 SC-06.USAGE (unaccepted candidate) | none assigned | none assigned | operations_candidate |
+| ProviderReportedCostEvidence | #12 CI05-COMP-004 (separate proposal criteria; no acceptance assigned) | cost-intelligence (intended only) | cost-intelligence, integration-evals (intended only) | intended_role_only; owner and source adoption pending |
 | BudgetReservation | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
 | ReserveRequest | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
 | ReserveResult | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
@@ -161,6 +165,53 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
+    },
+    {
+      "name": "ProviderReportedCostEvidence",
+      "group": "ProviderReportedCostEvidence",
+      "issue": 12,
+      "requirement": "CI05-COMP-004 proposal-only; separate criteria; no acceptance assigned",
+      "owner_role": "Shared-contracts schema proposal",
+      "domain_steward": null,
+      "named_owner": null,
+      "reviewer": null,
+      "owner_acknowledgement": null,
+      "producers": [
+        "cost-intelligence"
+      ],
+      "consumers": [
+        "cost-intelligence",
+        "integration-evals"
+      ],
+      "role_status": "intended_role_only",
+      "trust_boundary": "immutable source evidence pointer; record shape and content hash do not authenticate the source",
+      "semantic_authority": "provider authenticity and financial reconciliation remain owner-controlled",
+      "lifecycle": "host-assigned immutable value; resolver owns current trust and revocation",
+      "field_steward": "unassigned proposal",
+      "state": "producer_proposal_pending_review",
+      "schema_path": "schemas/ProviderReportedCostEvidence/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ProviderReportedCostEvidence_1_0_0.d.ts",
+      "helper": "tooling/usage-reported-unsettled.mjs",
+      "fixtures": "fixtures/ProviderReportedCostEvidence.json",
+      "docs": "docs/provider-reported-cost-evidence.md",
+      "version_policy": "compatibility/version-policy.json",
+      "field_classification": "schema x-classification; source bytes and scoped identities are restricted",
+      "acceptance": null,
+      "proposal_criteria_path": "compatibility/usage-reported-unsettled-proposal.json",
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/ProviderReportedCostEvidence/1.0.0.json",
+          "generated_export": "generated/ProviderReportedCostEvidence_1_0_0.d.ts",
+          "helper": "tooling/usage-reported-unsettled.mjs",
+          "fixtures": "fixtures/ProviderReportedCostEvidence.json",
+          "docs": "docs/provider-reported-cost-evidence.md",
+          "producers": [],
+          "consumers": [],
+          "role_status": "opt_in_candidate_no_current_assignment"
+        }
+      ]
     },
     {
       "name": "PartialFailure",
@@ -375,7 +426,31 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "schema x-classification; public projection stays allowlisted",
-      "acceptance": null
+      "acceptance": null,
+      "versions": [
+        {
+          "schema_version": "1.0.0",
+          "schema_path": "schemas/UsageEvent/1.0.0.json",
+          "generated_export": "generated/UsageEvent_1_0_0.d.ts",
+          "helper": "tooling/operations.mjs",
+          "fixtures": "fixtures/UsageEvent.json",
+          "docs": "docs/operations-contracts.md",
+          "semantic_profile": "immutable_v1_behavior"
+        },
+        {
+          "schema_version": "2.0.0",
+          "schema_path": "schemas/UsageEvent/2.0.0.json",
+          "generated_export": "generated/UsageEvent_2_0_0.d.ts",
+          "helper": "tooling/usage-reported-unsettled.mjs",
+          "fixtures": "fixtures/UsageEvent.2_0_0.json",
+          "docs": "docs/operations-contracts.md",
+          "producers": [],
+          "consumers": [],
+          "role_status": "opt_in_candidate_no_current_assignment",
+          "semantic_profile": "provider_reported_unsettled_candidate"
+        }
+      ],
+      "proposal_status": "unaccepted_candidate"
     },
     {
       "name": "BudgetReservation",

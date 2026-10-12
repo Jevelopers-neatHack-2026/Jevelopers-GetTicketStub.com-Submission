@@ -16,6 +16,32 @@ const same = (a, b) => hashManifest(a) === hashManifest(b);
 const inside = (directory, path) => { const rel = relative(directory, path); return rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel); };
 const root = fileURLToPath(new URL('../', import.meta.url));
 const errno = value => typeof value === 'string' && /^E[A-Z0-9]{1,30}$/.test(value) ? value : null;
+const contractVersions = entry => (entry.versions ?? [entry]).map(version => ({ ...entry, ...version }));
+const versionsForConsumer = (entry, repository) => contractVersions(entry).filter(version => version.producers?.includes(repository) || version.consumers?.includes(repository));
+
+export function requiredConsumerCoverage(catalog, repository) {
+  const assigned = catalog.flatMap(entry => {
+    const versions = versionsForConsumer(entry, repository);
+    if (!versions.length) return [];
+    return [{
+      entry,
+      versions,
+      role: {
+        producer: versions.some(version => version.producers?.includes(repository)),
+        consumer: versions.some(version => version.consumers?.includes(repository))
+      }
+    }];
+  });
+  return {
+    requiredNames: assigned.map(({ entry }) => entry.name),
+    requiredRoles: assigned.map(({ entry, role }) => ({ contract: entry.name, ...role })),
+    requiredFixtures: assigned.flatMap(({ entry, versions }) => versions.map(version => ({
+      contract: entry.name,
+      version: version.schema_version,
+      path: version.fixtures
+    })))
+  };
+}
 
 /** Runner-side failures (not consumer evidence) keep a path-free cause so they are never attributed to the consumer artifact. */
 class RunnerEnvironmentError extends Error {
@@ -132,10 +158,9 @@ export async function consumerChecks(manifest, paths = {}) {
     if (code) { block(code); continue; }
     checkout_records.push({ repository, source_sha: entry.source_sha, checkout: 'clean_exact_revision' });
     if (!pinsMatch(entry, schemaManifest.schemas, fixtureManifest.digest, expectedPackage.digest) || entry.dependency_mode !== 'offline') { block('BLOCKED_MISSING_INTEGRATION_PIN'); continue; }
-    const required = catalog.filter(contract => contract.producers.includes(repository) || contract.consumers.includes(repository));
-    const requiredNames = required.map(contract => contract.name);
-    const requiredFixtures = required.flatMap(contract => (contract.versions ?? [contract]).map(version => ({ contract: contract.name, version: version.schema_version, path: version.fixtures })));
-    if (requiredFixtures.some(contract => !entry.schema_pins.some(pin => pin.contract === contract.contract && pin.version === contract.version)) || !Array.isArray(entry.roles) || required.some(contract => !entry.roles.some(role => role && role.contract === contract.name && role.producer === contract.producers.includes(repository) && role.consumer === contract.consumers.includes(repository)))) { block('BLOCKED_INCOMPLETE_CONSUMER_COVERAGE'); continue; }
+    const requiredCoverage = requiredConsumerCoverage(catalog, repository);
+    const { requiredNames, requiredFixtures, requiredRoles } = requiredCoverage;
+    if (requiredFixtures.some(contract => !entry.schema_pins.some(pin => pin.contract === contract.contract && pin.version === contract.version)) || !Array.isArray(entry.roles) || requiredRoles.some(role => !entry.roles.some(actual => actual && actual.contract === role.contract && actual.producer === role.producer && actual.consumer === role.consumer))) { block('BLOCKED_INCOMPLETE_CONSUMER_COVERAGE'); continue; }
     if (!Array.isArray(entry.command) || entry.command.length !== 2 || entry.command[0] !== 'node' || typeof entry.command[1] !== 'string' || !safePackagePath(entry.command[1]) || !entry.command[1].endsWith('.mjs')) { block('BLOCKED_MISSING_CONSUMER_COMMAND'); continue; }
     let temp;
     try {

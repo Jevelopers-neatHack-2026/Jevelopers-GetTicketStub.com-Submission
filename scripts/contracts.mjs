@@ -180,7 +180,7 @@ export async function execute(command, options) {
       break;
     }
     case 'docs': {
-      for (const path of ['README.md', 'CHANGELOG.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md', 'docs/research-creative-contracts.md', 'docs/commerce-evidence-contracts.md', 'docs/finance-v2-contracts.md', 'docs/capability-contracts.md', 'docs/fixture-harness.md', 'docs/consumer-handoff.md', 'docs/release-guide.md', 'docs/architecture/OWNERSHIP.md', 'docs/architecture/ACCEPTANCE.md']) {
+      for (const path of ['README.md', 'CHANGELOG.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md', 'docs/provider-reported-cost-evidence.md', 'docs/research-creative-contracts.md', 'docs/commerce-evidence-contracts.md', 'docs/finance-v2-contracts.md', 'docs/capability-contracts.md', 'docs/fixture-harness.md', 'docs/consumer-handoff.md', 'docs/release-guide.md', 'docs/architecture/OWNERSHIP.md', 'docs/architecture/ACCEPTANCE.md']) {
         const text = await readFile(root + path, 'utf8');
         for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
           if (/^(https?:|#)/.test(match[1])) continue;
