@@ -27,9 +27,11 @@ export function FinancialSummaryView({ result, projectLabel }: FinancialSummaryV
   const headingId = useId();
   const heading = <h2 id={headingId}>Financial summary</h2>;
   const wrap = (body: ReactNode) => <section className="td-component-stack" aria-labelledby={headingId}>{heading}{body}</section>;
-  if (result.status === 'missing') return wrap(<Notice title="No summary delivered">No financial summary has been delivered for this scope. No amounts are shown.</Notice>);
-  if (result.status === 'restricted') return wrap(<Notice title="Summary restricted">This summary is restricted for your access. No amounts are shown.</Notice>);
-  if (result.status === 'unknown') return wrap(<Notice title="Summary state unknown">The state of this summary could not be determined. No amounts are shown.</Notice>);
+  if (result.status === 'missing' || result.status === 'restricted' || result.status === 'unknown') {
+    if (result.status === 'missing') return wrap(<Notice title="No summary delivered">No financial summary has been delivered for this scope. No amounts are shown.</Notice>);
+    if (result.status === 'restricted') return wrap(<Notice title="Summary restricted">This summary is restricted for your access. No amounts are shown.</Notice>);
+    return wrap(<Notice title="Summary state unknown">The state of this summary could not be determined. No amounts are shown.</Notice>);
+  }
   if (result.status === 'refused') {
     const unsupported = UNSUPPORTED.has(result.code);
     return wrap(<section className="td-example-section" role="alert">
@@ -38,6 +40,7 @@ export function FinancialSummaryView({ result, projectLabel }: FinancialSummaryV
       <dl><div><dt>Refusal code</dt><dd>{result.code}</dd></div>{result.path && <div><dt>Refusal path</dt><dd>{result.path}</dd></div>}</dl>
     </section>);
   }
+  if (!('data' in result)) return wrap(<Notice title="Summary state unknown">The state of this summary could not be determined. No amounts are shown.</Notice>);
   const data = result.data;
   const stale = result.status === 'stale';
   const names = Object.keys(data.requested).length ? Object.keys(data.requested) : Object.keys(data.metrics);

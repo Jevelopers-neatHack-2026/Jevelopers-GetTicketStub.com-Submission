@@ -43,8 +43,8 @@ describe('FinancialSummaryView independent axes, coverage, freshness and mode', 
   it('renders every lifecycle axis as its own labelled value, taken verbatim from the producer', () => {
     view(ready());
     const states = screen.getByRole('region', { name: 'Summary states' });
-    for (const [label, value] of [['Valuation', 'estimated'], ['Settlement', 'unpaid'], ['Reconciliation', 'unmatched'], ['Reservation', 'held'], ['Completeness', 'incomplete'], ['Environment', 'test'], ['Billing mode', 'simulated']]) {
-      expect(within(states).getByText(label, { selector: 'dt' }).nextElementSibling).toHaveTextContent(value!);
+    for (const [label, value] of [['Valuation', 'estimated'], ['Settlement', 'unpaid'], ['Reconciliation', 'unmatched'], ['Reservation', 'held'], ['Completeness', 'incomplete'], ['Environment', 'test'], ['Billing mode', 'simulated']] as const) {
+      expect(within(states).getByText(label, { selector: 'dt' }).nextElementSibling).toHaveTextContent(value);
     }
     expect(within(states).getByText('Evidence: synthetic fixture')).toBeVisible();
   });

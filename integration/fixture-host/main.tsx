@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Dashboard, type TableSort } from '@jevelopers/team-dashboard';
+import { Dashboard, FinancialSummaryView, refuseUnsupportedPacket, type TableSort } from '@jevelopers/team-dashboard';
 import '@jevelopers/team-dashboard/style.css';
 import { ComponentExamples } from './component-examples';
-import { authorizedFixture, fixtureProvider, fixtureStates, type FixtureState } from './host';
+import { authorizedFixture, fixtureProvider, fixtureStates, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type FixtureState, type SummaryFixtureName } from './host';
 const params = new URLSearchParams(window.location.search);
+const requestedSummary = params.get('summary');
+const summaryName = summaryFixtureNames.find((name) => name === requestedSummary) as SummaryFixtureName | undefined;
 const configuredBase = params.get('base') ?? '/admin/finance';
 const examples = params.get('examples') === 'components';
 const initialState = params.get('state') ?? (examples ? 'ready' : null);
@@ -42,7 +44,10 @@ function FixtureHost() {
     </aside>
     <main><Dashboard basePath={configuredBase} pathname={pathname} navigate={navigate}
       access={authenticated ? authorizedFixture : { status: 'restricted' }} provider={connected ? provider : undefined}
-      renderRoute={({ data, route }) => examples ? <ComponentExamples route={route} navigate={navigate} sample={search.get('sample') ?? 'all'} onSampleChange={(value) => changeSample('sample', value)} page={search.get('page') === '2' ? '2' : '1'} onPageChange={(direction) => changeSample('page', direction === 'next' ? '2' : '1')} sort={sort} onSort={setSort} returnToResults={(href) => navigate(href, true)} restoreFocus={restoreFocus} returnFocusId={returnFocusId} /> : <section><h2>Connected read-only extension</h2><p>{data.text}</p></section>} /></main>
+      renderRoute={({ data, route }) => summaryName && route.id === 'overview' && !examples ? <>
+        <p role="note"><strong>SYNTHETIC FIXTURE</strong>: offline development data shaped like adapter output. Not real Finance data; the actual Finance summary route is unavailable until the accepted handoff.</p>
+        <FinancialSummaryView result={summaryFixture(summaryName, refuseUnsupportedPacket)} projectLabel={syntheticProjectLabel} />
+      </> : examples ?<ComponentExamples route={route} navigate={navigate} sample={search.get('sample') ?? 'all'} onSampleChange={(value) => changeSample('sample', value)} page={search.get('page') === '2' ? '2' : '1'} onPageChange={(direction) => changeSample('page', direction === 'next' ? '2' : '1')} sort={sort} onSort={setSort} returnToResults={(href) => navigate(href, true)} restoreFocus={restoreFocus} returnFocusId={returnFocusId} /> : <section><h2>Connected read-only extension</h2><p>{data.text}</p></section>} /></main>
   </>;
 }
 createRoot(document.getElementById('root')!).render(<FixtureHost />);

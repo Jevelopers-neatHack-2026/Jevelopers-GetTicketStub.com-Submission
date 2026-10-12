@@ -16,3 +16,5 @@ export { Tooltip } from './components/Tooltip';
 export { EvidenceLink, type EvidenceDisplay, type EvidencePolicy } from './components/EvidenceLink';
 export { ScopeContext, type ScopeDisplay } from './components/ScopeContext';
 export { ReturnToResults } from './components/ReturnToResults';
+export { FinancialSummaryView, refuseUnsupportedPacket, type FinancialSummaryViewProps, type FinancePacketReferences } from './views/financial-summary';
+export type { ProjectionResult, SummaryProjection, MetricProjection } from './data/shared-contracts-adapter';
