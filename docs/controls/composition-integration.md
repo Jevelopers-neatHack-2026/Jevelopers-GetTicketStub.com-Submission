@@ -25,7 +25,7 @@ specified separately in [Reviewed artwork action recovery](artwork-recovery.md).
 The browser consumes that closed result before unlocking a fresh style or
 composition review after a rejected, completed, failed or cancelled style action.
 
-The adapter owns only `control_composition_actions_v1` on the existing controls SQLite connection. It stores the normalized scoped reviewed action and exact request/hash before invoke, and binds the genuine backend job. Caller-owned BEGIN or SAVEPOINT transactions reject before host callbacks or writes. It owns no selection pointer, rights authority, approval issuer or renderer.
+The adapter owns `control_composition_actions_v1` and the scoped `control_composition_rejections_v1` journal on the existing controls SQLite connection. It stores the normalized scoped reviewed action and exact request/hash before invoke, and binds the genuine backend job. Caller-owned BEGIN or SAVEPOINT transactions reject before host callbacks or writes. It owns no selection pointer, rights authority, approval issuer or renderer.
 
 Read/refresh never initialize. Missing composition shows the exact selected artwork binding; initialization requires an explicit review and separate Apply. The four exact operations are text, text size, layer layout and approved-logo position. Each goes through public create/get/update, the real durable action and job, exact parent/target/full hashes and owner preview bytes. Pure composition preserves original artwork bytes and the DesignVersion/selection identities.
 
