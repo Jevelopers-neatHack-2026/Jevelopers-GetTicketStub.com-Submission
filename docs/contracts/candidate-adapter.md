@@ -41,6 +41,14 @@ under supervisor section 8 criterion 5. They confer no complete program/domain
 acceptance or genuine authority. `accepted:false`, `live_integration:false` and
 blocked supplier eligibility remain recorded in actual output provenance.
 
+Consumer adoption was independently reviewed and merged in print-production
+PR33 on 2026-10-12 at `0ef7398bb94caacf6b48068747142883470fbdaf`.
+The [postmerge receipt](https://github.com/Jevelopers-neatHack-2026/print-production/pull/33#issuecomment-6115833069)
+records clean install/build/typecheck, 76 focused tests and all six operations
+through the public candidate entry, with real base/two-row bundle verification
+and independently checked file hashes/lengths. This is reviewed private adoption,
+not accepted public API, genuine approval authority or whole-release acceptance.
+
 The host authenticates scope, actor/audience, current access, resolver and approval
 ports independently. Requests use the factory's frozen `context`; replacement
 contexts and undeclared reference versions/hashes fail before resolver access.
@@ -79,6 +87,8 @@ Owner 97/98/100 count and 8/32/40 MiB bounds are enforced alongside lower privat
 64-file/16 MiB storage and 32 MiB ZIP bounds. The exporter receives the 8 MiB
 entry ceiling before rendering; metadata limits apply before ZIP packing.
 
+## Local metering evidence
+
 Compose/export execution attempts and the existing batch attempts produce durable
 local observations/outbox entries. Provider and billable IDs, prices, finance
 receipts and canonical `UsageEvent` references are absent. These observations
@@ -86,6 +96,23 @@ remain staged; no accepted finance intake or synthetic acknowledgement is
 claimed. Replays reuse durable publication and do not add execution attempts.
 Completed status does not create new observations or evidence records once
 terminal intents are staged; missing terminal usage may be reconciled on replay.
+
+PR38 merged on 2026-10-12 at `300f997c87e36077a93dd1c4951420878a5c847c`.
+Its [independent final-source receipt](https://github.com/Jevelopers-neatHack-2026/print-production/pull/38#issuecomment-6117773482)
+covers source `d4add26778a3f9b5bdf78b993957ed737b44e443`. The private
+[`readEvidencePage` adapter](../../src/telemetry/evidence-page.ts) reads
+`ObservationOutbox.list` without mutating observations or delivery state. Its
+allowlisted projection retains local operation/job/execution-attempt/publication
+references and measured or unknown metrics, while omitting raw request and row-key
+hashes. The envelope remains staged, local, unmapped and non-authoritative:
+`environment=local`, `billingMode=unclassified`, `producerBuildDigest=null`,
+delivery status not included. The strict verifier checks unsigned SHA-256 local
+integrity; it supplies no canonical `UsageEvent`, Finance acknowledgement,
+signature or consumer acceptance. The host must authorize scope before reading;
+the guessable routing `scopeDigest` provides neither authentication nor anonymity
+and grants no token access. This adapter is not a root or candidate package export.
+
+## Durable publication and runtime provenance
 
 PR30 review corrections refresh private asset and composition permission backends
 on cached compose/export and artifact/job observation. Restored row models carry
@@ -145,11 +172,12 @@ remain stored privately. Tests demonstrate the owner helper's
 persisted row evidence while publication eligibility is blocked. No draft-ref
 field exists; PP#13.4 canonical visible row/batch publication remains unfulfilled.
 
-The historical 0.9.3 owner review requested changes for SC-CHK-018 (invalid-clock
+The historical 0.9.3/0.9.4 owner review and repairs preceded the 2026-10-12 PR33
+adoption. That review requested changes for SC-CHK-018 (invalid-clock
 TypeError) and SC-CHK-021 (noncanonical independently expected references/bindings
 escaping pure helpers). Owner 0.9.4 repaired these paths to typed context failures.
 The reviewed 0.9.7 archive adds subsequent context repairs described above;
-independent review of this consumer refresh remains pending. Host clock
+PR33's independent consumer review and postmerge receipt are linked above. Host clock
 parsing and typed expected values remain in place; owner source is vendored
 unchanged. V2 supplier eligibility intentionally remains `LEGACY_UNREPRESENTABLE`:
 an `ArtifactFile/2` preview cannot be equated with `Preview/1` approval.
@@ -173,6 +201,34 @@ hash fulfillment validator acceptance remain external blockers. No supplier orde
 paid generation, registry publication, CI repair, issue closure or release claim
 is part of this work. Entire graph retrieval was unavailable (`entire` not
 installed); there was no `.codegraph` index. No index or toolchain was installed.
+
+## Offline consumer handoff
+
+PR39 merged on 2026-10-12 at `ba33313241b4a3bb2bd9349a685b5fb9d1eaa3c4`.
+The [Linux corpus receipt](https://github.com/Jevelopers-neatHack-2026/print-production/pull/39#issuecomment-6117921499)
+records reviewed merge candidate `82b8b4cc319e9d086a5731c30b57013b2c3e95ae`
+and successful Linux
+[run 38203353840](https://github.com/Jevelopers-neatHack-2026/print-production/actions/runs/38203353840)
+at source `4d8aad009be59fd0125b2658dbec36d68ebb0f33`.
+It records actual rendered bytes in `pp16-bundle-handoff-1`, artifact ID
+`11727002342`, archive SHA-256
+`e806e15abe8bd6f85b745a8f7698e3e223409ec73bc7025046a806fccd32bc9f`
+(recorded expiry 2026-11-11). The receipt retains the hashes and validation
+results after the downloadable artifact expires.
+
+The receipt records independent verification of 64 baseline/control/variant
+lengths and hashes and invocation of installed owner 0.9.7
+`verifyProductionBundleFiles` on the downloaded bytes with the complete trusted
+commitment. The valid variant's
+integrity passed while eligibility stayed blocked; tampered payload/manifest/
+detached metadata, missing payload/manifest and extra-file variants each rejected
+with `INTEGRITY_FAILURE`. The diagnostic trust sidecar is synthetic/self-attested,
+not application-issued approval. This is an offline consumer development corpus,
+not approved-package conformance: `accepted:false`, `handoffEligible:false`,
+`canonical_usage_intake:unavailable`, `finance_receipt:null` and `usage_refs:[]`
+remain. Stale-spec and approved-valid cases still require a genuine second
+supplier spec, accepted shared-contracts mapping and application approval binding.
+The scoped merge leaves PP#16 and the repository release gate open.
 
 ## Acceptance mapping and local evidence
 
@@ -204,17 +260,18 @@ PP_CANONICAL_EVIDENCE_DIR=out/canonical-evidence node --test --test-concurrency=
   dist/tests/integration/canonical-production*.test.js
 ```
 
-Exact commands, outcomes, commits and output digests are recorded in the ignored
-`out/canonical-adapter-report.json`. The separate dependency refresh receipt is
+Historical PR30 implementation evidence (merged 2026-10-11) is recorded in the
+ignored `out/canonical-adapter-report.json`. The earlier dependency refresh receipt is
 `out/canonical-refresh-report.json`; preceding 44 focused and 602 broad passes are
-historical receipts, not a full-suite claim for the refreshed HEAD. Independent
-parent review of this consumer candidate is still required. The owner 0.9.7
-review and development permission are recorded above.
+historical receipts, not a full-suite claim for this checkout. Independent
+PR30 review and merged-source verification are published in its
+[postmerge receipt](https://github.com/Jevelopers-neatHack-2026/print-production/pull/30#issuecomment-6115311903);
+PR33's reviewed 0.9.7 adoption and postmerge evidence are linked above.
 The review-fix receipt is `out/canonical-fix-report.json`; it preserves baseline
 failures, permanent regression results, separate-process interruption evidence and
-the exact fixed commit/tree. It supplies implementation evidence for a fresh
-independent review and does not self-approve the candidate or accept owner 0.9.4.
-The current dependency refresh evidence is `out/contracts-097-report.json`, with
+the exact fixed commit/tree used for PR30's independent review. Its private
+implementation evidence did not itself approve the candidate or accept owner 0.9.4.
+The PR33 dependency refresh evidence is `out/contracts-097-report.json`, with
 the exact consumer HEAD/tree, complete archive delta, all-member installation
 audit, final-head checks, six-operation/base-row byte proofs and negative-owner
 command/control evidence. Earlier 0.9.4 reports and producer fixture base revisions
