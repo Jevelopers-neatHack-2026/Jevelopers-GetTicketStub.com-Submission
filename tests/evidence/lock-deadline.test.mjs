@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
@@ -186,3 +187,85 @@ test('a delayed post-commit microtask does not retroactively fail a committed re
     assert.ok(resumedAt >= latestDeadline + OVERRUN_MS);
     assert.deepEqual(h.snapshot(), beforeDelay);
   });
+
+for (const mode of ['normal', 'delayed-schema']) {
+  test(`ordinary ${mode} lock preflight observes pending rejection and permits recovery`,
+    { timeout: 15_000 }, async (t) => {
+      const directory = await mkdtemp(path.join(os.tmpdir(), 'ei-lock-preflight-'));
+      t.after(() => rm(directory, { recursive: true, force: true }));
+      // A separate strict child makes a missed rejection fatal even when the
+      // public API's typed rejection is caught. The one declared SQLite shim
+      // delays a real schema get; native clocks, timers and rows are unchanged.
+      const script = `
+        import assert from 'node:assert/strict';
+        import { createHash } from 'node:crypto';
+        import { performance } from 'node:perf_hooks';
+        import { DatabaseSync } from 'node:sqlite';
+        import { createEvidenceStore, EvidenceStoreError } from ${JSON.stringify(new URL('../../src/evidence/store.mjs', import.meta.url).href)};
+        const mode = process.argv[1];
+        const config = {
+          directory: process.argv[2],
+          resolveTenant: (request) => request.tenant,
+          resolveKey: ({ tenantId, purpose }) => ({ keyId: purpose + '-synthetic',
+            key: createHash('sha256').update(tenantId + ':' + purpose).digest() }),
+          resolveRetention: ({ nowMs }) => ({ expiresAtMs: nowMs + 60_000,
+            policyId: 'synthetic-preflight', policyVersion: '1', accessPolicy: 'tenant_private' }),
+        };
+        const request = { tenant: 'synthetic-lock-preflight' };
+        const bootstrap = createEvidenceStore({ ...config, lockTimeoutMs: 5_000 });
+        const baseline = await bootstrap.integritySnapshot(await bootstrap.scopeForAuthenticatedRequest(request));
+        const store = createEvidenceStore({ ...config, lockTimeoutMs: ${LOCK_TIMEOUT_MS} });
+        const scope = await store.scopeForAuthenticatedRequest(request);
+        const originalPrepare = DatabaseSync.prototype.prepare;
+        const sleeper = new Int32Array(new SharedArrayBuffer(4));
+        const observation = { mode, delayedQueries: 0, delayMs: 0, errorCode: null, completed: false, recovered: false };
+        let armed = mode === 'delayed-schema';
+        DatabaseSync.prototype.prepare = function (sql, ...rest) {
+          const statement = Reflect.apply(originalPrepare, this, [sql, ...rest]);
+          if (!armed || !sql.includes('SELECT version FROM evidence_extension_schema')) return statement;
+          const get = statement.get;
+          return { get(...args) {
+            const value = Reflect.apply(get, statement, args);
+            armed = false;
+            observation.delayedQueries += 1;
+            const startedAt = performance.now();
+            const until = startedAt + ${LOCK_TIMEOUT_MS + OVERRUN_MS};
+            while (performance.now() < until) Atomics.wait(sleeper, 0, 0, Math.max(1, until - performance.now()));
+            observation.delayMs = performance.now() - startedAt;
+            return value;
+          } };
+        };
+        try {
+          const result = await store.integritySnapshot(scope);
+          assert.deepEqual(result, baseline);
+          observation.completed = true;
+        } catch (error) {
+          assert.ok(error instanceof EvidenceStoreError);
+          observation.errorCode = error.code;
+        } finally {
+          DatabaseSync.prototype.prepare = originalPrepare;
+        }
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.deepEqual(await store.integritySnapshot(scope), baseline);
+        observation.recovered = true;
+        console.log(JSON.stringify(observation));
+      `;
+      const childEnv = { ...process.env };
+      delete childEnv.NODE_TEST_CONTEXT;
+      const child = spawnSync(process.execPath,
+        ['--unhandled-rejections=strict', '--input-type=module', '--eval', script, mode, directory],
+        { encoding: 'utf8', env: childEnv, timeout: 10_000 });
+      assert.equal(child.error, undefined);
+      assert.equal(child.signal, null);
+      assert.equal(child.status, 0, child.stderr);
+      t.diagnostic(child.stderr.trim());
+      const observation = JSON.parse(child.stdout);
+      t.diagnostic(JSON.stringify(observation));
+      assert.equal(observation.mode, mode);
+      assert.equal(observation.recovered, true);
+      assert.equal(observation.completed, mode === 'normal');
+      assert.equal(observation.errorCode, mode === 'normal' ? null : 'EVIDENCE_BUSY');
+      assert.equal(observation.delayedQueries, mode === 'normal' ? 0 : 1);
+      if (mode === 'delayed-schema') assert.ok(observation.delayMs >= LOCK_TIMEOUT_MS + OVERRUN_MS);
+    });
+}

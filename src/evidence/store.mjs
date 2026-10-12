@@ -589,7 +589,12 @@ function createLockContext(timeoutMs, externalSignal) {
 }
 
 function awaitWithLockContext(value, context) {
-  context.check();
+  try { context.check(); } catch (error) {
+    // The caller may already have started native async work. An expired
+    // preflight must still observe its rejection while preserving this refusal.
+    observeNativeRejectedPromise(value);
+    throw error;
+  }
   return new Promise((resolve, reject) => {
     let settled = false;
     const cleanup = () => context.signal.removeEventListener('abort', onAbort);
