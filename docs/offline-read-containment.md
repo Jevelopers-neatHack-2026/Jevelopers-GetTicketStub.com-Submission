@@ -28,7 +28,10 @@ backslashes. Network access and process forks remain denied.
 
 On Linux, bubblewrap starts with an empty filesystem and binds only the read
 closure read-only plus the task-output directory writable. It creates its own
-`/dev` and PID-namespace `/proc`, retains `--unshare-pid`, `--die-with-parent`, and
+`/dev` and `/proc` mounts before remounting the root read-only. This nonrecursive
+remount prevents writes to unmounted namespace paths while preserving the separate
+task-output and device/proc mounts. It retains
+`--unshare-pid`, `--die-with-parent`, and
 `--unshare-net`, and receives an offline seccomp filter compiled with the system
 `libseccomp.so.2`. The filter rejects socket creation/use, socketpair, and io_uring
 entry points with EPERM; this covers pathname Unix sockets that a mounted task
@@ -57,9 +60,43 @@ input-write denial, unrelated inherited descriptors, and a task-owned Unix socke
 Only synthetic sentinels are used. macOS cancellation tests prove fork denial;
 Linux cancellation tests prove detached descendant cleanup. Linux-only filter and
 syscall tests must run on Linux and their macOS skips are not Linux evidence.
-The added CI read/filter lane runs as the ordinary runner user. No new root-owner
-execution, capabilities, kernel policy change, Docker daemon, or unconfined
-fallback is provided. A runner that cannot create the required namespaces fails.
+No new root-owner execution, capabilities, kernel policy change, Docker daemon,
+or unconfined fallback is provided. A runner that cannot create the required
+namespaces rejects payload execution.
+
+## Required CI contexts and tested capabilities
+
+The mandatory `Offline Linux containment verification` workflow runs as the
+ordinary user on the supported `ubuntu-22.04` hosted runner. It requires working
+user, mount, PID and network namespaces, bubblewrap, and libseccomp. Its startup
+control must succeed with a nonzero UID before the payload checks execute.
+
+| Context | Required work | Evidence boundary |
+| --- | --- | --- |
+| Ubuntu 22.04, ordinary user | All 98 native cases: 38 new read/input/seccomp cases, 52 existing owner/lifetime/diagnostic/reporting cases, and 8 history/archive cases; complete old and opt-in canonical scripts, including 21 old and 14 opt-in tests and eight source/installed CLI matrix runs | Mandatory unprivileged containment and canonical verification; test failures remain fatal |
+| Ubuntu 24.04 standard workflow | Original ordinary, privileged-owner, canonical and retrieval regression selectors, including the reporting execution case | Existing baseline regression coverage; privileged execution is not unprivileged containment evidence |
+| Ubuntu 24.04 ordinary-user diagnostics | Bounded baseline, explicit user-namespace and current-UID mapping probes, plus kernel/runtime facts and retained stderr/status | Diagnostic capture is mandatory; its completion does not mean the namespace startup succeeded |
+| Native macOS | Existing read/write, owner, staging and cancellation scenarios | Fork-denial evidence; Linux-only skips do not establish Linux behavior |
+
+The three new read/input/seccomp files run on Ubuntu 22.04 and stay excluded from
+the Ubuntu 24.04 ordinary suite. All pre-existing Ubuntu 24.04 selectors remain.
+The 52 owner cases and 8 history cases also run on Ubuntu 22.04; these are duplicate
+platform invocations of the same case IDs. Canonical checks repeated across
+workflows likewise do not create additional unique conformance cases.
+
+Qualification run [38244476304](https://github.com/Jevelopers-neatHack-2026/integration-evals/actions/runs/38244476304)
+at source tree `15810f2ccfab3a97ebcef8ae5305a9cdf9522b89` passed all 98 native,
+21 old and 14 opt-in tests without skips, under UID 1001 on Ubuntu 22.04.5,
+kernel 6.8.0-1064-azure, bubblewrap 0.6.1, Python 3.13.9 and Node 22.23.3.
+The real checkout, outside and symlink write probes reported EROFS while task
+writes succeeded. Later candidates must obtain fresh mandatory CI and review.
+
+The observed Ubuntu 24.04 ordinary-user environment cannot initialize the required
+network namespace: its retained probes fail at loopback `RTM_NEWADDR` with EPERM.
+That context remains unavailable for normal-user payload execution; its failures
+are preserved and are not relabeled as successful containment. No host/LSM policy
+change or privilege fallback is used. Full product acceptance remains blocked
+until the actual composed runtime is qualified.
 
 The trusted evaluator/runtime installation and launcher-controlled input roots are
 part of the boundary. This is not isolation from a hostile process already running

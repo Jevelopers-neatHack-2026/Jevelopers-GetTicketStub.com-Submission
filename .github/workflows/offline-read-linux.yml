@@ -1,4 +1,4 @@
-name: Offline containment Ubuntu 22 capability experiment
+name: Offline Linux containment verification
 on:
   pull_request:
   workflow_dispatch:
@@ -6,6 +6,7 @@ permissions:
   contents: read
 jobs:
   unprivileged-linux:
+    name: Mandatory unprivileged Linux verification
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:

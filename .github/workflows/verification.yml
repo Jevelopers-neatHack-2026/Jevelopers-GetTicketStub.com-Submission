@@ -45,7 +45,7 @@ jobs:
           node "$RUNNER_TEMP/contract-runtime/installed-scenarios.mjs" > reports/runs/verification/installed-caller.json
       - name: Install platform isolation tooling
         run: sudo apt-get update && sudo apt-get install --yes bubblewrap libseccomp2
-      - name: Verify offline read closure as the unprivileged runner
+      - name: Record ordinary-user namespace availability diagnostics
         run: |
           mkdir -p reports/runs/verification
           set +e
@@ -90,7 +90,8 @@ jobs:
             run_probe explicit-current-id --unshare-user --uid "$(id -u)" --gid "$(id -g)"
           } > reports/runs/verification/linux-isolation-capability.log 2>&1
           set -e
-          .venv/bin/python -m pytest tests/test_process_reads.py tests/test_process_inputs.py tests/test_process_seccomp.py --junitxml=reports/runs/verification/linux-read-junit.xml
+          test -s reports/runs/verification/linux-isolation-capability.log
+          test -s reports/runs/verification/bwrap-help.txt
       - name: Verify real Linux isolation and retained owner output
         run: |
           mkdir -p reports/runs/verification
