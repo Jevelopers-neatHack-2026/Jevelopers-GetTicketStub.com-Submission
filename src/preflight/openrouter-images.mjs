@@ -546,6 +546,18 @@ function snapshotCredentialResponse(value) {
     binding, binding_fields: bindingFields, evidence });
 }
 
+function credentialBindingFieldsAllowed(fields, grantRef) {
+  // These frozen keys come from the captured enumeration of the resolver's
+  // binding. Do not construct or inspect the allowlist through mutable array
+  // predicates or an iterator after a caller callback has run.
+  for (let index = 0; index < fields.length; index += 1) {
+    const key = fields[index];
+    if (key !== 'service' && key !== 'account_ref' && key !== 'project_ref'
+      && key !== 'target_binding_sha256' && !(grantRef && key === 'grant_ref')) return false;
+  }
+  return true;
+}
+
 async function resolveCredential(credentialPort, { purpose = 'read_only_account_check', scope, target, grantRef, deadlineAt, now }) {
   try {
     if (!SAFE_REF.test(scope.account_ref) || !SAFE_REF.test(scope.project_ref)) {
@@ -566,8 +578,7 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
       || resolved.decision !== 'resolved' || resolved.evidence_mode !== 'live') {
       throw error('credential_unavailable', 'Trusted credential resolver did not confirm this provider scope.');
     }
-    const allowedBindingFields = ['service', 'account_ref', 'project_ref', 'target_binding_sha256', ...(grantRef ? ['grant_ref'] : [])];
-    if (!resolved.binding || resolved.binding_fields.some((key) => !allowedBindingFields.includes(key))
+    if (!resolved.binding || !credentialBindingFieldsAllowed(resolved.binding_fields, grantRef)
       || resolved.binding.service !== OPENROUTER_PREFLIGHT_SERVICE
       || resolved.binding.account_ref !== scope.account_ref || resolved.binding.project_ref !== scope.project_ref
       || resolved.binding.target_binding_sha256 !== expectedBindingHash

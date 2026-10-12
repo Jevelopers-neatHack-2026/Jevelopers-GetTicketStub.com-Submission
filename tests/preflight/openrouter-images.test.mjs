@@ -2017,6 +2017,69 @@ for (const [guard, record] of [
   });
 }
 
+for (const boundary of ['some', 'includes', 'iterator']) {
+  test(`unexpected credential binding fields refuse after replacing array ${boundary} and recover with a valid response`, async () => {
+    const original = { apply: Reflect.apply, some: Array.prototype.some,
+      includes: Array.prototype.includes, iterator: Array.prototype[Symbol.iterator] };
+    const unexpected = 'test_unexpected_binding_field';
+    let malformed = true;
+    let interceptedGuards = 0;
+    const calls = [];
+    const host = [];
+    const { fetchImpl, requests } = interceptedFetch();
+    const port = grantCredentialPort({ calls, mutate(value) {
+      if (malformed) value.binding[unexpected] = 'synthetic-disallowed-field';
+      return value;
+    } });
+    const input = billable();
+    let adapter;
+    try {
+      adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: port, fetchImpl,
+        get dispatchPort() {
+          if (boundary === 'some') Array.prototype.some = function (callback, thisArg) {
+            if (this.length === 6 && this[0] === 'service' && this[5] === unexpected) {
+              interceptedGuards += 1; return false;
+            }
+            return original.apply(original.some, this, [callback, thisArg]);
+          };
+          if (boundary === 'includes') Array.prototype.includes = function (value, fromIndex) {
+            if (this.length === 5 && this[0] === 'service' && value === unexpected) {
+              interceptedGuards += 1; return true;
+            }
+            return original.apply(original.includes, this, [value, fromIndex]);
+          };
+          if (boundary === 'iterator') Array.prototype[Symbol.iterator] = function () {
+            if (this.length === 1 && this[0] === 'grant_ref') {
+              interceptedGuards += 1;
+              return original.apply(original.iterator, ['grant_ref', unexpected], []);
+            }
+            return original.apply(original.iterator, this, []);
+          };
+          return { async prepare(args) { host.push(['prepare', args.credential.token === TOKEN_CANARY]); },
+            async dispatch(args) { host.push(['dispatch', args.credential.token === TOKEN_CANARY]); } };
+        },
+      });
+      await assert.rejects(adapter.prepare(input), (error) => error.code === 'credential_unavailable');
+    } finally {
+      Array.prototype.some = original.some;
+      Array.prototype.includes = original.includes;
+      Array.prototype[Symbol.iterator] = original.iterator;
+    }
+    assert.equal(interceptedGuards, 0, 'binding validation cannot call a replaced array helper');
+    assert.equal(calls.length, 1);
+    assert.deepEqual(host, [], 'a malformed binding must refuse before host preparation');
+    assert.equal(requests.length, 0);
+
+    malformed = false;
+    const prepared = await adapter.prepare(input);
+    await adapter.dispatch(dispatchInput(input, prepared));
+    await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
+    assert.equal(calls.length, 2, 'a corrected resolver response can obtain fresh single-use authority');
+    assert.deepEqual(host, [['prepare', true], ['dispatch', true]]);
+    assert.equal(requests.length, 0, 'the recovered host fixture performs no external request');
+  });
+}
+
 for (const boundary of ['object-keys', 'array-map', 'json-stringify', 'set-has', 'descriptor-getter']) {
   test(`the final authority fence runs no replacement ${boundary} callback`, async () => {
     const original = { apply: Reflect.apply, keys: Object.keys, map: Array.prototype.map,
