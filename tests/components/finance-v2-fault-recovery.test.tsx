@@ -179,3 +179,64 @@ describe('cancelled generations discard late rejections before inspection', () =
     view.unmount();
   });
 });
+
+
+describe('independent readable fault metadata survives an unrelated malformed field', () => {
+  const httpCases = [
+    [401, { outcome: 'unauthorized' }],
+    [403, { outcome: 'restricted' }],
+    [404, { outcome: 'missing' }],
+    [429, { outcome: 'error', kind: 'rate_limited', retryable: true }],
+    [500, { outcome: 'error', kind: 'server', retryable: true }],
+    [599, { outcome: 'error', kind: 'server', retryable: true }],
+  ] as const;
+  for (const property of ['code', 'name'] as const) {
+    it.each(httpCases)(`preserves HTTP %i when ${property} throws`, (status, expected) => {
+      const error = Object.defineProperty({ status }, property, { get() { throw new Error(CANARY); } });
+      expect(classifyFinanceV2Fault(error)).toEqual(expected);
+    });
+  }
+  it.each([
+    [{ code: 'TIMEOUT' }, 'status'],
+    [{ name: 'TimeoutError' }, 'status'],
+    [{ name: 'TimeoutError' }, 'code'],
+  ] as const)('preserves readable timeout metadata in mixed case %#', (metadata, property) => {
+    const error = Object.defineProperty({ ...metadata }, property, { get() { throw new Error(CANARY); } });
+    expect(classifyFinanceV2Fault(error)).toEqual({ outcome: 'error', kind: 'timeout', retryable: true });
+  });
+  it('retains the timeout-code short circuit without inspecting name', () => {
+    const inspect = vi.fn(() => { throw new Error(CANARY); });
+    const error = Object.defineProperty({ code: 'TIMEOUT' }, 'name', { get: inspect });
+    expect(classifyFinanceV2Fault(error)).toEqual({ outcome: 'error', kind: 'timeout', retryable: true });
+    expect(inspect).not.toHaveBeenCalled();
+  });
+  it.each([{ status: 401, code: 'TIMEOUT' }, { status: 503, name: 'TimeoutError' }])('preserves existing timeout precedence in case %#', (error) => {
+    expect(classifyFinanceV2Fault(error)).toEqual({ outcome: 'error', kind: 'timeout', retryable: true });
+  });
+  it.each([
+    [{ status: 503 }, 'code', 'The report service is unavailable right now.'],
+    [{ code: 'TIMEOUT' }, 'status', 'The report service did not answer in time.'],
+  ] as const)('keeps a safe Retry and recovers from mixed adapter fault %# with fresh authorization', async (metadata, property, copy) => {
+    const { port, pending } = manualPort();
+    const token = vi.fn(async () => 'synthetic-token');
+    render(<FinanceV2ConnectedView {...connected(port, { authorization: { revision: '1', token } })} />);
+    await settle();
+    const error = Object.defineProperty({ ...metadata }, property, { get() { throw new Error(CANARY); } });
+    await act(async () => { pending[0]!.reject(error); });
+    expect(screen.getByRole('alert')).toHaveTextContent(copy);
+    expect(screen.getByRole('alert')).toHaveTextContent('No amounts are shown.');
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(document.body.innerHTML).not.toContain(CANARY);
+    expect(document.body.innerHTML).not.toContain('synthetic-token');
+    await act(async () => { screen.getByRole('button', { name: 'Retry' }).click(); });
+    await settle();
+    expect(pending).toHaveLength(2);
+    expect(token).toHaveBeenCalledTimes(2);
+    expect(pending[0]!.request.signal.aborted).toBe(true);
+    await act(async () => { pending[1]!.resolve({ status: 'missing' }); });
+    expect(document.body.textContent).toContain('No Finance v2 report has been delivered');
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(document.body.innerHTML).not.toContain(CANARY);
+    expect(document.body.innerHTML).not.toContain('synthetic-token');
+  });
+});

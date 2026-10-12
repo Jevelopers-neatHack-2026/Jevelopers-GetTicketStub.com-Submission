@@ -52,22 +52,25 @@ export type FinanceV2Fault =
   | Readonly<{ outcome: 'unauthorized' | 'restricted' | 'missing' }>
   | Readonly<{ outcome: 'error'; kind: FinanceV2FaultKind; retryable: boolean }>;
 
-/** Maps a thrown port failure to a typed fault from its numeric `status` or `code` only. Messages and bodies are never read, so nothing secret can be echoed. */
+/** Maps readable `status`, `code` or `name` metadata to a typed fault. Messages and bodies are never read or shown. */
 export function classifyFinanceV2Fault(error: unknown): FinanceV2Fault {
-  try {
-    const status = typeof error === 'object' && error !== null ? (error as { status?: unknown }).status : undefined;
-    const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
-    if (code === 'TIMEOUT' || (typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'TimeoutError')) return { outcome: 'error', kind: 'timeout', retryable: true };
-    if (status === 401) return { outcome: 'unauthorized' };
-    if (status === 403) return { outcome: 'restricted' };
-    if (status === 404) return { outcome: 'missing' };
-    if (status === 429) return { outcome: 'error', kind: 'rate_limited', retryable: true };
-    if (typeof status === 'number' && Number.isInteger(status) && status >= 500 && status <= 599) return { outcome: 'error', kind: 'server', retryable: true };
-    return { outcome: 'error', kind: 'failed', retryable: false };
-  } catch {
-    // Error metadata can itself throw (for example an accessor or revoked proxy). Never echo that failure.
-    return { outcome: 'error', kind: 'failed', retryable: false };
-  }
+  const field = (key: 'status' | 'code' | 'name'): unknown => {
+    try {
+      return typeof error === 'object' && error !== null ? (error as Record<string, unknown>)[key] : undefined;
+    } catch {
+      // An unreadable field must neither escape nor discard other readable classification metadata.
+      return undefined;
+    }
+  };
+  const status = field('status');
+  const code = field('code');
+  if (code === 'TIMEOUT' || field('name') === 'TimeoutError') return { outcome: 'error', kind: 'timeout', retryable: true };
+  if (status === 401) return { outcome: 'unauthorized' };
+  if (status === 403) return { outcome: 'restricted' };
+  if (status === 404) return { outcome: 'missing' };
+  if (status === 429) return { outcome: 'error', kind: 'rate_limited', retryable: true };
+  if (typeof status === 'number' && Number.isInteger(status) && status >= 500 && status <= 599) return { outcome: 'error', kind: 'server', retryable: true };
+  return { outcome: 'error', kind: 'failed', retryable: false };
 }
 
 /** Fixed, secret-free copy per fault kind. */
