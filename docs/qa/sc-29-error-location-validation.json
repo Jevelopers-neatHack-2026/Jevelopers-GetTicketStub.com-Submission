@@ -1,0 +1,64 @@
+{
+  "base_sha": "26e7cb718e74b7fab1b64ab0d9e69acfe058a5a6",
+  "baseline_validator_blob": "ca6ff409b00a2d8d5f04e90261a561b2c6f8fe36",
+  "mode": "offline synthetic validator doubles; supplementary source-mirror execution",
+  "actual_runtime": "v22.16.0",
+  "runs": [
+    {
+      "source": "baseline",
+      "command": "node --test --test-reporter=tap tests/reporting-error-location.test.mjs",
+      "tests": 20,
+      "pass": 11,
+      "fail": 9,
+      "skipped": 0,
+      "exit_code": 1
+    },
+    {
+      "source": "candidate",
+      "command": "node --check proposals/reporting-v1/validate.mjs",
+      "exit_code": 0
+    },
+    {
+      "source": "candidate",
+      "command": "node --test --test-reporter=tap tests/reporting-error-location.test.mjs",
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "skipped": 0,
+      "exit_code": 0
+    }
+  ],
+  "candidate_sha256": {
+    ".github/workflows/reporting-proposal.yml": "27df93b7f484265a8e8327a6bf43d376353cf614bdbeb8fc272d067907d500d0",
+    "ci/reporting/README.md": "b0e339ad3b6c71e2bbd5a4369b35357d4cb0c01d10499bd5ada2285612e728c3",
+    "ci/reporting/package-lock.json": "a5b0b97f31be49b551baa45385ae07fe3474aa13540bddd72ff912e03148f405",
+    "ci/reporting/package.json": "937f04189183bd4047eb5911ba7e9d32d13210828d7dc2691b88fbdc85b6a343",
+    "proposals/reporting-v1/validate.mjs": "a6a31cf9ff6a7bacf23224a8f0b123eac5756e9a638974317d246daf9dbc20d1",
+    "tests/reporting-error-location-integration.test.mjs": "6d2c2849fb87f109b5b2dfddb6bf2b3fc4a6181c0d825c6928572bb5eb6aa238",
+    "tests/reporting-error-location.test.mjs": "f9ac931e1dd91a340272568fc5b1f0ebe5ef29fd9ed1eaf4067dca3e95dd1076"
+  },
+  "logs_sha256": {
+    "baseline-location-tests.tap": "89cfbb2304edb646f0d9744e50f4c225b71cf4771a5d61b9dee8e4cba218b39a",
+    "baseline-validate.mjs": "21ecdc308c2e10b19d69b7a03bc62fabec9e26d503841dbc9d36fef9c471c500",
+    "candidate-location-tests-final.tap": "5362396ffb0265153fa9097442af6983130c98203439793c26ae0ac346adeb6b",
+    "candidate-location-tests.tap": "86f92cce36d8f9dd012066e6234efb0e9d10a81b2cd75be257a10333d343451c",
+    "candidate-syntax-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-syntax.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "not_locally_run": [
+    "Node22.23.3/24.21.0 execution",
+    "real Ajv integration and complete committed reporting suites (pinned dependency absent)",
+    "SDK build/generation/types/installed-package/consumer acceptance"
+  ],
+  "limits": [
+    "Direct clone failed DNS; source mirror verified against exact Git blob.",
+    "Entire CLI unavailable; focused known-file inspection used.",
+    "The isolated CI-only dependency lock reuses the existing five-entry Ajv subgraph; registry provisioning is separate from offline tests.",
+    "Current-candidate review, canonical-runtime results, merge and postmerge checks are recorded separately only after actual execution."
+  ],
+  "local_static_checks": [
+    "YAML event/permission/action-pin/checkout/no-bypass assertions passed",
+    "CI package/lock identity, five-package dependency closure and SHA512 encoding passed",
+    "Both new test modules pass node --check"
+  ]
+}
