@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.10.0 (unreleased development candidate)
+
+Adds an unaccepted UsageEvent/2.0.0 direct provider-reported-unsettled USD branch and ProviderReportedCostEvidence/1.0.0 with separate source-byte and domain-separated record commitments. An opt-in helper checks an owner-supplied evidence lookup and pairwise identity without authenticating a provider or implementing Finance state. UsageEvent/1.0.0 bytes, fixtures, helper behavior and Finance dispatch remain pinned; synthetic fixtures do not establish real provider receipts, owner acceptance or consumer adoption.
+
 ## 0.9.7 (unreleased development candidate)
 
 The independent whole-PR review of 34568c9 verified the row/CSV repairs and reproduced SC-CHK-024 missing contexts, SC-CHK-025 malformed file inventory records and SC-CHK-026 unvalidated idempotency tuples. Error creation/adaptation and geometry translation guard context before dereference; the same boundary audit also guards the supplied personalization template and non-string error codes. Observed records and ZIP descriptors are checked before filename access, sorting or case folding. Idempotency requires canonical complete scoped operation/key/digest tuples, retaining NOT_FOUND for namespace mismatch, IDEMPOTENCY_CONFLICT for valid digest differences and replay_authorized: false. Existing wire/fixture encodings and positive byte/error/geometry controls remain unchanged. These local repairs require a fresh exact-candidate review; external acceptance and unsupported owner interfaces remain open.

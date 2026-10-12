@@ -5,6 +5,7 @@ import { checkCommerceEvidence } from './commerce-evidence.mjs';
 import { historicalFinanceFixture } from './historical-finance-fixtures.mjs';
 import { checkPrintSpec, checkFulfillmentCapabilitySnapshot } from './capability.mjs';
 import { checkProductionFixture } from './production-fixture-check.mjs';
+import { checkProviderReportedCostEvidence, checkReportedUnsettledUsageEvent, compareReportedUnsettledUsageIdentity } from './usage-reported-unsettled.mjs';
 
 export const fixtureCategories = Object.freeze(['minimal', 'full', 'missing', 'type', 'enum', 'malformed_json', 'unsupported_version', 'unknown_field', 'unknown_critical', 'additive_field', 'retained_encoding']);
 const digest = value => hashBytes(new TextEncoder().encode(canonicalJson(value)));
@@ -41,6 +42,9 @@ export function evaluateFixture(contract, manifest, fixture) {
     return checkOperation(contract, payload, fixture.context);
   }
   if (fixture.mode === 'relationship') return compareUsageIdentity(fixture.prior, payload);
+  if (fixture.mode === 'provider_reported_cost_evidence') return checkProviderReportedCostEvidence(payload);
+  if (fixture.mode === 'usage_reported_unsettled') return checkReportedUnsettledUsageEvent(payload, fixture.context ?? manifest.context);
+  if (fixture.mode === 'usage_reported_unsettled_relationship') return compareReportedUnsettledUsageIdentity(fixture.prior, payload);
   if (fixture.mode === 'context') return checkTrustedContext(payload, fixture.expected_context);
   if (fixture.mode === 'parse') return parseContractVersion(contract, fixture.consumer_version ?? manifest.schema_version, fixture.json);
   if (fixture.mode && fixture.mode !== 'structural') throw new Error('Unknown fixture mode');
@@ -64,7 +68,7 @@ export function runCanonicalFixtures(contract, manifest) {
       const result = evaluateFixture(contract, manifest, fixture);
       assertFixture(result, fixture.expected);
       let canonical_sha256 = null;
-      if (result.ok && fixture.mode !== 'relationship') {
+      if (result.ok && !['relationship', 'usage_reported_unsettled_relationship'].includes(fixture.mode)) {
         const bytes = canonicalJson(result.value);
         const roundtrip = parseContract(contract, bytes);
         assertFixture(roundtrip, { ok: true, value: result.value });

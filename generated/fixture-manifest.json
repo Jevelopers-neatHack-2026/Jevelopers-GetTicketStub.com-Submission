@@ -65,6 +65,7 @@
     "fixtures/ProductionRowCsvContextCalibration.json": "sha256:e715a8369e2e70ce6601e6ccb244f0805a53a627e7b0709a2407b8fd2aafde42",
     "fixtures/ProductionRuntime.json": "sha256:2e21cc4e53436952e3f0d50722f8760fd1a65d5f95ac982165607424465ef10e",
     "fixtures/ProjectRequest.json": "sha256:5ad1e5aa2074e2acd58d3a7eb8246e889321a6e786766d2c30e90e1f877fcc12",
+    "fixtures/ProviderReportedCostEvidence.json": "sha256:407303930ab4d824547e95eac819704a6ac97b4f4851721879afa8c1bbcd7fac",
     "fixtures/QueryRequest.2_0_0.json": "sha256:69c2290ed3e18b2a577d4ae5f8e493d3b506a8a71761f59e0b32887a12a84e1f",
     "fixtures/QueryRequest.json": "sha256:02ecc8f5d62b0edb35aed2bc40ed660eee4d4e692212ae70f72d1ea0a0760672",
     "fixtures/QueryResult.2_0_0.json": "sha256:f685d27237bd1c4e3db4f7add94a76243034646ab1a3c3b195f31a7ab36350e0",
@@ -90,9 +91,10 @@
     "fixtures/SettleResult.2_0_0.json": "sha256:8f8ec98f3163120cf6e32181fbae9aa6a120d82d22d811d52fd8068b87fc9408",
     "fixtures/SettleResult.json": "sha256:f1727555000cad209b3bcb54d09ec3a3ca66d7c07b6e55882762e44a27d5eeb2",
     "fixtures/TemplateSpec.json": "sha256:bf202ffcb3c06d4ff8de157bdb5cd69894846e06015a6cf042e4f037b041aaac",
+    "fixtures/UsageEvent.2_0_0.json": "sha256:d9a22e2e143bdedf7645de1d35ea0b0f0834c9fd46f7dc655ef2003787925851",
     "fixtures/UsageEvent.json": "sha256:c3261936892562c1b0dbf57a665d5d460c8c462ac85dce15fbc05846a7b71cdb"
   },
-  "digest": "sha256:8db06e6348ff798c066f429bb0b21d5b7fd56ce07705b0133584bfe4f8d829ab",
+  "digest": "sha256:8f9684718b06dfb7b52c196530c521a7865358c450f1f17ab8bc110558887eb9",
   "status": "synthetic_candidates_only",
   "contracts": [
     {
@@ -11813,6 +11815,138 @@
       ]
     },
     {
+      "contract": "ProviderReportedCostEvidence",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/ProviderReportedCostEvidence.json",
+      "cases": [
+        {
+          "id": "known-per-attempt",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "provider_reported_cost_evidence",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "explicit-unknown-cost-is-null",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "aggregate-scope-remains-distinct",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing-host-evidence-id",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/evidence_id"
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/revision"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/source"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown-critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive-field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained-encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
       "contract": "QueryRequest",
       "version": "2.0.0",
       "policy_version": "1.0.0",
@@ -17717,6 +17851,219 @@
           "category": "production_semantic",
           "policy_version": "1.0.0",
           "mode": "production",
+          "expected": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "contract": "UsageEvent",
+      "version": "2.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/UsageEvent.2_0_0.json",
+      "cases": [
+        {
+          "id": "exact-usd-null-rate-null-request",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "known-cost-with-unknown-usage-and-timeout",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "known-cost-with-cancelled-outcome",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "known-cost-with-unknown-outcome",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing-money-is-rejected",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/valuation"
+          }
+        },
+        {
+          "id": "unsettled-cannot-carry-reconciliation",
+          "category": "semantic",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/reconciliation_ref"
+          }
+        },
+        {
+          "id": "duplicate-redelivery-may-change-transport",
+          "category": "relationship",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled_relationship",
+          "expected": {
+            "ok": true,
+            "value": "duplicate_observation"
+          }
+        },
+        {
+          "id": "changed-economics-under-same-observation-conflicts",
+          "category": "relationship",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled_relationship",
+          "expected": {
+            "ok": false,
+            "code": "OBSERVATION_CONFLICT",
+            "path": "/valuation"
+          }
+        },
+        {
+          "id": "changed-attempt-under-same-observation-conflicts",
+          "category": "relationship",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled_relationship",
+          "expected": {
+            "ok": false,
+            "code": "IDENTITY_COLLISION",
+            "path": "/provider_attempt_id"
+          }
+        },
+        {
+          "id": "exact-linked-correction",
+          "category": "relationship",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled_relationship",
+          "expected": {
+            "ok": true,
+            "value": "superseding_observation"
+          }
+        },
+        {
+          "id": "late-observation-is-classified-as-superseded",
+          "category": "relationship",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled_relationship",
+          "expected": {
+            "ok": true,
+            "value": "superseded_observation"
+          }
+        },
+        {
+          "id": "full",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "usage_reported_unsettled",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "wrong-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/billing_mode"
+          }
+        },
+        {
+          "id": "unknown-enum",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/environment"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-version",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown-critical",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive-field",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained-encoding",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "structural",
           "expected": {
             "ok": true
           }

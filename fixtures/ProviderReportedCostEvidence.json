@@ -1,0 +1,194 @@
+{
+  "contract": "ProviderReportedCostEvidence",
+  "schema_version": "1.0.0",
+  "policy_version": "1.0.0",
+  "fixture_provenance": "synthetic_only; no real provider receipt or authenticated resolver lookup",
+  "valid": {
+    "contract": "ProviderReportedCostEvidence",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "evidence_id": "123e4567-e89b-42d3-a456-000000000024",
+    "revision": 1,
+    "content_hash": "sha256:e598c9a472902c0e11a9f6d410869cd1b817d67c3c5a0333a5965d61004f4498",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_observation_id": "123e4567-e89b-42d3-a456-000000000019",
+    "provider": "synthetic_provider",
+    "model": "synthetic_model",
+    "source": "provider_response",
+    "source_observed_at": "2026-10-10T12:00:01Z",
+    "source_bytes_hash": "sha256:2b132847dc360e26d4847d40911fb706d0c81d7d8bded8909088cb1212a8bb22",
+    "source_scope": {
+      "kind": "per_billable_attempt",
+      "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+      "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000020",
+      "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+      "provider_request_id": null
+    },
+    "reported_cost": {
+      "state": "known",
+      "money": {
+        "amount": "0.000003",
+        "currency": "USD",
+        "scale": 6
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "known-per-attempt",
+      "category": "minimal",
+      "mode": "provider_reported_cost_evidence",
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "explicit-unknown-cost-is-null",
+      "category": "type",
+      "mode": "structural",
+      "set": {
+        "reported_cost": {
+          "state": "unknown",
+          "money": null
+        }
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "aggregate-scope-remains-distinct",
+      "category": "full",
+      "mode": "structural",
+      "set": {
+        "source_scope": {
+          "kind": "per_key_aggregate",
+          "aggregate_key": "synthetic-key",
+          "period_start": "2026-10-10T11:00:00Z",
+          "period_end": "2026-10-10T12:00:00Z"
+        }
+      },
+      "expected": {
+        "ok": true
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "missing-host-evidence-id",
+      "category": "missing",
+      "remove": [
+        "evidence_id"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/evidence_id"
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "wrong-type",
+      "category": "type",
+      "policy_version": "1.0.0",
+      "set": {
+        "revision": "one"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/revision"
+      }
+    },
+    {
+      "id": "unknown-enum",
+      "category": "enum",
+      "policy_version": "1.0.0",
+      "set": {
+        "source": "provider_fiction"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/source"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "policy_version": "1.0.0",
+      "mode": "parse",
+      "consumer_version": "1.0.0",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "unsupported-version",
+      "category": "unsupported_version",
+      "policy_version": "1.0.0",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "policy_version": "1.0.0",
+      "set": {
+        "unregistered_field": "synthetic"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "unknown-critical",
+      "category": "unknown_critical",
+      "policy_version": "1.0.0",
+      "set": {
+        "critical_extension": "synthetic"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "additive-field",
+      "category": "additive_field",
+      "policy_version": "1.0.0",
+      "set": {
+        "future_field": "synthetic"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "retained-encoding",
+      "category": "retained_encoding",
+      "policy_version": "1.0.0",
+      "expected": {
+        "ok": true
+      }
+    }
+  ]
+}

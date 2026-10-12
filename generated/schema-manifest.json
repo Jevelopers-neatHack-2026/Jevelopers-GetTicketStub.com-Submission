@@ -1,5 +1,5 @@
 {
-  "package_version": "0.9.7",
+  "package_version": "0.10.0",
   "source_revision": null,
   "status": "unreleased_candidates",
   "toolchain": {
@@ -431,6 +431,13 @@
       "sha256": "be6b676371c85b93ab417f371ab44ac5f160ed2f253d1e9a50ab7e0d9d35b1f9"
     },
     {
+      "contract": "ProviderReportedCostEvidence",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProviderReportedCostEvidence/1.0.0",
+      "path": "schemas/ProviderReportedCostEvidence/1.0.0.json",
+      "sha256": "acba47b010db148695aa6443e35c1551ed4362a670b8fb6c46a0d4228998ceb4"
+    },
+    {
       "contract": "QueryRequest",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/QueryRequest/1.0.0",
@@ -611,6 +618,13 @@
       "schema_id": "https://schemas.jevelopers.org/UsageEvent/1.0.0",
       "path": "schemas/UsageEvent/1.0.0.json",
       "sha256": "8556135f33fc81f85b51d11268c8b6e7d6fd464f73ef6f6b82df8a2207f6dbf6"
+    },
+    {
+      "contract": "UsageEvent",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/UsageEvent/2.0.0",
+      "path": "schemas/UsageEvent/2.0.0.json",
+      "sha256": "6fb3a168208376a943bda31ee85f766f192416aa281eacc483325e52c4e93ec3"
     }
   ]
 }

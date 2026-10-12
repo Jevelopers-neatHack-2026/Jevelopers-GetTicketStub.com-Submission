@@ -30,15 +30,22 @@ try {
   console.log(run(process.execPath, ['fixture-consumer.mjs'], directory).trim());
   await cp(root + 'examples/capability-consumer.mjs', join(directory, 'capability-consumer.mjs'));
   console.log(run(process.execPath, ['capability-consumer.mjs'], directory).trim());
+  console.log(run(process.execPath, [join(directory, 'node_modules', '@jevelopers', 'shared-contracts', 'examples', 'usage-reported-unsettled-consumer.mjs')], directory).trim());
   await productionInstalledChecks(directory, run);
   await writeFile(join(directory, 'consumer.mts'), `import { parseContract, versions } from '@jevelopers/shared-contracts';
 import type { ContractMap, ContractVersionMap, ContractName, TenantId, ProjectId } from '@jevelopers/shared-contracts';
 import { runCanonicalFixtures } from '@jevelopers/shared-contracts/fixture-harness';
+import { checkReportedUnsettledUsageEvent } from '@jevelopers/shared-contracts/usage-reported-unsettled';
+import type { ProviderReportedUnsettledValuation, UsageReportedContext } from '@jevelopers/shared-contracts/usage-reported-unsettled';
+import type { ProviderReportedCostEvidence_1_0_0, UsageEvent_2_0_0 } from '@jevelopers/shared-contracts';
 import { checkPrintSpec } from '@jevelopers/shared-contracts/capability';
 import type { PrintSpec, CapabilityContext } from '@jevelopers/shared-contracts/capability';
 type Assert<T extends true> = T;
 type EachVersion = Assert<{ [K in ContractName]: ContractMap[K]['schema_version'] extends keyof ContractVersionMap[K] ? true : false }[ContractName]>;
 type Brands = Assert<ProjectId extends TenantId ? false : true>;
+type DirectRateCardIsNull = Assert<ProviderReportedUnsettledValuation['rate_card_ref'] extends null ? true : false>;
+type ExactV2 = Assert<UsageEvent_2_0_0['schema_version'] extends '2.0.0' ? true : false>;
+type EvidenceIsReadonly = Assert<ProviderReportedCostEvidence_1_0_0 extends Readonly<ProviderReportedCostEvidence_1_0_0> ? true : false>;
 const parsed = parseContract('ProjectRequest', '{}');
 if (parsed.ok) { const version: '1.0.0' = parsed.value.schema_version; }
 const registry: 'ProjectRequest_1_0_0' = versions.ProjectRequest['1.0.0'];
@@ -47,10 +54,13 @@ export type Parity = readonly [EachVersion, Brands];
 declare const capabilityContext: CapabilityContext;
 const checkedSpec = checkPrintSpec({}, capabilityContext);
 if (checkedSpec.ok) { const unitState: PrintSpec['constraints']['geometry']['trim']['state'] = checkedSpec.value.constraints.geometry.trim.state; }
+declare const usageContext: UsageReportedContext;
+const reported = checkReportedUnsettledUsageEvent({}, usageContext);
+if (reported.ok) { const candidateVersion: '2.0.0' = reported.value.schema_version; }
 `);
   run(process.execPath, [root + 'node_modules/typescript/bin/tsc', '--noEmit', '--strict', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', join(directory, 'consumer.mts')], directory);
   console.log(JSON.stringify({ installed_types: 'passed', esm_export_map: 'passed' }));
-  console.log(JSON.stringify({ archive_hash: digest, reproducible: true, runtime_dependencies: 0 }));
+  console.log(JSON.stringify({ archive_hash: digest, archive_integrity: first.integrity, reproducible: true, runtime_dependencies: 0 }));
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

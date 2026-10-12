@@ -51,8 +51,8 @@ function embeddedErrorFacts(value, path = '', slot = false) {
   return ok(value);
 }
 
-function boundary(contract, input, context) {
-  const parsed = validateContract(contract, input);
+function boundary(contract, input, context, version) {
+  const parsed = version ? validateContractVersion(contract, version, input) : validateContract(contract, input);
   if (!parsed.ok) return parsed;
   try { canonicalJson(context); } catch (error) {
     if (error instanceof ContractError) return fail('INVALID_TRUST_CONTEXT');
@@ -211,7 +211,7 @@ function usageFacts(value) {
 }
 
 export function compareUsageIdentity(left, right) {
-  const a = validateContract('UsageEvent', left), b = validateContract('UsageEvent', right);
+  const a = validateContractVersion('UsageEvent', '1.0.0', left), b = validateContractVersion('UsageEvent', '1.0.0', right);
   if (!a.ok) return a; if (!b.ok) return b;
   if (!usageFacts(a.value).ok || !usageFacts(b.value).ok) return fail('INVALID_PAYLOAD');
   for (const key of ['tenant_id', 'project_id']) if (a.value[key] !== b.value[key]) return fail('SCOPE_MISMATCH', '/' + key);
@@ -232,7 +232,7 @@ export function compareUsageIdentity(left, right) {
 }
 
 export function checkUsageEvent(input, context) {
-  const parsed = boundary('UsageEvent', input, context); if (!parsed.ok) return parsed;
+  const parsed = boundary('UsageEvent', input, context, '1.0.0'); if (!parsed.ok) return parsed;
   if (!['development', 'test', 'production'].includes(context.environment) || !['live', 'sandbox', 'simulated'].includes(context.billing_mode)) return fail('INVALID_TRUST_CONTEXT');
   if (parsed.value.environment !== context.environment || parsed.value.billing_mode !== context.billing_mode) return fail('SCOPE_MISMATCH', '/billing_mode');
   const facts = usageFacts(parsed.value); if (!facts.ok) return facts;

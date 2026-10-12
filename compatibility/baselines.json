@@ -362,6 +362,22 @@
       "accepted": false
     },
     {
+      "contract": "UsageEvent",
+      "version": "2.0.0",
+      "schema_id": "https://schemas.jevelopers.org/UsageEvent/2.0.0",
+      "path": "schemas/UsageEvent/2.0.0.json",
+      "sha256": "6fb3a168208376a943bda31ee85f766f192416aa281eacc483325e52c4e93ec3",
+      "accepted": false
+    },
+    {
+      "contract": "ProviderReportedCostEvidence",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProviderReportedCostEvidence/1.0.0",
+      "path": "schemas/ProviderReportedCostEvidence/1.0.0.json",
+      "sha256": "acba47b010db148695aa6443e35c1551ed4362a670b8fb6c46a0d4228998ceb4",
+      "accepted": false
+    },
+    {
       "contract": "BudgetReservation",
       "version": "2.0.0",
       "sha256": "e1099e84c7a94d1fbee6c73d1725265b1fd46b2ba4ae6a1a11ab0970ced89a07"

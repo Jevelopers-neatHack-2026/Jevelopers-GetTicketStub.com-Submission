@@ -175,6 +175,9 @@ const records = {
   "ProjectRequest": {
     "1.0.0": "ProjectRequest_1_0_0"
   },
+  "ProviderReportedCostEvidence": {
+    "1.0.0": "ProviderReportedCostEvidence_1_0_0"
+  },
   "QueryRequest": {
     "1.0.0": "QueryRequest_1_0_0",
     "2.0.0": "QueryRequest_2_0_0"
@@ -235,7 +238,8 @@ const records = {
     "1.0.0": "TemplateSpec_1_0_0"
   },
   "UsageEvent": {
-    "1.0.0": "UsageEvent_1_0_0"
+    "1.0.0": "UsageEvent_1_0_0",
+    "2.0.0": "UsageEvent_2_0_0"
   }
 };
 for (const record of Object.values(records)) Object.freeze(record);
