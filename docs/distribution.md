@@ -178,3 +178,17 @@ passes. Required font, visual, rights, claims, sanitization, migration and named
 consumer/release evidence stay blocking while null. The report cannot publish,
 close an issue or change ART-05/EVAL-04/global acceptance; their actual owners retain
 those decisions. Review the original-source history separately for BK-10.5.
+
+Each gate run sends asset review outputs and the approved package to its own fresh
+evidence directory. A previous run's files remain intact and cannot cause a later
+source revision to collide with a stale default asset build. When approved packaging
+is available, the gate compares the actual `package-brand` archive byte-for-byte
+with a fresh reconstruction and binds manual and consumer receipts to that exact
+approved file set. An approved subset may omit optional review-proposal guides;
+receipts for that subset must not be checked against the larger proposal instead.
+Missing or changed package output blocks the gate even if the command reports success.
+
+If approved packaging is unavailable, the gate may retain an explicitly unapproved
+review archive for diagnosis. That archive does not supply a candidate for release
+acceptance, and the report stays blocked. Synthetic subset, stale-receipt and package
+tampering tests exercise this distinction without adding real approval records.
