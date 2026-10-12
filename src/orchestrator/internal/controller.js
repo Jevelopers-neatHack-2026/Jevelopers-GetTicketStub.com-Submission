@@ -5,7 +5,8 @@ import {
   DurableWorkflowStore,
   measureCheckpointPayload,
   checkpointPayloadForIntegrity,
-  consumeLocalCompletionBusyAfterConfirmedInactive
+  consumeLocalCompletionBusyAfterConfirmedInactive,
+  consumeLocalAdmissionBusyAfterConfirmedInactive
 } from '../../internal/durable-store.js';
 import { RuntimeError } from '../../internal/errors.js';
 import {
@@ -474,6 +475,202 @@ function completionRetryWindowAvailable(fields, snapshot, now, elapsedMs, limitS
   return remainingWallMs > fields.busyTimeoutMs;
 }
 
+function isLocalAdmissionBusy(error) {
+  const confirmedInactive = consumeLocalAdmissionBusyAfterConfirmedInactive(error);
+  return confirmedInactive
+    && error instanceof RuntimeError
+    && error.module === 'state'
+    && error.operation === '_localControllerAdmit'
+    && error.code === 'STORE_BUSY'
+    && error.retryable === true;
+}
+
+function admissionRetryWindowAvailable(fields, snapshot, now, elapsedMs, limitSet, controllerState) {
+  if (!Number.isSafeInteger(fields.busyTimeoutMs) || typeof fields.runtimeDeadlineNs !== 'bigint') return false;
+  const busyWaitNs = BigInt(fields.busyTimeoutMs) * 1_000_000n;
+  if (fields.runtimeDeadlineNs - process.hrtime.bigint() <= busyWaitNs) return false;
+  const limits = getLimitValues(limitSet);
+  const remainingWallMs = Math.min(
+    snapshot.workflow.leaseExpiresAtMs - now,
+    controllerState.budget.deadlineWallMs - now,
+    limits.maxElapsedMs - elapsedMs
+  );
+  return remainingWallMs > fields.busyTimeoutMs;
+}
+
+function admissionResolutionStopReason(resolution) {
+  if (resolution.reason === 'lease_expired') return 'LEASE_FENCED';
+  if (resolution.reason === 'external_outcome_unresolved') return 'EXTERNAL_OUTCOME_UNRESOLVED';
+  if ([
+    'pending_state_changed', 'pending_checkpoint_changed', 'pending_base_checkpoint_changed'
+  ].includes(resolution.reason)) return 'WORKFLOW_SNAPSHOT_CHANGED';
+  return 'LOCAL_ADMISSION_OUTCOME_UNKNOWN';
+}
+
+async function admitWithBusyRecovery({
+  store,
+  fields,
+  snapshot,
+  previousState,
+  controllerState,
+  plan,
+  limitSet,
+  workflowId,
+  ownerId,
+  fence,
+  stepId,
+  admissionKind,
+  admissionEventId,
+  phase,
+  elapsedAtStart,
+  initialMono,
+  hasBusyTimeout
+}) {
+  let candidate = controllerState;
+  const maximumCalls = 3;
+  for (let admissionCall = 1; admissionCall <= maximumCalls; admissionCall += 1) {
+    try {
+      setOperationsDiagnosticPhase(phase, snapshot.checkpoint.sequence);
+      const admission = store._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
+        workflowId,
+        ownerId,
+        fence,
+        expectedRevision: snapshot.workflow.revision,
+        expectedCheckpointSequence: snapshot.checkpoint.sequence,
+        stepId,
+        admissionKind,
+        eventId: admissionEventId,
+        controllerState: candidate
+      });
+      return { kind: 'committed', admission, controllerState: candidate };
+    } catch (error) {
+      if (!isLocalAdmissionBusy(error) || !hasBusyTimeout) throw error;
+
+      let resolution;
+      try {
+        setOperationsDiagnosticPhase('admission_resolution', snapshot.checkpoint.sequence);
+        resolution = store._localControllerResolveAdmission(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
+          workflowId,
+          ownerId,
+          fence,
+          expectedRevision: snapshot.workflow.revision,
+          expectedCheckpointSequence: snapshot.checkpoint.sequence,
+          stepId,
+          admissionKind,
+          eventId: admissionEventId,
+          previousCheckpointSha256: snapshot.checkpoint.sha256,
+          controllerState: candidate
+        });
+      } catch (resolutionError) {
+        recordOperationsDiagnosticError('controller_error', resolutionError, {
+          phase: 'admission_resolution', checkpointSequence: snapshot.checkpoint.sequence
+        });
+        return {
+          kind: 'stopped',
+          reason: 'LOCAL_ADMISSION_OUTCOME_UNKNOWN',
+          checkpointSequence: snapshot.checkpoint.sequence
+        };
+      }
+
+      if (resolution.kind === 'committed') {
+        const currentStop = unavailableSnapshot(resolution.snapshot);
+        if (currentStop) {
+          return {
+            kind: 'stopped', reason: currentStop,
+            checkpointSequence: resolution.snapshot.checkpoint.sequence
+          };
+        }
+        if (
+          resolution.snapshot.workflow.revision !== resolution.revision
+          || resolution.snapshot.checkpoint.sequence !== resolution.checkpointSequence
+          || resolution.snapshot.workflow.leaseOwner !== ownerId
+          || resolution.snapshot.workflow.fence !== fence
+          || resolution.snapshot.workflow.leaseExpiresAtMs === null
+          || resolution.snapshot.workflow.leaseExpiresAtMs <= resolution.now
+        ) {
+          return {
+            kind: 'stopped', reason: 'WORKFLOW_SNAPSHOT_CHANGED',
+            checkpointSequence: resolution.snapshot.checkpoint.sequence
+          };
+        }
+        return { kind: 'committed', admission: resolution, controllerState: candidate };
+      }
+      if (resolution.kind !== 'pending') {
+        return {
+          kind: 'stopped',
+          reason: admissionResolutionStopReason(resolution),
+          checkpointSequence: resolution.snapshot?.checkpoint.sequence ?? snapshot.checkpoint.sequence
+        };
+      }
+      if (admissionCall === maximumCalls) {
+        return {
+          kind: 'stopped', reason: 'LOCAL_ADMISSION_BUSY',
+          checkpointSequence: resolution.snapshot.checkpoint.sequence
+        };
+      }
+
+      await yieldAtControllerBoundary();
+      const retrySnapshot = store._localControllerSnapshot(LOCAL_CONTROLLER_STORAGE_CAPABILITY, workflowId);
+      const retryStop = unavailableSnapshot(retrySnapshot);
+      if (retryStop) {
+        return { kind: 'stopped', reason: retryStop, checkpointSequence: retrySnapshot.checkpoint.sequence };
+      }
+      if (
+        retrySnapshot.workflow.revision !== snapshot.workflow.revision
+        || retrySnapshot.checkpoint.sequence !== snapshot.checkpoint.sequence
+        || retrySnapshot.checkpoint.sha256 !== snapshot.checkpoint.sha256
+      ) {
+        return {
+          kind: 'stopped', reason: 'WORKFLOW_SNAPSHOT_CHANGED',
+          checkpointSequence: retrySnapshot.checkpoint.sequence
+        };
+      }
+      const retryNow = store._localControllerNow(LOCAL_CONTROLLER_STORAGE_CAPABILITY);
+      if (
+        retrySnapshot.workflow.leaseOwner !== ownerId
+        || retrySnapshot.workflow.fence !== fence
+        || retrySnapshot.workflow.leaseExpiresAtMs === null
+        || retrySnapshot.workflow.leaseExpiresAtMs <= retryNow
+      ) {
+        return { kind: 'stopped', reason: 'LEASE_FENCED', checkpointSequence: retrySnapshot.checkpoint.sequence };
+      }
+      const retryElapsed = elapsedNow(elapsedAtStart, initialMono);
+      const clockReason = checkClockBudget(candidate.budget, retryNow, retryElapsed, limitSet);
+      if (clockReason) {
+        return { kind: 'stopped', reason: clockReason, checkpointSequence: retrySnapshot.checkpoint.sequence };
+      }
+      if (!admissionRetryWindowAvailable(fields, retrySnapshot, retryNow, retryElapsed, limitSet, candidate)) {
+        return {
+          kind: 'stopped', reason: 'LOCAL_ADMISSION_BUSY',
+          checkpointSequence: retrySnapshot.checkpoint.sequence
+        };
+      }
+      const retryBudget = Object.freeze({
+        ...candidate.budget,
+        lastWallMs: retryNow,
+        elapsedMs: retryElapsed
+      });
+      candidate = previousState === null
+        ? buildInitialPrivateCheckpoint({
+          workflowId,
+          planJson: candidate.planJson,
+          plan,
+          limitSet,
+          baseCheckpointData: candidate.baseCheckpointData,
+          budget: retryBudget,
+          stepId
+        })
+        : buildAdmissionCheckpoint(previousState, admissionKind, stepId, retryBudget);
+      assertPrivateCheckpointRoundTrip(retrySnapshot, candidate, plan, limitSet, retryNow);
+      snapshot = retrySnapshot;
+    }
+  }
+  return {
+    kind: 'stopped', reason: 'LOCAL_ADMISSION_BUSY',
+    checkpointSequence: snapshot.checkpoint.sequence
+  };
+}
+
 /**
  * Execute one pinned private plan over the durable store. The only executable
  * handlers come from the static reviewed registry; each allowance and result
@@ -534,12 +731,14 @@ export async function runBoundedLocalPlan(input) {
     let admissionKind;
     let elapsedAtStart;
     let initialMono;
+    let previousState = null;
 
     if (privateCheckpoint(snapshot.checkpoint.data)) {
       if (snapshot.checkpoint.data.version !== CHECKPOINT_VERSION) {
         return controllerStop('CHECKPOINT_UNSUPPORTED', workflowId, checkpointSequence);
       }
       state = controllerState(snapshot.checkpoint.data, workflowId);
+      previousState = state;
       ({ plan, limitSet } = compilePinnedPlan(state, workflowId));
       assertOptionalPins(fields, plan, limitSet, workflowId);
       const recovery = readRecovery(snapshot, now);
@@ -596,17 +795,31 @@ export async function runBoundedLocalPlan(input) {
     assertPrivateCheckpointRoundTrip(snapshot, state, plan, limitSet, now);
     diagnosticPhase = 'initial_admission';
     setOperationsDiagnosticPhase(diagnosticPhase, checkpointSequence);
-    let currentAdmission = store._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
+    const initialAdmissionEventId = eventId(admissionKind);
+    const initialAdmissionResult = await admitWithBusyRecovery({
+      store,
+      fields,
+      snapshot,
+      previousState,
+      controllerState: state,
+      plan,
+      limitSet,
       workflowId,
       ownerId: fields.ownerId,
       fence: fields.fence,
-      expectedRevision: snapshot.workflow.revision,
-      expectedCheckpointSequence: snapshot.checkpoint.sequence,
       stepId: pendingStepId,
       admissionKind,
-      eventId: eventId(admissionKind),
-      controllerState: state
+      admissionEventId: initialAdmissionEventId,
+      phase: diagnosticPhase,
+      elapsedAtStart,
+      initialMono,
+      hasBusyTimeout
     });
+    if (initialAdmissionResult.kind === 'stopped') {
+      return controllerStop(initialAdmissionResult.reason, workflowId, initialAdmissionResult.checkpointSequence);
+    }
+    state = initialAdmissionResult.controllerState;
+    let currentAdmission = initialAdmissionResult.admission;
     admissionOrdinal += 1;
     recordOperationsDiagnosticProgress('admission_committed', admissionOrdinal, currentAdmission.checkpointSequence);
 
@@ -813,20 +1026,33 @@ export async function runBoundedLocalPlan(input) {
       assertPrivateCheckpointRoundTrip(snapshot, nextState, plan, limitSet, nextWall);
       diagnosticPhase = 'next_admission';
       setOperationsDiagnosticPhase(diagnosticPhase, checkpointSequence);
-      const nextAdmission = store._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
+      const nextAdmissionEventId = eventId('step');
+      const nextAdmissionResult = await admitWithBusyRecovery({
+        store,
+        fields,
+        snapshot,
+        previousState: state,
+        controllerState: nextState,
+        plan,
+        limitSet,
         workflowId,
         ownerId: fields.ownerId,
         fence: fields.fence,
-        expectedRevision: snapshot.workflow.revision,
-        expectedCheckpointSequence: snapshot.checkpoint.sequence,
         stepId,
         admissionKind: 'step',
-        eventId: eventId('step'),
-        controllerState: nextState
+        admissionEventId: nextAdmissionEventId,
+        phase: diagnosticPhase,
+        elapsedAtStart,
+        initialMono,
+        hasBusyTimeout
       });
+      if (nextAdmissionResult.kind === 'stopped') {
+        return controllerStop(nextAdmissionResult.reason, workflowId, nextAdmissionResult.checkpointSequence);
+      }
+      const nextAdmission = nextAdmissionResult.admission;
       admissionOrdinal += 1;
       recordOperationsDiagnosticProgress('admission_committed', admissionOrdinal, nextAdmission.checkpointSequence);
-      state = nextState;
+      state = nextAdmissionResult.controllerState;
       pendingStepId = stepId;
       // The next loop iteration uses this committed admission's revision/fence.
       currentAdmission = nextAdmission;

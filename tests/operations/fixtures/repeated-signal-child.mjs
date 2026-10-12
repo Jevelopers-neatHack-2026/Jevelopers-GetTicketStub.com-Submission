@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { DurableWorkflowStore, createTelemetryExporter, createHmacTokenizer } from '../../../src/internal/index.js';
@@ -43,6 +44,16 @@ const worker = createOperationsWorker({
 let removeHandlers;
 let runnerPid = null;
 let restartWorker;
+let firstSignalObservedAt = null;
+const observeFirstSignal = () => {
+  if (firstSignalObservedAt === null) firstSignalObservedAt = performance.now();
+};
+const elapsedMs = startedAt => {
+  const elapsed = performance.now() - startedAt;
+  return Number.isFinite(elapsed) && elapsed >= 0 ? Number(elapsed.toFixed(3)) : null;
+};
+process.on('SIGTERM', observeFirstSignal);
+process.on('SIGINT', observeFirstSignal);
 try {
   removeHandlers = worker.installSignalHandlers();
   const loop = worker.start();
@@ -59,9 +70,12 @@ try {
   if (!Number.isSafeInteger(runnerPid) || runnerPid < 2 || !process.kill(runnerPid, 'SIGSTOP')) {
     throw new Error('The fixture could not pause only its actual owned runner child.');
   }
+  const readyWrittenAt = performance.now();
   process.stdout.write(JSON.stringify({ event: 'ready', providerCalls: 0, childPaused: true }) + '\n');
   await loop;
   const stopped = await worker.stop('signal');
+  const signalToFirstStopElapsedMs = firstSignalObservedAt === null
+    ? null : elapsedMs(firstSignalObservedAt);
   if (!stopped.stopped || !stopped.childrenReaped || !stopped.storeClosed) {
     throw new Error('Repeated signals did not complete one bounded worker stop.');
   }
@@ -78,6 +92,7 @@ try {
     throw new Error('Shutdown did not durably requeue pure local work or changed provider-attempt state.');
   }
 
+  const restartStartedAt = performance.now();
   restartWorker = createOperationsWorker({ databasePath, ownerId: 'review-worker-restart' });
   const restartLoop = restartWorker.start();
   const end = Date.now() + 8_000;
@@ -89,7 +104,10 @@ try {
     await delay(10);
   }
   if (completed?.state !== 'completed') throw new Error('Restart did not resume the accepted pure local plan.');
+  const restartWorkElapsedMs = elapsedMs(restartStartedAt);
+  const finalStopStartedAt = performance.now();
   const finalStop = await restartWorker.stop('test');
+  const finalStopElapsedMs = elapsedMs(finalStopStartedAt);
   if (!finalStop.stopped || !finalStop.childrenReaped) throw new Error('The restarted worker did not stop cleanly.');
   const final = new DatabaseSync(databasePath, { readOnly: true });
   const completedJob = final.prepare('SELECT state, generation, fence_token FROM operations_work WHERE job_id=?').get(submitted.jobId);
@@ -102,8 +120,15 @@ try {
       || finalAttempts !== 0) {
     throw new Error('Restart did not settle the same local job under a higher generation and fence.');
   }
+  const phaseElapsedMs = {
+    signalToFirstStopElapsedMs,
+    restartWorkElapsedMs,
+    finalStopElapsedMs,
+    readyToFinalRecordElapsedMs: elapsedMs(readyWrittenAt)
+  };
   process.stdout.write(JSON.stringify({
     event: 'stopped', stopped, sinkCalls, providerCalls: 0,
+    phaseElapsedMs,
     telemetry: { cursor: diagnostics.cursor, pendingRecords: diagnostics.pendingRecords, state: diagnostics.state },
     workAfterStop: { state: stoppedJob.state, generation: Number(stoppedJob.generation), fence: Number(stoppedJob.fence_token) },
     afterRestart: { state: completedJob.state, workflowState: completedWorkflow.state,
@@ -117,6 +142,8 @@ try {
   process.stderr.write(`Repeated-signal fixture failed: ${error?.message ?? 'unknown'}\n`);
   process.exitCode = 1;
 } finally {
+  process.off('SIGTERM', observeFirstSignal);
+  process.off('SIGINT', observeFirstSignal);
   try { removeHandlers?.(); } catch {}
   try { if (worker.lifecycle !== 'stopped') await worker.stop('test'); } catch {}
   try { if (restartWorker && restartWorker.lifecycle !== 'stopped') await restartWorker.stop('test'); } catch {}

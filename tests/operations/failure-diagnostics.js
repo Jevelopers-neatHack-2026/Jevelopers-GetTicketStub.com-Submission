@@ -21,6 +21,41 @@ const C02_CONTROL_FAILURE_ERROR_CLASSES = new Set(['Error', 'RangeError', 'Synta
 const INCOMPLETE_C02_CONTROL_DIAGNOSTICS = Object.freeze({
   complete: false, recordCount: 0, records: Object.freeze([])
 });
+const OPS02_RACE_FAILURE_PREFIX = 'AH11_OPS_OPS02_C02_DIAGNOSTIC ';
+const OPS02_RACE_FAILURE_MAX_RECORDS = 64;
+const OPS02_RACE_FAILURE_MAX_LINE_BYTES = 320;
+const OPS02_RACE_FAILURE_MAX_BYTES = 16_384;
+const OPS02_RACE_FAILURE_BOUNDARIES = new Set([
+  'case_started', 'diagnostic_no_canary', 'diagnostic_proxy_unread',
+  'diagnostic_child_exit', 'diagnostic_child_prefix', 'diagnostic_child_no_canary',
+  'seed_accept', 'contender_exit', 'child_exit_group', 'accepted_count',
+  'refusal_count', 'stored_counter', 'stored_rows', 'reservation'
+]);
+const OPS02_RACE_FAILURE_KINDS = new Set([
+  'diagnostic', 'global_records', 'project_bytes_existing', 'project_bytes_new',
+  'project_records', 'global_bytes'
+]);
+const OPS02_RACE_FAILURE_EXITS = new Set(['not_applicable', 'zero', 'nonzero', 'signal', 'unknown']);
+const OPS02_RACE_FAILURE_STAGES = new Set([
+  'config', 'open', 'resource', 'validation', 'admission', 'result', 'close', 'unknown', 'none', 'unobserved'
+]);
+const OPS02_RACE_FAILURE_CODES = new Set([
+  'OPS_CONFIG_INVALID', 'STORE_OPEN_FAILED', 'STORE_WRITE_FAILED', 'STORE_BUSY', 'STORE_CLOSED',
+  'UNSUPPORTED_SCHEMA_VERSION', 'UNVERSIONED_DATA', 'INVALID_INPUT', 'ERR_SQLITE_ERROR',
+  'ERR_INVALID_ARG_TYPE', 'EACCES', 'ENOENT', 'ENOSPC', 'UNKNOWN', 'none', 'unobserved'
+]);
+const INCOMPLETE_OPS02_RACE_DIAGNOSTICS = Object.freeze({
+  complete: false, recordCount: 0, records: Object.freeze([])
+});
+const OPS06_CLOSE_PHASE_FAILURE_PREFIX = 'AH11_OPS_OPS06_CLOSE_PHASES ';
+const OPS06_CLOSE_PHASE_FAILURE_MAX_BYTES = 512;
+const OPS06_CLOSE_PHASE_KEYS = Object.freeze([
+  'finalStopElapsedMs', 'processCloseElapsedMs', 'readyToFinalRecordElapsedMs',
+  'restartWorkElapsedMs', 'schema', 'caseId', 'signalToFirstStopElapsedMs'
+].sort());
+const INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS = Object.freeze({
+  complete: false, recordCount: 0, records: Object.freeze([])
+});
 const SAFE_ERROR_CODES = new Set([
   'EACCES', 'EISDIR', 'ENOENT', 'ETIMEDOUT', 'ERR_ASSERTION',
   'ERR_CHILD_PROCESS_STDIO_MAXBUFFER', 'ERR_SQLITE_ERROR', 'ERR_TEST_FAILURE',
@@ -122,6 +157,159 @@ function safeC02ControlReadDiagnostics(value) {
     complete,
     recordCount: complete ? records.length : 0,
     records: Object.freeze(complete ? records : [])
+  });
+}
+
+function safeOps02RaceRecord(record) {
+  const keys = record && typeof record === 'object' && !Array.isArray(record)
+    ? Object.keys(record).sort() : [];
+  if (keys.length !== 9 || keys[0] !== 'boundary' || keys[1] !== 'caseId'
+      || keys[2] !== 'childCode' || keys[3] !== 'childStage' || keys[4] !== 'contender'
+      || keys[5] !== 'exit' || keys[6] !== 'passed' || keys[7] !== 'raceKind' || keys[8] !== 'schema'
+      || record.schema !== 'agent-harness.ah11-ops02-race-diagnostic.v1'
+      || record.caseId !== 'OPS02.C02'
+      || !OPS02_RACE_FAILURE_BOUNDARIES.has(record.boundary)
+      || !OPS02_RACE_FAILURE_KINDS.has(record.raceKind)
+      || !(record.contender === null || record.contender === 0 || record.contender === 1)
+      || typeof record.passed !== 'boolean'
+      || !OPS02_RACE_FAILURE_EXITS.has(record.exit)
+      || !OPS02_RACE_FAILURE_STAGES.has(record.childStage)
+      || !OPS02_RACE_FAILURE_CODES.has(record.childCode)) return null;
+  const childBoundary = record.boundary === 'contender_exit' || record.boundary === 'diagnostic_child_exit';
+  if (!childBoundary && (record.exit !== 'not_applicable'
+      || record.childStage !== 'none' || record.childCode !== 'none' || record.contender !== null)) return null;
+  if (record.boundary === 'contender_exit'
+      && (record.contender === null || record.raceKind === 'diagnostic'
+        || record.passed !== (record.exit === 'zero'))) return null;
+  if (record.boundary === 'diagnostic_child_exit'
+      && (record.raceKind !== 'diagnostic' || record.contender !== null
+        || record.exit === 'not_applicable')) return null;
+  if (record.boundary === 'child_exit_group' && record.contender !== null) return null;
+  return Object.freeze({
+    schema: 'agent-harness.ah11-ops02-race-diagnostic.v1',
+    caseId: 'OPS02.C02', boundary: record.boundary, raceKind: record.raceKind,
+    contender: record.contender, passed: record.passed, exit: record.exit,
+    childStage: record.childStage, childCode: record.childCode
+  });
+}
+
+export function parseOps02RaceDiagnostics(channel) {
+  if (!channel || typeof channel !== 'object' || Array.isArray(channel)) return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+  const expectedKeys = ['bytes', 'count', 'diagnosticsComplete', 'lines'];
+  const keys = Object.keys(channel).sort();
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])
+      || expectedKeys.some(key => !Object.hasOwn(channel, key))) return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+  const { lines, count, bytes, diagnosticsComplete } = channel;
+  if (typeof lines !== 'string' || !Number.isSafeInteger(count) || count < 0
+      || count > OPS02_RACE_FAILURE_MAX_RECORDS || !Number.isSafeInteger(bytes) || bytes < 0
+      || bytes > OPS02_RACE_FAILURE_MAX_BYTES || diagnosticsComplete !== true
+      || lines.length > OPS02_RACE_FAILURE_MAX_BYTES) return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+  const actualBytes = Buffer.byteLength(lines, 'utf8');
+  if (actualBytes !== bytes || actualBytes > OPS02_RACE_FAILURE_MAX_BYTES
+      || (count === 0 ? lines !== '' : !lines.endsWith('\n'))) return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+  const rawLines = count === 0 ? [] : lines.split('\n');
+  if (count > 0) rawLines.pop();
+  if (rawLines.length !== count || rawLines.length > OPS02_RACE_FAILURE_MAX_RECORDS) {
+    return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+  }
+  const records = [];
+  for (const rawLine of rawLines) {
+    if (Buffer.byteLength(rawLine, 'utf8') + 1 > OPS02_RACE_FAILURE_MAX_LINE_BYTES
+        || !rawLine.startsWith(OPS02_RACE_FAILURE_PREFIX)) return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+    let value;
+    try { value = JSON.parse(rawLine.slice(OPS02_RACE_FAILURE_PREFIX.length)); } catch {
+      return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+    }
+    const safe = safeOps02RaceRecord(value);
+    if (!safe) return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+    records.push(safe);
+  }
+  if (records.length === 0 || records[0].boundary !== 'case_started'
+      || records[0].caseId !== 'OPS02.C02' || records[0].passed !== true) {
+    return INCOMPLETE_OPS02_RACE_DIAGNOSTICS;
+  }
+  return Object.freeze({ complete: true, recordCount: records.length, records: Object.freeze(records) });
+}
+
+function safeOps02RaceDiagnostics(value) {
+  let complete = value?.complete === true
+    && Number.isSafeInteger(value?.recordCount)
+    && value.recordCount > 0 && value.recordCount <= OPS02_RACE_FAILURE_MAX_RECORDS
+    && Array.isArray(value?.records) && value.records.length === value.recordCount;
+  const records = [];
+  for (const record of (Array.isArray(value?.records) ? value.records : []).slice(0, OPS02_RACE_FAILURE_MAX_RECORDS)) {
+    const safe = safeOps02RaceRecord(record);
+    if (!safe) {
+      complete = false;
+      break;
+    }
+    records.push(safe);
+  }
+  return Object.freeze({
+    complete,
+    recordCount: complete ? records.length : 0,
+    records: Object.freeze(complete ? records : [])
+  });
+}
+
+function safeOps06ClosePhaseRecord(record) {
+  const keys = record && typeof record === 'object' && !Array.isArray(record)
+    ? Object.keys(record).sort() : [];
+  if (keys.length !== OPS06_CLOSE_PHASE_KEYS.length
+      || keys.some((key, index) => key !== OPS06_CLOSE_PHASE_KEYS[index])
+      || record.schema !== 'agent-harness.ah11-ops06-close-phases.v1'
+      || record.caseId !== 'OPS06.C01') return null;
+  const numericKeys = [
+    'signalToFirstStopElapsedMs', 'restartWorkElapsedMs', 'finalStopElapsedMs',
+    'readyToFinalRecordElapsedMs', 'processCloseElapsedMs'
+  ];
+  if (numericKeys.some(key => typeof record[key] !== 'number'
+      || !Number.isFinite(record[key]) || record[key] < 0 || record[key] > 30_000)) return null;
+  return Object.freeze({
+    schema: 'agent-harness.ah11-ops06-close-phases.v1',
+    caseId: 'OPS06.C01',
+    signalToFirstStopElapsedMs: record.signalToFirstStopElapsedMs,
+    restartWorkElapsedMs: record.restartWorkElapsedMs,
+    finalStopElapsedMs: record.finalStopElapsedMs,
+    readyToFinalRecordElapsedMs: record.readyToFinalRecordElapsedMs,
+    processCloseElapsedMs: record.processCloseElapsedMs
+  });
+}
+
+export function parseOps06ClosePhaseDiagnostics(channel) {
+  if (!channel || typeof channel !== 'object' || Array.isArray(channel)) return INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS;
+  const expectedKeys = ['bytes', 'count', 'diagnosticsComplete', 'lines'];
+  const keys = Object.keys(channel).sort();
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])
+      || expectedKeys.some(key => !Object.hasOwn(channel, key))) return INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS;
+  const { lines, count, bytes, diagnosticsComplete } = channel;
+  if (typeof lines !== 'string' || count !== 1 || !Number.isSafeInteger(bytes) || bytes < 0
+      || bytes > OPS06_CLOSE_PHASE_FAILURE_MAX_BYTES || diagnosticsComplete !== true
+      || lines.length > OPS06_CLOSE_PHASE_FAILURE_MAX_BYTES) return INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS;
+  const actualBytes = Buffer.byteLength(lines, 'utf8');
+  if (actualBytes !== bytes || actualBytes > OPS06_CLOSE_PHASE_FAILURE_MAX_BYTES || !lines.endsWith('\n')) {
+    return INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS;
+  }
+  const rawLines = lines.split('\n');
+  rawLines.pop();
+  if (rawLines.length !== 1 || Buffer.byteLength(`${rawLines[0]}\n`, 'utf8') > OPS06_CLOSE_PHASE_FAILURE_MAX_BYTES
+      || !rawLines[0].startsWith(OPS06_CLOSE_PHASE_FAILURE_PREFIX)) return INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS;
+  let value;
+  try { value = JSON.parse(rawLines[0].slice(OPS06_CLOSE_PHASE_FAILURE_PREFIX.length)); } catch {
+    return INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS;
+  }
+  const record = safeOps06ClosePhaseRecord(value);
+  if (!record) return INCOMPLETE_OPS06_CLOSE_PHASE_DIAGNOSTICS;
+  return Object.freeze({ complete: true, recordCount: 1, records: Object.freeze([record]) });
+}
+
+function safeOps06ClosePhaseDiagnostics(value) {
+  const safe = Array.isArray(value?.records) && value.records.length === 1
+    ? safeOps06ClosePhaseRecord(value.records[0]) : null;
+  const complete = value?.complete === true && value?.recordCount === 1 && safe !== null;
+  return Object.freeze({
+    complete, recordCount: complete ? 1 : 0,
+    records: Object.freeze(complete ? [safe] : [])
   });
 }
 
@@ -340,7 +528,8 @@ function makeRecord({
 
 export function buildSafeFailureDiagnostics({
   scenario, phase, stage, status = null, signal = null, error = null,
-  stdout = '', stderr = '', missingCases = [], c02ControlReadDiagnostics = undefined
+  stdout = '', stderr = '', missingCases = [], c02ControlReadDiagnostics = undefined,
+  ops02RaceDiagnostics = undefined, ops06ClosePhaseDiagnostics = undefined
 }) {
   const combined = `${typeof stdout === 'string' ? stdout : ''}\n${typeof stderr === 'string' ? stderr : ''}`;
   const outputBytes = Buffer.byteLength(combined, 'utf8');
@@ -439,6 +628,12 @@ export function buildSafeFailureDiagnostics({
     records: Object.freeze(records),
     ...(c02ControlReadDiagnostics === undefined ? {} : {
       c02ControlReadDiagnostics: safeC02ControlReadDiagnostics(c02ControlReadDiagnostics)
+    }),
+    ...(ops02RaceDiagnostics === undefined ? {} : {
+      ops02RaceDiagnostics: safeOps02RaceDiagnostics(ops02RaceDiagnostics)
+    }),
+    ...(ops06ClosePhaseDiagnostics === undefined ? {} : {
+      ops06ClosePhaseDiagnostics: safeOps06ClosePhaseDiagnostics(ops06ClosePhaseDiagnostics)
     })
   });
 }
