@@ -2,11 +2,22 @@
 
 These fixtures use synthetic tenant and event data. They were captured with the repository-pinned Node 22.23.3 runtime from baseline commit `c887d88afb9665ea92129b89d685b2a75ae482ea`; no paid service or public retrieval was used.
 
+## Reproduction setup
+
+Use Node 22.23.3 and set `EI_BASELINE_CHECKOUT` to a checkout of that pinned baseline. Before running either capture command below, install the baseline checkout's own locked dependencies:
+
+```sh
+: "${EI_BASELINE_CHECKOUT:?Set this to the pinned baseline checkout}"
+npm --prefix "$EI_BASELINE_CHECKOUT" ci
+```
+
+The generators import modules from the baseline checkout, including its HTML/XHTML parser dependencies. Installing dependencies only in the current repository does not prepare the separate baseline. Use its own lockfile; do not substitute the current repository's `node_modules`.
+
 ## Legacy schema-v1 receipt
 
 `private-run-receipt-v1-legacy.json` is a complete schema-v1 `no_links` receipt written by the baseline evidence-store API. Its committed SHA-256 is `6e48ff85e930aa2046719d338e79018748279446d4191ed7948b71103ac66ec5`. The capture generator is `generate-private-run-receipt-v1-legacy.mjs` (SHA-256 `0573146ec52a1bcec7527176039ad5d57f95188b1d3b8a680e7d1cad58e9c05c`); it verifies the baseline commit and `src/evidence/store.mjs` SHA-256 `0d910b9dedd97f6130202a300ba171cbe6e4870fc898445ea6d7900454db9070`. The synthetic payload key ID is `payload-legacy-fixture-v1`, derived as SHA-256 of `${tenantId}:${purpose}:legacy-receipt-v1`.
 
-The historical baseline rerun returned exit code 0 with the same payload hash and byte count as the committed receipt. To reproduce the capture on another machine, use Node 22.23.3, set `EI_BASELINE_CHECKOUT` to a checkout of the pinned baseline commit above, and run from the current repository root. The portable commands below replace the original operator-specific toolchain and temporary-directory paths; they are not a new execution receipt.
+The historical baseline rerun returned exit code 0 with the same payload hash and byte count as the committed receipt. After completing the reproduction setup above, run from the current repository root. The portable commands below replace the original operator-specific toolchain and temporary-directory paths; they are not a new execution receipt.
 
 ```sh
 : "${EI_BASELINE_CHECKOUT:?Set this to the pinned baseline checkout}"
@@ -28,7 +39,7 @@ The committed descriptor SHA-256 is `2981e94690d5c041b364ac91f8ebc24d5d0bc0742d4
 
 `private-run-receipt-v1-policy-omission/` captures a baseline `runPrivateRetrieval` receipt for a canonical URL rejected because it contains a credential-like query. The generator `generate-private-run-receipt-v1-policy-omission.mjs` (SHA-256 `71a49302ffcd5b0b5b88471bc7b2357d4084e0011d60b0fecad28025d150a98a`) verifies baseline commit `c887d88afb9665ea92129b89d685b2a75ae482ea` and the same three source hashes as the overcap capture. It uses an in-process local HTTP server and the pinned `SafeFetcher` test seam; after the first real baseline completion it injects an interruption before the second queued seed, leaving an active run with one completed old-format receipt and one queued seed. The old receipt carries `some_link_candidates_omitted_by_policy_or_parser_limit` but no exact count and retains no rejected URL. No public retrieval or paid service is used.
 
-The committed descriptor SHA-256 is `f57113de37a9d8d65eb4c86191364d14ac052d41b279666dc9933b55fafe2b3f`; its evidence and frontier database hashes are `0c8728d0b14e8db0c901915a4c89b22003c7d6359dddb6d25881e0915167e976` and `edce65bb2859096e235d98e5d026826f614b6aa372468c8b9917c579e4677250`. A portable reproduction command, with the same baseline and Node 22.23.3 prerequisites, is:
+The committed descriptor SHA-256 is `f57113de37a9d8d65eb4c86191364d14ac052d41b279666dc9933b55fafe2b3f`; its evidence and frontier database hashes are `0c8728d0b14e8db0c901915a4c89b22003c7d6359dddb6d25881e0915167e976` and `edce65bb2859096e235d98e5d026826f614b6aa372468c8b9917c579e4677250`. A portable reproduction command, after the same baseline dependency setup and with Node 22.23.3, is:
 
 ```sh
 : "${EI_BASELINE_CHECKOUT:?Set this to the pinned baseline checkout}"
