@@ -4083,8 +4083,12 @@ test('external cancellation bounds stalled stop persistence and keeps an admitte
   assert.equal((await reopened.getTransportProgress(reopenedScope, runId)).spentBytes, transport.spentBytes);
 });
 
-for (const siblingAbortDelayMs of [0, 600, 900]) {
-  test(`deferred stop callback enforces its original deadline after a ${siblingAbortDelayMs}ms sibling abort listener`, { timeout: 8_000 }, async (t) => {
+for (const { siblingAbortDelayMs, cleanupServiceStallMs = 0 } of [
+  { siblingAbortDelayMs: 0 }, { siblingAbortDelayMs: 600 }, { siblingAbortDelayMs: 900 },
+  { siblingAbortDelayMs: 600, cleanupServiceStallMs: 400 },
+]) {
+  const serviceLabel = cleanupServiceStallMs ? ' with the original cleanup boundary blocked by a native callback' : '';
+  test(`deferred stop callback enforces its original deadline after a ${siblingAbortDelayMs}ms sibling abort listener${serviceLabel}`, { timeout: 8_000 }, async (t) => {
     const h = await harness(t);
     const body = eventHtml();
     let requestCount = 0;
@@ -4097,6 +4101,7 @@ for (const siblingAbortDelayMs of [0, 600, 900]) {
     let stopEnteredAt;
     let stopAbortedAt;
     let stopCalls = 0;
+    const unresolvedCalls = [];
     const frontier = frontierWithMethodOverrides(h.frontier, {
       stopRun: async (_scope, _runId, _reason, signal) => {
         stopCalls += 1;
@@ -4107,11 +4112,24 @@ for (const siblingAbortDelayMs of [0, 600, 900]) {
         else signal.addEventListener('abort', observeAbort, { once: true });
         return new Promise(() => {});
       },
+      markUnresolved: async (...args) => {
+        const signal = args[3];
+        const observation = { enteredAt: performance.now(), signalAtEntry: signal?.aborted };
+        unresolvedCalls.push(observation);
+        const observeAbort = () => { observation.abortedAt = performance.now(); };
+        signal?.addEventListener('abort', observeAbort, { once: true });
+        try { return await h.frontier.markUnresolved(...args); }
+        finally {
+          observation.returnedAt = performance.now();
+          observation.signalAtReturn = signal?.aborted;
+          signal?.removeEventListener('abort', observeAbort);
+        }
+      },
     });
     let retentionEntered;
     const entered = new Promise((resolve) => { retentionEntered = resolve; });
     const cancellation = new AbortController();
-    const runId = `private-deferred-stop-${siblingAbortDelayMs}`;
+    const runId = `private-deferred-stop-${siblingAbortDelayMs}-${cleanupServiceStallMs}`;
     const seeds = [{ url: sourceUrl('/deferred-stop') }];
     const limits = { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs: 5_000 };
     const running = runPrivateRetrieval(h.makeInput({
@@ -4129,11 +4147,41 @@ for (const siblingAbortDelayMs of [0, 600, 900]) {
       if (siblingAbortDelayMs) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, siblingAbortDelayMs);
       siblingReturnedAt = performance.now();
     }, { once: true });
+    // This independent native timer is registered before cancellation. Its
+    // actual callback time distinguishes service of the original boundary from
+    // a renewed cleanup allowance. It never changes a runner clock or timer.
+    let heartbeatServicedAt;
+    const heartbeatScheduledAt = performance.now();
+    let heartbeatTimer;
+    const heartbeat = new Promise((resolve) => {
+      heartbeatTimer = setTimeout(() => { heartbeatServicedAt = performance.now(); resolve(); }, 750);
+    });
+    t.after(() => clearTimeout(heartbeatTimer));
+    let serviceStallEnteredAt;
+    let serviceStallReturnedAt;
+    if (cleanupServiceStallMs) {
+      const serviceStallTimer = setTimeout(() => {
+        serviceStallEnteredAt = performance.now();
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, cleanupServiceStallMs);
+        serviceStallReturnedAt = performance.now();
+      }, siblingAbortDelayMs + 25);
+      t.after(() => clearTimeout(serviceStallTimer));
+    }
     const cancelledAt = performance.now();
     cancellation.abort();
     const result = await running;
     const returnedAt = performance.now();
-    t.diagnostic(JSON.stringify({ siblingAbortDelayMs, stopEntryMs: stopEnteredAt - cancelledAt,
+    await heartbeat;
+    const originalCleanupBoundaryAt = cancelledAt + 750;
+    const cleanupServiceBoundaryAt = Math.max(originalCleanupBoundaryAt, siblingReturnedAt, heartbeatServicedAt);
+    t.diagnostic(JSON.stringify({ siblingAbortDelayMs, cleanupServiceStallMs,
+      cancelledAt, siblingReturnedAt, returnedAt, originalCleanupBoundaryAt,
+      heartbeatScheduledAt, heartbeatRequestedDelayMs: 750, heartbeatServicedAt,
+      serviceStallEnteredAt, serviceStallReturnedAt,
+      cancellationToReturnMs: returnedAt - cancelledAt,
+      withinOriginal850Ms: returnedAt - cancelledAt <= 850,
+      cleanupAfterBoundaryServiceMs: returnedAt - cleanupServiceBoundaryAt,
+      unresolvedCalls, stopEntryMs: stopEnteredAt - cancelledAt,
       signalAtEntry, stopAbortMs: stopAbortedAt - cancelledAt,
       cleanupAfterListenerMs: returnedAt - siblingReturnedAt, requestCount, stopCalls }));
     assert.equal(stopCalls, 1);
@@ -4141,6 +4189,17 @@ for (const siblingAbortDelayMs of [0, 600, 900]) {
     assert.equal(result.status, 'cancelled');
     assert.equal(result.draft, null);
     assert.equal(requestCount, 1);
+    assert.ok(returnedAt <= cleanupServiceBoundaryAt + 100,
+      'cleanup returns within 100ms after the event loop can service the original boundary; deferred entry does not renew its allowance');
+    if (cleanupServiceStallMs) {
+      assert.ok(serviceStallEnteredAt >= siblingReturnedAt && serviceStallEnteredAt < originalCleanupBoundaryAt,
+        'the native control starts after deferred entry and before the original cleanup boundary');
+      assert.ok(serviceStallReturnedAt >= originalCleanupBoundaryAt,
+        'the native control actually prevents service at the original cleanup boundary');
+      assert.ok(heartbeatServicedAt >= serviceStallReturnedAt, 'the independent heartbeat observes actual late service');
+      assert.ok(returnedAt - cancelledAt > 850,
+        'the deliberately blocked-service control retains its observed violation of the old absolute 850ms assertion');
+    }
     const snapshot = await h.frontier.getSnapshot(h.scope, runId);
     assert.notEqual(snapshot.candidates[0].state, 'completed');
     assert.equal(snapshot.candidates[0].admittedAttemptCount, 1);
@@ -4159,15 +4218,11 @@ for (const siblingAbortDelayMs of [0, 600, 900]) {
     if (siblingAbortDelayMs === 0) {
       assert.equal(signalAtEntry, false, 'the control retains its valid initial stop allowance');
       assert.ok(stopAbortedAt - cancelledAt < 650, 'the original 500ms signal cap remains in force');
-      assert.ok(returnedAt - cancelledAt <= 850, 'the control stays within the shared cleanup envelope');
     } else {
       assert.ok(stopEnteredAt - cancelledAt >= 500, 'the stop callback starts after its own 500ms deadline');
       if (siblingAbortDelayMs < 750) {
         assert.ok(stopEnteredAt - cancelledAt < 750,
           'this case expires the stop allowance while the shared envelope still has time');
-        assert.ok(returnedAt - cancelledAt <= 850, 'deferred entry does not renew the cleanup envelope');
-      } else {
-        assert.ok(returnedAt - siblingReturnedAt < 100, 'the exhausted envelope grants no additional scheduled wait');
       }
       assert.equal(signalAtEntry, true, 'an expired stop allowance is checked at actual callback entry');
     }
