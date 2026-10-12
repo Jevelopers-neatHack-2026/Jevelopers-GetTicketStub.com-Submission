@@ -28,6 +28,19 @@ The runner also carries one monotonic deadline from entry through scope creation
 
 The final controlled-asset preflight is raced against that original signal and deadline. If either wins, the host controller is revoked synchronously; a late successful opaque check is discarded once, and a late rejection is observed without changing the incomplete result. A never-settling preflight cannot hold the run open. This callback boundary accepts ordinary native promises from the current or another realm only when descriptor checks confirm the intrinsic Promise constructor/species path and there is no own `constructor` property. It never reads a returned value's `then` property or adopts a thenable. A host adapter returning an exotic or subclass Promise must observe its rejection before returning; that value is denied without invoking its constructor or species accessors.
 
+## Source refusal reasons
+
+The source composer preserves bounded extractor refusals before any source or fact is persisted. The private runner records the corresponding sanitized limitation in the existing encrypted completion receipt, so reopening the same run retains the reason without another request. These are observations of the supplied response; they do not authorize rendering, access bypass, a provider fallback, or a successful package.
+
+| Extractor refusal | Private limitation | Supported next input |
+| --- | --- | --- |
+| `JS_REQUIRED` | `dynamic_rendering_required` | An accessible static public source containing the requested facts |
+| `ACCESS_RESTRICTED` | `source_access_restricted` | An accessible public source; no login or challenge bypass is attempted |
+| `UNSUPPORTED_MEDIA` | `unsupported_media` | A supported text representation, or the separately supported text-PDF path |
+| `UNSUPPORTED_ENCODING`, `MALFORMED_ENCODING` | `malformed_or_unsupported_encoding` | A supported UTF-8 source with consistent declarations |
+
+Cancellation and resource termination keep precedence over these source-level observations. Unclassified unusable extraction retains `source_incomplete_or_access_restricted`. Existing historical receipts keep their recorded generic limitation; reopening them does not infer a more specific past outcome. Malformed text rejected by `SafeFetcher` before extraction remains `unsupported_media`. No factual draft is released for a run containing only refused sources.
+
 ## Private completion receipts
 
 The evidence store adds a separate `private-retrieval-receipts` extension schema (version 1); it does not change the evidence manifest's historical v1/v2/v3 payload profiles. A bounded AES-GCM receipt uses the existing `payload` key-resolution purpose and a distinct `private-retrieval-receipt` associated-data kind. It binds the tenant, run configuration, exact frontier candidate and claim, completion outcome, selected evidence/fact IDs and versions, content hashes, source positions, and source-to-identity candidates. Receipt plaintext is capped at 512 KiB per row and the tenant table is capped at 4,096 rows and 32 MiB of sealed envelopes. Its plaintext SQLite columns contain only bounded tenant/run lookup hashes, state, key id, payload digest/length, expiry, and the encrypted envelope; fact values and excerpts are not placed in frontier metadata.
