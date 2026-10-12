@@ -15,17 +15,20 @@
 // Plus the delivery paths: the iPhone path hands a PNG File to the share sheet (and opens a tab when sharing is absent),
 // and art that cannot be read (another origin without CORS) ends in a message instead of a broken file.
 // Writes the PNGs, the screenshots and side-by-sides to <evidence-dir>/download/. Offline: Chrome resolves loopback only.
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { launchBrowser, chromePath } from "./lib/cdp.mjs";
 import { BEGIN_CAPTURE_PROVENANCE, browserProvenance, captureFailureFrames, readCaptureProvenance } from "./lib/download-capture-diagnostics.mjs";
+import { DownloadReceipts } from "./lib/download-receipts.mjs";
+import { checkDownloadReceiptControls } from "./lib/download-receipt-controls.mjs";
 
 const base = (process.argv[2] ?? "http://127.0.0.1:3000").replace(/\/$/, "");
 const evidenceDir = resolve(process.argv[3] ?? "out/gt-evidence");
 const outDir = join(evidenceDir, "download");
-const dlDir = join(outDir, "_downloads");
 mkdirSync(outDir, { recursive: true });
+// Retain exact GUID-named native files in a new directory. Never clear a directory while an old download can finish.
+const dlDir = mkdtempSync(join(outDir, "native-downloads-"));
 
 // Tolerances, measured on the quarter-size blurred images (0..255 per channel; mean absolute difference, and the share of
 // pixels where any channel is off by more than 40). The default holds for photo and flat-colour editions. Two editions
@@ -172,32 +175,18 @@ const COMPARE = `(() => {
 })()`;
 
 // ---- helpers over the studio page ----
-const readPng = (file) => readFileSync(file);
 function pngSize(buf) {
   const sig = buf.subarray(0, 8).toString("hex") === "89504e470d0a1a0a";
   return { sig, width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
 }
 
-async function waitDownload(before = 0, ms = 40000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    const files = readdirSync(dlDir).filter((f) => f.endsWith(".png") && !f.endsWith(".crdownload"));
-    const partial = readdirSync(dlDir).some((f) => f.endsWith(".crdownload"));
-    if (files.length > before && !partial) return files.sort().at(-1);
-    await sleep(150);
-  }
-  return null;
-}
-const clearDownloads = () => {
-  rmSync(dlDir, { recursive: true, force: true });
-  mkdirSync(dlDir, { recursive: true });
-};
-
 const browser = await launchBrowser();
+const receipts = new DownloadReceipts(browser, dlDir);
 try {
   // Startup provenance is outside the capture path; an executable path/inventory is not a measured browser version.
   evidence.browser = await browserProvenance(browser.conn);
-  await browser.conn.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: dlDir });
+  await receipts.start();
+  evidence.nativeControls = await checkDownloadReceiptControls(check, mkdtempSync(join(outDir, "native-controls-")));
   // Each comparison gets a fresh blank tab: one tab kept for the whole run stopped answering after many large images.
   const within = async (promise, what, ms = 60_000) => {
     let timer;
@@ -225,6 +214,7 @@ try {
 
   for (const vp of VIEWPORTS) {
     const page = await browser.newPage({ width: vp.width, height: vp.height, dpr: 2, mobile: vp.mobile });
+    await receipts.install(page); // observe before app code; every press below gets a fresh openStudio document
     const pngs = []; // [{ id, png }] for the control
     /** The studio, with the stored stub changed the way the editor stores it. */
     async function openStudio(c, mutate) {
@@ -330,12 +320,14 @@ try {
         e.click();
         return true;
       })()`);
-    async function download(side) {
-      clearDownloads();
-      if (!(await press(side))) return { error: "no visible Download control" };
-      const name = await waitDownload();
-      if (!name) return { error: `no file was saved (${await page.eval(`document.querySelector("[data-download-root]")?.innerText?.replace(/\s+/g, " ") ?? "no download block"`).catch(() => "?")})` };
-      return { name, buf: readPng(join(dlDir, name)) };
+    async function download(side, label) {
+      try {
+        const action = await receipts.arm(page, side, label);
+        if (!(await press(side))) return { error: "no visible Download control" };
+        return await receipts.download(action);
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) };
+      }
     }
 
     for (const c of CASES) {
@@ -350,7 +342,8 @@ try {
           await page.send("Network.emulateNetworkConditions", { offline: false, latency: 150, downloadThroughput: 200_000, uploadThroughput: 200_000 });
         }
         const opened = await openStudio(c);
-        const got = opened ? await download("front") : { error: "no studio" };
+        const got = opened ? await download("front", `${label}: original front`) : { error: "no studio" };
+        rec.downloadReceipt = got.receipt;
         if (cold) {
           await page.send("Emulation.setCPUThrottlingRate", { rate: 1 });
           await page.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
@@ -388,7 +381,8 @@ try {
         const first = shot;
         const reversed = `(() => { s.event.title = s.event.title.split(" ").reverse().join(" "); })();`;
         if (!check(`${label}: reopened with the title edited`, await openStudio(c, reversed))) continue;
-        const got2 = await download("front");
+        const got2 = await download("front", `${label}: edited front`);
+        rec.editedDownloadReceipt = got2.receipt;
         const shot2 = await screenStub(c, { checkout: true });
         if (!check(`${label}: the edited stub downloads`, !got2.error && !!shot2, got2.error)) continue;
         rec.editedScreen = shot2.info;
@@ -407,7 +401,8 @@ try {
         // the back, for the first two editions of each viewport (a landscape and a portrait)
         if (c.key === "pale" && c.edition === "researched" || c.edition === "letterpress") {
           if (!(await openStudio(c))) continue;
-          const back = await download("back");
+          const back = await download("back", `${label}: back`);
+          rec.backDownloadReceipt = back.receipt;
           if (!check(`${label}: the back downloads (${back.name ?? back.error})`, !back.error && /-back\.png$/.test(back.name ?? ""), back.error)) continue;
           const sh = await screenStub(c, { flip: true });
           const bm = sh ? await against(sh.png, back.buf, true) : null;
@@ -434,33 +429,37 @@ try {
         // 1. iPhone with file sharing: the share sheet gets one PNG File
         await openStudio(c);
         await page.eval(`(() => { window.__shared = null; navigator.canShare = () => true; navigator.share = async (d) => { window.__shared = { n: d.files.length, name: d.files[0].name, type: d.files[0].type, size: d.files[0].size }; }; return true; })()`);
-        clearDownloads();
+        const shareAction = await receipts.arm(page, "front", `${label}: share`);
         await press("front");
         const shared = await page.waitFor("window.__shared", 20000).then(() => page.eval("window.__shared"));
         check(`${label}: iPhone hands one PNG file to the share sheet (${JSON.stringify(shared)})`, !!shared && shared.n === 1 && shared.type === "image/png" && shared.size > 5000 && /^ticketstub-.*\.png$/.test(shared.name));
-        check(`${label}: iPhone sharing saves no download`, readdirSync(dlDir).length === 0);
+        check(`${label}: iPhone sharing saves no download`, !!shared && await receipts.noDownload(page, shareAction, "share"));
         await sleep(300);
         check(`${label}: the screen says it was saved`, await page.waitFor(`document.body.innerText.includes("Saved")`, 3000));
         // 2. iPhone, share sheet closed: a cancel, no error
         await openStudio(c);
-        await page.eval(`(() => { navigator.canShare = () => true; navigator.share = async () => { throw Object.assign(new Error("closed"), { name: "AbortError" }); }; return true; })()`);
+        await page.eval(`(() => { window.__cancelled = false; navigator.canShare = () => true; navigator.share = async () => { window.__cancelled = true; throw Object.assign(new Error("closed"), { name: "AbortError" }); }; return true; })()`);
+        const cancelAction = await receipts.arm(page, "front", `${label}: share cancelled`);
         await press("front");
-        await sleep(2500);
-        check(`${label}: iPhone closing the share sheet is not an error`, await page.eval(`!document.querySelector("[data-failure]")`));
+        const cancelled = await page.waitFor("window.__cancelled", 20000);
+        const cancelTerminal = cancelled && await receipts.noDownload(page, cancelAction, "cancelled");
+        check(`${label}: iPhone closing the share sheet is not an error`, cancelTerminal && await page.eval(`!document.querySelector("[data-failure]")`));
         // 3. iPhone without file sharing: the picture opens in a tab
         await openStudio(c);
         await page.eval(`(() => { window.__opened = null; navigator.canShare = undefined; window.open = (u) => { window.__opened = String(u); return {}; }; return true; })()`);
+        const tabAction = await receipts.arm(page, "front", `${label}: tab`);
         await press("front");
         const opened = await page.waitFor("window.__opened", 20000).then(() => page.eval("window.__opened"));
         check(`${label}: iPhone without file sharing opens the blob in a tab`, typeof opened === "string" && opened.startsWith("blob:"), String(opened));
         check(`${label}: the screen tells them to press and hold`, await page.waitFor(`document.body.innerText.includes("Press and hold")`, 3000));
+        if (typeof opened === "string" && opened.startsWith("blob:")) await receipts.noDownload(page, tabAction, "tab");
         await page.send("Emulation.setUserAgentOverride", { userAgent: "" });
         // 4. art that cannot be read: a message, no file
         await openStudio(c, `v.art = { kind: "image", src: "https://127.0.0.1:9/never.png", seed: 1, provenance: "simulated" };`);
-        clearDownloads();
+        const failureAction = await receipts.arm(page, "front", `${label}: unreadable art`);
         await press("front");
         const failed$ = await page.waitFor(`document.querySelector("[data-failure]")`, 20000);
-        check(`${label}: unreadable art ends in a message, not a broken file`, failed$ && readdirSync(dlDir).length === 0, failed$ ? "a file was saved" : "no message");
+        check(`${label}: unreadable art ends in a message, not a broken file`, failed$ && await receipts.noDownload(page, failureAction, "failed"), failed$ ? "a file was saved" : "no message");
         await page.eval(`localStorage.removeItem("ticketstub.wall.v1")`); // the demo stubs come back as they were
         evidence.failureMessage = await page.eval(`document.querySelector("[data-failure]")?.innerText ?? null`);
         console.log(`note unreadable-art message: ${JSON.stringify(evidence.failureMessage)}`);
@@ -472,7 +471,10 @@ try {
   }
 } finally {
   await browser.close();
-  rmSync(dlDir, { recursive: true, force: true });
+  // Unknown, duplicate and late deliveries remain failures, including arrivals after a no-download terminal.
+  evidence.downloadReceipts = { directory: dlDir, ...receipts.snapshot() };
+  receipts.stop();
+  check("all native downloads have one current document/action/Blob receipt and completed matching GUID", evidence.downloadReceipts.violations.length === 0, JSON.stringify(evidence.downloadReceipts.violations));
 }
 evidence.passed = passed;
 evidence.failed = failed;
