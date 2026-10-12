@@ -8,6 +8,7 @@ import {
   type TrustedCreativeActor,
 } from "../../../src/api/v1.mjs";
 import type { EditPlan } from "../../../src/contracts/creative/v1.mjs";
+import { CreativeVersionStore } from "../../../src/versions/index.mjs";
 
 declare const ports: CreativeRuntimePorts;
 declare const principal: TrustedCreativeActor;
@@ -32,3 +33,13 @@ void response;
 void code;
 void stepCount;
 void rawInspect;
+
+declare const versionStore: CreativeVersionStore;
+const briefReadWithoutMigration = versionStore.getBrief({
+  scope: { tenant_id: "tenant", project_id: "project" }, brief_id: "brief",
+}, { allowLegacyHistoryBackfill: false });
+const briefUsabilityWithoutMigration = versionStore.isBriefUsable({
+  scope: { tenant_id: "tenant", project_id: "project" }, brief_id: "brief",
+}, { allowLegacyHistoryBackfill: false });
+void briefReadWithoutMigration;
+void briefUsabilityWithoutMigration;

@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { canonicalHash, canonicalSerialize } from "../contracts/index.mjs";
-import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurrent, creativeCompositionFenceCurrent } from "./store.mjs";
+import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurrent, creativeCompositionFenceCurrent,
+  inspectionRepairControllerForStore } from "./store.mjs";
 import { applyResearchInvalidation } from "../planning/index.mjs";
-import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
+import { inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
 import { runSqliteDatabaseOperation, runSqliteDatabaseOperationSync,
   sqliteDatabaseOperationIsActive, sqliteDatabaseOperationOwnedBy } from "../sqlite/admission.mjs";
 
@@ -110,16 +111,22 @@ function briefScope(scope, briefId) {
   return Object.freeze({ tenant_id, project_id, brief_id: checkedBriefId });
 }
 
-function contextFenceMatches(store, scope, fence, { requireRecordedRepair = false, afterPublication = false } = {}) {
+function contextFenceMatches(store, scope, fence, { requireRecordedRepair = false, afterPublication = false,
+  readOnlyBriefHistory = false } = {}) {
   if (!record(fence) || Object.keys(fence).some((key) => ![
     "brief_id", "brief_hash", "design_version_id", "design_hash",
     "expected_current_design_version_id", "expected_current_design_hash", "inspection_repair", "inspection_rights", "composition",
   ].includes(key))) return false;
   try {
     const checkedScope = briefScope(scope, fence.brief_id);
-    const brief = store.getBrief({ scope: checkedScope, brief_id: checkedScope.brief_id });
+    // The final send fence uses the store's true read-only history mode. A
+    // separate precheck would still race a cross-process history deletion
+    // before getBrief's legacy backfill path.
+    const historyOptions = readOnlyBriefHistory ? { allowLegacyHistoryBackfill: false } : undefined;
+    const brief = store.getBrief({ scope: checkedScope, brief_id: checkedScope.brief_id }, historyOptions);
     if (!brief || canonicalHash(brief) !== fence.brief_hash) return false;
-    if (!store.isBriefUsable({ scope: checkedScope, brief_id: checkedScope.brief_id, brief_hash: fence.brief_hash })) return false;
+    if (!store.isBriefUsable({ scope: checkedScope, brief_id: checkedScope.brief_id,
+      brief_hash: fence.brief_hash }, historyOptions)) return false;
     if (fence.design_version_id !== undefined) {
       safeReference(fence.design_version_id, "context_fence.design_version_id");
       safeHash(fence.design_hash, "context_fence.design_hash");
@@ -202,8 +209,8 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
       identityError: () => new VersionStoreError("unavailable", "database.identity", true),
       conflictError: () => new VersionStoreError("unavailable", "database.cross_connection", true) });
   };
-  const inspectionRepairController = createSqliteInspectionRepairController({ database: store.db, now: store.now,
-    owner: store });
+  const inspectionRepairController = inspectionRepairControllerForStore(store);
+  if (!inspectionRepairController) throw new VersionStoreError("unavailable", "database", true);
   const snapshotRepairScope = (scope) => {
     if (!record(scope) || Array.isArray(scope)) return scope;
     return Object.freeze({ tenant_id: scope.tenant_id, project_id: scope.project_id,
@@ -832,13 +839,14 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
       // The send permit crosses a Finance await after authorizeDispatch has
       // committed. Re-read the durable owner state synchronously at the last
       // callback boundary; awaiting the serialized authorizer here would
-      // recreate the cancellation/lease race this check closes.
+      // recreate the cancellation/lease race this check closes. A scheduler
+      // can remain marked active for a microtask after its synchronous work
+      // has returned, so this final read validates identity but does not try
+      // to acquire the scheduler. It is read-only and rejects any live SQLite
+      // transaction before observing owner state.
       try {
-        return runSqliteDatabaseOperationSync({ database: store.db, owner: store,
-          identityError: () => new VersionStoreError("unavailable", "database.identity", true),
-          conflictError: () => new VersionStoreError("unavailable", "database.cross_connection", true),
-          work: () => {
-        try {
+        sqliteDatabaseOperationIsActive(store.db,
+          () => new VersionStoreError("unavailable", "database.identity", true));
         // This check must not borrow a transaction opened by another caller
         // on the shared connection. In that case the reads could observe
         // uncommitted owner state, so fail closed without touching the caller's
@@ -893,7 +901,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           return Object.freeze({ status: "lease_lost" });
         }
         if (!sameDispatchFence(intent.context_fence_json, input.context_fence) ||
-            !contextFenceMatches(store, scope, input.context_fence)) {
+            !contextFenceMatches(store, scope, input.context_fence, { readOnlyBriefHistory: true })) {
           return Object.freeze({ status: "stale_context" });
         }
         // Context and permission checks above may read several owner rows. Do
@@ -911,10 +919,6 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           return Object.freeze({ status: "stale_context" });
         }
         return Object.freeze({ status: "authorized", dispatch_intent_ref });
-        } catch {
-        return Object.freeze({ status: "lease_lost" });
-      }
-          } });
       } catch {
         return Object.freeze({ status: "lease_lost" });
       }

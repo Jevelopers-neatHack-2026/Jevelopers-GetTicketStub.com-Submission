@@ -2841,6 +2841,40 @@ test("dispatch authorization replay does not reuse an intent after the lease exp
   assert.deepEqual(replay, { status: "lease_lost" });
   assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_dispatch_intents WHERE job_id=?")
     .get(started.job_id).count, 1, "the replay cannot create another dispatch intent");
+
+  store.db.exec("DROP TRIGGER creative_brief_versions_no_delete");
+  store.db.prepare(`DELETE FROM creative_brief_versions
+    WHERE tenant_id=? AND project_id=? AND brief_id=?`).run(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id);
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_brief_versions WHERE brief_id=?")
+    .get(SCOPE.brief_id).count, 0);
+  assert.equal(store.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id },
+    { allowLegacyHistoryBackfill: false }), null, "read-only brief lookup does not migrate a missing history head");
+  assert.equal(store.isBriefUsable({ scope: SCOPE, brief_id: SCOPE.brief_id },
+    { allowLegacyHistoryBackfill: false }), false, "read-only usability check does not migrate a missing history head");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_brief_versions WHERE brief_id=?")
+    .get(SCOPE.brief_id).count, 0, "both read-only store methods leave missing history untouched");
+  assert.deepEqual(adapter.jobs.assertDispatchCurrent(currentPermit), { status: "stale_context" },
+    "the final synchronous fence fails closed when the immutable brief history head is missing");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_brief_versions WHERE brief_id=?")
+    .get(SCOPE.brief_id).count, 0, "the final send fence never backfills legacy brief history");
+
+  assert.ok(store.getBrief({ scope: SCOPE, brief_id: SCOPE.brief_id }),
+    "the ordinary legacy read retains its supported history backfill behavior");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_brief_versions WHERE brief_id=?")
+    .get(SCOPE.brief_id).count, 1);
+
+  store.db.exec("DROP TRIGGER creative_brief_versions_no_update");
+  const corruptedHash = `sha256:${"0".repeat(64)}`;
+  store.db.prepare(`UPDATE creative_brief_versions SET brief_hash=?
+    WHERE tenant_id=? AND project_id=? AND brief_id=?`).run(corruptedHash,
+      SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id);
+  const corruptedHistory = store.db.prepare(`SELECT version_no,brief_hash,record_json FROM creative_brief_versions
+    WHERE tenant_id=? AND project_id=? AND brief_id=?`).get(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id);
+  assert.deepEqual(adapter.jobs.assertDispatchCurrent(currentPermit), { status: "stale_context" },
+    "the final synchronous fence fails closed when immutable brief history is corrupt");
+  assert.deepEqual(store.db.prepare(`SELECT version_no,brief_hash,record_json FROM creative_brief_versions
+    WHERE tenant_id=? AND project_id=? AND brief_id=?`).get(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id),
+    corruptedHistory, "the final send fence leaves corrupt history untouched");
 });
 
 test("normal paired publication rolls back when the lease expires during final result timestamping", async (t) => {
