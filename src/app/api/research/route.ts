@@ -6,6 +6,7 @@ import { HARBOUR_GAME, NEATHACK, PALE_HOURS } from "@/customer/studio/fixtures";
 import type { EventData, EventType, Fact } from "@/customer/studio/types";
 import { lookupTicketmaster, parseTicketmasterUrl, type TicketmasterUrl, type TmLookupMiss, type TmLookupOk } from "@/customer/studio/research/ticketmaster";
 import { buildEventIntelligencePackage } from "@/customer/studio/research/ticketmasterPackage";
+import { BlockedDestinationError, fetchPublic, INTAKE_LIMITS, parseIntakeUrl, readCapped, UNSUPPORTED_FIELDS, type IntakeRejection } from "@/server/intake-url";
 import { annotate, fetchFailure, observeRoute, providerObserver, recordParse, sourceTimer, type SourceName, type SourceOutcome } from "@/server/observability/measure";
 
 // Research an event from a link. Real page fetch + schema.org parse + Open-Meteo weather.
@@ -60,9 +61,9 @@ function searchFixtures(query: string): EventData[] {
 async function fetchPage(url: string): Promise<string> {
   const done = sourceTimer("event_page");
   try {
-    const res = await fetch(url, {
+    // The only page fetch for user links: every hop is checked for scheme, credentials, port and public addresses.
+    const res = await fetchPublic(url, {
       headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
-      redirect: "follow",
       signal: AbortSignal.timeout(8000),
       cache: "no-store",
     });
@@ -70,9 +71,9 @@ async function fetchPage(url: string): Promise<string> {
       done("http_error", res.status);
       throw new Error(`HTTP ${res.status}`);
     }
-    const text = await res.text();
+    const text = await readCapped(res, INTAKE_LIMITS.pageBytes);
     done("ok", res.status);
-    return text.slice(0, 2_000_000);
+    return text;
   } catch (error) {
     done(fetchFailure(error));
     throw error;
@@ -428,17 +429,48 @@ const TM_OUTCOME: Record<TmLookupMiss["reason"], SourceOutcome> = {
   "bad-response": "bad_response",
 };
 
+/** A refusal before any lookup or fetch. One fixed message per class; the input is never echoed or logged. */
+async function intakeRefusal(req: Request, status: number, code: string, message: string) {
+  annotate({ code });
+  await recordEvent(req, "intake_rejected", { code });
+  return errorJson(status, code, message);
+}
+
+const URL_REFUSAL: Record<IntakeRejection, string> = {
+  url_too_long: "That link is too long. Paste the event page address.",
+  url_malformed: READ_ERROR,
+  unsupported_scheme: "Only web links that start with http or https can be read.",
+  url_credentials: "Links with a username or password in them can't be read. Paste the plain event page address.",
+  unsupported_port: "That link uses a port we don't read. Paste the normal event page address.",
+  blocked_destination: "That address isn't a public event page, so we can't read it.",
+};
+
 export const POST = route(observeRoute("research", async (req: Request) => {
-  let body: { url?: string; query?: string };
+  const declared = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > INTAKE_LIMITS.bodyBytes) return intakeRefusal(req, 413, "too_large", "That request is too big. Send one link or a short search.");
+  let text: string;
+  let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as { url?: string; query?: string };
+    text = await req.text();
+    if (text.length > INTAKE_LIMITS.bodyBytes) return intakeRefusal(req, 413, "too_large", "That request is too big. Send one link or a short search.");
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+    body = parsed as Record<string, unknown>;
   } catch {
     annotate({ code: "bad_request" });
     await recordEvent(req, "intake_rejected", { code: "bad_request" });
     return errorJson(400, "bad_request", "Send a link or a search.");
   }
 
+  // Uploads, extra sources and anything else we don't read are refused out loud, never accepted and ignored.
+  if (UNSUPPORTED_FIELDS.some((f) => f in body)) {
+    return intakeRefusal(req, 422, "unsupported_input", "Uploads and extra sources aren't supported yet. Paste one event page link instead.");
+  }
+  if (body.url !== undefined && typeof body.url !== "string") return intakeRefusal(req, 400, "bad_request", "Send a link or a search.");
+  if (body.query !== undefined && typeof body.query !== "string") return intakeRefusal(req, 400, "bad_request", "Send a link or a search.");
+
   if (typeof body.query === "string" && !body.url) {
+    if (body.query.length > INTAKE_LIMITS.queryChars) return intakeRefusal(req, 422, "too_large", "That search is too long. Try the event name.");
     await recordEvent(req, "intake_submitted", { source: "search" });
     const results = searchFixtures(body.query);
     annotate({ operation: "research_search", dependency: "fixture", fallback: "simulated", results: results.length });
@@ -449,12 +481,15 @@ export const POST = route(observeRoute("research", async (req: Request) => {
   const raw = typeof body.url === "string" ? body.url.trim() : "";
   if (!raw) return readError(req);
 
+  // A bare demo keyword ("neathack") is not a link; anything link-shaped must pass the full boundary.
+  const linkShaped = /^https?:\/\//i.test(raw) || /^[a-z][a-z0-9+.-]*:(?!\d+(?:[/?#]|$))/i.test(raw) || raw.startsWith("//") || /[./@]/.test(raw);
   let url: URL | undefined;
-  try {
-    url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
-    if (!/^https?:$/.test(url.protocol) || !url.hostname.includes(".")) url = undefined;
-  } catch {
-    url = undefined;
+  if (linkShaped) {
+    const checked = parseIntakeUrl(raw);
+    if (checked.ok) url = checked.url;
+    else if (checked.reason !== "url_malformed" || raw.length > INTAKE_LIMITS.urlChars) {
+      return intakeRefusal(req, 422, checked.reason === "url_too_long" ? "too_large" : "unsupported_url", URL_REFUSAL[checked.reason]);
+    }
   }
 
   // Ticketmaster / Live Nation links go to the Discovery API first. Without a key, or on any API failure
@@ -557,6 +592,8 @@ export const POST = route(observeRoute("research", async (req: Request) => {
   } catch (error) {
     const failure = providerFailure(error);
     if (failure) return providerEnvelope(failure);
+    // A redirect or resolved address that left the public web is refused, not papered over with a slug guess.
+    if (error instanceof BlockedDestinationError && error.reason !== "dns_failed") return intakeRefusal(req, 422, "unsupported_url", URL_REFUSAL.blocked_destination);
     return tmFallback();
   }
 }));

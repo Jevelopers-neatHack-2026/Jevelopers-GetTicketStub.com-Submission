@@ -50,6 +50,8 @@ export const MESSAGES = {
   already_claimed: { message: "Someone already claimed this stub. Ask the organizer for your own link.", action: START },
   variant_not_orderable: { message: "That size and finish isn't orderable yet. Choose another, or keep it as a preview.", action: WALL },
   unreadable_link: { message: "We couldn't read that link. Paste the event page address, or search for the event by name.", action: RETRY, retryable: true },
+  unsupported_url: { message: "That link can't be read. Paste a public event page address that starts with http or https, with no username or password.", action: RETRY, retryable: true },
+  unsupported_input: { message: "Uploads and extra sources aren't supported yet. Paste one event page link instead.", action: RETRY, retryable: true },
   demo_only: { message: "This preview only knows its demo events. Try neatHack, The Pale Hours or Harbour FC.", action: RETRY, retryable: true },
   context_unavailable: { message: "Signed context isn't set up on this server yet, so nothing can use it. Your stubs are unaffected.", action: RETRY, retryable: true },
 
