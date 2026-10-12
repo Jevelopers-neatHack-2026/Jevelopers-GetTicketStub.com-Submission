@@ -1,5 +1,9 @@
 import type { PdfTextReaderErrorCode } from '../extraction/pdf/index.mjs';
-import type { RetrievedDocument } from '../security/index.mjs';
+import type { RetrievedDocument, RetrievedSvgAssetDocument } from '../security/index.mjs';
+import type {
+  PrivateAssetReleaseAuthorityController,
+  PrivateAssetReleaseCheck,
+} from '../research/private-asset-release.mjs';
 
 declare const tenantScopeBrand: unique symbol;
 declare const evidenceHandleBrand: unique symbol;
@@ -161,6 +165,105 @@ export interface EvidenceIngestResult {
   readonly positions: readonly EvidencePositionHandle[];
   readonly created: boolean;
   readonly metadata: AvailableEvidenceMetadata;
+}
+
+export interface ControlledAssetEvidenceIngestResult extends EvidenceIngestResult {
+  readonly outcome: 'stored';
+}
+
+export interface ControlledAssetProvenance {
+  readonly schemaVersion: 1;
+  readonly policyVersion: 'ei-private-svg-acquisition/1';
+  readonly policyId: string;
+  readonly role: 'fetched-source' | 'transformed';
+  readonly inspectionPolicyVersion: 'svg-static-geometry/1';
+  readonly sourceEvidenceId: string;
+  readonly sourceEvidenceVersion: number;
+  readonly sourceContentHash: string;
+  readonly sourceDerivationDigest: string;
+  readonly sourceUrl: string;
+  readonly candidateId: string;
+  readonly positionIndex: number;
+  readonly sourceForm: AssetSourceForm;
+  readonly sourceLocator: TextRangeLocator;
+  readonly excerptHash: string;
+  readonly field: string;
+  readonly value: string;
+  readonly assetUrl: string;
+  readonly sourceBytesHash: string;
+  readonly transformedBytesHash: string;
+}
+
+export interface ControlledAssetEvidenceIngestInput {
+  /** Original result object supplied by the trusted same-run composition; copied documents lack its process-local witness. */
+  readonly document: RetrievedSvgAssetDocument;
+  readonly retentionHandle: object;
+  readonly retentionCeiling: Readonly<{
+    evidence: EvidenceHandle;
+    version: number;
+    contentHash: string;
+  }>;
+  /** Opaque, one-process witness from the trusted private-retrieval composition. */
+  readonly witness: object;
+  readonly provenance: ControlledAssetProvenance;
+}
+
+export interface ControlledAssetAcquisitionBinding {
+  readonly schemaVersion: 1;
+  readonly policyVersion: 'ei-private-svg-acquisition/1';
+  readonly policyId: string;
+  readonly sourceEvidenceId: string;
+  readonly sourceEvidenceVersion: number;
+  readonly sourceContentHash: string;
+  readonly sourceDerivationDigest: string;
+  readonly sourceUrl: string;
+  readonly candidateId: string;
+  readonly positionIndex: number;
+  readonly sourceForm: AssetSourceForm;
+  readonly sourceLocator: TextRangeLocator;
+  readonly excerptHash: string;
+  readonly field: string;
+  readonly value: string;
+  readonly assetUrl: string;
+}
+
+export interface AssetSourceCandidateBindingRead {
+  readonly evidenceId: string;
+  readonly metadata: AvailableEvidenceMetadata & {
+    readonly representation: 'asset-source-excerpt';
+    readonly derivationDigest: string;
+  };
+  readonly source: EvidenceSelectedEvidence['source'];
+  readonly candidate: Readonly<{
+    readonly candidateId: string;
+    readonly positionIndex: number;
+    readonly sourceForm: AssetSourceForm;
+    readonly locator: TextRangeLocator;
+    readonly excerptHash: string;
+    readonly field: string;
+    readonly fetchSuggestion: string;
+    readonly quarantineReason: null;
+    /** Exact UTF-8 value copied from the encrypted source position. */
+    readonly value: string;
+  }>;
+}
+
+export interface ControlledAssetAcquisitionArtifact {
+  readonly evidenceId: string;
+  readonly version: number;
+  readonly contentHash: string;
+  readonly byteLength: number;
+}
+
+export interface ControlledAssetAcquisitionCompletion {
+  readonly schemaVersion: 1;
+  readonly policyVersion: 'ei-private-svg-acquisition/1';
+  readonly inspectionPolicyVersion: 'svg-static-geometry/1';
+  readonly binding: ControlledAssetAcquisitionBinding;
+  readonly sourceBytesHash: string;
+  readonly transformedBytesHash: string;
+  readonly originalEvidence: ControlledAssetAcquisitionArtifact;
+  readonly transformedEvidence: ControlledAssetAcquisitionArtifact;
 }
 
 export interface PdfDerivedReaderOptions {
@@ -384,6 +487,8 @@ export interface EvidencePrivatePayloadInput<Request = unknown> {
     derivedPdf?: PdfDerivedProvenance;
     /** Present only for the encrypted asset source excerpt representation. */
     assetSource?: AssetSourceProvenance;
+    /** Present only on encrypted controlled SVG acquisition evidence. */
+    controlledAsset?: ControlledAssetProvenance;
   }>;
   readonly positions: readonly Readonly<{
     locator: StoredEvidenceLocator;
@@ -420,6 +525,8 @@ export interface EvidenceSelectedEvidence {
     derivedPdf?: PdfDerivedProvenance;
     /** Present only for asset source excerpts. Text remains behind the private payload capability. */
     assetSource?: AssetSourceProvenance;
+    /** Present only on encrypted controlled SVG acquisition evidence. */
+    controlledAsset?: ControlledAssetProvenance;
   }>;
   readonly positions: readonly Readonly<{
     handle: EvidencePositionHandle;
@@ -504,6 +611,7 @@ export interface PrivateRetrievalReceiptCandidate {
     field: string;
     value: string;
   }>[];
+  readonly assetAcquisition?: ControlledAssetAcquisitionBinding;
 }
 
 export interface PrivateRetrievalReceiptClaim {
@@ -529,6 +637,8 @@ export interface PrivateRetrievalReceiptCompletion {
   readonly truncatedCount?: number;
   readonly omittedSuggestions?: readonly unknown[];
   readonly sourceLinkCandidatesOmittedCount?: number;
+  readonly assetAcquisition?: ControlledAssetAcquisitionCompletion;
+  readonly assetSuggestions?: readonly ControlledAssetAcquisitionBinding[];
 }
 
 export interface PrivateRetrievalReceiptBinding {
@@ -556,6 +666,8 @@ export type PrivateRetrievalReceiptRead =
     readonly sourceLinkCandidatesOmittedCount: number;
     readonly limitations: readonly string[];
     readonly identity: PrivateRetrievalReceiptIdentity;
+    readonly assetAcquisition?: ControlledAssetAcquisitionCompletion;
+    readonly assetSuggestions?: readonly ControlledAssetAcquisitionBinding[];
     readonly evidenceIds: readonly string[];
     readonly facts: readonly StoredEvidenceFactRecord[];
   });
@@ -625,4 +737,103 @@ export interface EvidenceStore<Request = unknown> {
   ): Promise<PrivateRetrievalReceiptRead>;
 }
 
-export declare function createEvidenceStore<Request = unknown>(options: EvidenceStoreOptions<Request>): EvidenceStore<Request>;
+export interface ControlledAssetReleaseEvidenceReference {
+  readonly handle: EvidenceHandle;
+  readonly metadata: AvailableEvidenceMetadata;
+}
+
+export interface ControlledAssetReleaseRoleGroup {
+  readonly candidateId: string;
+  readonly evidence: readonly [ControlledAssetReleaseEvidenceReference, ControlledAssetReleaseEvidenceReference];
+}
+
+export interface ControlledAssetReleaseRevalidationInput {
+  readonly runId: string;
+  readonly policyDigest: string;
+  readonly releaseController: PrivateAssetReleaseAuthorityController;
+  /** The same at-most-eight evidence records selected for the private draft, including fact support. */
+  readonly evidence: readonly ControlledAssetReleaseEvidenceReference[];
+  /** The same fact handles selected for the private draft. */
+  readonly facts: readonly EvidenceFactHandle[];
+  /** At most eight candidate-bound fetched/transformed role pairs. */
+  readonly assetGroups: readonly ControlledAssetReleaseRoleGroup[];
+  /** Last awaited policy re-read; returns only candidate IDs whose plans remain eligible. */
+  readonly beforeFinalization: (context: Readonly<{ candidateIds: readonly string[] }>) => readonly string[] | Promise<readonly string[]>;
+  /**
+   * Synchronous trusted-composition preflight after the last awaited policy
+   * check. The opaque release controller, not this boolean result, is the
+   * final revocation authority at projection; thenables are rejected.
+   */
+  readonly finalizeHostAuthority: (context: Readonly<{ candidateIds: readonly string[] }>) => Readonly<{
+    releaseAuthorized: boolean;
+    candidateIds: readonly string[];
+  }>;
+}
+
+export interface ControlledAssetReleaseRevalidationResult {
+  readonly releaseCheck: PrivateAssetReleaseCheck;
+  readonly candidateIds: readonly string[];
+}
+
+export interface ControlledAssetReleaseFinalizationInput<Result> {
+  readonly releaseController: PrivateAssetReleaseAuthorityController;
+  readonly runId: string;
+  readonly policyDigest: string;
+  readonly deadlineAtMonotonic: number;
+  readonly candidateIds: readonly string[];
+  /** Synchronous projection callback executed at the release linearization point. */
+  readonly project: (current: Readonly<{
+    currentEvidenceMetadata: readonly AvailableEvidenceMetadata[];
+    candidateIds: readonly string[];
+  }>) => Result;
+}
+
+/** Optional capability required only when private retrieval is explicitly opted into controlled SVG acquisition. */
+export interface ControlledAssetEvidenceStore<Request = unknown> extends EvidenceStore<Request> {
+  /** Internal same-run SVG path; supported callers must provide the trusted composition's original document and witness. */
+  ingestControlledAssetEvidence(
+    scope: EvidenceTenantScope,
+    input: ControlledAssetEvidenceIngestInput,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<ControlledAssetEvidenceIngestResult>;
+  /** Reopens one exact encrypted asset-source position, with current tenant/retention checks. */
+  readAssetSourceCandidateBinding(
+    scope: EvidenceTenantScope,
+    evidence: EvidenceHandle,
+    candidateId: string,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<AssetSourceCandidateBindingRead>;
+  /** Reopens exact encrypted controlled asset bytes and reauthorizes their current source candidate. */
+  readControlledAssetBytes(
+    scope: EvidenceTenantScope,
+    evidence: EvidenceHandle,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<Readonly<{
+    evidenceId: string;
+    metadata: AvailableEvidenceMetadata;
+    source: EvidenceSelectedEvidence['source'];
+    bytes: Uint8Array;
+  }>>;
+  /** Final same-run release barrier for the selected page/facts and active controlled asset role pairs. */
+  revalidateControlledAssetRelease(
+    scope: EvidenceTenantScope,
+    input: ControlledAssetReleaseRevalidationInput,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<ControlledAssetReleaseRevalidationResult>;
+  /** Synchronous one-shot current-state check and projection; implementations must not await or return a thenable. */
+  finalizeControlledAssetRelease<Result>(
+    scope: EvidenceTenantScope,
+    releaseCheck: PrivateAssetReleaseCheck,
+    request: Request,
+    signal: AbortSignal | undefined,
+    input: ControlledAssetReleaseFinalizationInput<Result>,
+  ): Result;
+  /** Discards an unused preflight and wipes its retained snapshot. */
+  discardControlledAssetRelease(scope: EvidenceTenantScope, releaseCheck: PrivateAssetReleaseCheck): boolean;
+}
+
+export declare function createEvidenceStore<Request = unknown>(options: EvidenceStoreOptions<Request>): ControlledAssetEvidenceStore<Request>;

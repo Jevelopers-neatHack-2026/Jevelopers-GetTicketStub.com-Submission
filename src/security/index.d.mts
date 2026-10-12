@@ -53,6 +53,15 @@ export interface RetrievedDocument {
   readonly image?: ImageDimensions;
 }
 
+export interface RetrievedSvgAssetDocument {
+  readonly url: string;
+  readonly contentType: 'image/svg+xml';
+  /** Independently inspected by the caller; copied from one bounded response. */
+  readonly bytes: Uint8Array;
+  readonly fetchedAt: string;
+  readonly redirects: 0;
+}
+
 export interface FetchOptions {
   readonly signal?: AbortSignal;
 }
@@ -61,6 +70,8 @@ export interface FetchOptions {
 export declare class SafeFetcher {
   constructor();
   fetch(input: string, options?: FetchOptions): Promise<RetrievedDocument>;
+  /** One-hop image/svg+xml transport capped at 128 KiB; performs no redirect request. */
+  fetchSvgAsset(input: string, options?: FetchOptions): Promise<RetrievedSvgAssetDocument>;
 }
 
 export { isPublicAddress, parseAndValidateUrl, sameAddress, validateHostname } from "./url-policy.mjs";

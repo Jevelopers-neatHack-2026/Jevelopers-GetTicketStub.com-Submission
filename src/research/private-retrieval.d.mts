@@ -8,6 +8,9 @@ import type {
   EntityObservation,
 } from '../discovery/entities/identity.mjs';
 import type {
+  ControlledAssetAcquisitionBinding,
+  ControlledAssetAcquisitionCompletion,
+  ControlledAssetEvidenceStore,
   EvidenceSelectedEvidence,
   EvidenceStore,
   StoredEvidenceFactRecord,
@@ -18,8 +21,9 @@ import type {
   OccurrenceTransition,
 } from '../discovery/occurrences/identity.mjs';
 import type { SafeFetcher } from '../security/index.mjs';
+import type { PrivateAssetReleaseAuthorityController } from './private-asset-release.mjs';
 
-export type PrivateRetrievalAuthorizationStage = 'start' | 'candidate' | 'release';
+export type PrivateRetrievalAuthorizationStage = 'start' | 'candidate' | 'asset-acquisition' | 'release';
 
 export interface PrivateRetrievalRetentionContext {
   readonly runId: string;
@@ -27,12 +31,23 @@ export interface PrivateRetrievalRetentionContext {
   readonly sourceUrl: string;
   /** Final normalized transport URL reported by SafeFetcher. */
   readonly canonicalUrl: string;
-  readonly representation?: 'asset-source-excerpt';
+  readonly representation?: 'asset-source-excerpt' | 'controlled-asset-bytes';
+  readonly sourceEvidenceId?: string;
+  readonly sourceEvidenceVersion?: number;
+  readonly sourceContentHash?: string;
 }
 
-export interface PrivateRetrievalInput<Request = unknown> {
+export interface PrivateRetrievalAssetAcquisitionPolicy {
+  readonly schemaVersion: 1;
+  readonly policyVersion: 'ei-private-svg-acquisition/1';
+  readonly policyId: string;
+  /** Explicit allowlist of exact URL origins. Unknown or omitted policies keep acquisition off. */
+  readonly allowedOrigins: readonly string[];
+}
+
+export interface PrivateRetrievalInputBase<Request = unknown, Store extends EvidenceStore<Request> = EvidenceStore<Request>> {
   readonly frontier: DiscoveryFrontierStore<Request>;
-  readonly evidenceStore: EvidenceStore<Request>;
+  readonly evidenceStore: Store;
   readonly safeFetcher: SafeFetcher;
   readonly request: Request;
   readonly runId: string;
@@ -47,8 +62,52 @@ export interface PrivateRetrievalInput<Request = unknown> {
     request: Request,
     context: Readonly<{ runId: string; stage: PrivateRetrievalAuthorizationStage }>,
   ) => boolean;
+  /** Trusted host policy callback. A returned policy is immutable for this run and receipt identity. */
+  readonly assetAcquisitionPolicyFor?: (
+    request: Request,
+    context: Readonly<{ runId: string }>,
+  ) => PrivateRetrievalAssetAcquisitionPolicy | null | Promise<PrivateRetrievalAssetAcquisitionPolicy | null>;
+  /**
+   * Opt-in host capability issuer. Its controller is bound to this logical run,
+   * exact normalized policy digest, tenant, and monotonic deadline. Keep the
+   * controller and revoke it synchronously when any bound authority changes.
+   */
+  readonly assetAcquisitionReleaseAuthorityFor?: (
+    request: Request,
+    context: Readonly<{
+      runId: string;
+      policy: PrivateRetrievalAssetAcquisitionPolicy;
+      policyDigest: string;
+      deadlineAtMonotonic: number;
+    }>,
+  ) => PrivateAssetReleaseAuthorityController | Promise<PrivateAssetReleaseAuthorityController>;
   readonly signal?: AbortSignal;
 }
+
+/**
+ * Legacy adapters remain valid while acquisition is default-off. Supplying an
+ * explicit acquisition policy requires the store's additive controlled-SVG
+ * capability so enabled callers cannot accidentally type an incomplete port.
+ */
+export type PrivateRetrievalInput<Request = unknown> =
+  | (PrivateRetrievalInputBase<Request, EvidenceStore<Request>> & {
+      readonly assetAcquisitionPolicyFor?: undefined;
+      readonly assetAcquisitionReleaseAuthorityFor?: undefined;
+    })
+  | (PrivateRetrievalInputBase<Request, ControlledAssetEvidenceStore<Request>> & {
+      readonly assetAcquisitionPolicyFor: NonNullable<PrivateRetrievalInputBase<Request>['assetAcquisitionPolicyFor']>;
+      readonly assetAcquisitionReleaseAuthorityFor: NonNullable<
+        PrivateRetrievalInputBase<Request>['assetAcquisitionReleaseAuthorityFor']
+      >;
+    });
+
+/** Issues the opaque host controller used by the opt-in release barrier. */
+export declare function createPrivateAssetReleaseAuthority(input: Readonly<{
+  tenantId: string;
+  runId: string;
+  policy: PrivateRetrievalAssetAcquisitionPolicy;
+  expiresAtMonotonic: number;
+}>): PrivateAssetReleaseAuthorityController;
 
 export interface PrivateRetrievalProgress {
   readonly state: 'active' | 'halted' | 'exhausted';
@@ -127,6 +186,47 @@ export interface PrivateRetrievalLinkCandidate {
   readonly sourceAuthority: 'not_evaluated';
 }
 
+export interface PrivateRetrievalAssetAcquisition {
+  readonly schemaVersion: 1;
+  readonly status: 'blocked_local_inspection_only';
+  readonly candidateBindingHash: string;
+  readonly candidate: Readonly<{
+    frontierCandidateId: string;
+    assetSourceCandidateId: string;
+    sourceEvidenceId: string;
+    assetUrl: string;
+    field: string;
+    excerptHash: string;
+  }>;
+  readonly sourceEvidence: Readonly<{
+    evidenceId: string;
+    version: number;
+    contentHash: string;
+    derivationDigest: string;
+  }>;
+  readonly acquiredEvidence: Readonly<{
+    fetchedSource: ControlledAssetAcquisitionCompletion['originalEvidence'];
+    transformed: ControlledAssetAcquisitionCompletion['transformedEvidence'];
+    sourceBytesHash: string;
+    transformedBytesHash: string;
+    inspectionPolicyVersion: 'svg-static-geometry/1';
+    storedBytesReopenedAndVerified: true;
+  }>;
+  readonly acceptedExternalAssetVersion: null;
+  readonly questionPlan: Readonly<{
+    questionId: 'Q-EI-BRAND-ROLE:v1';
+    status: 'blocked';
+    candidateBindingHash: string;
+    execution: 'not_dispatched';
+    observerMetadata: null;
+    observerMetadataProvenance: 'absent';
+    rights: 'unknown';
+    permission: 'unknown';
+    roleClassification: null;
+    reasonCodes: readonly string[];
+  }>;
+}
+
 export interface PrivateRetrievalConflict {
   readonly kind: 'occurrence_identity' | 'entity_identity';
   readonly candidateIds: readonly string[];
@@ -152,6 +252,7 @@ export interface PrivateRetrievalDraft {
   }>[];
   readonly sources: readonly PrivateRetrievalSource[];
   readonly linkCandidates: readonly PrivateRetrievalLinkCandidate[];
+  readonly assetAcquisitions?: readonly PrivateRetrievalAssetAcquisition[];
   /** Valid extracted links retained with provenance but not queued because of the completion cap. */
   readonly omittedLinkCandidates: readonly Readonly<{
     readonly url: string;

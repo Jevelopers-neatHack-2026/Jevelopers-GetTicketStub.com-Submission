@@ -15,3 +15,10 @@ test("every declared package subpath has matching runtime exports", () => {
   assert.equal(typeof controlledFetch.DEFAULT_RUN_LIMITS, "object");
   assert.equal(controlledFetch.RetrievalError, root.RetrievalError);
 });
+
+test("SafeFetcher lifecycle and store-witness helpers remain outside the supported package boundary", async () => {
+  await assert.rejects(
+    import("@jevelopers/event-intelligence-safe-retrieval/security/internal/fetch-lifecycle"),
+    { code: "ERR_PACKAGE_PATH_NOT_EXPORTED" },
+  );
+});

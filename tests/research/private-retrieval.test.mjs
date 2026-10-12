@@ -10,7 +10,7 @@ import test from 'node:test';
 import { gzipSync } from 'node:zlib';
 import { createEvidenceStore } from '../../src/evidence/store.mjs';
 import { createDiscoveryFrontierStore } from '../../src/discovery/planner/frontier.mjs';
-import { runPrivateRetrieval } from '../../src/research/private-retrieval.mjs';
+import { createPrivateAssetReleaseAuthority, runPrivateRetrieval } from '../../src/research/private-retrieval.mjs';
 import { SafeFetcher } from '../../src/security/controlled-fetch.mjs';
 import { fixtureUrl, localTestSeam, respond, startFixture } from '../security/support.mjs';
 
@@ -59,6 +59,28 @@ function frontierWithMethodOverrides(frontier, overrides) {
     'completeCandidate', 'markUnresolved', 'stopRun', 'sealPrivateDraft', 'getSnapshot',
   ]) wrapped[name] = Object.hasOwn(overrides, name) ? overrides[name] : frontier[name].bind(frontier);
   return wrapped;
+}
+
+function legacyEvidenceAdapter(evidenceStore) {
+  const adapter = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence',
+    'ingestAssetSourceEvidence', 'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+  ]) adapter[name] = evidenceStore[name].bind(evidenceStore);
+  return adapter;
+}
+
+function controlledEvidenceAdapter(evidenceStore) {
+  const adapter = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence',
+    'ingestAssetSourceEvidence', 'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+    'ingestControlledAssetEvidence', 'readControlledAssetBytes', 'readAssetSourceCandidateBinding',
+    'revalidateControlledAssetRelease', 'finalizeControlledAssetRelease', 'discardControlledAssetRelease',
+  ]) adapter[name] = evidenceStore[name].bind(evidenceStore);
+  return adapter;
 }
 
 async function waitUntilPerfAtOrAfter(targetPerfMs) {
@@ -117,6 +139,7 @@ async function harness(t, { evidenceOptions = {}, hostnames = [LOCAL_FIXTURE_HOS
   const frontierDirectory = path.join(root, 'frontier');
   const evidenceDirectory = path.join(root, 'evidence');
   const requests = new Set();
+  const releaseControllers = [];
   const permitted = new WeakMap();
   let currentAcl = true;
   const createRetention = (expiresAtMs = Date.now() + 120_000) => {
@@ -180,22 +203,40 @@ async function harness(t, { evidenceOptions = {}, hostnames = [LOCAL_FIXTURE_HOS
     onDial: () => requests.add('dial'),
   }));
   const makeInput = ({ runId, server, seeds, limits, authorizeCurrent, retentionHandleFor, safeFetcher, signal,
-    frontier: frontierStore = frontier, store = evidenceStore }) => ({
-    frontier: frontierStore,
-    evidenceStore: store,
-    safeFetcher: safeFetcher ?? makeFetcher(server),
-    request: request(),
-    runId,
-    seeds,
-    ...(limits ? { limits } : {}),
-    ...(signal ? { signal } : {}),
-    retentionHandleFor: retentionHandleFor ?? (() => createRetention()),
-    authorizeCurrent: authorizeCurrent ?? (() => true),
-  });
+    assetAcquisitionPolicyFor, assetAcquisitionReleaseAuthorityFor,
+    frontier: frontierStore = frontier, store = evidenceStore }) => {
+    const authenticated = request();
+    const releaseAuthorityFor = assetAcquisitionReleaseAuthorityFor === null
+      ? undefined
+      : assetAcquisitionReleaseAuthorityFor ?? (assetAcquisitionPolicyFor ? (_request, context) => {
+        const issued = createPrivateAssetReleaseAuthority({
+          tenantId: authenticated.principal.tenantId,
+          runId: context.runId,
+          policy: context.policy,
+          expiresAtMonotonic: context.deadlineAtMonotonic,
+        });
+        releaseControllers.push(issued);
+        return issued;
+      } : undefined);
+    return {
+      frontier: frontierStore,
+      evidenceStore: store,
+      safeFetcher: safeFetcher ?? makeFetcher(server),
+      request: authenticated,
+      runId,
+      seeds,
+      ...(limits ? { limits } : {}),
+      ...(signal ? { signal } : {}),
+      ...(assetAcquisitionPolicyFor ? { assetAcquisitionPolicyFor } : {}),
+      ...(releaseAuthorityFor ? { assetAcquisitionReleaseAuthorityFor: releaseAuthorityFor } : {}),
+      retentionHandleFor: retentionHandleFor ?? (() => createRetention()),
+      authorizeCurrent: authorizeCurrent ?? (() => true),
+    };
+  };
   return {
     root, frontierDirectory, frontier, scope, openFrontier, evidenceStore, evidenceScope,
     evidenceConfig,
-    createRetention, makeFetcher, makeInput, requests,
+    createRetention, makeFetcher, makeInput, requests, releaseControllers,
     currentlyAuthorized() { return currentAcl; },
     setAcl(value) { currentAcl = value; },
   };
@@ -597,6 +638,791 @@ test('one-hop limit admits and completes its last real request, then releases AE
   assert.equal(reopenedRaw.source.sourceUrl, suppliedUrl);
   assert.equal(reopenedRaw.source.canonicalUrl, canonicalUrl);
   assert.ok(reopenedRaw.positions.length > 0);
+});
+
+test('opted-in SVG acquisition shares the same run, keeps lexical excerpt bindings, and reopens role-separated encrypted bytes', async (t) => {
+  const paths = [];
+  const canonicalSvg = '<svg height="10" width="10" xmlns="http://www.w3.org/2000/svg"><rect fill="red" height="3" width="2"/></svg>';
+  const event = {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: 'Bound SVG Event',
+    startDate: '2027-06-20',
+    location: { name: 'Civic Hall', address: { addressLocality: 'Boston' } },
+    logo: '/secondary.svg',
+  };
+  const jsonLd = JSON.stringify(event).replace('/secondary.svg', `${String.fromCharCode(92)}/secondary.svg`);
+  const html = Buffer.from(`<!doctype html><html><head><meta property="og:image" content="/logo&#46;svg#mark"></head><body>`
+    + `<script type="application/ld+json">${jsonLd}</script></body></html>`);
+  const server = await startFixture((requestValue, response) => {
+    paths.push(new URL(requestValue.url, 'http://fixture.example.org').pathname);
+    assert.equal(requestValue.headers.authorization, undefined);
+    assert.equal(requestValue.headers.cookie, undefined);
+    if (['/logo.svg', '/secondary.svg'].includes(new URL(requestValue.url, 'http://fixture.example.org').pathname)) {
+      respond(response, 200, { 'content-type': 'image/svg+xml' }, canonicalSvg);
+      return;
+    }
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, html);
+  });
+  t.after(() => server.close());
+  let evidenceNow = Date.now();
+  // The host's lower position ceiling is preserved for controlled byte records;
+  // successful reopen below proves the asset is stored in capped chunks.
+  const h = await harness(t, { evidenceOptions: { now: () => evidenceNow, maxPositionBytes: 32 } });
+  const runId = 'private-controlled-svg-same-run';
+  const seedUrl = sourceUrl('/event');
+  const sourceRetentionExpiresAt = evidenceNow + 120_000;
+  const retentionHandleFor = () => h.createRetention(sourceRetentionExpiresAt);
+  const receiptFailures = [];
+  const controlledAssetDuplicates = [];
+  const observedStore = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
+    'lookupEvidence', 'lookupFact', 'materializeSelected', 'beginPrivateRunReceipt', 'readPrivateRunReceipt',
+    'ingestControlledAssetEvidence', 'readControlledAssetBytes', 'readAssetSourceCandidateBinding',
+    'revalidateControlledAssetRelease', 'finalizeControlledAssetRelease', 'discardControlledAssetRelease',
+  ]) observedStore[name] = h.evidenceStore[name].bind(h.evidenceStore);
+  observedStore.finalizePrivateRunReceipt = async (...args) => {
+    try { return await h.evidenceStore.finalizePrivateRunReceipt(...args); }
+    catch (error) { receiptFailures.push(error?.code ?? error?.name ?? 'unknown'); throw error; }
+  };
+  observedStore.ingestControlledAssetEvidence = async (...args) => {
+    const first = await h.evidenceStore.ingestControlledAssetEvidence(...args);
+    const duplicate = await h.evidenceStore.ingestControlledAssetEvidence(...args);
+    controlledAssetDuplicates.push({
+      role: args[1].provenance.role,
+      firstId: first.metadata.evidenceId,
+      duplicateId: duplicate.metadata.evidenceId,
+      firstCreated: first.created,
+      duplicateCreated: duplicate.created,
+    });
+    return first;
+  };
+  const assetAcquisitionPolicy = Object.freeze({
+    schemaVersion: 1,
+    policyVersion: 'ei-private-svg-acquisition/1',
+    policyId: 'offline-controlled-svg-test-v1',
+    allowedOrigins: Object.freeze(['http://fixture.example.org']),
+  });
+  const assetAcquisitionPolicyFor = () => assetAcquisitionPolicy;
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds: [{ url: seedUrl }], assetAcquisitionPolicyFor, retentionHandleFor, store: observedStore,
+  }));
+
+  assert.equal(result.status, 'draft', JSON.stringify({ result, receiptFailures }));
+  assert.equal(h.releaseControllers.at(-1)?.revoke('positive_after_release'), 'after_release',
+    'the host observes a revoke after the synchronous SQLite-backed projection as after_release');
+  assert.equal(result.progress.transportAttemptAdmissions, 3, JSON.stringify({ paths, sources: result.sources, limitations: result.limitations }));
+  assert.deepEqual(paths, ['/event', '/logo.svg', '/secondary.svg']);
+  assert.equal(result.assetAcquisitions.length, 2);
+  assert.equal(controlledAssetDuplicates.length, 4);
+  assert.ok(controlledAssetDuplicates.every((entry) => entry.firstCreated
+    && !entry.duplicateCreated && entry.firstId === entry.duplicateId),
+  'an exact same-context and same-role duplicate is idempotent and keeps its immutable evidence identity');
+  for (const acquisition of result.assetAcquisitions) {
+    assert.equal(acquisition.status, 'blocked_local_inspection_only');
+    assert.equal(acquisition.acceptedExternalAssetVersion, null);
+    assert.equal(acquisition.questionPlan.status, 'blocked');
+    assert.equal(acquisition.questionPlan.execution, 'not_dispatched');
+    assert.equal(acquisition.questionPlan.observerMetadata, null);
+    assert.equal(acquisition.questionPlan.rights, 'unknown');
+    assert.equal(acquisition.questionPlan.permission, 'unknown');
+    assert.equal(acquisition.questionPlan.roleClassification, null);
+    assert.equal(acquisition.acquiredEvidence.storedBytesReopenedAndVerified, true);
+    assert.equal(acquisition.acquiredEvidence.sourceBytesHash, acquisition.acquiredEvidence.transformedBytesHash,
+      'canonical input is idempotently transformed while both provenance stages remain represented');
+    assert.notEqual(acquisition.acquiredEvidence.fetchedSource.evidenceId,
+      acquisition.acquiredEvidence.transformed.evidenceId);
+  }
+  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshot.candidates.length, 3);
+  assert.ok(snapshot.candidates.every((candidate) => candidate.state === 'completed'));
+  assert.equal(snapshot.attempts.length, 3);
+
+  const reopenedStore = createEvidenceStore(h.evidenceConfig);
+  const reopenedScope = await reopenedStore.scopeForAuthenticatedRequest(request());
+  const expectedLexicalValues = new Set([
+    '/logo&#46;svg#mark',
+    `"${String.fromCharCode(92)}/secondary.svg"`,
+  ]);
+  for (const acquisition of result.assetAcquisitions) {
+    const sourceHandle = await reopenedStore.lookupEvidence(reopenedScope, acquisition.candidate.sourceEvidenceId);
+    const sourceBinding = await reopenedStore.readAssetSourceCandidateBinding(
+      reopenedScope, sourceHandle, acquisition.candidate.assetSourceCandidateId, request(),
+    );
+    assert.equal(sourceBinding.candidate.value, [...expectedLexicalValues].find((value) => value === sourceBinding.candidate.value));
+    assert.equal(sourceBinding.candidate.fetchSuggestion, acquisition.candidate.assetUrl);
+    for (const [role, artifact] of [
+      ['fetched-source', acquisition.acquiredEvidence.fetchedSource],
+      ['transformed', acquisition.acquiredEvidence.transformed],
+    ]) {
+      const handle = await reopenedStore.lookupEvidence(reopenedScope, artifact.evidenceId);
+      const opened = await reopenedStore.readControlledAssetBytes(reopenedScope, handle, request());
+      assert.equal(opened.metadata.version, artifact.version);
+      assert.equal(opened.metadata.contentHash, artifact.contentHash);
+      assert.equal(opened.source.controlledAsset.role, role);
+      assert.equal(createHash('sha256').update(opened.bytes).digest('hex'), artifact.contentHash);
+      assert.equal(opened.bytes.toString('utf8'), canonicalSvg);
+      assert.ok(opened.bytes.byteLength > 32, 'reopened source spans multiple positions under the host 32-byte cap');
+      if (role === 'fetched-source') {
+        const copiedBytes = Buffer.from(opened.bytes);
+        try {
+          await assert.rejects(reopenedStore.ingestControlledAssetEvidence(reopenedScope, {
+            document: {
+              url: opened.source.sourceUrl,
+              contentType: opened.source.contentType,
+              bytes: copiedBytes,
+              fetchedAt: opened.source.retrievedAt,
+              redirects: 0,
+            },
+            retentionHandle: h.createRetention(),
+            retentionCeiling: {
+              evidence: sourceHandle,
+              version: sourceBinding.metadata.version,
+              contentHash: sourceBinding.metadata.contentHash,
+            },
+            provenance: opened.source.controlledAsset,
+            witness: Object.freeze(Object.create(null)),
+          }, request()), (error) => error?.code === 'EVIDENCE_INVALID');
+        } finally {
+          copiedBytes.fill(0);
+        }
+      }
+      opened.bytes.fill(0);
+    }
+  }
+
+  const restartedFrontier = h.openFrontier();
+  const recovered = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds: [{ url: seedUrl }], assetAcquisitionPolicyFor, retentionHandleFor,
+    frontier: restartedFrontier, store: reopenedStore,
+  }));
+  assert.equal(recovered.status, 'draft', JSON.stringify(recovered));
+  assert.equal(recovered.assetAcquisitions.length, 2);
+  assert.equal(paths.length, 3, 'same-config receipt replay reopens evidence without another request');
+
+  const changedPolicyResult = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds: [{ url: seedUrl }],
+    assetAcquisitionPolicyFor: () => ({ ...assetAcquisitionPolicy, policyId: 'changed-policy-v1' }),
+    retentionHandleFor, frontier: restartedFrontier, store: reopenedStore,
+  }));
+  assert.equal(changedPolicyResult.status, 'incomplete', 'a changed allowlist policy cannot reopen an immutable run');
+  assert.equal(paths.length, 3, 'changed run policy is rejected before transport');
+
+  const revokedAssetAuthorization = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds: [{ url: seedUrl }], assetAcquisitionPolicyFor, retentionHandleFor,
+    authorizeCurrent: (_request, context) => context.stage !== 'asset-acquisition',
+    frontier: restartedFrontier, store: reopenedStore,
+  }));
+  assert.equal(revokedAssetAuthorization.status, 'incomplete', JSON.stringify(revokedAssetAuthorization));
+  assert.equal(revokedAssetAuthorization.draft, null, 'revoked asset authorization suppresses the local plan');
+  assert.equal(paths.length, 3, 'revoked asset authorization does not redispatch completed evidence');
+
+  const roleSwapStore = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
+    'lookupEvidence', 'lookupFact', 'materializeSelected', 'beginPrivateRunReceipt', 'readPrivateRunReceipt',
+    'readControlledAssetBytes', 'readAssetSourceCandidateBinding', 'finalizePrivateRunReceipt',
+    'revalidateControlledAssetRelease', 'finalizeControlledAssetRelease', 'discardControlledAssetRelease',
+  ]) roleSwapStore[name] = h.evidenceStore[name].bind(h.evidenceStore);
+  const ingestControlledAssetEvidence = h.evidenceStore.ingestControlledAssetEvidence.bind(h.evidenceStore);
+  let fetchedRoleWitness;
+  roleSwapStore.ingestControlledAssetEvidence = (scope, input, authenticatedRequest, signal) => {
+    if (input.provenance.role === 'fetched-source') fetchedRoleWitness = input.witness;
+    return ingestControlledAssetEvidence(scope, {
+      ...input,
+      ...(input.provenance.role === 'transformed' ? { witness: fetchedRoleWitness } : {}),
+    }, authenticatedRequest, signal);
+  };
+  const roleSwapResult = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-role-swap', server, seeds: [{ url: seedUrl }], assetAcquisitionPolicyFor,
+    retentionHandleFor, store: roleSwapStore,
+  }));
+  assert.equal(roleSwapResult.status, 'draft', JSON.stringify(roleSwapResult));
+  assert.deepEqual(roleSwapResult.assetAcquisitions, [], 'a source-role witness cannot authorize a transformed-role record');
+  assert.equal(paths.length, 6, 'role mismatch is detected after only the same-run page and two SVG requests');
+  const roleSwapSnapshot = await h.frontier.getSnapshot(h.scope, 'private-controlled-svg-role-swap');
+  assert.deepEqual(roleSwapSnapshot.candidates.filter((candidate) => candidate.depth > 0)
+    .map((candidate) => candidate.completionOutcome), ['failed', 'failed']);
+
+  evidenceNow = sourceRetentionExpiresAt + 1;
+  const expiredSourceReplay = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds: [{ url: seedUrl }], assetAcquisitionPolicyFor, retentionHandleFor,
+    frontier: restartedFrontier, store: reopenedStore,
+  }));
+  assert.equal(expiredSourceReplay.status, 'incomplete', JSON.stringify(expiredSourceReplay));
+  assert.equal(paths.length, 6, 'expired source evidence cannot trigger a fresh asset fetch');
+});
+
+test('controlled release joint tail catches cross-domain revocation after the final async store authorization', async (t) => {
+  const svg = '<svg height="10" width="10" xmlns="http://www.w3.org/2000/svg"><rect fill="red" height="3" width="2"/></svg>';
+  const policy = Object.freeze({
+    schemaVersion: 1,
+    policyVersion: 'ei-private-svg-acquisition/1',
+    policyId: 'offline-controlled-svg-joint-tail-v1',
+    allowedOrigins: Object.freeze(['http://fixture.example.org']),
+  });
+
+  for (const mode of [
+    'async-store-asset-revocation',
+    'async-store-release-revocation',
+    'async-store-deadline',
+    'host-finalizer-store-acl-revocation',
+    'host-finalizer-store-expiry',
+    'store-current-auth-host-revocation',
+  ]) {
+    const paths = [];
+    const page = Buffer.from('<!doctype html><html><head><meta property="og:image" content="/logo.svg"></head><body>'
+      + '<script type="application/ld+json">{"@type":"Event","name":"Joint Tail Event","startDate":"2027-06-20"}</script></body></html>');
+    const server = await startFixture((requestValue, response) => {
+      const pathname = new URL(requestValue.url, 'http://fixture.example.org').pathname;
+      paths.push(pathname);
+      if (pathname === '/logo.svg') respond(response, 200, { 'content-type': 'image/svg+xml' }, svg);
+      else respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, page);
+    });
+    t.after(() => server.close());
+
+    let storeAcl = true;
+    let hostReleaseAuthorized = true;
+    let hostAssetAuthorized = true;
+    const evidenceNowStart = Date.now();
+    let evidenceNow = evidenceNowStart;
+    const sourceRetentionExpiresAt = evidenceNowStart + 120_000;
+    let finalRevalidationEntered = false;
+    let firstStoreAuthorizationTriggered = false;
+    let firstCurrentAuthorizationTriggered = false;
+    let firstHostFinalizationTriggered = false;
+    let hostRevocationDisposition = null;
+    let finalProjectionEntered = false;
+    const performanceObject = globalThis.performance;
+    const priorOwnPerformanceNow = Object.getOwnPropertyDescriptor(performanceObject, 'now');
+    const realPerformanceNow = performanceObject.now.bind(performanceObject);
+    const performanceStart = realPerformanceNow();
+
+    const h = await harness(t, {
+      evidenceOptions: {
+        now: () => evidenceNow,
+        async authorizePrivateAccess({ tenantId, request: authenticated }) {
+          if (finalRevalidationEntered && !firstStoreAuthorizationTriggered && mode.startsWith('async-store-')) {
+            firstStoreAuthorizationTriggered = true;
+            if (mode === 'async-store-asset-revocation') hostAssetAuthorized = false;
+            if (mode === 'async-store-release-revocation') hostReleaseAuthorized = false;
+            if (mode === 'async-store-asset-revocation' || mode === 'async-store-release-revocation') {
+              queueMicrotask(() => {
+                hostRevocationDisposition = h.releaseControllers.at(-1)?.revoke(`queued_${mode}`);
+              });
+            }
+            if (mode === 'async-store-deadline') {
+              // Advance the actual monotonic clock source used by the runner
+              // after final store authorization, without sleeping 30 seconds.
+              Object.defineProperty(performanceObject, 'now', {
+                configurable: true,
+                value: () => performanceStart + 60_000,
+              });
+            }
+          }
+          return storeAcl && authenticated?.principal?.tenantId === tenantId && authenticated.allowPrivate === true;
+        },
+        authorizePrivateAccessCurrent({ tenantId, request: authenticated }) {
+          const authorized = storeAcl && authenticated?.principal?.tenantId === tenantId && authenticated.allowPrivate === true;
+          if (finalRevalidationEntered && !firstCurrentAuthorizationTriggered
+            && mode === 'store-current-auth-host-revocation') {
+            firstCurrentAuthorizationTriggered = true;
+            hostReleaseAuthorized = false;
+            hostRevocationDisposition = h.releaseControllers.at(-1)?.revoke('store_current_auth_reentry');
+          }
+          return authorized;
+        },
+      },
+    });
+
+    const store = Object.create(null);
+    for (const name of [
+      'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
+      'lookupEvidence', 'lookupFact', 'materializeSelected', 'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+      'ingestControlledAssetEvidence', 'readControlledAssetBytes', 'readAssetSourceCandidateBinding',
+      'revalidateControlledAssetRelease', 'finalizeControlledAssetRelease', 'discardControlledAssetRelease',
+    ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
+    const finalize = h.evidenceStore.finalizeControlledAssetRelease.bind(h.evidenceStore);
+    store.finalizeControlledAssetRelease = (scope, check, authenticated, signal, input) => finalize(
+      scope, check, authenticated, signal, {
+        ...input,
+        project(current) {
+          finalProjectionEntered = true;
+          return input.project(current);
+        },
+      },
+    );
+    const revalidate = h.evidenceStore.revalidateControlledAssetRelease.bind(h.evidenceStore);
+    store.revalidateControlledAssetRelease = (scope, input, authenticated, signal) => {
+      finalRevalidationEntered = true;
+      return revalidate(scope, {
+        ...input,
+        finalizeHostAuthority(context) {
+          const decision = input.finalizeHostAuthority(context);
+          if (!firstHostFinalizationTriggered && mode === 'host-finalizer-store-acl-revocation') {
+            firstHostFinalizationTriggered = true;
+            storeAcl = false;
+          }
+          if (!firstHostFinalizationTriggered && mode === 'host-finalizer-store-expiry') {
+            firstHostFinalizationTriggered = true;
+            evidenceNow = sourceRetentionExpiresAt + 1;
+          }
+          return decision;
+        },
+      }, authenticated, signal);
+    };
+
+    const runId = `private-controlled-svg-joint-tail-${mode}`;
+    let result;
+    try {
+      result = await runPrivateRetrieval(h.makeInput({
+        runId,
+        server,
+        seeds: [{ url: sourceUrl('/event') }],
+        store,
+        retentionHandleFor: () => h.createRetention(sourceRetentionExpiresAt),
+        assetAcquisitionPolicyFor: () => policy,
+        authorizeCurrent: (_request, context) => {
+          if (context.stage === 'release') return hostReleaseAuthorized;
+          if (context.stage === 'asset-acquisition') return hostAssetAuthorized;
+          return true;
+        },
+      }));
+    } finally {
+      if (priorOwnPerformanceNow) Object.defineProperty(performanceObject, 'now', priorOwnPerformanceNow);
+      else delete performanceObject.now;
+    }
+
+    assert.deepEqual(paths, ['/event', '/logo.svg'], `${mode} never dispatches a second or replay request`);
+    assert.equal(result.status, 'incomplete', `${mode} suppresses stale release output: ${JSON.stringify(result)}`);
+    assert.equal(result.draft, null);
+    assert.deepEqual(result.assetAcquisitions ?? [], []);
+    if (mode === 'async-store-release-revocation') assert.equal(firstStoreAuthorizationTriggered, true);
+    if (mode === 'async-store-asset-revocation' || mode === 'async-store-release-revocation'
+      || mode === 'store-current-auth-host-revocation') {
+      assert.equal(hostRevocationDisposition, 'before_release', `${mode} revokes before the projection linearization point`);
+    }
+    if (mode === 'async-store-deadline') assert.equal(firstStoreAuthorizationTriggered, true);
+    if (mode === 'host-finalizer-store-acl-revocation' || mode === 'host-finalizer-store-expiry') {
+      assert.equal(firstHostFinalizationTriggered, true);
+    }
+    if (mode === 'store-current-auth-host-revocation') assert.equal(firstCurrentAuthorizationTriggered, true);
+    if (mode === 'store-current-auth-host-revocation') {
+      assert.equal(finalProjectionEntered, false, 'synchronous reentrant revocation is observed before projection');
+    }
+  }
+});
+
+test('opt-in release issuance rejects missing, copied, and wrong-run controllers before transport', async (t) => {
+  const paths = [];
+  const server = await startFixture((requestValue, response) => {
+    paths.push(new URL(requestValue.url, 'http://fixture.example.org').pathname);
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml({ asset: true }));
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const policy = Object.freeze({
+    schemaVersion: 1,
+    policyVersion: 'ei-private-svg-acquisition/1',
+    policyId: 'offline-release-capability-v1',
+    allowedOrigins: Object.freeze(['http://fixture.example.org']),
+  });
+  const cases = [
+    ['missing', null],
+    ['copied-controller', (_request, context) => {
+      const controller = createPrivateAssetReleaseAuthority({
+        tenantId: TENANT, runId: context.runId, policy: context.policy,
+        expiresAtMonotonic: context.deadlineAtMonotonic,
+      });
+      return Object.freeze({ revoke: controller.revoke });
+    }],
+    ['wrong-run', (_request, context) => createPrivateAssetReleaseAuthority({
+      tenantId: TENANT, runId: `${context.runId}-other`, policy: context.policy,
+      expiresAtMonotonic: context.deadlineAtMonotonic,
+    })],
+  ];
+  for (const [name, authorityFor] of cases) {
+    const result = await runPrivateRetrieval(h.makeInput({
+      runId: `private-release-controller-${name}`, server, seeds: [{ url: sourceUrl('/event') }],
+      assetAcquisitionPolicyFor: () => policy,
+      assetAcquisitionReleaseAuthorityFor: authorityFor,
+    }));
+    assert.equal(result.status, 'incomplete', `${name}: ${JSON.stringify(result)}`);
+    assert.equal(result.draft, null);
+  }
+  assert.deepEqual(paths, [], 'invalid opt-in authority cannot dispatch the page or an asset request');
+});
+
+test('a queued revocation after SQLite-backed synchronous projection is classified after_release', async (t) => {
+  const paths = [];
+  const svg = '<svg height="10" width="10" xmlns="http://www.w3.org/2000/svg"><rect height="3" width="2"/></svg>';
+  const page = Buffer.from('<!doctype html><html><head><meta property="og:image" content="/logo.svg"></head><body>'
+    + '<script type="application/ld+json">{"@type":"Event","name":"Release Event","startDate":"2027-06-20"}</script></body></html>');
+  const server = await startFixture((requestValue, response) => {
+    const pathname = new URL(requestValue.url, 'http://fixture.example.org').pathname;
+    paths.push(pathname);
+    if (pathname === '/logo.svg') respond(response, 200, { 'content-type': 'image/svg+xml' }, svg);
+    else respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, page);
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const policy = Object.freeze({
+    schemaVersion: 1,
+    policyVersion: 'ei-private-svg-acquisition/1',
+    policyId: 'offline-post-release-v1',
+    allowedOrigins: Object.freeze(['http://fixture.example.org']),
+  });
+  let controller;
+  let disposition;
+  const store = controlledEvidenceAdapter(h.evidenceStore);
+  const finalize = store.finalizeControlledAssetRelease.bind(h.evidenceStore);
+  store.finalizeControlledAssetRelease = (scope, check, authenticated, signal, input) => finalize(
+    scope, check, authenticated, signal, {
+      ...input,
+      project(current) {
+        const projected = input.project(current);
+        queueMicrotask(() => { disposition = controller.revoke('queued_after_projection'); });
+        return projected;
+      },
+    },
+  );
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-release-after-projection', server, seeds: [{ url: sourceUrl('/event') }],
+    store,
+    assetAcquisitionPolicyFor: () => policy,
+    assetAcquisitionReleaseAuthorityFor: (_request, context) => {
+      controller = createPrivateAssetReleaseAuthority({
+        tenantId: TENANT, runId: context.runId, policy: context.policy,
+        expiresAtMonotonic: context.deadlineAtMonotonic,
+      });
+      return controller;
+    },
+  }));
+  assert.equal(result.status, 'draft', JSON.stringify(result));
+  assert.equal(result.assetAcquisitions.length, 1);
+  assert.deepEqual(paths, ['/event', '/logo.svg']);
+  await Promise.resolve();
+  assert.equal(disposition, 'after_release');
+});
+
+test('cancellation queued after revalidation discards its retained one-shot check before projection', async (t) => {
+  const paths = [];
+  const svg = '<svg height="10" width="10" xmlns="http://www.w3.org/2000/svg"><rect height="3" width="2"/></svg>';
+  const page = Buffer.from('<!doctype html><html><head><meta property="og:image" content="/logo.svg"></head><body>'
+    + '<script type="application/ld+json">{"@type":"Event","name":"Cancel Release Event","startDate":"2027-06-20"}</script></body></html>');
+  const server = await startFixture((requestValue, response) => {
+    const pathname = new URL(requestValue.url, 'http://fixture.example.org').pathname;
+    paths.push(pathname);
+    if (pathname === '/logo.svg') respond(response, 200, { 'content-type': 'image/svg+xml' }, svg);
+    else respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, page);
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const store = controlledEvidenceAdapter(h.evidenceStore);
+  const revalidate = store.revalidateControlledAssetRelease.bind(h.evidenceStore);
+  const abortController = new AbortController();
+  store.revalidateControlledAssetRelease = async (...args) => {
+    const result = await revalidate(...args);
+    queueMicrotask(() => abortController.abort());
+    return result;
+  };
+  const policy = Object.freeze({
+    schemaVersion: 1,
+    policyVersion: 'ei-private-svg-acquisition/1',
+    policyId: 'offline-cancel-release-v1',
+    allowedOrigins: Object.freeze(['http://fixture.example.org']),
+  });
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-release-cancel-check', server, seeds: [{ url: sourceUrl('/event') }], store,
+    signal: abortController.signal,
+    assetAcquisitionPolicyFor: () => policy,
+  }));
+  assert.equal(result.status, 'cancelled', JSON.stringify(result));
+  assert.equal(result.draft, null);
+  assert.deepEqual(paths, ['/event', '/logo.svg']);
+  assert.equal(h.releaseControllers.at(-1)?.revoke('cancel_after_preflight'), 'before_release',
+    'discard consumes and revokes the authority without releasing the retained snapshot');
+});
+
+test('opted-in runs with zero surviving asset plans still recheck current selected retention before projection', async (t) => {
+  const paths = [];
+  let evidenceNow = Date.now();
+  let retentionExpiresAt = evidenceNow + 30_000;
+  let finalRevalidationEntered = false;
+  const server = await startFixture((requestValue, response) => {
+    paths.push(new URL(requestValue.url, 'http://fixture.example.org').pathname);
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t, {
+    evidenceOptions: {
+      now: () => evidenceNow,
+      authorizePrivateAccess({ tenantId, request: authenticated }) {
+        if (finalRevalidationEntered) evidenceNow = retentionExpiresAt + 1;
+        return tenantId === TENANT && authenticated.allowPrivate === true;
+      },
+    },
+  });
+  const store = controlledEvidenceAdapter(h.evidenceStore);
+  const revalidate = store.revalidateControlledAssetRelease.bind(h.evidenceStore);
+  store.revalidateControlledAssetRelease = (...args) => {
+    finalRevalidationEntered = true;
+    return revalidate(...args);
+  };
+  const policy = Object.freeze({
+    schemaVersion: 1,
+    policyVersion: 'ei-private-svg-acquisition/1',
+    policyId: 'offline-empty-assets-v1',
+    allowedOrigins: Object.freeze(['http://fixture.example.org']),
+  });
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-release-empty-assets', server, seeds: [{ url: sourceUrl('/event') }], store,
+    assetAcquisitionPolicyFor: () => policy,
+    retentionHandleFor: () => h.createRetention(retentionExpiresAt),
+  }));
+  assert.equal(finalRevalidationEntered, true, 'the final same-run release barrier runs with no asset role groups');
+  assert.equal(result.status, 'incomplete', JSON.stringify(result));
+  assert.equal(result.draft, null, 'expired selected source and supported facts cannot escape the final barrier');
+  assert.deepEqual(result.assetAcquisitions ?? [], []);
+  assert.deepEqual(paths, ['/event'], 'the empty asset path performs no additional transport');
+});
+
+test('a store adapter cannot turn the synchronous projection into an async thenable release', async (t) => {
+  const paths = [];
+  const svg = '<svg height="10" width="10" xmlns="http://www.w3.org/2000/svg"><rect height="3" width="2"/></svg>';
+  const page = Buffer.from('<!doctype html><html><head><meta property="og:image" content="/logo.svg"></head><body>'
+    + '<script type="application/ld+json">{"@type":"Event","name":"Thenable Event","startDate":"2027-06-20"}</script></body></html>');
+  const server = await startFixture((requestValue, response) => {
+    const pathname = new URL(requestValue.url, 'http://fixture.example.org').pathname;
+    paths.push(pathname);
+    if (pathname === '/logo.svg') respond(response, 200, { 'content-type': 'image/svg+xml' }, svg);
+    else respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, page);
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const store = controlledEvidenceAdapter(h.evidenceStore);
+  const finalize = store.finalizeControlledAssetRelease.bind(h.evidenceStore);
+  store.finalizeControlledAssetRelease = (scope, check, authenticated, signal, input) => finalize(
+    scope, check, authenticated, signal, {
+      ...input,
+      project(current) { return Promise.resolve(input.project(current)); },
+    },
+  );
+  const policy = Object.freeze({
+    schemaVersion: 1,
+    policyVersion: 'ei-private-svg-acquisition/1',
+    policyId: 'offline-thenable-release-v1',
+    allowedOrigins: Object.freeze(['http://fixture.example.org']),
+  });
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-release-thenable', server, seeds: [{ url: sourceUrl('/event') }], store,
+    assetAcquisitionPolicyFor: () => policy,
+  }));
+  assert.equal(result.status, 'incomplete', JSON.stringify(result));
+  assert.equal(result.draft, null);
+  assert.deepEqual(paths, ['/event', '/logo.svg']);
+  assert.equal(h.releaseControllers.at(-1)?.revoke('thenable_projection_failed'), 'before_release');
+});
+
+test('default-off and zero-depth runs never issue separate asset requests; an ordinary SVG seed stays failed', async (t) => {
+  const paths = [];
+  const page = Buffer.from('<!doctype html><html><head><meta property="og:image" content="/logo.svg"></head><body>'
+    + '<script type="application/ld+json">{"@type":"Event","name":"Bounded Event","startDate":"2027-06-20"}</script></body></html>');
+  const server = await startFixture((requestValue, response) => {
+    const pathname = new URL(requestValue.url, 'http://fixture.example.org').pathname;
+    paths.push(pathname);
+    if (pathname.endsWith('.svg')) respond(response, 200, { 'content-type': 'image/svg+xml' }, '<svg/>');
+    else respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, page);
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const policy = () => ({
+    schemaVersion: 1,
+    policyVersion: 'ei-private-svg-acquisition/1',
+    policyId: 'offline-controlled-svg-test-v1',
+    allowedOrigins: ['http://fixture.example.org'],
+  });
+  const legacyStore = legacyEvidenceAdapter(h.evidenceStore);
+
+  const defaultOff = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-default-off', server, seeds: [{ url: sourceUrl('/event-off') }],
+    store: legacyStore,
+  }));
+  assert.equal(defaultOff.status, 'draft', JSON.stringify(defaultOff));
+  assert.deepEqual(paths, ['/event-off']);
+  assert.deepEqual(defaultOff.assetAcquisitions, []);
+
+  const explicitNullPolicy = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-policy-null', server, seeds: [{ url: sourceUrl('/event-null') }],
+    store: legacyStore, assetAcquisitionPolicyFor: () => null,
+  }));
+  assert.equal(explicitNullPolicy.status, 'draft', JSON.stringify(explicitNullPolicy));
+  assert.deepEqual(paths, ['/event-off', '/event-null'], 'a null policy preserves the default-off legacy path');
+
+  const missingOptInMethods = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-missing-opt-in-methods', server,
+    seeds: [{ url: sourceUrl('/event-missing-methods') }],
+    store: legacyStore, assetAcquisitionPolicyFor: policy,
+  }));
+  assert.equal(missingOptInMethods.status, 'incomplete', JSON.stringify(missingOptInMethods));
+  assert.ok(missingOptInMethods.limitations.includes('asset_acquisition_store_unavailable'));
+  assert.deepEqual(paths, ['/event-off', '/event-null'], 'an opt-in run with a legacy store fails closed before transport');
+
+  const missingReleaseAuthority = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-missing-release-authority', server,
+    seeds: [{ url: sourceUrl('/event-missing-authority') }],
+    assetAcquisitionPolicyFor: policy,
+    assetAcquisitionReleaseAuthorityFor: null,
+  }));
+  assert.equal(missingReleaseAuthority.status, 'incomplete', JSON.stringify(missingReleaseAuthority));
+  assert.ok(missingReleaseAuthority.limitations.includes('asset_acquisition_release_authority_unavailable'));
+  assert.deepEqual(paths, ['/event-off', '/event-null'], 'an explicit policy without a release capability does not fetch');
+
+  const widenedDefaultOff = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-default-off', server, seeds: [{ url: sourceUrl('/event-off') }],
+    assetAcquisitionPolicyFor: policy,
+  }));
+  assert.equal(widenedDefaultOff.status, 'incomplete', 'a default-off run cannot be widened on resume');
+  assert.equal(paths.length, 2, 'policy widening is rejected before another transport request');
+
+  const zeroDepth = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-zero-depth', server, seeds: [{ url: sourceUrl('/event-zero') }],
+    limits: { maxDepth: 0 }, assetAcquisitionPolicyFor: policy,
+  }));
+  assert.equal(zeroDepth.status, 'draft', JSON.stringify(zeroDepth));
+  assert.deepEqual(paths, ['/event-off', '/event-null', '/event-zero']);
+  assert.equal(zeroDepth.progress.transportAttemptAdmissions, 1);
+  assert.equal(zeroDepth.assetAcquisitions.length, 0);
+
+  const ordinarySeed = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-ordinary-seed', server, seeds: [{ url: sourceUrl('/ordinary.svg') }],
+    assetAcquisitionPolicyFor: policy,
+  }));
+  assert.equal(ordinarySeed.status, 'incomplete', JSON.stringify(ordinarySeed));
+  assert.equal(paths.at(-1), '/ordinary.svg');
+  assert.equal(ordinarySeed.assetAcquisitions, undefined);
+  const ordinarySnapshot = await h.frontier.getSnapshot(h.scope, 'private-controlled-svg-ordinary-seed');
+  assert.equal(ordinarySnapshot.candidates[0].completionOutcome, 'failed');
+});
+
+test('an asset and ordinary-link URL collision keeps the candidate on ordinary-link retrieval', async (t) => {
+  const paths = [];
+  const page = Buffer.from('<!doctype html><html><head><meta property="og:image" content="/logo.svg"></head><body>'
+    + '<a href="/logo.svg">ordinary link</a>'
+    + '<script type="application/ld+json">{"@type":"Event","name":"Collision Event","startDate":"2027-06-20"}</script></body></html>');
+  const server = await startFixture((requestValue, response) => {
+    const pathname = new URL(requestValue.url, 'http://fixture.example.org').pathname;
+    paths.push(pathname);
+    if (pathname === '/logo.svg') respond(response, 200, { 'content-type': 'image/svg+xml' }, '<svg/>');
+    else respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, page);
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-link-collision', server, seeds: [{ url: sourceUrl('/collision') }],
+    assetAcquisitionPolicyFor: () => ({
+      schemaVersion: 1,
+      policyVersion: 'ei-private-svg-acquisition/1',
+      policyId: 'offline-controlled-svg-test-v1',
+      allowedOrigins: ['http://fixture.example.org'],
+    }),
+  }));
+
+  assert.equal(result.status, 'draft', JSON.stringify(result));
+  assert.deepEqual(result.assetAcquisitions, [], 'mixed-role URL references cannot upgrade a generic child to asset purpose');
+  assert.deepEqual(paths, ['/collision', '/logo.svg']);
+  assert.equal(result.progress.transportAttemptAdmissions, 2);
+  const snapshot = await h.frontier.getSnapshot(h.scope, 'private-controlled-svg-link-collision');
+  const child = snapshot.candidates.find((candidate) => candidate.depth === 1);
+  assert.ok(child);
+  assert.equal(child.state, 'completed');
+  assert.equal(child.completionOutcome, 'failed', 'the ordinary generic retriever rejects the SVG media type');
+  assert.equal(snapshot.attempts.length, 2, 'the collision is admitted only once as a normal frontier child');
+});
+
+test('transport-accepted SVG prolog syntax is rejected by inspection before evidence promotion', async (t) => {
+  const paths = [];
+  const page = Buffer.from('<!doctype html><html><head><meta property="og:image" content="/prolog.svg"></head><body>'
+    + '<script type="application/ld+json">{"@type":"Event","name":"SVG Prolog Event","startDate":"2027-06-20"}</script></body></html>');
+  const declaration = '<?xml version="1.0" encoding="UTF-8"?>';
+  const commentPrefix = `${declaration}<!--`;
+  const filler = 'a'.repeat(1023 - Buffer.byteLength(commentPrefix));
+  const prologSvg = Buffer.from(`${commentPrefix}${filler}é--><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1"/></svg>`);
+  const server = await startFixture((requestValue, response) => {
+    const pathname = new URL(requestValue.url, 'http://fixture.example.org').pathname;
+    paths.push(pathname);
+    if (pathname === '/prolog.svg') respond(response, 200, { 'content-type': 'image/svg+xml' }, prologSvg);
+    else respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, page);
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-prolog-reject', server, seeds: [{ url: sourceUrl('/prolog-event') }],
+    assetAcquisitionPolicyFor: () => ({
+      schemaVersion: 1,
+      policyVersion: 'ei-private-svg-acquisition/1',
+      policyId: 'offline-controlled-svg-test-v1',
+      allowedOrigins: ['http://fixture.example.org'],
+    }),
+  }));
+
+  assert.equal(result.status, 'draft', JSON.stringify(result));
+  assert.deepEqual(paths, ['/prolog-event', '/prolog.svg']);
+  assert.equal(result.progress.transportAttemptAdmissions, 2);
+  assert.deepEqual(result.assetAcquisitions, [], 'transport signature acceptance does not bypass the safe asset inspector');
+  const snapshot = await h.frontier.getSnapshot(h.scope, 'private-controlled-svg-prolog-reject');
+  const assetCandidate = snapshot.candidates.find((candidate) => candidate.depth === 1);
+  assert.ok(assetCandidate);
+  assert.equal(assetCandidate.state, 'completed');
+  assert.equal(assetCandidate.completionOutcome, 'failed');
+  const transport = await h.frontier.getTransportProgress(h.scope, 'private-controlled-svg-prolog-reject');
+  assert.equal(transport.states.body_complete, 2, 'the complete bounded bytes reached inspection without a second request');
+  assert.equal(transport.states.unknown ?? 0, 0);
+});
+
+test('active, malformed, over-limit, and signature-deceptive SVG responses are never promoted', async (t) => {
+  const paths = [];
+  const assetPaths = ['/active.svg', '/malformed.svg', '/oversized.svg', '/deceptive.svg'];
+  const page = Buffer.from('<!doctype html><html><head>'
+    + assetPaths.map((assetPath) => `<meta property="og:image" content="${assetPath}">`).join('')
+    + '</head><body><script type="application/ld+json">{"@type":"Event","name":"Bad SVG Event","startDate":"2027-06-20"}</script></body></html>');
+  const bodies = new Map([
+    ['/active.svg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><script>alert(1)</script></svg>')],
+    ['/malformed.svg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1">')],
+    ['/oversized.svg', Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1">${' '.repeat(128 * 1024)}</svg>`) ],
+    ['/deceptive.svg', Buffer.from('<!doctype html><html><body>not SVG</body></html>')],
+  ]);
+  const server = await startFixture((requestValue, response) => {
+    const pathname = new URL(requestValue.url, 'http://fixture.example.org').pathname;
+    paths.push(pathname);
+    if (bodies.has(pathname)) respond(response, 200, { 'content-type': 'image/svg+xml' }, bodies.get(pathname));
+    else respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, page);
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-controlled-svg-negative-bytes', server, seeds: [{ url: sourceUrl('/bad-assets') }],
+    assetAcquisitionPolicyFor: () => ({
+      schemaVersion: 1,
+      policyVersion: 'ei-private-svg-acquisition/1',
+      policyId: 'offline-controlled-svg-test-v1',
+      allowedOrigins: ['http://fixture.example.org'],
+    }),
+  }));
+
+  assert.equal(result.status, 'incomplete', JSON.stringify(result));
+  assert.equal(result.draft, null);
+  assert.equal(result.progress.transportAttemptAdmissions, 5);
+  assert.equal(paths.length, 5, 'each in-budget candidate gets one same-run request');
+  assert.deepEqual(new Set(paths), new Set(['/bad-assets', ...assetPaths]));
+  assert.equal(result.assetAcquisitions, undefined, 'invalid source bytes never yield stored evidence or a blocked plan');
+  const snapshot = await h.frontier.getSnapshot(h.scope, 'private-controlled-svg-negative-bytes');
+  assert.equal(snapshot.candidates.length, 5);
+  const assetCandidates = snapshot.candidates.filter((candidate) => candidate.depth === 1);
+  assert.ok(assetCandidates.every((candidate) => candidate.state === 'completed' && candidate.completionOutcome === 'failed'));
+  const transport = await h.frontier.getTransportProgress(h.scope, 'private-controlled-svg-negative-bytes');
+  assert.ok(transport.states.unknown > 0, 'an over-limit dispatched response remains unknown rather than releasing its reservation');
 });
 
 test('selected-evidence cap seals a useful incomplete draft while preserving queued candidates without another dispatch', async (t) => {
@@ -3123,6 +3949,200 @@ test('remote cancellation bounds a never-resolving retention callback and ignore
   assert.equal(ingestCalls, 0, 'the late handle is not used to write private evidence after cancellation');
 });
 
+test('external cancellation bounds stalled stop persistence and keeps an admitted lease unknown across restart', { timeout: 8_000 }, async (t) => {
+  let retentionStarted;
+  const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });
+  const pendingRetention = new Promise(() => {});
+  let requestCount = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-external-cancel-stalled-stop';
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    stopRun: async () => new Promise(() => {}),
+  });
+  const cancellation = new AbortController();
+  const running = runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    signal: cancellation.signal,
+    seeds: [{ url: sourceUrl('/external-cancel-stalled-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs: 5_000 },
+    retentionHandleFor() {
+      retentionStarted();
+      return pendingRetention;
+    },
+  }));
+  await retentionCallbackStarted;
+  const cancelledAt = performance.now();
+  cancellation.abort();
+  const result = await running;
+  const cleanupElapsedMs = performance.now() - cancelledAt;
+  t.diagnostic(JSON.stringify({ cleanupElapsedMs, resultStatus: result.status, requestCount, stopPersistence: 'never-settles' }));
+  assert.ok(cleanupElapsedMs <= 850,
+    `external cancellation returns within the 750ms cleanup budget plus 100ms scheduling tolerance (${cleanupElapsedMs.toFixed(1)}ms)`);
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.draft, null);
+  assert.equal(requestCount, 1, 'the initial admitted response was the only HTTP request');
+
+  const interrupted = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(interrupted.candidates[0].state, 'unresolved');
+  assert.equal(interrupted.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(interrupted.candidates[0].admittedAttemptCount, 1);
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transport.reservedBytes, 0, 'the completed body keeps its settled accounting');
+  assert.ok(transport.spentBytes > 0);
+
+  const reopened = h.openFrontier();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+  const restarted = await runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier: reopened,
+    seeds: [{ url: sourceUrl('/external-cancel-stalled-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs: 5_000 },
+  }));
+  assert.equal(restarted.draft, null);
+  assert.equal(requestCount, 1, 'restart cannot redispatch the unresolved admission while stop persistence is stalled');
+  const afterRestart = await reopened.getSnapshot(reopenedScope, runId);
+  assert.equal(afterRestart.candidates[0].state, 'unresolved');
+  assert.equal(afterRestart.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal((await reopened.getTransportProgress(reopenedScope, runId)).spentBytes, transport.spentBytes);
+});
+
+test('external cancellation still resolves an admitted lease when stop persistence rejects', { timeout: 8_000 }, async (t) => {
+  let retentionStarted;
+  const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });
+  const pendingRetention = new Promise(() => {});
+  let requestCount = 0;
+  let stopCalls = 0;
+  let unresolvedCalls = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    stopRun: async () => {
+      stopCalls += 1;
+      throw new Error('simulated stop persistence failure');
+    },
+    markUnresolved: async (...args) => {
+      unresolvedCalls += 1;
+      return h.frontier.markUnresolved(...args);
+    },
+  });
+  const runId = 'private-external-cancel-stop-error';
+  const cancellation = new AbortController();
+  const running = runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    signal: cancellation.signal,
+    seeds: [{ url: sourceUrl('/external-cancel-stop-error') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs: 5_000 },
+    retentionHandleFor() {
+      retentionStarted();
+      return pendingRetention;
+    },
+  }));
+  await retentionCallbackStarted;
+  const cancelledAt = performance.now();
+  cancellation.abort();
+  const result = await running;
+  const cleanupElapsedMs = performance.now() - cancelledAt;
+  t.diagnostic(JSON.stringify({ cleanupElapsedMs, resultStatus: result.status, requestCount, stopCalls, unresolvedCalls }));
+  assert.ok(cleanupElapsedMs <= 850,
+    `a rejected stop write cannot exceed the 750ms cleanup budget plus 100ms scheduling tolerance (${cleanupElapsedMs.toFixed(1)}ms)`);
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.draft, null);
+  assert.equal(requestCount, 1);
+  assert.equal(stopCalls, 1);
+  assert.ok(unresolvedCalls >= 1 && unresolvedCalls <= 2,
+    'the run makes at most one uncertainty retry after its first bounded mark');
+  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshot.candidates[0].state, 'unresolved');
+  assert.equal(snapshot.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(snapshot.candidates[0].admittedAttemptCount, 1);
+});
+
+test('deadline returns with an unresolved admission when stop persistence never settles', { timeout: 8_000 }, async (t) => {
+  let retentionStarted;
+  let runAuthorizedAt;
+  const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });
+  const pendingRetention = new Promise(() => {});
+  let requestCount = 0;
+  let stopCalls = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    stopRun: async () => {
+      stopCalls += 1;
+      return new Promise(() => {});
+    },
+  });
+  const runId = 'private-deadline-never-stop';
+  const durationMs = 1_500;
+  const running = runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    seeds: [{ url: sourceUrl('/deadline-never-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+    authorizeCurrent() {
+      if (runAuthorizedAt === undefined) runAuthorizedAt = performance.now();
+      return true;
+    },
+    retentionHandleFor() {
+      retentionStarted();
+      return pendingRetention;
+    },
+  }));
+  await retentionCallbackStarted;
+  const result = await running;
+  const elapsedMs = performance.now() - runAuthorizedAt;
+  t.diagnostic(JSON.stringify({ elapsedMs, durationMs, resultStatus: result.status, requestCount, stopCalls }));
+  assert.ok(elapsedMs <= durationMs + 850,
+    `deadline cleanup returns within the original duration plus the 750ms budget and 100ms scheduling tolerance (${elapsedMs.toFixed(1)}ms)`);
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('deadline_exceeded'));
+  assert.equal(requestCount, 1);
+  assert.equal(stopCalls, 1);
+  const interrupted = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(interrupted.candidates[0].state, 'unresolved');
+  assert.equal(interrupted.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(interrupted.candidates[0].admittedAttemptCount, 1);
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transport.reservedBytes, 0);
+  assert.ok(transport.spentBytes > 0);
+
+  const reopened = h.openFrontier();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+  const restarted = await runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier: reopened,
+    seeds: [{ url: sourceUrl('/deadline-never-stop') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1, durationMs },
+  }));
+  assert.equal(restarted.draft, null);
+  assert.equal(requestCount, 1, 'an expired restarted run cannot redispatch its unresolved admission');
+  const afterRestart = await reopened.getSnapshot(reopenedScope, runId);
+  assert.equal(afterRestart.candidates[0].state, 'unresolved');
+  assert.equal(afterRestart.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal((await reopened.getTransportProgress(reopenedScope, runId)).spentBytes, transport.spentBytes);
+});
+
 test('a stop before the first admission keeps the lease cancellation reason', { timeout: 8_000 }, async (t) => {
   let bindingStarted;
   const candidateBindingStarted = new Promise((resolve) => { bindingStarted = resolve; });
@@ -3630,27 +4650,31 @@ test('the whole-run deadline bounds a never-resolving final retention callback u
     },
     markUnresolved: async (...args) => {
       const reason = args[2]?.reason;
-      cleanupTrace.push({ method: 'markUnresolved', phase: 'start', reason, atPerfMs: performance.now() });
+      cleanupTrace.push({ method: 'markUnresolved', phase: 'start', reason,
+        sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
       try {
         const result = await h.frontier.markUnresolved(...args);
-        cleanupTrace.push({ method: 'markUnresolved', phase: 'success', reason, atPerfMs: performance.now() });
+        cleanupTrace.push({ method: 'markUnresolved', phase: 'success', reason,
+          sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
         return result;
       } catch (error) {
         cleanupTrace.push({ method: 'markUnresolved', phase: 'error', reason,
-          code: error?.code ?? null, atPerfMs: performance.now() });
+          code: error?.code ?? null, sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
         throw error;
       }
     },
     stopRun: async (...args) => {
       const reason = args[2];
-      cleanupTrace.push({ method: 'stopRun', phase: 'start', reason, atPerfMs: performance.now() });
+      cleanupTrace.push({ method: 'stopRun', phase: 'start', reason,
+        sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
       try {
         const result = await h.frontier.stopRun(...args);
-        cleanupTrace.push({ method: 'stopRun', phase: 'success', reason, atPerfMs: performance.now() });
+        cleanupTrace.push({ method: 'stopRun', phase: 'success', reason,
+          sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
         return result;
       } catch (error) {
         cleanupTrace.push({ method: 'stopRun', phase: 'error', reason,
-          code: error?.code ?? null, atPerfMs: performance.now() });
+          code: error?.code ?? null, sequence: cleanupTrace.length + 1, atPerfMs: performance.now() });
         throw error;
       }
     },
@@ -3792,8 +4816,9 @@ test('the whole-run deadline bounds a never-resolving final retention callback u
     'the whole-run deadline releases the stalled final retention callback promptly');
   assert.ok(runReturnedAtPerfMs >= effectiveDeadlineLowerPerfMs - 100,
     'the admitted run did not return before the conservative absolute deadline bound');
-  assert.ok(runReturnedAtPerfMs <= effectiveDeadlineUpperPerfMs + 2_000,
-    'cleanup returns within a bounded interval after the conservative absolute deadline bound');
+  const cleanupAfterDeadlineMs = runReturnedAtPerfMs - effectiveDeadlineUpperPerfMs;
+  assert.ok(cleanupAfterDeadlineMs <= 850,
+    `cleanup returns within the shared 750ms envelope plus 100ms SQLite/timer tolerance (${cleanupAfterDeadlineMs.toFixed(1)}ms)`);
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('deadline_exceeded'));
@@ -3811,6 +4836,15 @@ test('the whole-run deadline bounds a never-resolving final retention callback u
     'every cleanup attempt preserves the possible admission state');
   assert.ok(unresolvedAttempts.some((entry) => entry.phase === 'success'),
     'the repeated uncertainty resolution succeeds after the writer lock releases');
+  const firstResolutionFailure = cleanupTrace.findIndex((entry) => entry.method === 'markUnresolved'
+    && entry.phase === 'error');
+  const deadlineStopSuccess = cleanupTrace.findIndex((entry) => entry.method === 'stopRun'
+    && entry.phase === 'success');
+  const postStopResolution = cleanupTrace.findIndex((entry, index) => index > firstResolutionFailure
+    && entry.method === 'markUnresolved' && entry.phase === 'success');
+  assert.ok(firstResolutionFailure >= 0 && deadlineStopSuccess > firstResolutionFailure
+    && postStopResolution > deadlineStopSuccess,
+  'the recovery write waits until the bounded deadline stop releases its competing writer transaction');
   const snapshot = await h.frontier.getSnapshot(h.scope, runId);
   assert.equal(snapshot.deadlineAtMs, persistedDeadlineAtMs, 'the persisted absolute deadline remains unchanged');
   assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'attempt_limit'));
@@ -4506,6 +5540,46 @@ test('revocation while final selected materialization is returning withholds the
   h.setAcl(false);
   releaseFinal();
   const result = await running;
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('authorization_revoked'));
+});
+
+test('default-off legacy evidence adapters still recheck host release authorization after materialization', async (t) => {
+  const server = await startFixture((_request, response) => {
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  let materializationCalls = 0;
+  let finalMaterializationCompleted = false;
+  let releaseAuthorized = true;
+  let releaseCheckedAfterMaterialization = false;
+  const store = legacyEvidenceAdapter(h.evidenceStore);
+  const materialize = store.materializeSelected;
+  store.materializeSelected = async (...args) => {
+    const result = await materialize(...args);
+    materializationCalls += 1;
+    if (materializationCalls === 3) {
+      finalMaterializationCompleted = true;
+      releaseAuthorized = false;
+    }
+    return result;
+  };
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId: 'private-default-off-final-release-revoked',
+    server,
+    seeds: [{ url: sourceUrl('/event') }],
+    store,
+    authorizeCurrent: (_request, context) => {
+      if (context.stage === 'release' && finalMaterializationCompleted) {
+        releaseCheckedAfterMaterialization = true;
+      }
+      return context.stage !== 'release' || releaseAuthorized;
+    },
+  }));
+  assert.equal(finalMaterializationCompleted, true, 'the fixture revoked release only after final selection materialized');
+  assert.equal(releaseCheckedAfterMaterialization, true);
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('authorization_revoked'));

@@ -257,14 +257,19 @@ function normalizeLimits(value) {
 }
 
 function normalizeRunInput(value) {
-  const input = ownRecord(value, new Set(['runId', 'seeds', 'limits']));
+  const input = ownRecord(value, new Set(['runId', 'seeds', 'limits', 'privateRunConfigHash']));
   if (!input || !validId(input.runId, 96)) fail();
+  if (input.privateRunConfigHash !== undefined
+    && (typeof input.privateRunConfigHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.privateRunConfigHash))) fail();
   const seedsRaw = ownArray(input.seeds, MAX_SEEDS);
   if (!seedsRaw || seedsRaw.length < 1) fail();
   const seeds = seedsRaw.map(normalizeSeed);
   seeds.sort((left, right) => stableCompare(stableJson(left), stableJson(right)));
   const limits = normalizeLimits(input.limits);
-  const config = { schema: 'ei-private-bounded-frontier/v1', runId: input.runId, seeds, limits };
+  const config = {
+    schema: 'ei-private-bounded-frontier/v1', runId: input.runId, seeds, limits,
+    ...(input.privateRunConfigHash === undefined ? {} : { privateRunConfigHash: input.privateRunConfigHash }),
+  };
   return { runId: input.runId, seeds, limits, config, configJson: stableJson(config), configHash: digest(stableJson(config)) };
 }
 
