@@ -1,0 +1,232 @@
+{
+  "sourceCommit": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+  "observedAt": "2026-10-12T11:49:37.518Z",
+  "url": "http://127.0.0.1:4179/",
+  "status": "PARTIAL_LOCAL_NOT_DEPLOYED",
+  "observations": [
+    {
+      "step": "320x568 reduced-motion maker",
+      "observed": {
+        "finale": {
+          "h": 568,
+          "scrollHeight": 1065,
+          "scrollTop": 0
+        },
+        "h": 568,
+        "href": "https://getticketstub.com/make",
+        "w": 320,
+        "y": 19817
+      }
+    },
+    {
+      "step": "mobile native wheel",
+      "observed": {
+        "clientHeight": 568,
+        "scrollHeight": 1065,
+        "scrollTop": 497
+      }
+    },
+    {
+      "step": "empty Enter",
+      "observed": {
+        "focus": "ev",
+        "invalid": "true",
+        "url": "http://127.0.0.1:4179/#make"
+      }
+    },
+    {
+      "step": "fictional Enter local only",
+      "observed": {
+        "forms": 0,
+        "href": "https://getticketstub.com/make",
+        "status": "The studio opens separately. Your preview text is not included; availability can change.",
+        "url": "http://127.0.0.1:4179/#make"
+      }
+    },
+    {
+      "step": "maker viewport 375x812",
+      "observed": {
+        "documentWidth": 368,
+        "h": 812,
+        "href": "https://getticketstub.com/make",
+        "input": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "link": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "w": 375
+      }
+    },
+    {
+      "step": "maker viewport 768x1024",
+      "observed": {
+        "documentWidth": 769,
+        "h": 1024,
+        "href": "https://getticketstub.com/make",
+        "input": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "link": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "w": 768
+      }
+    },
+    {
+      "step": "maker viewport 1440x900",
+      "observed": {
+        "documentWidth": 1455,
+        "h": 900,
+        "href": "https://getticketstub.com/make",
+        "input": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "link": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "w": 1440
+      }
+    },
+    {
+      "step": "Tab after preview",
+      "observed": {
+        "focus": "getticketstub.com",
+        "tag": "A"
+      }
+    },
+    {
+      "step": "reopen maker after resize 375x812",
+      "observed": {
+        "h": 812,
+        "input": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "link": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "w": 375,
+        "y": 19817
+      }
+    },
+    {
+      "step": "reopen maker after resize 768x1024",
+      "observed": {
+        "h": 1024,
+        "input": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "link": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "w": 768,
+        "y": 19817
+      }
+    },
+    {
+      "step": "reopen maker after resize 1440x900",
+      "observed": {
+        "h": 900,
+        "input": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "link": {
+          "bottom": 0,
+          "height": 0,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "width": 0,
+          "x": 0,
+          "y": 0
+        },
+        "w": 1440,
+        "y": 19817
+      }
+    }
+  ],
+  "limitations": [
+    "Viewport resize reset scene; first resized measurements hidden; reopen observations retained without claiming pass",
+    "3D WebGL unavailable in this browser; static fallback only",
+    "Not physical touch, screen reader, contrast, zoom/reflow, performance or deployed evidence",
+    "Existing browser profile, not clean browser privacy certification"
+  ],
+  "screenshot": "/tmp/landing-current-mobile.jpg"
+}

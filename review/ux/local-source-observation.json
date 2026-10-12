@@ -1,12 +1,17 @@
 {
-  "schema": "ticketstub.ux-local-source-observation/1",
-  "observedAt": "2026-10-12T10:12:57.116Z",
-  "sourceRevision": "b6ae55cd48971c9ef292293252f1931744a91095",
+  "schema": "ticketstub.ux-local-source-observation/2",
+  "observedAt": "2026-10-12T11:47:18.725Z",
+  "sourceRevision": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
   "nodeVersion": "v24.15.0",
   "evidenceClass": "local-source-and-VM-only",
+  "publicationState": "NOT_DEPLOYED",
   "deploymentIdentity": "UNKNOWN",
+  "uxApproval": "PENDING",
+  "historicalObservation": "review/ux/history/local-source-observation-b6ae55c.json",
+  "historicalObservationSha256": "7a7a2c3069eeb20e71e99675a7fab2cf0e5d1359968dff4d813c3e0f0c41baae",
   "validatorSha256": "399ea37a4171147e18176af9e314aeeb07a510787ddae8387762ce2f910e2d62",
   "testsSha256": "8021536d29c01e900c0bfffd462dee9c23f2c324bee4916e09706b3fd9440596",
+  "artifactManifestSha256": "e64d9bcaf5b26f0a1bc1d104e679a5f26a2f4fda30cde023dba506692bdc06ad",
   "artifactFiles": {
     "assets/ballet-clean.webp": {
       "bytes": 53684,
@@ -49,8 +54,8 @@
       "sha256": "c36b5d0af494390fd2fdd18d581033e60dc156b45604c00060b0dd6bd8153936"
     },
     "index.html": {
-      "bytes": 192879,
-      "sha256": "51ae897ff786d2ae5bd7ab9a7e76c47196f698ef8d895f6b26e7b23a19d9a2fd"
+      "bytes": 196605,
+      "sha256": "9c3b80588cfa0e4c226e04102f0b14e6bb820fb0d88c61b2965bdd8f01038159"
     }
   },
   "sourceChecks": {
@@ -63,48 +68,144 @@
       "document-heading-before-h1",
       "footer-heading-level-review",
       "maker-outside-main-landmark",
-      "mobile-status-visibility-review",
       "browser-screenreader-reflow-performance-not-measured",
       "no-js-loader-and-maker-visibility-not-verified"
     ],
-    "pageSha256": "51ae897ff786d2ae5bd7ab9a7e76c47196f698ef8d895f6b26e7b23a19d9a2fd"
+    "pageSha256": "9c3b80588cfa0e4c226e04102f0b14e6bb820fb0d88c61b2965bdd8f01038159"
   },
   "commandsExecuted": [
     {
-      "command": "node --test tests/ux.test.mjs",
-      "status": "PASS",
-      "tests": 17,
+      "id": "ux-tests",
+      "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+      "arguments": [
+        "--test",
+        "tests/ux.test.mjs"
+      ],
+      "startedAt": "2026-10-12T11:46:53.251Z",
+      "endedAt": "2026-10-12T11:46:53.681Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/reports/54dce18/ux-tests.stdout.log",
+      "stderr": "review/ux/reports/54dce18/ux-tests.stderr.log",
+      "stdoutSha256": "f290b54613cb1cccfe61c2e2c591be35d477d944254a4ed643b94bfeeb2dd3bc",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "testCount": 17,
       "skipped": 0
     },
     {
-      "command": "node --test tests/*.test.mjs",
-      "status": "PASS",
-      "tests": 94,
+      "id": "all-tests",
+      "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+      "arguments": [
+        "--test",
+        "tests/content-proof.test.mjs",
+        "tests/cta.test.mjs",
+        "tests/foundation.test.mjs",
+        "tests/metadata.test.mjs",
+        "tests/privacy.test.mjs",
+        "tests/scroll.test.mjs",
+        "tests/ux.test.mjs"
+      ],
+      "startedAt": "2026-10-12T11:46:53.685Z",
+      "endedAt": "2026-10-12T11:46:54.857Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/reports/54dce18/all-tests.stdout.log",
+      "stderr": "review/ux/reports/54dce18/all-tests.stderr.log",
+      "stdoutSha256": "806b62945f67e788449a17261454963a723de3f9acbde7ac4d929bf5a7924f38",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "testCount": 104,
       "skipped": 0
     },
     {
-      "command": "./scripts/validate-landing --suite ux --mode draft",
-      "status": "PASS_DRAFT",
-      "realHandlerScrollTests": 9
+      "id": "ux-draft",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "ux",
+        "--mode",
+        "draft"
+      ],
+      "startedAt": "2026-10-12T11:46:54.859Z",
+      "endedAt": "2026-10-12T11:46:55.218Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/reports/54dce18/ux-draft.stdout.log",
+      "stderr": "review/ux/reports/54dce18/ux-draft.stderr.log",
+      "stdoutSha256": "6e1ac6064b3f558ad7f6c41128ac551e7feec98e9e8ff57cb8b7749e213bf7fb",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "testCount": 9,
+      "skipped": 0
     },
     {
-      "command": "./scripts/validate-landing --suite ux",
-      "status": "BLOCKED",
+      "id": "ux-release",
+      "executable": "./scripts/validate-landing",
+      "arguments": [
+        "--suite",
+        "ux"
+      ],
+      "startedAt": "2026-10-12T11:46:55.219Z",
+      "endedAt": "2026-10-12T11:46:55.554Z",
       "exitCode": 1,
-      "reason": "Required actual browser/manual/performance evidence unavailable"
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/reports/54dce18/ux-release.stdout.log",
+      "stderr": "review/ux/reports/54dce18/ux-release.stderr.log",
+      "stdoutSha256": "317e58352d636c5f9875dc53b43b25ef867ec0669edd737c854f3fa086190778",
+      "stderrSha256": "154c5505b056429a495dca948620bcd937943658e1ea0c56c9dbd6829f93ea58",
+      "testCount": 9,
+      "skipped": 0
     },
     {
-      "command": "git diff --check",
-      "status": "PASS"
-    },
-    {
-      "command": "three concurrent node --test --test-reporter=dot tests/ux.test.mjs invocations",
-      "status": "PASS",
-      "testsPerInvocation": 17,
-      "reason": "Unique OS-temporary test repositories avoid cross-run artifact deletion"
+      "id": "build",
+      "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+      "arguments": [
+        "scripts/build.mjs"
+      ],
+      "recordedAt": "2026-10-12T11:48:56.583Z",
+      "exitCode": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "review/ux/reports/54dce18/build.stdout.log",
+      "stderr": "review/ux/reports/54dce18/build.stderr.log",
+      "stdoutSha256": "c005ef06372299c25d7799129dbf09098a9aebb7deb7c2f3c034e0d67b0869b4",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "testCount": null,
+      "skipped": null
     }
   ],
-  "actualBrowserEvidence": "PENDING",
+  "actualBrowserEvidence": "PARTIAL_LOCAL_ROOT_RECEIPT",
   "actualMobileLabMeasurements": "NOT_RUN",
-  "wcagConformance": "NOT_ASSERTED"
+  "wcagConformance": "NOT_ASSERTED",
+  "artifactManifestPath": "review/ux/reports/54dce18/artifact-manifest.json",
+  "publicationScope": "Local validation artifact; not deployed by this task. Actual public landing deployment identity is UNKNOWN.",
+  "commandRecordsPath": "review/ux/reports/54dce18/commands.json",
+  "commandRecordsSha256": "68f5bbd67624b13f981828271600f73308ba86dc214f5ad4927d5736ba7b42d1",
+  "browserEvidence": {
+    "status": "PARTIAL_LOCAL_NOT_DEPLOYED",
+    "sourceCommit": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+    "observedAt": "2026-10-12T11:49:37.518Z",
+    "url": "http://127.0.0.1:4179/",
+    "receiptPath": "review/ux/browser/54dce18/root-browser-evidence.json",
+    "receiptSha256": "05c6284b73de38bba9e9a9d641a83a0955a84e93cbf78e08ac2f7e5eb6354a9b",
+    "screenshotPath": "review/ux/browser/54dce18/mobile-320.jpg",
+    "screenshotSha256": "bd9d3da73de603eb009f2bcfc912a5bc1b1a2d6f83f00c924c3ccd3cea61f3a1",
+    "screenshotPixels": {
+      "width": 305,
+      "height": 541
+    },
+    "reportedViewport": {
+      "width": 320,
+      "height": 568
+    },
+    "associatedLocalArtifactManifestSha256": "e64d9bcaf5b26f0a1bc1d104e679a5f26a2f4fda30cde023dba506692bdc06ad",
+    "artifactPinScope": "Local reproducible build of recorded source; browser receipt names sourceCommit but supplies no independent served-byte manifest.",
+    "resized3757681440": "INCONCLUSIVE_ZERO_INPUT_AND_LINK_RECTANGLES",
+    "browserVersion": "NOT_RECORDED",
+    "profile": "EXISTING_NOT_CLEAN_CERTIFICATION",
+    "wcagConformance": "NOT_ASSERTED",
+    "performance": "NOT_MEASURED"
+  }
 }
