@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { HostSessionVerifier, TrustedHostContext, VerifyResult } from '../../src/server';
+import { parseInstant, type HostSessionVerifier, type TrustedHostContext, type VerifyResult } from '../../src/server';
 
 /**
  * Offline test double of a host session verifier. It models what a real host must do: check an HMAC
@@ -21,7 +21,7 @@ export function issueFixtureToken(claims: Claims): string {
 export function captainClaims(overrides: Partial<Claims> = {}): Claims {
   return {
     actorId: 'account:acc_FIXTURE_captain1', tenantId: 'account:acc_FIXTURE_captain1', projectId: 'event:evt_fx_1', role: 'captain',
-    capabilities: ['event.read', 'finance.read', 'finance.export'], audience: FIXTURE_AUDIENCE, expiresAt: '2026-10-10T12:05:00.000Z',
+    capabilities: ['event.read', 'finance.read', 'finance.export'], environment: 'test', billingMode: 'simulated', audience: FIXTURE_AUDIENCE, expiresAt: '2026-10-10T12:05:00.000Z',
     sessionId: 'session-captain', membershipRevision: 2, ...overrides,
   };
 }
@@ -45,7 +45,8 @@ export function fixtureVerifier(state: HostState, now: () => Date = () => FIXTUR
       if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return { ok: false, reason: 'forged' };
       let claims: Claims;
       try { claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Claims; } catch { return { ok: false, reason: 'malformed' }; }
-      if (Date.parse(claims.expiresAt) <= now().getTime()) return { ok: false, reason: 'expired' };
+      const expires = parseInstant(claims.expiresAt);
+      if (expires === undefined || expires <= now().getTime()) return { ok: false, reason: 'expired' };
       if (claims.audience !== audience) return { ok: false, reason: 'wrong_audience' };
       if (!state.liveSessions.has(claims.sessionId)) return { ok: false, reason: 'revoked' };
       if (!state.projectMembers.get(claims.projectId)?.has(claims.actorId)) return { ok: false, reason: 'revoked' };
