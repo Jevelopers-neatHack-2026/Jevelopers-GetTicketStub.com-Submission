@@ -119,12 +119,12 @@ node proposals/reporting-v1/validate.mjs
 node --test tests/reporting-proposal.test.mjs
 ```
 
-The runner exits 0 when all synthetic fixtures match, 1 on expectation mismatch, and 2 on setup failure. Output contains counts, fixture identifiers and sanitized error locations. Success means structural validity only, never semantic or owner acceptance. Preserve the source SHA, runtime version, raw schema/fixture byte hashes and command outputs alongside any review receipt.
+The runner exits 0 when all synthetic fixtures match, 1 on expectation mismatch, and 2 on setup failure. Output contains counts, safe case ordinals and sanitized error locations. Success means structural validity only, never semantic or owner acceptance. Preserve the source SHA, runtime version, raw schema/fixture byte hashes and command outputs alongside any review receipt.
 
 ## Verification performed on this packet
 
 - Both schemas compile with strict Ajv 8.17.1; local references resolve.
 - All 199 committed synthetic cases pass: 14 positive and 185 negative.
-- Twenty new tests pass on Node 22.23.3 and 24.21.0, with zero failures or skips.
+- Twenty-two new tests pass on Node 22.23.3 and 24.21.0, with zero failures or skips.
 - Tests detect tampered expectations and validators that incorrectly accept all negative cases, and reject missing/wrong dependencies without fetching.
 - This verifies the isolated proposal and fixture harness only. Documented host obligations, owner decisions, canonical types/exports, actual browser integration, returned-page contracts and Finance-approved metric evidence remain pending.
