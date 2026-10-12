@@ -1,10 +1,10 @@
-import { test, expect } from './capture-test.mjs';
+import { test, expect, resetFixture } from './capture-test.mjs';
 import AxeBuilder from '@axe-core/playwright';
 const counts=async request=>(await request.get('/api/counters')).json();
 async function refresh(page,expected){const response=page.waitForResponse('**/api/composition/current');await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();const view=(await(await response).json()).view;expect(view.status).toBe('current');if(expected)expect(view.projection.base.revision_sha256).toBe(expected.revision_sha256);await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');}
 async function initialize(page){await expect(page.locator('#composition-status')).toContainText('not initialized');await page.getByLabel('I reviewed the selected artwork and initialization binding.').check();const response=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Initialize reviewed composition'}).click();const result=(await(await response).json()).result;expect(result.ok).toBe(true);await expect(page.locator('#operation-status')).toContainText(result.revision_id);await refresh(page,result);}
 async function apply(page){await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();const response=page.waitForResponse('**/api/composition/apply');await page.keyboard.press('Enter');const result=(await(await response).json()).result;expect(result.ok).toBe(true);await expect(page.locator('#operation-status')).toContainText(result.revision_id);await refresh(page,result);}
-test.beforeEach(async({page,request})=>{await request.post('/__fixture/reset',{data:{lock_logo:false}});await page.goto('/composition.html');});
+test.beforeEach(async({page,request,lockLogo})=>{await resetFixture(request, {lock_logo:lockLogo});await page.goto('/composition.html');});
 test('definitive stale non-admission survives reload and permits reviewed renewal plus fresh Apply',async({page,request},info)=>{
   await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();
   await request.post('/__fixture/state',{data:{advance_ms:60001}});
@@ -127,12 +127,16 @@ test('lost HTTP completion reconciles one saved revision after reload; mismatche
   await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await page.getByRole('button',{name:'Read existing operation'}).click();await expect(page.locator('#operation-status')).toContainText('Historical completion recovered');expect(await counts(request)).toMatchObject({composition_previews:1});
   await request.post('/__fixture/state',{data:{advance_ms:60001}});await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');await expect(page.locator('#composition-preview')).toBeHidden();await expect(page.locator('#composition-editor')).toBeHidden();
 });
+test.describe('locked logo authority', () => {
+  test.use({ lockLogo: true });
 test('revoked permissions and locked logo never complete Apply, hostile view extras never render',async({page,request})=>{
-  await request.post('/__fixture/reset',{data:{lock_logo:true}});await page.goto('/composition.html');await initialize(page);await expect(page.getByLabel('Approved logo position',{exact:true})).toBeDisabled();
+  await initialize(page);await expect(page.getByLabel('Approved logo position',{exact:true})).toBeDisabled();
   await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();await request.post('/__fixture/state',{data:{revoke:true}});await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();await expect(page.locator('#operation-status')).not.toContainText('Composition saved');expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0});
   await page.route('**/api/composition/current',async route=>{const response=await route.fetch(),data=await response.json();data.view.script='<script>attack()</script>';await route.fulfill({response,json:data});},{times:1});
   const rejected=page.waitForResponse('**/api/composition/current');await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await rejected;
   await expect(page.locator('#composition-error')).toContainText('exact preview unavailable');await expect(page.locator('#composition-editor')).toBeHidden();
+});
+
 });
 
 test('both original artwork styles use genuine parent edits; lost response recovers one immutable child with opaque cache',async({page,request},info)=>{

@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       CONTROLS_PACKAGE_EVIDENCE: build/controls-package-evidence
+      CONTROLS_BROWSER_EVIDENCE_DIR: test-results/browser-stores
     strategy:
       fail-fast: false
       matrix:

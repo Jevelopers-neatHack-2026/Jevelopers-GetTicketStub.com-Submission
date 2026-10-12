@@ -40,6 +40,8 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
     return value;
   };
   const store = new CreativeVersionStore({ databasePath: join(directory, 'creative.sqlite'), objectRoot: join(directory, 'objects'), now: () => clock });
+  let adapter, inspection, composition;
+  try {
   let gate = null, gateKind, waiting, waitingBinding;
   const wait = async (kind,binding) => { if (gateKind === kind) { waiting=kind;waitingBinding=binding;try{await gate;}finally{waiting=undefined;waitingBinding=undefined;} } };
   let brief;
@@ -128,7 +130,6 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
     counters.bootstrap_image_calls = counters.image_calls; counters.image_calls = 0; counters.reservations = 0; counters.transport_acks = 0;
   }
   if (enableComposition) attachOfflineComposition(ports, { store, policy, counters, wait, now: () => clock });
-  let adapter, inspection, composition;
   const readContext = () => {
     const current = store.getBrief({ scope, brief_id: brief.brief_id });
     return { brief: current, selection: store.getSelection({ scope, brief_id: brief.brief_id }), design: store.getCurrentDesignVersion({ scope, brief_id: brief.brief_id }),
@@ -164,6 +165,7 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
         mapping_status: usage.status, target_binding_sha256: usage.target_binding_sha256,
         attempt_binding_sha256: usage.attempt_binding_sha256, billable_attempt_id: usage.billable_attempt_id };
     },
+    waitForFixture(kind) { return wait(kind); },
     get waiting() { return waiting; },
     get waitingBinding() { return waitingBinding; },
     block(kind) { gateKind = kind; gate = new Promise(resolve => { released = resolve; }); },
@@ -202,4 +204,9 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
     close() { if(closed)return; closed=true; this.release(); adapter.close(); store.close(); },
   };
   return host;
+  } catch (error) {
+    try { try { adapter?.close(); } finally { store.close(); } }
+    catch (cleanup) { throw new AggregateError([error, cleanup], 'MOCK host initialization and cleanup failed'); }
+    throw error;
+  }
 }

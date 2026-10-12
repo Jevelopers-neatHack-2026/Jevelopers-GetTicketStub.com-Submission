@@ -5,9 +5,18 @@ import { mkdtempSync, rmSync, mkdirSync, cpSync, writeFileSync, readdirSync, rea
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
+import { createHostLifecycle } from './host-lifecycle.mjs';
 import { createIntegratedHost, fixturePrincipal } from '../../fixtures/controls/integrated-host.mjs';
 const port = Number(process.env.CONTROLS_FIXTURE_PORT ?? 4317);
-let dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-')), host = await createIntegratedHost(dir, { enableComposition: true });
+async function createSession(options = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-'));
+  try { return { dir, host: await createIntegratedHost(dir, { enableComposition: true, ...options }) }; }
+  catch (error) {
+    try { rmSync(dir, { recursive: true, force: true }); }
+    catch (cleanup) { throw new AggregateError([error, cleanup], 'MOCK session initialization and cleanup failed'); }
+    throw error;
+  }
+}
 const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/javascript'], '/messages.mjs': ['messages.mjs', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/schema.mjs': ['../../src/controls/schema.mjs', 'text/javascript'],
   '/inspection-presentation.html': ['inspection-presentation.html', 'text/html'],
   '/inspection-presentation.mjs': ['inspection-presentation.mjs', 'text/javascript'],
@@ -21,14 +30,15 @@ Object.assign(files, { '/composition.html': ['composition.html', 'text/html'], '
 const compositionPrincipal = req => req.headers['x-mock-controls-principal'] === 'other-tenant' ? { ...fixturePrincipal, tenant_id: 'other_fixture_tenant' } : req.headers['x-mock-controls-principal'] === 'other-actor' ? { ...fixturePrincipal, actor_id: 'other_fixture_actor' } : fixturePrincipal;
 const json = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
 const mode = { mode: 'mock', authority: 'MOCK trusted host fixture; no actual membership', transport: 'native provider with intercepted offline fetch', backend: 'actual local API/planning/SQLite versions/telemetry' };
-let captureSequence = 0, hostFinalized = false;
-function closeAndCaptureHost(reason) {
-  if (hostFinalized) return;
-  const counters = host.counts(); host.close(); hostFinalized = true;
+let captureSequence = 0;
+function closeAndCaptureHost(session, reason) {
+  const { host, dir } = session;
+  if (!session.closed) { session.counters = host.counts(); session.closed = true; host.close(); }
+  const counters = session.counters;
   const evidence = process.env.CONTROLS_BROWSER_EVIDENCE_DIR;
-  if (!evidence) return;
-  const target = join(evidence, `session-${String(++captureSequence).padStart(4,'0')}`);
-  mkdirSync(target, { recursive: true }); cpSync(dir, join(target, 'store-root'), { recursive: true });
+  if (!evidence) { session.finalized = true; return; }
+  mkdirSync(evidence, { recursive: true });
+  const target = mkdtempSync(join(evidence, `session-${String(++captureSequence).padStart(4,'0')}-`)); cpSync(dir, join(target, 'store-root'), { recursive: true });
   const files = [];
   function walk(directory, prefix = '') {
     for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a,b)=>a.name.localeCompare(b.name))) {
@@ -42,8 +52,11 @@ function closeAndCaptureHost(reason) {
   writeFileSync(join(target, 'manifest.json'), JSON.stringify(files, null, 2) + '\n');
   writeFileSync(join(target, 'receipt.json'), JSON.stringify({ reason, captured_at: new Date().toISOString(), node: process.version, node_executable: process.execPath,
     cwd: process.cwd(), mode: 'mock', live_calls: 0, counters, membership: 'explicit MOCK fixture', files: files.length }, null, 2) + '\n');
+  session.finalized = true;
 }
+const lifecycle = createHostLifecycle(await createSession(), { create: createSession, finalize: closeAndCaptureHost, remove: session => rmSync(session.dir, { recursive: true, force: true }) });
 const server = createServer(async (req, res) => {
+  let lease, host;
   try {
     const path = new URL(req.url, 'http://localhost').pathname;
     if (req.method === 'GET' && files[path]) {
@@ -51,6 +64,8 @@ const server = createServer(async (req, res) => {
         'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'" });
       return res.end(await readFile(new URL(file, import.meta.url)));
     }
+    if (req.method === 'GET' && path === '/__fixture/lifecycle') return json(res, { mode: 'mock', live_calls: 0, ...lifecycle.state() });
+    if (req.method === 'GET') { lease = await lifecycle.acquire(); host = lease.host; }
     if (req.method === 'GET' && path === '/api/inspection/latest') return json(res, { view: await host.inspection.latest(fixturePrincipal), repair: await host.inspection.latestRepair(fixturePrincipal), source: await host.inspection.currentSource(fixturePrincipal), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/schema') return json(res, { ...mode, schema: host.schema(), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/counters') return json(res, { ...mode, ...host.counts() });
@@ -71,7 +86,11 @@ const server = createServer(async (req, res) => {
       if (query.has('after_revision_id')) options.after_revision_id = query.get('after_revision_id');
       return json(res, { view: await host.composition.history(compositionPrincipal(req), options), counters: host.counts() });
     }
-    if (req.method === 'GET' && path === '/api/composition/current') return json(res, { view: await host.composition.current(compositionPrincipal(req)), counters: host.counts() });
+    if (req.method === 'GET' && path === '/api/composition/current') {
+      const view = await host.composition.current(compositionPrincipal(req));
+      await host.waitForFixture('composition-current');
+      return json(res, { view, counters: host.counts() });
+    }
     if (req.method === 'GET' && path === '/api/composition/preview') {
       const query = new URL(req.url, 'http://localhost').searchParams;
       const value = await host.composition.preview(compositionPrincipal(req), Object.fromEntries(['revision_id','revision_sha256','preview_sha256'].map(k => [k, query.get(k)])));
@@ -94,7 +113,15 @@ const server = createServer(async (req, res) => {
     if (req.headers.origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return json(res, { code: 'permission' }, 403);
     let bytes = '', size = 0; for await (const chunk of req) { size += chunk.length; if (size > 32768) return json(res, { code: 'validation' }, 413); bytes += chunk; }
     const payload = JSON.parse(bytes);
-    if (path === '/__fixture/capture') { closeAndCaptureHost('browser-case-complete'); return json(res, { ok: true, mode: 'mock', live_calls: 0 }); }
+    if (path === '/__fixture/capture') { await lifecycle.change('browser-case-complete'); return json(res, { ok: true, mode: 'mock', live_calls: 0 }); }
+    if (path === '/__fixture/reset') {
+      const nativeFormat = payload.native_format ?? 'png';
+      if (!['png', 'jpeg', 'webp'].includes(nativeFormat)) return json(res, { code: 'validation' }, 400);
+      await lifecycle.change('fixture-reset', { nativeFormat, lockLogo: payload.lock_logo !== false });
+      return json(res, { ...mode, ok: true });
+    }
+    const draining = path === '/__fixture/state' && payload.release === true && Object.keys(payload).length === 1 || ['/api/cancel', '/api/composition/cancel', '/api/inspection/cancel'].includes(path);
+    lease = await lifecycle.acquire({ draining }); host = lease.host;
     if (path === '/api/composition/review') return json(res, { review: await host.composition.review(compositionPrincipal(req), payload), counters: host.counts() });
     if (path === '/api/composition/apply') return json(res, { result: await host.composition.apply(compositionPrincipal(req), payload), counters: host.counts() });
     if (path === '/api/composition/lookup') return json(res, { result: await host.composition.lookup(compositionPrincipal(req), payload.action_id), counters: host.counts() });
@@ -112,13 +139,7 @@ const server = createServer(async (req, res) => {
     if (path === '/api/compare') return json(res, { ...mode, ...await host.compare(payload.design_version_id), counters: host.counts() });
     if (path === '/api/restore') return json(res, { ...mode, ...await host.restore(payload.design_version_id, payload.expected_selection_revision, payload.action_id), counters: host.counts() });
     if (path === '/api/dispatch') return json(res, { ...mode, ...host.adapter.store.dispatch(fixturePrincipal, payload.operation_id), counters: host.counts() });
-    if (path === '/__fixture/reset') {
-      const nativeFormat = payload.native_format ?? 'png';
-      if (!['png', 'jpeg', 'webp'].includes(nativeFormat)) return json(res, { code: 'validation' }, 400);
-      closeAndCaptureHost('fixture-reset'); rmSync(dir, { recursive: true, force: true }); dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-'));
-      host = await createIntegratedHost(dir, { nativeFormat, enableComposition: true, lockLogo: payload.lock_logo !== false }); hostFinalized = false;
-    }
-    else {
+    {
       if (payload.inspection_fault) host.policy.inspection_fault = payload.inspection_fault;
       if (payload.inspection_usage) host.policy.inspection_usage = payload.inspection_usage;
       if (payload.inspection_bucket) host.policy.inspection_bucket = payload.inspection_bucket;
@@ -140,7 +161,11 @@ const server = createServer(async (req, res) => {
     }
     return json(res, { ...mode, ok: true, counters: host.counts() });
   } catch { json(res, { ...mode, ok: false, code: 'validation' }, 400); }
+  finally { lease?.release(); }
 });
-server.listen(port, '127.0.0.1', () => console.log(`MOCK integrated controls fixture http://127.0.0.1:${port}; actual local API/store, intercepted transport`));
-const stop = () => server.close(() => { closeAndCaptureHost('orderly-server-stop'); rmSync(dir, { recursive: true, force: true }); process.exit(0); });
+server.listen(port, '127.0.0.1', () => console.log(`MOCK integrated controls fixture http://127.0.0.1:${server.address().port}; actual local API/store, intercepted transport`));
+const stop = () => server.close(async () => {
+  try { await lifecycle.stop(); process.exit(0); }
+  catch { console.error('MOCK fixture finalization failed'); process.exit(1); }
+});
 process.on('SIGTERM', stop); process.on('SIGINT', stop);

@@ -45,8 +45,37 @@ foundation project retains the original mocked brief/version projection on
 loopback port 4318. The actual API project runs on loopback port 4317; `npm start`
 in the example opens that fixture. `/__fixture/*` routes declare test authority,
 reset state and create deterministic wait barriers. They are not an application
-issuer. Temporary databases are deleted only on orderly fixture shutdown.
-Separate-process tests preserve their explicit database/object paths across exit.
+issuer. Each admitted HTTP operation retains its own host until its handler
+finishes, including counters read after awaited work. Reset and evidence capture
+wait for that host's active requests before closing SQLite or removing files.
+Ordinary new requests wait for the replacement; release-only fixture requests
+and API cancellation can still drain held work on the retiring host. These
+fixtures do not serialize the entire HTTP API.
+
+Reset constructs a replacement before finalizing the previous host. Failed
+initialization cleans its temporary directory and preserves the previous usable
+host. A capture failure returns failure and retains the original directory for
+a later capture attempt; unique capture directories preserve earlier evidence.
+The test client checks reset and capture responses. The locked-logo case chooses
+its lock before the first navigation, and context teardown stops new browser
+requests before final capture. Temporary databases are removed after successful
+reset or orderly shutdown. Separate-process tests preserve their explicit
+database/object paths across exit.
+
+The deterministic lifecycle checks run real loopback HTTP, local API and SQLite
+with a fixture-controlled current-read latch and a genuine held composition
+Apply. They verify reset/capture waits, release/cancel progress, original-host
+response counters, replacement schema/current health and captured store hashes
+and terminal job rows. Run the focused checks with either required Node pin:
+
+```sh
+node --test tests/controls/host-lifecycle.test.mjs tests/controls/host-lifecycle-http.test.mjs
+```
+
+`CONTROLS_BROWSER_EVIDENCE_DIR` retains exact closed stores with manifests and
+receipts. `CONTROLS_LIFECYCLE_EVIDENCE_DIR` retains the HTTP regression captures;
+its destination must already exist. These are synthetic fixture receipts, not
+application authority or acceptance evidence.
 
 The existing controls CI workflow defines the controls/browser checks on both
 pinned runtimes. Codec setup, public controls export/build and the actual package
