@@ -2,7 +2,7 @@
 //
 //   TICKETSTUB_OPS_TELEMETRY=off   (default; also any unknown value) — nothing is built or written
 //   TICKETSTUB_OPS_TELEMETRY=log   — one JSON line per event on stdout, prefixed by nothing, schema ticketstub.ops/1
-//   TICKETSTUB_OPS_TELEMETRY=neatlogs      — one Neatlogs trace per operation (needs NEATLOGS_API_KEY; see neatlogs.ts)
+//   TICKETSTUB_OPS_TELEMETRY=neatlogs      — one Neatlogs trace per operation (needs NEATLOGS_INGEST_KEY; see neatlogs.ts)
 //   TICKETSTUB_OPS_TELEMETRY=log,neatlogs  — both
 //
 // The log sink relies on the host's log pipeline for retention (see docs/operations/observability.md). The
@@ -108,8 +108,10 @@ function noteSelection(wanted: Set<string>, sinks: OpsSink[], rawLength: number)
 export function activeSink(): OpsSink | undefined {
   if (g.__ticketstubOpsSink !== undefined) return g.__ticketstubOpsSink ?? undefined;
   const raw = process.env.TICKETSTUB_OPS_TELEMETRY ?? "";
-  // Tolerate quotes or semicolons/spaces a host UI may add around the list.
-  const wanted = new Set(raw.toLowerCase().replace(/["']/g, "").split(/[\s,;]+/).filter(Boolean));
+  // Entries are separated by commas or semicolons only; each entry is trimmed and may be quoted. A sink name inside a
+  // longer entry ("neatlogs disabled", "log off") is an unrecognised entry, so it never turns that sink on.
+  const wanted = new Set(raw.toLowerCase().split(/[,;]/).map((v) => v.trim().replace(/^["']+|["']+$/g, "").trim()).filter(Boolean));
+  if (wanted.has("off")) return undefined; // an explicit "off" entry wins over anything listed with it
   const sinks: OpsSink[] = [];
   if (wanted.has("log")) sinks.push(logSink);
   if (wanted.has("neatlogs")) {

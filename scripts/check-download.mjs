@@ -379,7 +379,7 @@ try {
         check(`${label}: the screen tells them to press and hold`, await page.waitFor(`document.body.innerText.includes("Press and hold")`, 3000));
         await page.send("Emulation.setUserAgentOverride", { userAgent: "" });
         // 4. art that cannot be read: a message, no file
-        await openStudio(c, `v.art = { kind: "image", src: "http://127.0.0.1:9/never.png", seed: 1, provenance: "simulated" };`);
+        await openStudio(c, `v.art = { kind: "image", src: "https://127.0.0.1:9/never.png", seed: 1, provenance: "simulated" };`);
         clearDownloads();
         await press("front");
         const failed$ = await page.waitFor(`document.querySelector("[data-failure]")`, 20000);

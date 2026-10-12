@@ -124,6 +124,8 @@ The server also takes the same backup on its own once a week. Each hour it check
 
 Nothing deletes backups. Prune `/private/backups` by hand, and only after the newest one has been restored and checked.
 
+The deployed checks only the owner can run (sandbox flag off, restart survival, backup download, restore drill, real-email sign-in) are in [docs/operations/deployed-auth-storage-runbook.md](docs/operations/deployed-auth-storage-runbook.md).
+
 ### Verifying it (`verify:product`)
 
 ```
@@ -140,6 +142,8 @@ npm run verify:product -- --suite foundation --mode fixture --evidence-dir out/e
 | `a11y` | GT-11: axe-core on eight pages at 390 and 1280 px, overflow at 320, 640 and 200% zoom, a keyboard walk of the critical path with dialog focus, reduced motion, and the desk colours against WCAG AA, in a real headless Chrome (needs Chrome or Edge, or `CHROME_PATH`). `accessibility` is an alias. See `docs/product/accessibility.md` |
 | `production` | `scripts/smoke-production.mjs` against a production server |
 | `degraded` | a production server whose `TICKETSTUB_DB` and `TICKETSTUB_FILES` sit under a file, so storage can't be written: the 503s, the health fields, every page rendering 200, and `smoke:production` still passing |
+| `mail-off` | #27: a production server with no `RESEND_API_KEY` and `TICKETSTUB_SANDBOX_MAIL` unset, `0`, `true`, empty or ` 1`: sign-in and email change answer 503 `mail_unavailable` with no `devLink`, the log holds no link and no full address, the stored link is a hash that lives 15 minutes, and the dev email preview is a 404. A control run with the flag at `1` must hand out a link, sets a `ts_session` cookie that is HttpOnly, SameSite=Lax, Secure, `Path=/` and 90 days, and the link works once |
+| `backup-drill` | #27: seeds a wall, art, a share, an order and an organizer event through the app, takes `POST /api/admin/backup` as staff (404 for others), restarts on the same disk, restores with `scripts/restore-backup.mjs` into a new folder, re-checks hashes, `integrity_check` and row counts, and serves the copy. The evidence file's `drill` field keeps counts and hashes only |
 
 `--mode fixture` is the only mode: the run starts its own production server on a free port with a throwaway database, no provider or mail keys, and `ADMIN_EMAILS` set to a test address, and it blocks every outbound host except loopback (`scripts/lib/fixture-network-guard.mjs`; a blocked attempt fails the run even if the code swallowed it). An unknown suite, a missing build or fixture, and any skipped check exit nonzero. Each run writes `<evidence-dir>/<suite>-<timestamp>.json` with the command, exit code, counts, timestamps, git SHA, mode and per-step results. `npm run build` must have run first. See `docs/architecture/routes.md` for the route and state map and `docs/adr/0001-runtime.md` for the runtime decision.
 

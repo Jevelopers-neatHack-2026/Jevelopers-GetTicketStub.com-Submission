@@ -16,6 +16,7 @@ import { domToBlob } from "modern-screenshot";
 import { currentVersion, type Stub } from "../types";
 import { StubView } from "../stub/StubView";
 import { EDITION_META } from "../stub/editions";
+import { planArtFetch } from "./artSource";
 
 export type StubSide = "front" | "back";
 
@@ -34,10 +35,13 @@ const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()
 async function inlineArt(stub: Stub): Promise<Stub> {
   const version = currentVersion(stub);
   const art = version?.art;
-  if (!art || art.kind !== "image" || !art.src || art.src.startsWith("data:")) return stub;
+  if (!art || art.kind !== "image" || !art.src) return stub;
+  // Only data:, our own /api/art and https pictures are fetched; anything else keeps the procedural art (no request at all).
+  const plan = planArtFetch(art.src, location.href);
+  if (!plan.fetch) return stub;
   let res: Response;
   try {
-    res = await fetch(art.src, { mode: "cors", credentials: "same-origin" });
+    res = await fetch(art.src, { mode: "cors", credentials: plan.credentials });
   } catch (e) {
     // a cross-origin picture without CORS headers throws here exactly like being offline; tell them apart
     throw coded(new URL(art.src, location.href).origin === location.origin ? "network" : "bad_image", e);
