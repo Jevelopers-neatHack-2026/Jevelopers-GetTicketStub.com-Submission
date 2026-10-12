@@ -27,7 +27,7 @@ npm ci                          # repo toolchain: Node 24.21.0 (engines >=24.15.
 npm run contracts:provision     # clone at pinned head, Node 22.23.3: npm ci, build, pack; verify sha256 + SRI (fail closed); offline install
 npm run lint && npm run typecheck && npm test -- --run && npm run build   # unchanged gates; none needs the archive
 npm run test:contracts          # driver first (independent package verification), then tsc -p tsconfig.contracts.json and the vitest contracts config
-node scripts/run-contract-driver.mjs                                       # verifies the installed package with scripts/package-verify.mjs (no package imports; recomputes hashManifest(files) against the pin, byte-checks every file, rejects any symlink or non-regular entry, any unlisted file, and any path resolving outside the package), then runs the driver and checks its receipt. The driver and contract tests refuse to run if any `node_modules` directory exists in the repo other than the verified root one (it would shadow the package), and import the package only by an absolute file URL proven to lie inside the verified root (`scripts/verified-package.mjs`)
+node scripts/run-contract-driver.mjs                                       # verifies the installed package with scripts/package-verify.mjs (no package imports; recomputes hashManifest(files) against the pin, byte-checks every file, rejects any symlink or non-regular entry, any unlisted file, and any path resolving outside the package), then runs the driver and checks its receipt. The driver and contract tests refuse to run if any `node_modules` directory exists in the repo other than the verified root one (it would shadow the package), and import the package only by an absolute file URL proven to lie inside the verified root (`scripts/verified-package.mjs`). Under the producer's runner the driver instead accepts only a resolution inside the snapshot that runner binds (`SHARED_CONTRACTS_ROOT`)
 node scripts/producer-consumer-check.mjs <temp copy of producer checkout> .shared-contracts/jevelopers-shared-contracts-0.9.7.tgz
 ```
 
@@ -35,7 +35,7 @@ node scripts/producer-consumer-check.mjs <temp copy of producer checkout> .share
 
 ## Results
 
-Tested consumer: commit `6db0c4079d9e63b2f2e3fa651dd059af7d847c15`, tree `6c83377f36d1477fc657268c5431c85d76e3918e`. The commit that adds this document changes documentation only. Base: origin/main `380bba6c75789ac65a7cc6eb6d6d19469a4e5823`.
+Tested consumer: commit `81527ccdc21134b53cc63a1c44bcbce5b9bbfbcc`, tree `d509feca562111e7a5c4e15ecb2559610e33be3c`. The commit that adds this document changes documentation only. Base: origin/main `380bba6c75789ac65a7cc6eb6d6d19469a4e5823`.
 
 | Command | Result |
 | --- | --- |
@@ -44,7 +44,7 @@ Tested consumer: commit `6db0c4079d9e63b2f2e3fa651dd059af7d847c15`, tree `6c8337
 | `npm run typecheck` | pass |
 | `npm test -- --run` | 5 files, 177 tests passed (same counts as the base) |
 | `npm run build` | pass |
-| `npm run test:contracts` | driver (with independent package verification) passed; tsc pass; 3 files, 86 tests passed |
+| `npm run test:contracts` | driver (with independent package verification) passed; tsc pass; 3 files, 92 tests passed |
 | driver on Node 22.23.3 and on 24.21.0 | passed; 11 contracts, 249 package fixture cases, 13 of 13 domain cases |
 | producer `consumerChecks` on a temp copy, Node 22.23.3 | team-dashboard row passed; 11 observed contracts; 249 trusted fixture cases; 27 package modules imported and byte-checked; zero team-dashboard failures |
 
