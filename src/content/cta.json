@@ -1,0 +1,47 @@
+{
+  "schema": "ticketstub.cta/1",
+  "environment": "preview",
+  "capture": "deferred",
+  "destinations": {
+    "preview": {
+      "status": "PENDING",
+      "url": null,
+      "allowedOrigin": null,
+      "allowedPath": null,
+      "queryKeys": [],
+      "availability": "unknown",
+      "ownerRole": "Receiving application owner (GT-10B #19)",
+      "receipt": null
+    },
+    "demo": {
+      "status": "PENDING",
+      "url": null,
+      "allowedOrigin": null,
+      "allowedPath": null,
+      "queryKeys": [],
+      "availability": "unknown",
+      "ownerRole": "Receiving application owner (GT-10B #19)",
+      "receipt": null
+    },
+    "staging": {
+      "status": "PENDING",
+      "url": null,
+      "allowedOrigin": null,
+      "allowedPath": null,
+      "queryKeys": [],
+      "availability": "unknown",
+      "ownerRole": "Receiving application owner (GT-10B #19)",
+      "receipt": null
+    },
+    "production": {
+      "status": "PENDING",
+      "url": null,
+      "allowedOrigin": null,
+      "allowedPath": null,
+      "queryKeys": [],
+      "availability": "unknown",
+      "ownerRole": "Receiving application owner (GT-10B #19)",
+      "receipt": null
+    }
+  }
+}
