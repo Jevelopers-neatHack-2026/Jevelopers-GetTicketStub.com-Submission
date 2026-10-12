@@ -209,18 +209,25 @@ before(async () => {
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('configuration', () => {
-  test('loads only documented names, prefers process values and redacts output', () => {
+  test('loads all seven recognized names and redacts selected and ignored credentials', () => {
     const file = join(scratch, 'neatlogs.env');
+    const ignoredLegacyIngest = 'synthetic-ignored-legacy-ingest-canary-0123456789';
+    const ignoredLegacyRead = 'synthetic-ignored-legacy-read-canary-0123456789';
     writeFileSync(file, [
       '# comment',
       `NEATLOGS_INGEST_KEY="${INGEST_KEY}"`,
       `export NEATLOGS_PROJECT_ID=${PROJECT_ID}`,
       'NEATLOGS_READ_TOKEN=',
+      `NEATLOGS_API_KEY=${ignoredLegacyIngest}`,
+      `NEATLOGS_TOKEN=${ignoredLegacyRead}`,
+      'NEATLOGS_ENDPOINT=https://ingest.neatlogs.com/v1/traces',
+      'NEATLOGS_HOST=https://app.neatlogs.com',
       'UNRELATED_SECRET=should-not-be-read',
       ''
     ].join('\n'));
     assert.deepEqual(Object.keys(readNeatlogsEnvFile(file)).sort(), [
-      'NEATLOGS_INGEST_KEY', 'NEATLOGS_PROJECT_ID', 'NEATLOGS_READ_TOKEN'
+      'NEATLOGS_API_KEY', 'NEATLOGS_ENDPOINT', 'NEATLOGS_HOST', 'NEATLOGS_INGEST_KEY',
+      'NEATLOGS_PROJECT_ID', 'NEATLOGS_READ_TOKEN', 'NEATLOGS_TOKEN'
     ]);
     const config = loadNeatlogsConfig({ env: { NEATLOGS_READ_TOKEN: READ_TOKEN }, envFile: file });
     assert.equal(config.summary.region, 'us');
@@ -231,6 +238,8 @@ describe('configuration', () => {
     for (const rendered of [JSON.stringify(config), inspect(config), String(Object.values(config.summary))]) {
       assert.ok(!rendered.includes(INGEST_KEY));
       assert.ok(!rendered.includes(READ_TOKEN));
+      assert.ok(!rendered.includes(ignoredLegacyIngest));
+      assert.ok(!rendered.includes(ignoredLegacyRead));
     }
   });
 
@@ -259,14 +268,197 @@ describe('configuration', () => {
     assert.equal(legacy.summary.readbackReady, true);
     const both = loadNeatlogsConfig({
       env: { NEATLOGS_INGEST_KEY: `${INGEST_KEY}-new`, NEATLOGS_API_KEY: INGEST_KEY,
-        NEATLOGS_READ_TOKEN: `${READ_TOKEN}-new`, NEATLOGS_TOKEN: READ_TOKEN }
+        NEATLOGS_READ_TOKEN: `${READ_TOKEN}-new`, NEATLOGS_TOKEN: READ_TOKEN,
+        NEATLOGS_PROJECT_ID: PROJECT_ID }
     });
     assert.equal(both.ingestKey(), `${INGEST_KEY}-new`);
-    assert.equal(both.summary.readbackReady, false, 'the project ID is still required');
+    assert.equal(both.readbackToken(), `${READ_TOKEN}-new`);
+    assert.equal(both.summary.readbackReady, true);
     assert.throws(() => loadNeatlogsConfig({ env: {} }).ingestKey(), error => error.setting === 'NEATLOGS_INGEST_KEY' || /NEATLOGS_INGEST_KEY/.test(String(error.message)));
-    const env = { NEATLOGS_API_KEY: INGEST_KEY, NEATLOGS_TOKEN: READ_TOKEN, NEATLOGS_INGEST_KEY: INGEST_KEY, OTHER: 'x' };
-    scrubNeatlogsEnvironment(env);
-    assert.deepEqual(Object.keys(env), ['OTHER']);
+  });
+
+  test('keeps readback unavailable when a read token is configured without a project ID', () => {
+    const config = loadNeatlogsConfig({
+      env: {
+        NEATLOGS_INGEST_KEY: `${INGEST_KEY}-new`,
+        NEATLOGS_API_KEY: INGEST_KEY,
+        NEATLOGS_READ_TOKEN: `${READ_TOKEN}-new`,
+        NEATLOGS_TOKEN: READ_TOKEN
+      }
+    });
+    assert.equal(config.summary.ingestReady, true);
+    assert.equal(config.summary.readbackTokenConfigured, true);
+    assert.equal(config.summary.readbackReady, false);
+    assert.throws(
+      () => config.readbackToken(),
+      error => error instanceof NeatlogsConfigError
+        && error.code === 'MISSING_SETTING'
+        && error.setting === 'NEATLOGS_PROJECT_ID'
+    );
+  });
+
+  test('uses canonical env, canonical file, legacy env, then legacy file; blanks fall through', () => {
+    const writeEnv = (name, entries) => {
+      const path = join(scratch, name);
+      writeFileSync(path, entries.map(([key, value]) => `${key}=${value}`).join('\n'));
+      return path;
+    };
+    const canonicalFile = writeEnv('canonical.env', [
+      ['NEATLOGS_INGEST_KEY', 'synthetic-canonical-file-ingest-0123456789'],
+      ['NEATLOGS_READ_TOKEN', 'synthetic-canonical-file-read-0123456789'],
+      ['NEATLOGS_PROJECT_ID', PROJECT_ID],
+      ['NEATLOGS_API_KEY', 'synthetic-legacy-file-ingest-0123456789'],
+      ['NEATLOGS_TOKEN', 'synthetic-legacy-file-read-0123456789']
+    ]);
+    const canonicalFileWins = loadNeatlogsConfig({
+      env: {
+        NEATLOGS_API_KEY: 'synthetic-legacy-env-ingest-0123456789',
+        NEATLOGS_TOKEN: 'synthetic-legacy-env-read-0123456789',
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      },
+      envFile: canonicalFile
+    });
+    assert.equal(canonicalFileWins.ingestKey(), 'synthetic-canonical-file-ingest-0123456789');
+    assert.equal(canonicalFileWins.readbackToken(), 'synthetic-canonical-file-read-0123456789');
+
+    const legacyFile = writeEnv('legacy.env', [
+      ['NEATLOGS_API_KEY', 'synthetic-legacy-file-ingest-0123456789'],
+      ['NEATLOGS_TOKEN', 'synthetic-legacy-file-read-0123456789'],
+      ['NEATLOGS_PROJECT_ID', PROJECT_ID]
+    ]);
+    const canonicalEnvWins = loadNeatlogsConfig({
+      env: {
+        NEATLOGS_INGEST_KEY: 'synthetic-canonical-env-ingest-0123456789',
+        NEATLOGS_READ_TOKEN: 'synthetic-canonical-env-read-0123456789',
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      },
+      envFile: legacyFile
+    });
+    assert.equal(canonicalEnvWins.ingestKey(), 'synthetic-canonical-env-ingest-0123456789');
+    assert.equal(canonicalEnvWins.readbackToken(), 'synthetic-canonical-env-read-0123456789');
+
+    const legacyOnly = loadNeatlogsConfig({ envFile: legacyFile });
+    assert.equal(legacyOnly.ingestKey(), 'synthetic-legacy-file-ingest-0123456789');
+    assert.equal(legacyOnly.readbackToken(), 'synthetic-legacy-file-read-0123456789');
+
+    const blankCanonical = loadNeatlogsConfig({
+      env: {
+        NEATLOGS_INGEST_KEY: '  ',
+        NEATLOGS_READ_TOKEN: '\t',
+        NEATLOGS_API_KEY: 'synthetic-legacy-env-ingest-0123456789',
+        NEATLOGS_TOKEN: 'synthetic-legacy-env-read-0123456789',
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      },
+      envFile: writeEnv('blank-canonical.env', [
+        ['NEATLOGS_INGEST_KEY', '   '],
+        ['NEATLOGS_READ_TOKEN', ''],
+        ['NEATLOGS_API_KEY', 'synthetic-legacy-file-ingest-0123456789'],
+        ['NEATLOGS_TOKEN', 'synthetic-legacy-file-read-0123456789']
+      ])
+    });
+    assert.equal(blankCanonical.ingestKey(), 'synthetic-legacy-env-ingest-0123456789');
+    assert.equal(blankCanonical.readbackToken(), 'synthetic-legacy-env-read-0123456789');
+
+    assert.throws(() => loadNeatlogsConfig({
+      env: {
+        NEATLOGS_INGEST_KEY: 'synthetic-invalid-canonical 0123456789',
+        NEATLOGS_API_KEY: 'synthetic-valid-legacy-ingest-0123456789',
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      }
+    }), error => error.code === 'INVALID_CREDENTIAL');
+    assert.throws(() => loadNeatlogsConfig({
+      env: {
+        NEATLOGS_READ_TOKEN: 'synthetic-invalid-canonical 0123456789',
+        NEATLOGS_TOKEN: 'synthetic-valid-legacy-read-0123456789',
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      }
+    }), error => error.code === 'INVALID_CREDENTIAL');
+    assert.throws(() => loadNeatlogsConfig({
+      env: {
+        NEATLOGS_API_KEY: 'synthetic-valid-legacy-ingest-0123456789',
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      },
+      envFile: writeEnv('invalid-canonical-ingest.env', [
+        ['NEATLOGS_INGEST_KEY', 'synthetic-invalid-canonical 0123456789']
+      ])
+    }), error => error.code === 'INVALID_CREDENTIAL');
+    assert.throws(() => loadNeatlogsConfig({
+      env: {
+        NEATLOGS_TOKEN: 'synthetic-valid-legacy-read-0123456789',
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      },
+      envFile: writeEnv('invalid-canonical-read.env', [
+        ['NEATLOGS_READ_TOKEN', 'synthetic-invalid-canonical 0123456789']
+      ])
+    }), error => error.code === 'INVALID_CREDENTIAL');
+  });
+
+  test('keeps selected and ignored credential canaries out of errors and scrubs all seven names', () => {
+    const selectedIngest = 'synthetic-selected-ingest-canary-0123456789';
+    const selectedRead = 'synthetic-selected-read-canary-0123456789';
+    const ignoredIngest = 'synthetic-ignored-ingest-canary-0123456789';
+    const ignoredRead = 'synthetic-ignored-read-canary-0123456789';
+    const config = loadNeatlogsConfig({
+      env: {
+        NEATLOGS_INGEST_KEY: selectedIngest,
+        NEATLOGS_READ_TOKEN: selectedRead,
+        NEATLOGS_API_KEY: ignoredIngest,
+        NEATLOGS_TOKEN: ignoredRead,
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      }
+    });
+    const configOutput = [JSON.stringify(config), inspect(config), String(Object.values(config.summary))].join('\n');
+    for (const canary of [selectedIngest, selectedRead, ignoredIngest, ignoredRead]) {
+      assert.equal(configOutput.includes(canary), false);
+    }
+
+    for (const env of [
+      {
+        NEATLOGS_INGEST_KEY: 'synthetic-invalid-selected-ingest 0123456789',
+        NEATLOGS_API_KEY: ignoredIngest,
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      },
+      {
+        NEATLOGS_INGEST_KEY: '  ',
+        NEATLOGS_API_KEY: 'synthetic-invalid-selected-legacy 0123456789',
+        NEATLOGS_PROJECT_ID: PROJECT_ID
+      }
+    ]) {
+      let thrown;
+      try {
+        loadNeatlogsConfig({ env });
+      } catch (error) {
+        thrown = error;
+      }
+      assert.ok(thrown instanceof NeatlogsConfigError);
+      const errorOutput = [String(thrown), inspect(thrown), JSON.stringify(thrown)].join('\n');
+      for (const canary of [
+        env.NEATLOGS_INGEST_KEY,
+        env.NEATLOGS_API_KEY,
+        selectedIngest,
+        selectedRead,
+        ignoredIngest,
+        ignoredRead
+      ]) {
+        if (canary.trim() !== '') assert.equal(errorOutput.includes(canary), false);
+      }
+    }
+
+    const env = {
+      NEATLOGS_INGEST_KEY: selectedIngest,
+      NEATLOGS_READ_TOKEN: selectedRead,
+      NEATLOGS_PROJECT_ID: PROJECT_ID,
+      NEATLOGS_ENDPOINT: 'https://ingest.neatlogs.com/v1/traces',
+      NEATLOGS_HOST: 'https://app.neatlogs.com',
+      NEATLOGS_API_KEY: ignoredIngest,
+      NEATLOGS_TOKEN: ignoredRead,
+      UNRELATED: 'keep'
+    };
+    assert.deepEqual([...scrubNeatlogsEnvironment(env)], [
+      'NEATLOGS_INGEST_KEY', 'NEATLOGS_READ_TOKEN', 'NEATLOGS_PROJECT_ID',
+      'NEATLOGS_ENDPOINT', 'NEATLOGS_HOST', 'NEATLOGS_API_KEY', 'NEATLOGS_TOKEN'
+    ]);
+    assert.deepEqual(env, { UNRELATED: 'keep' });
   });
 
   test('scrubs recognized names from an environment object', () => {

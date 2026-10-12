@@ -9,14 +9,16 @@ Neatlogs separates ingestion from reading. Do not assume one credential works fo
 | Setting | What it is | Used for | Where it comes from |
 | --- | --- | --- | --- |
 | `NEATLOGS_INGEST_KEY` | Project key, sent as the `x-api-key` header | OTLP/HTTP ingest to `{ingest}/v1/traces` | Neatlogs → Settings → API keys → Project API key |
+| `NEATLOGS_API_KEY` | Legacy alias for `NEATLOGS_INGEST_KEY` during the rename | Same ingest use as `NEATLOGS_INGEST_KEY` | Existing host setting; migrate to the new name |
 | `NEATLOGS_READ_TOKEN` | Expiring service-account token, sent as `Authorization: Bearer` | Public API readback | Settings → Service accounts: create an account, bind it to the project with the least role, mint a token with `context:read` and `observability:read` (the create dialog pre-ticks only `context:read`; tick **Traces and sessions · Read** too, since scopes cannot be changed after creation) |
+| `NEATLOGS_TOKEN` | Legacy alias for `NEATLOGS_READ_TOKEN` during the rename | Same readback use as `NEATLOGS_READ_TOKEN` | Existing host setting; migrate to the new name |
 | `NEATLOGS_PROJECT_ID` | UUID of the bound project, sent as `x-project-id` | Public API readback | The project the service account is bound to |
 | `NEATLOGS_ENDPOINT` | Ingest origin. Blank means US `https://ingest.neatlogs.com` | Region selection | EU: `https://eu.ingest.neatlogs.com` |
 | `NEATLOGS_HOST` | App/API origin. Blank means US `https://app.neatlogs.com` | Region selection | EU: `https://eu.app.neatlogs.com` |
 
 Notes:
 
-- **Renamed 2026-10-12.** These were `NEATLOGS_API_KEY` and `NEATLOGS_TOKEN`, the names in the Neatlogs docs. The loader still reads the old names as fallbacks, and the new name wins when both are set, so a host can rename its settings at its own pace. The fallback will be removed once deployments use the new names.
+- **Renamed 2026-10-12.** `NEATLOGS_API_KEY` and `NEATLOGS_TOKEN` remain accepted as legacy aliases while hosts migrate to the canonical names. For each renamed credential, the source order is canonical process environment, canonical named file, legacy process environment, then legacy named file. The canonical name therefore wins even when its value comes from the file and a legacy value is in the process environment. A blank or whitespace-only candidate falls through; an invalid nonblank selected credential is rejected instead of falling back. Removal of the aliases requires a separately reviewed change.
 - Credentials are bound to the region that issued them. The loader refuses a mixed pair, such as an EU ingest origin with the US app origin.
 - SDK ingest keys "do not authorize Public API reads" per the Neatlogs authentication page, and SDK, dashboard and Public API credentials have separate policies.
 - The per-user HTTP write key (`nlw_…`, for `POST /v1/trace`) is a different credential. The harness does not use it.
@@ -27,9 +29,9 @@ Notes:
 Nothing is read implicitly. Configuration is assembled by `loadNeatlogsConfig({ env, envFile })`:
 
 - `env` is an explicit object, normally a copy of the server process environment that the host filled from its secret store.
-- `envFile` is optional and must be named explicitly, for example `--env-file .env` in local development. Only the five names above are read. Other lines are ignored.
-- Process values win over the file. Credential values can only be reached through `ingestKey()` and `readbackToken()`. JSON and `util.inspect` output show only a redacted summary.
-- After loading, `scrubNeatlogsEnvironment(process.env)` removes the five names from the process environment. This is needed because the pinned SDK capture refuses to start while any `NEATLOGS_*` name is present, and it also stops child processes from inheriting the secrets.
+- `envFile` is optional and must be named explicitly, for example `--env-file .env` in local development. Only the seven names in the table above are read. Other lines are ignored.
+- Unrenamed settings (`NEATLOGS_PROJECT_ID`, `NEATLOGS_ENDPOINT`, and `NEATLOGS_HOST`) use a nonblank process value before the file. Credential values can only be reached through `ingestKey()` and `readbackToken()`. JSON and `util.inspect` output show only a redacted summary.
+- After loading, `scrubNeatlogsEnvironment(process.env)` removes all seven recognized names from the process environment. This is needed because the pinned SDK capture refuses to start while any `NEATLOGS_*` name is present, and it also stops child processes from inheriting the secrets.
 
 Local: copy `.env.example` to `.env` (git-ignored by `.gitignore`) and fill in the values. Deployment: put the values in the host's server secret settings. Never put them in GitHub, issues, evidence, or command arguments.
 
@@ -88,7 +90,7 @@ The synthetic verifier path above does not use the durable telemetry cursor (`Te
 
 This is how a trace of a real harness workflow reaches Neatlogs. It is off by default.
 
-1. **Opt-in.** `loadNeatlogsTelemetryOptIn({ enabled: true, env, envFile, scrubEnv })` returns `{ enabled: false }` unless `enabled` is exactly `true`. When it is enabled, it loads settings through the same strict `loadNeatlogsConfig`, scrubs the five names from `scrubEnv`, and refuses to start without an ingest key. No new settings are added.
+1. **Opt-in.** `loadNeatlogsTelemetryOptIn({ enabled: true, env, envFile, scrubEnv })` returns `{ enabled: false }` unless `enabled` is exactly `true`. When it is enabled, it loads settings through the same strict `loadNeatlogsConfig`, scrubs all seven recognized names from `scrubEnv`, and refuses to start without an ingest key. No new settings are added.
 2. **Exporter.** `createNeatlogsOperationsTelemetry({ databasePath, outboxDirectory })` builds the existing `TelemetryExporter` on its own store connection. It is passed to `createOperationsWorker({ telemetry })`, the worker's existing injection point.
    - The worker itself is unchanged and still makes no network calls.
    - Records are the existing `agent-harness.telemetry.v1` projection with its fixed event allowlist. Policy drops are unchanged; for example, `private_local_step_*` events are dropped.
