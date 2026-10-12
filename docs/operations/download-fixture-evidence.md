@@ -65,8 +65,12 @@ The `captureQualification` record states the selected scope and exact expected, 
 `DOWNLOAD_ONLY`/`DOWNLOAD_VP` retain their diagnostic-subset meaning and do not qualify the complete gate.
 
 Before application navigation, `browserSessions` records the actual browser PID from `SystemInfo.getProcessInfo`,
-the throwaway profile argument from `SystemInfo.getInfo`, filesystem creation metadata, blank initial targets,
-and the launcher's source hash. Only the profile path hash is retained; raw command lines, GPU/model
+the throwaway profile argument from `SystemInfo.getInfo`, filesystem creation metadata, the startup target inventory,
+and the launcher's source hash. At least one blank application page/tab is required. Blank application targets,
+blank browser descriptors and recognized browser-owned UI have separate `recordedKinds` counts. Accepted UI is
+not blank: `initialTargetsBlank` is false when it is present, while `initialApplicationTargetsBlank` and its count
+describe the application targets only. An over-cap inventory leaves `allTargetsBlank` unknown. Only the profile
+path hash is retained; raw command lines, GPU/model
 data and target URLs are omitted. Protocol, size, path, creation-time or uniqueness failures leave isolation
 unconfirmed and fail the pair. These startup metadata queries can affect timing; they do not establish pixel
 readiness. A generated session label alone is not isolation evidence.
@@ -76,19 +80,25 @@ before dependency installation and application checks. This single-session nativ
 page and performs no capture; it does not qualify the six-pair matrix. Its JSON is retained by the workflow's
 existing always-run artifact step even on failure. Startup target evidence records at most 32 fixed type/URL/subtype
 classes, explicit omissions and precise rejection reasons; no target title, ID or URL is retained. Internal pages
-and workers are still rejected by the unchanged blank-target rule. A valid task profile can be retained privately
+with content, workers and extensions remain rejected. A valid task profile can be retained privately
 for removal verification even when target validation fails; confirmed removal never converts that identity failure
 into a pass. The launcher requests `about:blank`; diagnostics do not infer which startup target caused a failure
-that omitted its inventory. `browser_ui` is classified explicitly but remains rejected, including at a blank URL.
-For that type only, exact pinned tab-search, omnibox-popup and omnibox-popup AIM URLs receive fixed
-`browserUiUrlClass` names. Other URLs, including query/fragment variants, remain `unrecognized`; raw URLs are
-never retained. These diagnostic names do not accept any target or imply that every startup target was blank.
+that omitted its inventory. A startup target must have an absent subtype and either be a blank page/tab/browser
+descriptor (`about:blank` or an empty URL), or have the exact `browser_ui` type and one of these two observed URLs:
+`chrome://omnibox-popup.top-chrome/` or `chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html`.
+Their fixed `browserUiUrlClass` values are `omnibox_popup` and `omnibox_popup_aim`. The same URLs on a content,
+worker or unknown target do not qualify. Recognized UI cannot substitute for the required blank application target.
+The unobserved tab-search form keeps its diagnostic name and remains rejected. Other URLs, including query,
+fragment, lookalike and encoded variants, remain `unrecognized`; even `browser_ui` with a blank URL is rejected.
+The retained [Chrome154 preflight](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/120#issuecomment-6133199603)
+observed the two accepted shapes with absent subtypes alongside a blank page. That diagnostic run remains a
+failure with application checks skipped; recognizing its browser-owned UI does not retroactively qualify it.
 
 Download qualification requests the launcher's explicit `downloadIsolation` option for its baseline session,
 all four additional sessions and the identity preflight. Only this option adds `--disable-extensions` and
 `--disable-component-extensions-with-background-pages`; other browser suites keep their existing arguments.
 The `launchPolicy` field records a request, not proof that Chrome honored the flags. Actual startup target,
-process/profile and cleanup checks still decide qualification, and remain unchanged. This changes the download
+process/profile and cleanup checks still decide qualification. This changes the download
 verifier's browser environment; it is neither a compositor repair nor evidence of image readiness. The flags and
 diagnostic type are defined in Chromium revision `b510e9d7cd3a2fbd78d0ddc42234103206c5f78d`, the measured browser
 revision of the retained failed preflight: [extension switch](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/extensions/common/switches.h),
@@ -96,7 +106,12 @@ revision of the retained failed preflight: [extension switch](https://github.com
 [component loading](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/browser/extensions/component_loader.cc)
 and [browser UI type](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/content/browser/devtools/devtools_agent_host_impl.cc).
 The [pinned internal URL constants](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/common/webui_url_constants.h)
-ground the fixed diagnostic names; they are not an observed target inventory.
+ground the exact names. Chrome's [target classification](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/browser/devtools/chrome_devtools_manager_delegate.cc)
+assigns `browser_ui` through [browser-owned WebUI detection](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/browser/ui/webui_browser/webui_browser.cc).
+The [omnibox controller](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/browser/ui/webui/omnibox_popup/omnibox_popup_ui.h)
+inherits the [top Chrome UI-element disposition](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/browser/ui/webui/top_chrome/top_chrome_web_ui_controller.cc).
+This source and the observed inventory support only the two bounded browser-owned UI forms; they do not
+authorize arbitrary internal pages or establish compositor readiness.
 
 Each session's collector starts before application navigation and remains attached through bounded browser
 shutdown. Its final snapshot is then retained and the listener detached. Process exit, profile removal and
