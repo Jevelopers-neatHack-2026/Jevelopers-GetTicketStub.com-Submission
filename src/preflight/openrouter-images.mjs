@@ -559,6 +559,9 @@ function credentialBindingFieldsAllowed(fields, grantRef) {
 }
 
 async function resolveCredential(credentialPort, { purpose = 'read_only_account_check', scope, target, grantRef, deadlineAt, now }) {
+  let resolved;
+  let expiresAt;
+  let deadline;
   try {
     if (!SAFE_REF.test(scope.account_ref) || !SAFE_REF.test(scope.project_ref)) {
       throw error('credential_unavailable', 'Provider account and project references must be safe opaque IDs.');
@@ -573,7 +576,7 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
       target_binding: binding,
       ...(grantRef ? { grant_ref: grantRef } : {}),
     });
-    const resolved = snapshotCredentialResponse(await credentialPort.resolveCredential(request));
+    resolved = snapshotCredentialResponse(await credentialPort.resolveCredential(request));
     if (!resolved || typeof resolved !== 'object' || nativeArrayIsArray(resolved)
       || resolved.decision !== 'resolved' || resolved.evidence_mode !== 'live') {
       throw error('credential_unavailable', 'Trusted credential resolver did not confirm this provider scope.');
@@ -590,21 +593,27 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
       throw error('credential_unavailable', 'Trusted credential resolver did not return a usable bearer token.');
     }
     safeCredentialEvidence(resolved.evidence);
-    const checkedAt = readClock(now);
-    const expiresAt = nativeDateParse(resolved.expires_at);
-    const deadline = deadlineAt ? nativeDateParse(deadlineAt) : undefined;
-    if (deadlineAt && (!nativeNumberIsFinite(deadline) || deadline <= checkedAt)) {
-      throw error('preflight_deadline_passed', 'The approved operation deadline passed during credential resolution.');
+    if (typeof resolved.expires_at !== 'string') {
+      throw error('credential_unavailable', 'Credential expiry must be a timestamp string.');
     }
-    if (typeof resolved.expires_at !== 'string' || !nativeNumberIsFinite(expiresAt)
-      || expiresAt <= checkedAt || (deadlineAt && expiresAt < deadline)) {
-      throw error('credential_unavailable', 'Scoped credential is expired or will not remain valid through the operation deadline.');
-    }
-    return resolved.token;
-  } catch (cause) {
-    if (cause instanceof AccessPreflightError && ['adapter_unavailable', 'preflight_deadline_passed'].includes(cause.code)) throw cause;
+    expiresAt = nativeDateParse(resolved.expires_at);
+    deadline = deadlineAt ? nativeDateParse(deadlineAt) : undefined;
+  } catch {
+    // Resolver invocation, response accessors and validation share one private
+    // boundary. Never inspect or forward their thrown value, even if it claims
+    // one of this adapter's own clock/deadline error codes.
     throw error('credential_unavailable', 'Credential provider did not return a usable access token.');
   }
+  // Only adapter-origin clock and deadline failures retain these typed codes.
+  // The credential snapshot and parsed timestamps cannot invoke resolver code.
+  const checkedAt = readClock(now);
+  if (deadlineAt && (!nativeNumberIsFinite(deadline) || deadline <= checkedAt)) {
+    throw error('preflight_deadline_passed', 'The approved operation deadline passed during credential resolution.');
+  }
+  if (!nativeNumberIsFinite(expiresAt) || expiresAt <= checkedAt || (deadlineAt && expiresAt < deadline)) {
+    throw error('credential_unavailable', 'Credential provider did not return a usable access token.');
+  }
+  return resolved.token;
 }
 
 async function boundedJson(response) {

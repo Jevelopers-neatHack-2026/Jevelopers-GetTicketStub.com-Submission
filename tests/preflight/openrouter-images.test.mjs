@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { canonicalHash } from '../../src/contracts/validation.mjs';
 import {
+  AccessPreflightError,
   createOpenRouterImagesAdapter,
   executeAuthorizedAccessCell,
   openRouterCatalogEndpoint,
@@ -2295,3 +2296,72 @@ test('owned dispatch cancellation follows shadowed native callers despite synthe
     }
   }
 });
+
+for (const failure of ['replaced-includes', 'resolver-adapter-code', 'resolver-deadline-code',
+  'resolver-code-getter', 'response-token-getter', 'response-binding-getter', 'expiry-coercion']) {
+  test(`credential faults are sanitized by origin and recover after ${failure}`, async () => {
+    const originalIncludes = Array.prototype.includes;
+    const apply = Reflect.apply;
+    const calls = [];
+    const hostCalls = [];
+    const { fetchImpl, requests } = interceptedFetch();
+    const validResolver = grantCredentialPort();
+    let rejectCredential = true;
+    let codeReads = 0;
+    let expiryCoercions = 0;
+    const resolver = { evidence_mode: 'live', async resolveCredential(request) {
+      calls.push(request);
+      if (!rejectCredential) return validResolver.resolveCredential(request);
+      if (failure === 'replaced-includes') {
+        Array.prototype.includes = function (...args) {
+          if (this.length === 2 && this[0] === 'adapter_unavailable' && this[1] === 'preflight_deadline_passed') return true;
+          return apply(originalIncludes, this, args);
+        };
+        throw new AccessPreflightError('credential_unavailable', TOKEN_CANARY);
+      }
+      if (failure === 'resolver-adapter-code') throw new AccessPreflightError('adapter_unavailable', TOKEN_CANARY);
+      if (failure === 'resolver-deadline-code') throw new AccessPreflightError('preflight_deadline_passed', TOKEN_CANARY);
+      if (failure === 'resolver-code-getter') {
+        const cause = new AccessPreflightError('credential_unavailable', TOKEN_CANARY);
+        Object.defineProperty(cause, 'code', { get() { codeReads += 1; throw new Error(TOKEN_CANARY); } });
+        throw cause;
+      }
+      const response = await validResolver.resolveCredential(request);
+      if (failure === 'response-token-getter') {
+        Object.defineProperty(response, 'token', { get() { throw new AccessPreflightError('adapter_unavailable', TOKEN_CANARY); } });
+      } else if (failure === 'response-binding-getter') {
+        Object.defineProperty(response, 'binding', { get() { throw new AccessPreflightError('preflight_deadline_passed', TOKEN_CANARY); } });
+      } else {
+        response.expires_at = { [Symbol.toPrimitive]() {
+          expiryCoercions += 1;
+          throw new AccessPreflightError('adapter_unavailable', TOKEN_CANARY);
+        } };
+      }
+      return response;
+    } };
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: resolver, fetchImpl,
+      dispatchPort: { async prepare() { hostCalls.push('prepare'); return {}; },
+        async dispatch() { hostCalls.push('dispatch'); return { host: 'result' }; } } });
+    const input = billable();
+    let returnedError;
+    try { await adapter.prepare(input); } catch (cause) { returnedError = cause; }
+    finally { Array.prototype.includes = originalIncludes; }
+    assert.equal(calls.length, 1);
+    assert.deepEqual(hostCalls, [], 'resolver faults stop before any host work');
+    assert.equal(requests.length, 0, 'resolver faults make no external requests');
+    assert.ok(returnedError instanceof AccessPreflightError, 'the adapter returns a typed credential failure');
+    assert.equal(returnedError.code, 'credential_unavailable');
+    assert.equal(returnedError.message, 'Credential provider did not return a usable access token.');
+    assert.equal(codeReads, 0, 'a resolver-owned error is never inspected');
+    assert.equal(expiryCoercions, 0, 'a non-string expiry is never coerced');
+
+    rejectCredential = false;
+    const prepared = await adapter.prepare(input);
+    assert.deepEqual(hostCalls, ['prepare'], 'a fresh valid response recovers');
+    assert.deepEqual(await adapter.dispatch(dispatchInput(input, prepared)), { host: 'result' });
+    await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (cause) => cause.code === 'credential_unavailable');
+    assert.deepEqual(hostCalls, ['prepare', 'dispatch'], 'recovery still permits only one dispatch');
+    assert.equal(calls.length, 2);
+    assert.equal(requests.length, 0);
+  });
+}
