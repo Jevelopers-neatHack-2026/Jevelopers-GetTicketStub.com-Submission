@@ -102,7 +102,10 @@ for (const errcode of [6, 26, 517, "5", undefined]) {
 			}
 			return prepare(statement);
 		});
-		assert.throws(() => enableDurabilityWal(sql), (error) => error === failure);
+		assert.throws(
+			() => enableDurabilityWal(sql),
+			(error) => error === failure,
+		);
 		assert.equal(attempts, 1);
 		assert.equal(timeout(sql), 10000);
 	});
@@ -114,7 +117,10 @@ test("does not retry a non-SQLite exception", async (t) => {
 	const prepare = t.mock.method(sql, "prepare", () => {
 		throw failure;
 	});
-	assert.throws(() => enableDurabilityWal(sql), (error) => error === failure);
+	assert.throws(
+		() => enableDurabilityWal(sql),
+		(error) => error === failure,
+	);
 	assert.equal(prepare.mock.callCount(), 1);
 });
 
@@ -133,7 +139,10 @@ test("stops at the deadline and restores the timeout", async (t) => {
 		}
 		return prepare(statement);
 	});
-	assert.throws(() => enableDurabilityWal(sql), (error) => error === failure);
+	assert.throws(
+		() => enableDurabilityWal(sql),
+		(error) => error === failure,
+	);
 	assert.equal(attempts, 1);
 	assert.equal(wait.mock.callCount(), 0);
 	assert.equal(timeout(sql), 10000);
@@ -148,7 +157,10 @@ test("does not start another attempt after the deadline", async (t) => {
 	const prepare = t.mock.method(sql, "prepare", () => {
 		throw failure;
 	});
-	assert.throws(() => enableDurabilityWal(sql), (error) => error === failure);
+	assert.throws(
+		() => enableDurabilityWal(sql),
+		(error) => error === failure,
+	);
 	assert.equal(prepare.mock.callCount(), 1);
 	assert.equal(wait.mock.callCount(), 1);
 	assert.equal(wait.mock.calls[0]?.arguments[3], 1);
@@ -162,7 +174,10 @@ test("caps attempts even when the clock makes no progress", async (t) => {
 	const prepare = t.mock.method(sql, "prepare", () => {
 		throw failure;
 	});
-	assert.throws(() => enableDurabilityWal(sql), (error) => error === failure);
+	assert.throws(
+		() => enableDurabilityWal(sql),
+		(error) => error === failure,
+	);
 	assert.equal(prepare.mock.callCount(), 1000);
 	assert.equal(wait.mock.callCount(), 999);
 });
