@@ -35,7 +35,10 @@ import { operationsStoragePolicy, readOperationsConfig, validateLocalPlanWork } 
 import { createOperationsWorker } from '../../src/worker/private/worker.js';
 import { readStoreCompatibility, readOperationsHealth, requestOwnerRetention } from '../../src/health/private/health.js';
 import { runBoundedLocalPlan } from '../../src/orchestrator/internal/controller.js';
-import { buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics } from './failure-diagnostics.js';
+import {
+  buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics,
+  parseOps02RaceDiagnostics, parseOps06ClosePhaseDiagnostics
+} from './failure-diagnostics.js';
 import { createAdmissionFailureDiagnostic } from './fixtures/admission-store-child.mjs';
 
 const ROOT = resolve(new URL('../..', import.meta.url).pathname);
@@ -94,7 +97,15 @@ const METRICS = {
   c02ControlReadFailureLines: '',
   c02ControlReadFailureCount: 0,
   c02ControlReadFailureBytes: 0,
-  c02ControlReadDiagnosticsComplete: true
+  c02ControlReadDiagnosticsComplete: true,
+  ops02RaceDiagnosticLines: '',
+  ops02RaceDiagnosticCount: 0,
+  ops02RaceDiagnosticBytes: 0,
+  ops02RaceDiagnosticsComplete: true,
+  ops06ClosePhaseDiagnosticLines: '',
+  ops06ClosePhaseDiagnosticCount: 0,
+  ops06ClosePhaseDiagnosticBytes: 0,
+  ops06ClosePhaseDiagnosticsComplete: true
 };
 
 const CI1_PHASES = new Set([
@@ -136,6 +147,41 @@ const C02_CONTROL_DIAGNOSTIC_BOUNDARIES = new Set([
   'C02_RUNNER_READY', 'C02_MARKER_CONTROL_READY', 'C02_WATCHDOG_READY',
   'C02_WATCHDOG_TARGET_ACK', 'C02_INERT_DESCENDANT_MARKER', 'C02_WATCHDOG_RESULT'
 ]);
+const OPS02_RACE_DIAGNOSTIC_PREFIX = 'AH11_OPS_OPS02_C02_DIAGNOSTIC ';
+const OPS02_RACE_DIAGNOSTIC_MAX_RECORDS = 64;
+const OPS02_RACE_DIAGNOSTIC_MAX_LINE_BYTES = 320;
+const OPS02_RACE_DIAGNOSTIC_MAX_BYTES = 16_384;
+const OPS02_RACE_DIAGNOSTIC_BOUNDARIES = new Set([
+  'case_started', 'diagnostic_no_canary', 'diagnostic_proxy_unread',
+  'diagnostic_child_exit', 'diagnostic_child_prefix', 'diagnostic_child_no_canary',
+  'seed_accept', 'contender_exit', 'child_exit_group', 'accepted_count',
+  'refusal_count', 'stored_counter', 'stored_rows', 'reservation'
+]);
+const OPS02_RACE_DIAGNOSTIC_RACES = new Set([
+  'diagnostic', 'global_records', 'project_bytes_existing', 'project_bytes_new',
+  'project_records', 'global_bytes'
+]);
+const OPS02_RACE_DIAGNOSTIC_EXITS = new Set([
+  'not_applicable', 'zero', 'nonzero', 'signal', 'unknown'
+]);
+const OPS02_ADMISSION_FAILURE_STAGES = new Set([
+  'config', 'open', 'resource', 'validation', 'admission', 'result', 'close', 'unknown'
+]);
+const OPS02_ADMISSION_FAILURE_CODES = new Set([
+  'OPS_CONFIG_INVALID', 'STORE_OPEN_FAILED', 'STORE_WRITE_FAILED', 'STORE_BUSY', 'STORE_CLOSED',
+  'UNSUPPORTED_SCHEMA_VERSION', 'UNVERSIONED_DATA', 'INVALID_INPUT', 'ERR_SQLITE_ERROR',
+  'ERR_INVALID_ARG_TYPE', 'EACCES', 'ENOENT', 'ENOSPC', 'UNKNOWN'
+]);
+const OPS02_CHILD_DIAGNOSTIC_STAGES = new Set([
+  ...OPS02_ADMISSION_FAILURE_STAGES, 'none', 'unobserved'
+]);
+const OPS02_CHILD_DIAGNOSTIC_CODES = new Set([
+  ...OPS02_ADMISSION_FAILURE_CODES, 'none', 'unobserved'
+]);
+const OPS06_CLOSE_PHASE_DIAGNOSTIC_PREFIX = 'AH11_OPS_OPS06_CLOSE_PHASES ';
+const OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_RECORDS = 1;
+const OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_LINE_BYTES = 512;
+const OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_BYTES = 512;
 
 function c02OriginalErrorClass(error) {
   if (error instanceof SyntaxError) return 'SyntaxError';
@@ -175,6 +221,149 @@ function recordC02ControlReadFailure(boundary, error, state = METRICS) {
     return true;
   } catch {
     markC02DiagnosticCaptureIncomplete(state);
+    return false;
+  }
+}
+
+function markOps02RaceDiagnosticsIncomplete(state = METRICS) {
+  try { state.ops02RaceDiagnosticsComplete = false; } catch {}
+}
+
+function parseOps02AdmissionFailure(stderr) {
+  if (typeof stderr !== 'string') return null;
+  const lines = stderr.split(/\r?\n/u).filter(line => line.length > 0);
+  if (lines.length !== 1 || !lines[0].startsWith('OPS_ADMISSION_FAILURE ')) return null;
+  let record;
+  try { record = JSON.parse(lines[0].slice('OPS_ADMISSION_FAILURE '.length)); } catch { return null; }
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+  const keys = Object.keys(record).sort();
+  if (keys.length !== 3 || keys[0] !== 'code' || keys[1] !== 'schema' || keys[2] !== 'stage'
+      || record.schema !== 'ops-admission-failure.v1'
+      || !OPS02_ADMISSION_FAILURE_STAGES.has(record.stage)
+      || !OPS02_ADMISSION_FAILURE_CODES.has(record.code)) return null;
+  return { stage: record.stage, code: record.code };
+}
+
+function recordOps02RaceDiagnostic({
+  boundary, raceKind = 'diagnostic', contender = null, passed,
+  exit = 'not_applicable', childStage = 'none', childCode = 'none'
+}, state = METRICS) {
+  try {
+    if (!OPS02_RACE_DIAGNOSTIC_BOUNDARIES.has(boundary)
+        || !OPS02_RACE_DIAGNOSTIC_RACES.has(raceKind)
+        || !(contender === null || contender === 0 || contender === 1)
+        || typeof passed !== 'boolean'
+        || !OPS02_RACE_DIAGNOSTIC_EXITS.has(exit)
+        || !OPS02_CHILD_DIAGNOSTIC_STAGES.has(childStage)
+        || !OPS02_CHILD_DIAGNOSTIC_CODES.has(childCode)
+        || !Number.isSafeInteger(state.ops02RaceDiagnosticCount)
+        || !Number.isSafeInteger(state.ops02RaceDiagnosticBytes)
+        || typeof state.ops02RaceDiagnosticLines !== 'string') {
+      markOps02RaceDiagnosticsIncomplete(state);
+      return false;
+    }
+    const line = `${OPS02_RACE_DIAGNOSTIC_PREFIX}${JSON.stringify({
+      schema: 'agent-harness.ah11-ops02-race-diagnostic.v1',
+      caseId: 'OPS02.C02', boundary, raceKind, contender, passed,
+      exit, childStage, childCode
+    })}\n`;
+    const lineBytes = Buffer.byteLength(line, 'utf8');
+    if (state.ops02RaceDiagnosticCount >= OPS02_RACE_DIAGNOSTIC_MAX_RECORDS
+        || lineBytes > OPS02_RACE_DIAGNOSTIC_MAX_LINE_BYTES
+        || state.ops02RaceDiagnosticBytes + lineBytes > OPS02_RACE_DIAGNOSTIC_MAX_BYTES) {
+      markOps02RaceDiagnosticsIncomplete(state);
+      return false;
+    }
+    state.ops02RaceDiagnosticLines += line;
+    state.ops02RaceDiagnosticCount += 1;
+    state.ops02RaceDiagnosticBytes += lineBytes;
+    return true;
+  } catch {
+    markOps02RaceDiagnosticsIncomplete(state);
+    return false;
+  }
+}
+
+function recordOps02ContenderResults(raceKind, results, state = METRICS) {
+  let allPassed = Array.isArray(results) && results.every(result => result.code === 0);
+  if (!Array.isArray(results)) {
+    markOps02RaceDiagnosticsIncomplete(state);
+    return false;
+  }
+  results.forEach((result, contender) => {
+    const childFailure = parseOps02AdmissionFailure(result?.stderr);
+    const passed = result?.code === 0;
+    const exit = passed ? 'zero'
+      : result?.signal ? 'signal'
+        : Number.isSafeInteger(result?.code) ? 'nonzero' : 'unknown';
+    if (!passed) allPassed = false;
+    recordOps02RaceDiagnostic({
+      boundary: 'contender_exit', raceKind, contender, passed, exit,
+      childStage: childFailure?.stage ?? (exit === 'zero' ? 'none' : 'unobserved'),
+      childCode: childFailure?.code ?? (exit === 'zero' ? 'none' : 'unobserved')
+    }, state);
+  });
+  recordOps02RaceDiagnostic({
+    boundary: 'child_exit_group', raceKind, passed: allPassed
+  }, state);
+  return allPassed;
+}
+
+function classifyChildExitDisposition({ code, signal } = {}) {
+  if (Number.isSafeInteger(code) && code >= 0) return code === 0 ? 'zero' : 'nonzero';
+  if (code === null && typeof signal === 'string' && signal.length > 0) return 'signal';
+  return 'unknown';
+}
+
+function recordOps06ClosePhaseDiagnostic(record, processCloseElapsedMs, state = METRICS) {
+  try {
+    if (state.ops06ClosePhaseDiagnosticCount !== 0
+        || !Number.isSafeInteger(state.ops06ClosePhaseDiagnosticCount)
+        || !Number.isSafeInteger(state.ops06ClosePhaseDiagnosticBytes)
+        || typeof state.ops06ClosePhaseDiagnosticLines !== 'string'
+        || !record || typeof record !== 'object' || Array.isArray(record)) {
+      state.ops06ClosePhaseDiagnosticsComplete = false;
+      return false;
+    }
+    const phases = record.phaseElapsedMs;
+    if (!phases || typeof phases !== 'object' || Array.isArray(phases)) {
+      state.ops06ClosePhaseDiagnosticsComplete = false;
+      return false;
+    }
+    const value = {
+      schema: 'agent-harness.ah11-ops06-close-phases.v1', caseId: 'OPS06.C01',
+      signalToFirstStopElapsedMs: phases.signalToFirstStopElapsedMs,
+      restartWorkElapsedMs: phases.restartWorkElapsedMs,
+      finalStopElapsedMs: phases.finalStopElapsedMs,
+      readyToFinalRecordElapsedMs: phases.readyToFinalRecordElapsedMs,
+      processCloseElapsedMs
+    };
+    if (Object.values(value).some(item => typeof item === 'number'
+        && (!Number.isFinite(item) || item < 0 || item > 30_000))) {
+      state.ops06ClosePhaseDiagnosticsComplete = false;
+      return false;
+    }
+    for (const key of [
+      'signalToFirstStopElapsedMs', 'restartWorkElapsedMs', 'finalStopElapsedMs', 'readyToFinalRecordElapsedMs', 'processCloseElapsedMs'
+    ]) {
+      if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] < 0 || value[key] > 30_000) {
+        state.ops06ClosePhaseDiagnosticsComplete = false;
+        return false;
+      }
+    }
+    const line = `${OPS06_CLOSE_PHASE_DIAGNOSTIC_PREFIX}${JSON.stringify(value)}\n`;
+    const lineBytes = Buffer.byteLength(line, 'utf8');
+    if (lineBytes > OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_LINE_BYTES
+        || state.ops06ClosePhaseDiagnosticBytes + lineBytes > OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_BYTES) {
+      state.ops06ClosePhaseDiagnosticsComplete = false;
+      return false;
+    }
+    state.ops06ClosePhaseDiagnosticLines += line;
+    state.ops06ClosePhaseDiagnosticCount += 1;
+    state.ops06ClosePhaseDiagnosticBytes += lineBytes;
+    return true;
+  } catch {
+    try { state.ops06ClosePhaseDiagnosticsComplete = false; } catch {}
     return false;
   }
 }
@@ -2291,6 +2480,7 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
   });
 
   await t.test('OPS02.C02 races distinct global/project record and byte caps across processes', async t => {
+    recordOps02RaceDiagnostic({ boundary: 'case_started', passed: true });
     const capDirectory = tempDirectory('ah11-global-cap-race-');
     t.after(() => capDirectory.cleanup());
     const diagnosticKnown = createAdmissionFailureDiagnostic('admission', Object.assign(
@@ -2305,7 +2495,9 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     assert.deepEqual(diagnosticUnknown, {
       schema: 'ops-admission-failure.v1', stage: 'resource', code: 'UNKNOWN'
     });
-    assert.equal(JSON.stringify([diagnosticKnown, diagnosticUnknown]).includes('diagnostic-canary'), false);
+    const diagnosticCanaryIncluded = JSON.stringify([diagnosticKnown, diagnosticUnknown]).includes('diagnostic-canary');
+    recordOps02RaceDiagnostic({ boundary: 'diagnostic_no_canary', passed: diagnosticCanaryIncluded === false });
+    assert.equal(diagnosticCanaryIncluded, false);
     let proxyCodeReads = 0;
     const diagnosticProxy = new Proxy({}, {
       getOwnPropertyDescriptor() {
@@ -2316,6 +2508,7 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     assert.deepEqual(createAdmissionFailureDiagnostic('diagnostic-canary-stage', diagnosticProxy), {
       schema: 'ops-admission-failure.v1', stage: 'unknown', code: 'UNKNOWN'
     });
+    recordOps02RaceDiagnostic({ boundary: 'diagnostic_proxy_unread', passed: proxyCodeReads === 0 });
     assert.equal(proxyCodeReads, 0);
 
     const script = join(ROOT, 'tests/operations/fixtures/admission-store-child.mjs');
@@ -2323,15 +2516,29 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
       capDirectory.databasePath, 'tenant-unused', 'project-unused', 'key-unused', PLAN,
       'diagnostic-canary-invalid-json', join(capDirectory.directory, 'diagnostic-unused.json')
     ]);
+    const diagnosticFailureRecord = parseOps02AdmissionFailure(diagnosticFailure.stderr);
+    const diagnosticFailureExit = classifyChildExitDisposition(diagnosticFailure);
+    recordOps02RaceDiagnostic({
+      boundary: 'diagnostic_child_exit', raceKind: 'diagnostic', passed: diagnosticFailure.code === 2,
+      exit: diagnosticFailureExit,
+      childStage: diagnosticFailureRecord?.stage ?? 'unobserved',
+      childCode: diagnosticFailureRecord?.code ?? 'unobserved'
+    });
     assert.equal(diagnosticFailure.code, 2);
     assert.equal(diagnosticFailure.stdout, '');
     const diagnosticLines = diagnosticFailure.stderr.trim().split('\n');
     assert.equal(diagnosticLines.length, 1);
-    assert.ok(diagnosticLines[0].startsWith('OPS_ADMISSION_FAILURE '));
+    const diagnosticHasPrefix = diagnosticLines[0].startsWith('OPS_ADMISSION_FAILURE ');
+    recordOps02RaceDiagnostic({ boundary: 'diagnostic_child_prefix', passed: diagnosticHasPrefix });
+    assert.ok(diagnosticHasPrefix);
     assert.deepEqual(JSON.parse(diagnosticLines[0].slice('OPS_ADMISSION_FAILURE '.length)), {
       schema: 'ops-admission-failure.v1', stage: 'config', code: 'UNKNOWN'
     });
-    assert.equal(diagnosticFailure.stderr.includes('diagnostic-canary'), false);
+    const diagnosticChildCanaryIncluded = diagnosticFailure.stderr.includes('diagnostic-canary');
+    recordOps02RaceDiagnostic({
+      boundary: 'diagnostic_child_no_canary', passed: diagnosticChildCanaryIncluded === false
+    });
+    assert.equal(diagnosticChildCanaryIncluded, false);
 
     const config = {
       maxQueueRecords: 2, maxPerTenantRecords: 1, maxPerProjectRecords: 1,
@@ -2339,21 +2546,32 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
       maxTenants: 16, maxProjects: 128, maxEventBacklog: 1_024
     };
     const store = openStore(capDirectory.databasePath);
-    assert.equal(admit(store, 'tenant-seed', 'project-seed', 'seed', PLAN, config).accepted, true);
+    const globalSeedAccepted = admit(store, 'tenant-seed', 'project-seed', 'seed', PLAN, config).accepted;
+    recordOps02RaceDiagnostic({ boundary: 'seed_accept', raceKind: 'global_records', passed: globalSeedAccepted === true });
+    assert.equal(globalSeedAccepted, true);
     store.close();
     const outputs = [join(capDirectory.directory, 'cap-a.json'), join(capDirectory.directory, 'cap-b.json')];
     const races = await Promise.all(outputs.map((output, index) => runChild(script, [
       capDirectory.databasePath, `tenant-cap-${index}`, `project-cap-${index}`, `cap-key-${index}`,
       PLAN, JSON.stringify(config), output
     ])));
+    recordOps02ContenderResults('global_records', races);
     assert.ok(races.every(result => result.code === 0), races.map(result => result.stderr).join('\n'));
     const outcomes = outputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
-    assert.equal(outcomes.filter(result => result.accepted).length, 1);
-    assert.equal(outcomes.filter(result => !result.accepted && result.reasonCode === 'GLOBAL_QUEUE_FULL').length, 1);
+    const globalAcceptedCount = outcomes.filter(result => result.accepted).length;
+    recordOps02RaceDiagnostic({ boundary: 'accepted_count', raceKind: 'global_records', passed: globalAcceptedCount === 1 });
+    assert.equal(globalAcceptedCount, 1);
+    const globalFullCount = outcomes.filter(result => !result.accepted && result.reasonCode === 'GLOBAL_QUEUE_FULL').length;
+    recordOps02RaceDiagnostic({ boundary: 'refusal_count', raceKind: 'global_records', passed: globalFullCount === 1 });
+    assert.equal(globalFullCount, 1);
     const reopened = openStore(capDirectory.databasePath);
     const raw = new DatabaseSync(capDirectory.databasePath, { readOnly: true });
-    assert.equal(Number(raw.prepare('SELECT pending_records FROM operations_meta WHERE singleton=1').get().pending_records), 2);
-    assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 2);
+    const globalPendingRecords = Number(raw.prepare('SELECT pending_records FROM operations_meta WHERE singleton=1').get().pending_records);
+    recordOps02RaceDiagnostic({ boundary: 'stored_counter', raceKind: 'global_records', passed: globalPendingRecords === 2 });
+    assert.equal(globalPendingRecords, 2);
+    const globalWorkRows = Number(raw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count);
+    recordOps02RaceDiagnostic({ boundary: 'stored_rows', raceKind: 'global_records', passed: globalWorkRows === 2 });
+    assert.equal(globalWorkRows, 2);
     raw.close();
     reopened.close();
 
@@ -2367,7 +2585,9 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     const seedStore = openStore(projectBytes.databasePath);
     const seedWork = planAtWorkByteLength(8_000, PLAN, bytePolicy);
     const contenderWork = planAtWorkByteLength(5_000, PLAN, bytePolicy);
-    assert.equal(admit(seedStore, 'tenant-byte-race', 'project-byte-race', 'byte-seed', seedWork.work.planJson, bytePolicy).accepted, true);
+    const projectByteSeedAccepted = admit(seedStore, 'tenant-byte-race', 'project-byte-race', 'byte-seed', seedWork.work.planJson, bytePolicy).accepted;
+    recordOps02RaceDiagnostic({ boundary: 'seed_accept', raceKind: 'project_bytes_existing', passed: projectByteSeedAccepted === true });
+    assert.equal(projectByteSeedAccepted, true);
     seedStore.close();
     const byteOutputs = [join(projectBytes.directory, 'byte-a.json'), join(projectBytes.directory, 'byte-b.json')];
     const byteScript = join(ROOT, 'tests/operations/fixtures/admission-store-child.mjs');
@@ -2375,15 +2595,24 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
       projectBytes.databasePath, 'tenant-byte-race', 'project-byte-race', `byte-race-${index}`,
       contenderWork.work.planJson, JSON.stringify(bytePolicy), output
     ])));
+    recordOps02ContenderResults('project_bytes_existing', byteRace);
     assert.ok(byteRace.every(result => result.code === 0), byteRace.map(result => result.stderr).join('\n'));
     const byteResults = byteOutputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
-    assert.equal(byteResults.filter(result => result.accepted).length, 1);
-    assert.equal(byteResults.filter(result => !result.accepted && result.reasonCode === 'PROJECT_QUEUE_FULL').length, 1);
+    const projectByteAcceptedCount = byteResults.filter(result => result.accepted).length;
+    recordOps02RaceDiagnostic({ boundary: 'accepted_count', raceKind: 'project_bytes_existing', passed: projectByteAcceptedCount === 1 });
+    assert.equal(projectByteAcceptedCount, 1);
+    const projectByteFullCount = byteResults.filter(result => !result.accepted && result.reasonCode === 'PROJECT_QUEUE_FULL').length;
+    recordOps02RaceDiagnostic({ boundary: 'refusal_count', raceKind: 'project_bytes_existing', passed: projectByteFullCount === 1 });
+    assert.equal(projectByteFullCount, 1);
     const byteReopened = openStore(projectBytes.databasePath);
     const byteRaw = new DatabaseSync(projectBytes.databasePath, { readOnly: true });
-    assert.equal(Number(byteRaw.prepare('SELECT pending_bytes FROM operations_projects WHERE tenant_id=? AND project_id=?')
-      .get('tenant-byte-race', 'project-byte-race').pending_bytes), 13_000);
-    assert.equal(Number(byteRaw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 2);
+    const projectBytePendingBytes = Number(byteRaw.prepare('SELECT pending_bytes FROM operations_projects WHERE tenant_id=? AND project_id=?')
+      .get('tenant-byte-race', 'project-byte-race').pending_bytes);
+    recordOps02RaceDiagnostic({ boundary: 'stored_counter', raceKind: 'project_bytes_existing', passed: projectBytePendingBytes === 13_000 });
+    assert.equal(projectBytePendingBytes, 13_000);
+    const projectByteWorkRows = Number(byteRaw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count);
+    recordOps02RaceDiagnostic({ boundary: 'stored_rows', raceKind: 'project_bytes_existing', passed: projectByteWorkRows === 2 });
+    assert.equal(projectByteWorkRows, 2);
     byteRaw.close();
     byteReopened.close();
 
@@ -2402,16 +2631,27 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
       firstScopeBytes.databasePath, 'tenant-new-byte-race', 'project-new-byte-race', `first-byte-${index}`,
       firstByteWork.work.planJson, JSON.stringify(firstBytePolicy), output
     ])));
+    recordOps02ContenderResults('project_bytes_new', firstByteRace);
     assert.ok(firstByteRace.every(result => result.code === 0), firstByteRace.map(result => result.stderr).join('\n'));
     const firstByteResults = firstByteOutputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
-    assert.equal(firstByteResults.filter(result => result.accepted).length, 1);
-    assert.equal(firstByteResults.filter(result => !result.accepted && result.reasonCode === 'PROJECT_QUEUE_FULL').length, 1);
+    const firstByteAcceptedCount = firstByteResults.filter(result => result.accepted).length;
+    recordOps02RaceDiagnostic({ boundary: 'accepted_count', raceKind: 'project_bytes_new', passed: firstByteAcceptedCount === 1 });
+    assert.equal(firstByteAcceptedCount, 1);
+    const firstByteFullCount = firstByteResults.filter(result => !result.accepted && result.reasonCode === 'PROJECT_QUEUE_FULL').length;
+    recordOps02RaceDiagnostic({ boundary: 'refusal_count', raceKind: 'project_bytes_new', passed: firstByteFullCount === 1 });
+    assert.equal(firstByteFullCount, 1);
     const firstByteDb = openStore(firstScopeBytes.databasePath);
     const firstByteSnapshot = new DatabaseSync(firstScopeBytes.databasePath, { readOnly: true });
-    assert.equal(Number(firstByteSnapshot.prepare('SELECT pending_bytes FROM operations_projects WHERE tenant_id=? AND project_id=?')
-      .get('tenant-new-byte-race', 'project-new-byte-race').pending_bytes), 10_000);
-    assert.equal(Number(firstByteSnapshot.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 1);
-    assert.equal(Number(firstByteSnapshot.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton=1').get().reserved_disk_bytes) > 0, true);
+    const firstBytePendingBytes = Number(firstByteSnapshot.prepare('SELECT pending_bytes FROM operations_projects WHERE tenant_id=? AND project_id=?')
+      .get('tenant-new-byte-race', 'project-new-byte-race').pending_bytes);
+    recordOps02RaceDiagnostic({ boundary: 'stored_counter', raceKind: 'project_bytes_new', passed: firstBytePendingBytes === 10_000 });
+    assert.equal(firstBytePendingBytes, 10_000);
+    const firstByteWorkRows = Number(firstByteSnapshot.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count);
+    recordOps02RaceDiagnostic({ boundary: 'stored_rows', raceKind: 'project_bytes_new', passed: firstByteWorkRows === 1 });
+    assert.equal(firstByteWorkRows, 1);
+    const firstByteHasReservation = Number(firstByteSnapshot.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton=1').get().reserved_disk_bytes) > 0;
+    recordOps02RaceDiagnostic({ boundary: 'reservation', raceKind: 'project_bytes_new', passed: firstByteHasReservation });
+    assert.equal(firstByteHasReservation, true);
     firstByteSnapshot.close();
     firstByteDb.close();
 
@@ -2423,22 +2663,33 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
       maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048
     };
     const recordStore = openStore(projectRecords.databasePath);
-    assert.equal(admit(recordStore, 'tenant-record-race', 'project-record-race', 'record-seed', PLAN, recordPolicy).accepted, true);
+    const recordSeedAccepted = admit(recordStore, 'tenant-record-race', 'project-record-race', 'record-seed', PLAN, recordPolicy).accepted;
+    recordOps02RaceDiagnostic({ boundary: 'seed_accept', raceKind: 'project_records', passed: recordSeedAccepted === true });
+    assert.equal(recordSeedAccepted, true);
     recordStore.close();
     const recordOutputs = [join(projectRecords.directory, 'record-a.json'), join(projectRecords.directory, 'record-b.json')];
     const recordRace = await Promise.all(recordOutputs.map((output, index) => runChild(byteScript, [
       projectRecords.databasePath, 'tenant-record-race', 'project-record-race', `project-record-${index}`,
       PLAN, JSON.stringify(recordPolicy), output
     ])));
+    recordOps02ContenderResults('project_records', recordRace);
     assert.ok(recordRace.every(result => result.code === 0), recordRace.map(result => result.stderr).join('\n'));
     const recordResults = recordOutputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
-    assert.equal(recordResults.filter(result => result.accepted).length, 1);
-    assert.equal(recordResults.filter(result => !result.accepted && result.reasonCode === 'PROJECT_QUEUE_FULL').length, 1);
+    const projectRecordAcceptedCount = recordResults.filter(result => result.accepted).length;
+    recordOps02RaceDiagnostic({ boundary: 'accepted_count', raceKind: 'project_records', passed: projectRecordAcceptedCount === 1 });
+    assert.equal(projectRecordAcceptedCount, 1);
+    const projectRecordFullCount = recordResults.filter(result => !result.accepted && result.reasonCode === 'PROJECT_QUEUE_FULL').length;
+    recordOps02RaceDiagnostic({ boundary: 'refusal_count', raceKind: 'project_records', passed: projectRecordFullCount === 1 });
+    assert.equal(projectRecordFullCount, 1);
     const recordReopened = openStore(projectRecords.databasePath);
     const recordSnapshot = new DatabaseSync(projectRecords.databasePath, { readOnly: true });
-    assert.equal(Number(recordSnapshot.prepare('SELECT pending_records FROM operations_projects WHERE tenant_id=? AND project_id=?')
-      .get('tenant-record-race', 'project-record-race').pending_records), 2);
-    assert.equal(Number(recordSnapshot.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 2);
+    const projectRecordPendingRecords = Number(recordSnapshot.prepare('SELECT pending_records FROM operations_projects WHERE tenant_id=? AND project_id=?')
+      .get('tenant-record-race', 'project-record-race').pending_records);
+    recordOps02RaceDiagnostic({ boundary: 'stored_counter', raceKind: 'project_records', passed: projectRecordPendingRecords === 2 });
+    assert.equal(projectRecordPendingRecords, 2);
+    const projectRecordWorkRows = Number(recordSnapshot.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count);
+    recordOps02RaceDiagnostic({ boundary: 'stored_rows', raceKind: 'project_records', passed: projectRecordWorkRows === 2 });
+    assert.equal(projectRecordWorkRows, 2);
     recordSnapshot.close();
     recordReopened.close();
 
@@ -2452,8 +2703,10 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     const globalByteStore = openStore(globalBytes.databasePath);
     const seedGlobalWork = planAtWorkByteLength(16_000, PLAN, globalBytePolicy);
     for (const index of [0, 1, 2]) {
-      assert.equal(admit(globalByteStore, `tenant-global-byte-${index}`, `project-global-byte-${index}`,
-        `global-byte-seed-${index}`, seedGlobalWork.work.planJson, globalBytePolicy).accepted, true);
+      const accepted = admit(globalByteStore, `tenant-global-byte-${index}`, `project-global-byte-${index}`,
+        `global-byte-seed-${index}`, seedGlobalWork.work.planJson, globalBytePolicy).accepted;
+      recordOps02RaceDiagnostic({ boundary: 'seed_accept', raceKind: 'global_bytes', passed: accepted === true });
+      assert.equal(accepted, true);
     }
     globalByteStore.close();
     const globalContender = planAtWorkByteLength(10_000, PLAN, globalBytePolicy);
@@ -2462,14 +2715,23 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
       globalBytes.databasePath, `tenant-global-contender-${index}`, `project-global-contender-${index}`,
       `global-byte-contender-${index}`, globalContender.work.planJson, JSON.stringify(globalBytePolicy), output
     ])));
+    recordOps02ContenderResults('global_bytes', globalRace);
     assert.ok(globalRace.every(result => result.code === 0), globalRace.map(result => result.stderr).join('\n'));
     const globalResults = globalOutputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
-    assert.equal(globalResults.filter(result => result.accepted).length, 1);
-    assert.equal(globalResults.filter(result => !result.accepted && result.reasonCode === 'GLOBAL_QUEUE_FULL').length, 1);
+    const globalByteAcceptedCount = globalResults.filter(result => result.accepted).length;
+    recordOps02RaceDiagnostic({ boundary: 'accepted_count', raceKind: 'global_bytes', passed: globalByteAcceptedCount === 1 });
+    assert.equal(globalByteAcceptedCount, 1);
+    const globalByteFullCount = globalResults.filter(result => !result.accepted && result.reasonCode === 'GLOBAL_QUEUE_FULL').length;
+    recordOps02RaceDiagnostic({ boundary: 'refusal_count', raceKind: 'global_bytes', passed: globalByteFullCount === 1 });
+    assert.equal(globalByteFullCount, 1);
     const globalReopened = openStore(globalBytes.databasePath);
     const globalSnapshot = new DatabaseSync(globalBytes.databasePath, { readOnly: true });
-    assert.equal(Number(globalSnapshot.prepare('SELECT pending_bytes FROM operations_meta WHERE singleton=1').get().pending_bytes), 58_000);
-    assert.equal(Number(globalSnapshot.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 4);
+    const globalPendingBytes = Number(globalSnapshot.prepare('SELECT pending_bytes FROM operations_meta WHERE singleton=1').get().pending_bytes);
+    recordOps02RaceDiagnostic({ boundary: 'stored_counter', raceKind: 'global_bytes', passed: globalPendingBytes === 58_000 });
+    assert.equal(globalPendingBytes, 58_000);
+    const globalByteWorkRows = Number(globalSnapshot.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count);
+    recordOps02RaceDiagnostic({ boundary: 'stored_rows', raceKind: 'global_bytes', passed: globalByteWorkRows === 4 });
+    assert.equal(globalByteWorkRows, 4);
     globalSnapshot.close();
     globalReopened.close();
   });
@@ -5886,6 +6148,7 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
   const stoppedLine = signalOutput.split(/\r?\n/u).find(line => line.includes('"event":"stopped"'));
   assert.ok(stoppedLine, signalOutput);
   const stoppedRecord = JSON.parse(stoppedLine);
+  recordOps06ClosePhaseDiagnostic(stoppedRecord, processCloseElapsedMs);
   assert.equal(stoppedRecord.stopped.stopped, true);
   assert.equal(stoppedRecord.stopped.childrenReaped, true);
   assert.equal(stoppedRecord.stopped.storeClosed, true);
@@ -6570,6 +6833,60 @@ test('OPS09_MIGRATION_COMPATIBILITY migrates schema 5 atomically, preserves olde
   assert.throws(() => openStore(futurePath), error => error.code === 'UNSUPPORTED_SCHEMA_VERSION');
   assert.deepEqual(readFileSync(futurePath), bytes);
   await t.test('OPS09.C01 maps the supported schema upgrade, rollback, future refusal, and retained envelope controls', () => {
+    const currentPath = join(temporary.directory, 'current-policy-bound.sqlite');
+    const currentStore = openStore(currentPath);
+    const currentConfig = readOperationsConfig();
+    try {
+      currentStore._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+        maxStoreBytes: currentConfig.maxStoreBytes,
+        maxWalBytes: currentConfig.maxWalBytes,
+        minFreeDiskBytes: currentConfig.minFreeDiskBytes,
+        policy: operationsStoragePolicy(currentConfig)
+      });
+    } finally {
+      currentStore.close();
+    }
+    const beforeCurrentOpen = new DatabaseSync(currentPath, { readOnly: true });
+    let currentPolicy;
+    let currentSchema;
+    try {
+      currentPolicy = beforeCurrentOpen.prepare(
+        'SELECT policy_json FROM operations_meta WHERE singleton=1'
+      ).get().policy_json;
+      currentSchema = beforeCurrentOpen.prepare(
+        "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
+      ).all().map(row => ({ ...row }));
+      assert.equal(beforeCurrentOpen.prepare('PRAGMA user_version').get().user_version, 6);
+      assert.equal(typeof currentPolicy, 'string');
+    } finally {
+      beforeCurrentOpen.close();
+    }
+
+    const heldWriter = new DatabaseSync(currentPath, { timeout: 20 });
+    let openedWhileWriterHeld;
+    try {
+      heldWriter.exec('BEGIN IMMEDIATE');
+      openedWhileWriterHeld = DurableWorkflowStore.open({ databasePath: currentPath, busyTimeoutMs: 20 });
+      assert.ok(openedWhileWriterHeld);
+      assert.equal(heldWriter.isTransaction, true);
+    } finally {
+      try { openedWhileWriterHeld?.close(); } catch {}
+      try { if (heldWriter.isTransaction) heldWriter.exec('ROLLBACK'); } catch {}
+      heldWriter.close();
+    }
+    const afterCurrentOpen = new DatabaseSync(currentPath, { readOnly: true });
+    try {
+      assert.equal(afterCurrentOpen.prepare('PRAGMA user_version').get().user_version, 6);
+      assert.equal(afterCurrentOpen.prepare(
+        'SELECT policy_json FROM operations_meta WHERE singleton=1'
+      ).get().policy_json, currentPolicy);
+      assert.deepEqual(afterCurrentOpen.prepare(
+        "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
+      ).all().map(row => ({ ...row })), currentSchema);
+    } finally {
+      afterCurrentOpen.close();
+    }
+
     assert.equal(readStoreCompatibility(temporary.databasePath).status, 'supported');
     assert.equal(readStoreCompatibility(rollbackPath).status, 'migration_required');
     assert.equal(readStoreCompatibility(futurePath).status, 'schema_unsupported');
@@ -7336,7 +7653,10 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       'ci1PhaseCaptures', 'ci1PhaseCaptureBytes', 'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete',
       'ci1PhaseCaptureChildCloseUnconfirmed', 'ci1PhaseCaptureOwnedGroupCloseUnconfirmed',
       'c02ControlReadFailureLines', 'c02ControlReadFailureCount', 'c02ControlReadFailureBytes',
-      'c02ControlReadDiagnosticsComplete'
+      'c02ControlReadDiagnosticsComplete',
+      'ops02RaceDiagnosticLines', 'ops02RaceDiagnosticCount', 'ops02RaceDiagnosticBytes',
+      'ops02RaceDiagnosticsComplete', 'ops06ClosePhaseDiagnosticLines',
+      'ops06ClosePhaseDiagnosticCount', 'ops06ClosePhaseDiagnosticBytes', 'ops06ClosePhaseDiagnosticsComplete'
   ].sort());
   for (const key of [
     'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete', 'ci1PhaseCaptureChildCloseUnconfirmed',
@@ -7360,10 +7680,101 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
   assert.equal(c02DiagnosticLines.length, METRICS.c02ControlReadFailureCount);
   assert.ok(c02DiagnosticLines.every(line => Buffer.byteLength(`${line}\n`, 'utf8') <= 192));
   assert.ok(Buffer.byteLength(METRICS.c02ControlReadFailureLines, 'utf8') <= 1_536);
+  assert.equal(typeof METRICS.ops02RaceDiagnosticLines, 'string');
+  assert.equal(Number.isSafeInteger(METRICS.ops02RaceDiagnosticCount), true);
+  assert.ok(METRICS.ops02RaceDiagnosticCount > 0 && METRICS.ops02RaceDiagnosticCount <= OPS02_RACE_DIAGNOSTIC_MAX_RECORDS);
+  assert.equal(Number.isSafeInteger(METRICS.ops02RaceDiagnosticBytes), true);
+  assert.ok(METRICS.ops02RaceDiagnosticBytes >= 0 && METRICS.ops02RaceDiagnosticBytes <= OPS02_RACE_DIAGNOSTIC_MAX_BYTES);
+  assert.equal(typeof METRICS.ops02RaceDiagnosticsComplete, 'boolean');
+  assert.equal(Buffer.byteLength(METRICS.ops02RaceDiagnosticLines, 'utf8'), METRICS.ops02RaceDiagnosticBytes);
+  const ops02DiagnosticLines = METRICS.ops02RaceDiagnosticLines.split('\n');
+  assert.equal(ops02DiagnosticLines.at(-1), '', 'OPS02 diagnostics terminate on a complete line');
+  ops02DiagnosticLines.pop();
+  assert.equal(ops02DiagnosticLines.length, METRICS.ops02RaceDiagnosticCount);
+  assert.ok(ops02DiagnosticLines.every(line => Buffer.byteLength(`${line}\n`, 'utf8') <= OPS02_RACE_DIAGNOSTIC_MAX_LINE_BYTES));
+  assert.equal(parseOps02RaceDiagnostics({
+    lines: METRICS.ops02RaceDiagnosticLines, count: METRICS.ops02RaceDiagnosticCount,
+    bytes: METRICS.ops02RaceDiagnosticBytes, diagnosticsComplete: METRICS.ops02RaceDiagnosticsComplete
+  }).complete, true);
+  assert.equal(typeof METRICS.ops06ClosePhaseDiagnosticLines, 'string');
+  assert.equal(Number.isSafeInteger(METRICS.ops06ClosePhaseDiagnosticCount), true);
+  assert.equal(METRICS.ops06ClosePhaseDiagnosticCount, OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_RECORDS);
+  assert.equal(Number.isSafeInteger(METRICS.ops06ClosePhaseDiagnosticBytes), true);
+  assert.ok(METRICS.ops06ClosePhaseDiagnosticBytes >= 0
+    && METRICS.ops06ClosePhaseDiagnosticBytes <= OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_BYTES);
+  assert.equal(typeof METRICS.ops06ClosePhaseDiagnosticsComplete, 'boolean');
+  assert.equal(Buffer.byteLength(METRICS.ops06ClosePhaseDiagnosticLines, 'utf8'), METRICS.ops06ClosePhaseDiagnosticBytes);
+  assert.equal(parseOps06ClosePhaseDiagnostics({
+    lines: METRICS.ops06ClosePhaseDiagnosticLines, count: METRICS.ops06ClosePhaseDiagnosticCount,
+    bytes: METRICS.ops06ClosePhaseDiagnosticBytes, diagnosticsComplete: METRICS.ops06ClosePhaseDiagnosticsComplete
+  }).complete, true);
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.blockedExternalNetworkAttempts, 0);
   await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', async t => {
     assert.match(evidenceVerifier, /REQUIRED_LOCAL_CASES/u);
+    const exitDispositionControls = [
+      { result: { code: 0, signal: null }, exit: 'zero', passed: false },
+      { result: { code: 1, signal: null }, exit: 'nonzero', passed: false },
+      { result: { code: 2, signal: null }, exit: 'nonzero', passed: true },
+      { result: { code: null, signal: 'SIGTERM' }, exit: 'signal', passed: false },
+      { result: { code: null, signal: null }, exit: 'unknown', passed: false }
+    ];
+    for (const control of exitDispositionControls) {
+      assert.equal(classifyChildExitDisposition(control.result), control.exit);
+      assert.equal(control.result.code === 2, control.passed);
+    }
+    const ops02ControlRecords = [
+      {
+        schema: 'agent-harness.ah11-ops02-race-diagnostic.v1', caseId: 'OPS02.C02',
+        boundary: 'case_started', raceKind: 'diagnostic', contender: null,
+        passed: true, exit: 'not_applicable', childStage: 'none', childCode: 'none'
+      },
+      {
+        schema: 'agent-harness.ah11-ops02-race-diagnostic.v1', caseId: 'OPS02.C02',
+        boundary: 'contender_exit', raceKind: 'global_records', contender: 1,
+        passed: false, exit: 'nonzero', childStage: 'open', childCode: 'ERR_SQLITE_ERROR'
+      }
+    ];
+    const ops02ControlLines = ops02ControlRecords
+      .map(record => `AH11_OPS_OPS02_C02_DIAGNOSTIC ${JSON.stringify(record)}\n`).join('');
+    const ops02Control = parseOps02RaceDiagnostics({
+      lines: ops02ControlLines, count: ops02ControlRecords.length,
+      bytes: Buffer.byteLength(ops02ControlLines, 'utf8'), diagnosticsComplete: true
+    });
+    assert.equal(ops02Control.complete, true);
+    assert.equal(ops02Control.records[1].childCode, 'ERR_SQLITE_ERROR');
+    const unsafeOps02Line = `AH11_OPS_OPS02_C02_DIAGNOSTIC ${JSON.stringify({
+      ...ops02ControlRecords[1], childCode: 'SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d'
+    })}\n`;
+    const unsafeOps02 = parseOps02RaceDiagnostics({
+      lines: `${ops02ControlLines.split('\n')[0]}\n${unsafeOps02Line}`,
+      count: 2, bytes: Buffer.byteLength(`${ops02ControlLines.split('\n')[0]}\n${unsafeOps02Line}`, 'utf8'),
+      diagnosticsComplete: true
+    });
+    assert.equal(unsafeOps02.complete, false);
+    assert.doesNotMatch(JSON.stringify(unsafeOps02), /SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d/u);
+    const ops06ControlRecord = {
+      schema: 'agent-harness.ah11-ops06-close-phases.v1', caseId: 'OPS06.C01',
+      signalToFirstStopElapsedMs: 12.5, restartWorkElapsedMs: 120,
+      finalStopElapsedMs: 3.25, readyToFinalRecordElapsedMs: 150,
+      processCloseElapsedMs: 180
+    };
+    const ops06ControlLines = `AH11_OPS_OPS06_CLOSE_PHASES ${JSON.stringify(ops06ControlRecord)}\n`;
+    const ops06Control = parseOps06ClosePhaseDiagnostics({
+      lines: ops06ControlLines, count: 1,
+      bytes: Buffer.byteLength(ops06ControlLines, 'utf8'), diagnosticsComplete: true
+    });
+    assert.equal(ops06Control.complete, true);
+    assert.equal(ops06Control.records[0].processCloseElapsedMs, 180);
+    const unsafeOps06Line = `AH11_OPS_OPS06_CLOSE_PHASES ${JSON.stringify({
+      ...ops06ControlRecord, message: 'SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d'
+    })}\n`;
+    const unsafeOps06 = parseOps06ClosePhaseDiagnostics({
+      lines: unsafeOps06Line, count: 1,
+      bytes: Buffer.byteLength(unsafeOps06Line, 'utf8'), diagnosticsComplete: true
+    });
+    assert.equal(unsafeOps06.complete, false);
+    assert.doesNotMatch(JSON.stringify(unsafeOps06), /SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d/u);
     assert.match(evidenceVerifier, /missingLocalCases/u);
     assert.match(evidenceVerifier, /OPS_CI1_OWNED_GROUP_REGISTRY/u);
     assert.match(evidenceVerifier, /validatedCi1RegistryPathFromEnvironment/u);

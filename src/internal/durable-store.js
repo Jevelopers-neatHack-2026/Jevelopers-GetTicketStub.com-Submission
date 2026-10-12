@@ -1728,6 +1728,19 @@ function hasColumn(db, tableName, columnName) {
   ).get(tableName, columnName).count) === 1;
 }
 
+const CURRENT_V6_REQUIRED_TABLES = Object.freeze([
+  'operations_meta', 'operations_tenants', 'operations_projects', 'operations_work',
+  'workflow_events', 'workflows', 'workflow_checkpoints', 'operation_attempts'
+]);
+
+function hasCurrentV6OperationsSchema(db) {
+  return withConsistentReadSnapshot(db, 'initializeDatabase', () => {
+    if (readUserVersion(db) !== INTERNAL_SCHEMA_VERSION) return false;
+    if (CURRENT_V6_REQUIRED_TABLES.some(table => !hasTable(db, table))) return false;
+    return hasColumn(db, 'operations_meta', 'policy_json');
+  });
+}
+
 function migrateV6OperationsPolicyBinding(db) {
   if (!hasTable(db, 'operations_meta')) {
     fail('migrateV6OperationsPolicyBinding', 'CHECKPOINT_CORRUPT', 'The version 6 operations metadata is missing.');
@@ -1735,11 +1748,7 @@ function migrateV6OperationsPolicyBinding(db) {
   if (!hasColumn(db, 'operations_meta', 'policy_json')) {
     db.exec('ALTER TABLE operations_meta ADD COLUMN policy_json TEXT');
   }
-  const requiredTables = [
-    'operations_meta', 'operations_tenants', 'operations_projects', 'operations_work',
-    'workflow_events', 'workflows', 'workflow_checkpoints', 'operation_attempts'
-  ];
-  if (requiredTables.some(table => !hasTable(db, table))) {
+  if (CURRENT_V6_REQUIRED_TABLES.some(table => !hasTable(db, table))) {
     fail('migrateV6OperationsPolicyBinding', 'CHECKPOINT_CORRUPT', 'The version 6 operations schema is incomplete.');
   }
 }
@@ -1749,6 +1758,7 @@ function initializeDatabase(db) {
   if (version > INTERNAL_SCHEMA_VERSION) {
     fail('initializeDatabase', 'UNSUPPORTED_SCHEMA_VERSION', 'The durable store schema is newer than this runtime supports.');
   }
+  if (version === INTERNAL_SCHEMA_VERSION && hasCurrentV6OperationsSchema(db)) return;
   if (version === 0) {
     if (hasUserTables(db)) {
       fail('initializeDatabase', 'UNVERSIONED_DATA', 'The durable store contains data without a supported schema version.');
