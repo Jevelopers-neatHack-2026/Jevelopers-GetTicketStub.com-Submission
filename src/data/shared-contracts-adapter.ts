@@ -37,7 +37,7 @@ export type RefusalCode =
   | 'MALFORMED_JSON' | 'INVALID_PAYLOAD' | 'UNSUPPORTED_VERSION' | 'UNKNOWN_CONTRACT'
   | 'SCOPE_MISMATCH' | 'PARTITION_MISMATCH' | 'REFERENCE_MISMATCH' | 'DIGEST_MISMATCH' | 'FUTURE_DATED'
   | 'CURRENCY_MISMATCH' | 'INVALID_MONEY' | 'POLICY_MISMATCH' | 'INVALID_TRUST_CONTEXT' | 'CONTRACT_REFUSED'
-  | 'UNSUPPORTED_INTERFACE' | 'LEGACY_UNREPRESENTABLE' | 'UNACCEPTED_INTERFACE';
+  | 'UNSUPPORTED_INTERFACE' | 'LEGACY_UNREPRESENTABLE' | 'UNACCEPTED_INTERFACE' | 'PAYLOAD_TOO_LARGE' | 'KIT_FAILURE';
 export type Authority = 'read_only_projection';
 export type ProjectionResult<T> =
   | Readonly<{ status: 'ready'; authority: Authority; data: T }>
@@ -61,6 +61,8 @@ export type SummaryRequest = Common & Readonly<{
 /** Shape already validated by the package's generated validators; fields are read, never trusted from outside that gate. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Wire = any;
+/** Upper bound on a delivered record, checked before any parsing so oversized input cannot reach the producer's regex tokenizer. */
+export const MAX_PAYLOAD_CHARS = 1_048_576;
 const authority: Authority = 'read_only_projection';
 const refuse = (code: RefusalCode, path = ''): ProjectionResult<never> => ({ status: 'refused', authority, code, path });
 const KNOWN_CODES: ReadonlySet<string> = new Set<RefusalCode>(['MALFORMED_JSON', 'INVALID_PAYLOAD', 'UNSUPPORTED_VERSION', 'UNKNOWN_CONTRACT', 'SCOPE_MISMATCH', 'REFERENCE_MISMATCH', 'CURRENCY_MISMATCH', 'INVALID_MONEY', 'POLICY_MISMATCH', 'INVALID_TRUST_CONTEXT']);
@@ -87,12 +89,18 @@ export function refuseUnsupported(name: string): ProjectionResult<never> {
 type Intake = Readonly<{ value: Record<string, unknown> }>;
 /** Delivery state, structural parse, trusted scope, partition and digest. Everything contract-specific happens after this. */
 function intake(contract: string, request: Common, trusted: Record<string, string>): ProjectionResult<never> | Intake {
-  const { kit, scope, delivery } = request;
+  const { scope, delivery } = request;
   if (delivery.kind === 'restricted') return { status: 'restricted', authority };
   if (delivery.kind === 'absent') return { status: 'missing', authority };
   if (delivery.kind === 'unknown') return { status: 'unknown', authority };
   if (delivery.kind !== 'payload' || typeof delivery.json !== 'string') return refuse('INVALID_PAYLOAD');
   if (!scope.tenantId || !scope.projectId) return refuse('INVALID_TRUST_CONTEXT');
+  if (delivery.json.length > MAX_PAYLOAD_CHARS) return refuse('PAYLOAD_TOO_LARGE');
+  try { return intakeChecked(contract, request, trusted); } catch { return refuse('KIT_FAILURE'); }
+}
+function intakeChecked(contract: string, request: Common, trusted: Record<string, string>): ProjectionResult<never> | Intake {
+  const { kit, scope, delivery } = request;
+  if (delivery.kind !== 'payload') return refuse('INVALID_PAYLOAD');
   const parsed = kit.parseContractVersion(contract, '1.0.0', delivery.json);
   if (!parsed.ok) return fromCheck(parsed);
   const value = parsed.value;
@@ -109,8 +117,12 @@ function intake(contract: string, request: Common, trusted: Record<string, strin
 
 /** Freshness from the producer's `observed_at` against the host clock and host policy. */
 function freshness(request: Common, observedAt: unknown): Readonly<{ stale: boolean; ageMs: number }> | ProjectionResult<never> {
+  const bad = (value: unknown) => typeof value !== 'number' || !Number.isFinite(value) || value < 0;
+  if (bad(request.maxAgeMs)) return refuse('INVALID_TRUST_CONTEXT', '/maxAgeMs');
+  if (request.maxFutureSkewMs !== undefined && bad(request.maxFutureSkewMs)) return refuse('INVALID_TRUST_CONTEXT', '/maxFutureSkewMs');
   const now = Date.parse(request.now), observed = typeof observedAt === 'string' ? Date.parse(observedAt) : Number.NaN;
-  if (!Number.isFinite(now) || !Number.isFinite(observed) || !Number.isFinite(request.maxAgeMs) || request.maxAgeMs < 0) return refuse('INVALID_TRUST_CONTEXT', '/observed_at');
+  if (!Number.isFinite(now)) return refuse('INVALID_TRUST_CONTEXT', '/now');
+  if (!Number.isFinite(observed)) return refuse('INVALID_PAYLOAD', '/observed_at');
   const ageMs = now - observed;
   if (ageMs < -(request.maxFutureSkewMs ?? 5000)) return refuse('FUTURE_DATED', '/observed_at');
   return { stale: ageMs > request.maxAgeMs, ageMs: Math.max(0, ageMs) };
@@ -146,19 +158,21 @@ export function readFinancialSummary(request: SummaryRequest): ProjectionResult<
   const taken = intake('FinancialSummary', request, trustedOf(scope));
   if ('status' in taken) return taken;
   const v = taken.value as Wire; // validated by the package parser above
-  const checked = kit.checkFinancialSummary(v, {
+  let checked: Check;
+  try { checked = kit.checkFinancialSummary(v, {
     scope: trustedOf(scope), now: request.now, policy_version: '1.0.0', references: request.references,
     currency: request.currency, included_environments: [scope.environment], included_billing_modes: [scope.billingMode],
-  });
+  }); } catch { return refuse('KIT_FAILURE'); }
   if (!checked.ok) return fromCheck(checked);
-  const metrics: Record<string, MetricProjection> = {};
+  // Null-prototype maps: payload/host names such as `__proto__` must become own keys, never touch a prototype.
+  const metrics: Record<string, MetricProjection> = Object.create(null);
   for (const [name, metric] of Object.entries<Wire>(v.metrics)) {
     const amount: AmountDisplay = metric.status === 'known'
       ? { status: 'available', text: metric.value.amount, currency: metric.value.currency }
       : { status: 'unknown' };
     metrics[name] = { amount, definition: { id: metric.definition_ref.id, revision: metric.definition_ref.revision }, sourceCount: metric.source_refs.length };
   }
-  const requested: Record<string, AmountDisplay> = {}, missingMetrics: string[] = [];
+  const requested: Record<string, AmountDisplay> = Object.create(null), missingMetrics: string[] = [];
   for (const name of request.metricNames ?? []) {
     const found = Object.hasOwn(metrics, name) ? metrics[name] : undefined;
     if (found) requested[name] = found.amount; else { requested[name] = { status: 'unavailable' }; missingMetrics.push(name); }

@@ -23,15 +23,15 @@ Contract versions used: every one is `1.0.0`. The 11 consumer roles (CommonEnvel
 ## Commands
 
 ```sh
-npm ci                          # repo toolchain: Node 24.21.0 (engines >=24.15.0 <25), npm 11.19.0
+npm ci                          # repo toolchain: Node 24.21.0 (engines >=24.15.0 <25), npm 11.12.1 (the repo's `packageManager`)
 npm run contracts:provision     # clone at pinned head, Node 22.23.3: npm ci, build, pack; verify sha256 + SRI (fail closed); offline install
 npm run lint && npm run typecheck && npm test -- --run && npm run build   # unchanged gates; none needs the archive
-npm run test:contracts          # tsc -p tsconfig.contracts.json, vitest contracts config, then the offline driver
-node scripts/run-contract-driver.mjs                                       # driver alone, with a receipt check
+npm run test:contracts          # driver first (independent package verification), then tsc -p tsconfig.contracts.json and the vitest contracts config
+node scripts/run-contract-driver.mjs                                       # verifies the installed package with scripts/package-verify.mjs (no package imports; recomputes hashManifest(files) against the pin, byte-checks every file, rejects unlisted executables), then runs the driver and checks its receipt
 node scripts/producer-consumer-check.mjs <temp copy of producer checkout> .shared-contracts/jevelopers-shared-contracts-0.9.7.tgz
 ```
 
-`contracts:provision` clones into the gitignored `.shared-contracts/`, uses the Node 22.23.3 toolchain at `~/.cache/acv1-toolchains/node-v22.23.3-darwin-arm64/bin` (override with `SHARED_CONTRACTS_NODE_BIN`), and copies the installed package into `node_modules/@jevelopers/`. It does not touch `package.json` or the lockfile, so `npm ci` works for people without the archive. The package is not a declared dependency, so the next `npm ci` removes it; re-run the provision script.
+`contracts:provision` clones into the gitignored `.shared-contracts/`, needs Node 22.23.3 as the producer toolchain: either first on `PATH` or given as a bin directory in `SHARED_CONTRACTS_NODE_BIN`. The exact version is asserted and it fails clearly otherwise. It removes any previously installed package before starting and on every failure, and copies the installed package into `node_modules/@jevelopers/`. It does not touch `package.json` or the lockfile, so `npm ci` works for people without the archive. The package is not a declared dependency, so the next `npm ci` removes it; re-run the provision script.
 
 ## Results
 
@@ -73,7 +73,7 @@ Explicitly refused by name (`refuseUnsupported`): Preview1/ArtifactFile2 eligibi
 1. Incompatibility, producer `checkFinancialSummary` (0.9.7): it never relates the top-level `environment` and `billing_mode` to `included_environments` and `included_billing_modes`, so a record claiming production/live while listing test/simulated passes. The adapter adds the check. The test `INCOMPATIBILITY (producer 0.9.7)` asserts that the producer accepts it and the adapter refuses; it will fail if the producer later tightens this, which is the cue to revisit.
 2. `EvidenceProjection` has no tenant, project or timestamp. Scope cannot be verified from the payload and freshness cannot be assessed. The adapter reports `scopeBinding: 'host_request_only'` and never reports freshness for it.
 3. `JobStatus` and `FulfillmentStatus` transition and supplier-identity checks (`checkJobUpdate`, `checkFulfillmentStatus`) need owner-held prior records and mappings the dashboard does not have. Only structural, scope, order, partition and freshness checks are claimed.
-4. Fixtures use the same UUID for tenant and project, so the package fixtures cannot detect a tenant/project swap. Local tests use a distinct project id.
+4. Fixtures use the same UUID for tenant and project, so the package fixtures cannot detect a tenant/project swap. Local tests therefore use distinct tenant and project ids and assert that swapping them is refused with `SCOPE_MISMATCH`.
 5. Not covered: query inputs and cursors (TD-01B.B), cache identity and cancellation (TD-01B.C), transport and typed HTTP errors, fixture-versus-integrated labelling (TD-01B.E), and the CI workflow (it does not run `test:contracts`, since that needs a network clone).
 
 Nothing here is a ledger, Finance, live revenue or authority claim.

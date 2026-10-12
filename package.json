@@ -48,7 +48,7 @@
     "test:host": "node scripts/host-gate.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
     "contracts:provision": "node scripts/provision-shared-contracts.mjs",
-    "test:contracts": "tsc -p tsconfig.contracts.json && vitest run --config vitest.contracts.config.ts && node scripts/run-contract-driver.mjs"
+    "test:contracts": "node scripts/run-contract-driver.mjs && tsc -p tsconfig.contracts.json && vitest run --config vitest.contracts.config.ts"
   },
   "devDependencies": {
     "react": "19.3.0",

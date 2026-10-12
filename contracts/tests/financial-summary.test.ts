@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFinancialSummary, type SummaryRequest } from '../../src/data/shared-contracts-adapter';
-import { NOW, caseOf, json, kit, manifest, payloadOf, scopeOf } from './support';
+import { NOW, PROJECT, TENANT, caseOf, json, kit, manifest, payloadOf, scopeOf } from './support';
 
 const m = manifest('FinancialSummary');
 const context = caseOf(m, 'semantic-positive').context;
@@ -51,9 +51,17 @@ describe('TD-01B FinancialSummary refusals (malformed, forged scope, reference m
   ])('refuses %s', (_name, patch, code) => {
     expect(readFinancialSummary(request({ payload: { ...valid(), ...patch } }))).toMatchObject({ status: 'refused', code });
   });
-  it('refuses a forged tenant and a forged project even when they swap the two ids', () => {
+  it('refuses a forged tenant and a forged project', () => {
     expect(readFinancialSummary(request({ payload: { ...valid(), tenant_id: '123e4567-e89b-42d3-a456-426614174999' } }))).toMatchObject({ status: 'refused', code: 'SCOPE_MISMATCH', path: '/tenant_id' });
     expect(readFinancialSummary(request({ scope: scopeOf({ projectId: '123e4567-e89b-42d3-a456-426614174111' }) }))).toMatchObject({ status: 'refused', code: 'SCOPE_MISMATCH', path: '/project_id' });
+  });
+  it('distinguishes a tenant/project swap: distinct ids pass in order and fail when swapped', () => {
+    const tenantId = TENANT, projectId = PROJECT;
+    const payload = { ...valid(), tenant_id: tenantId, project_id: projectId };
+    expect(tenantId).not.toBe(projectId);
+    expect(readFinancialSummary(request({ payload, scope: scopeOf({ tenantId, projectId }) })).status).toBe('ready');
+    expect(readFinancialSummary(request({ payload, scope: scopeOf({ tenantId: projectId, projectId: tenantId }) }))).toMatchObject({ status: 'refused', code: 'SCOPE_MISMATCH', path: '/tenant_id' });
+    expect(readFinancialSummary(request({ payload: { ...payload, tenant_id: projectId, project_id: tenantId }, scope: scopeOf({ tenantId, projectId }) }))).toMatchObject({ status: 'refused', code: 'SCOPE_MISMATCH', path: '/tenant_id' });
   });
   it('never takes scope from the payload: an authorized host scope for another tenant rejects a payload that merely self-describes it', () => {
     const forged = { ...valid(), tenant_id: '123e4567-e89b-42d3-a456-426614174222' };
@@ -170,5 +178,55 @@ describe('TD-01B environment and billing partitions stay separate', () => {
     expect(live.data.badges[0]).toBe('live');
     expect(simulated.data.badges[0]).toBe('fixture');
     expect(Object.keys(live.data)).not.toContain('total');
+  });
+});
+
+describe('TD-01B dictionary keys, hostile input and host policy validation', () => {
+  const named = (name: string) => {
+    const p = valid();
+    const metric = p.metrics.expense;
+    // JSON.parse keeps `__proto__` as an own member, which an object literal would not.
+    const text = json(p).replace('"expense":', JSON.stringify(name) + ':');
+    expect(JSON.parse(text).metrics).toHaveProperty([name]);
+    void metric;
+    const references = Object.fromEntries(Object.entries(context.references as Record<string, unknown>).map(([k, v]) => [k.replace('metrics/expense/', `metrics/${name}/`), v]));
+    return request({ delivery: { kind: 'payload', json: text }, references, metricNames: [name] });
+  };
+  it.each(['__proto__', 'constructor', 'toString', 'hasOwnProperty'])('keeps a valid %s metric as an own property and does not report it missing', (name) => {
+    const result = readFinancialSummary(named(name));
+    if (result.status !== 'ready') throw new Error(JSON.stringify(result));
+    expect(Object.hasOwn(result.data.metrics, name)).toBe(true);
+    expect(Object.hasOwn(result.data.requested, name)).toBe(true);
+    expect(Object.keys(result.data.metrics)).toEqual([name]);
+    expect(result.data.missingMetrics).toEqual([]);
+    expect(Object.getPrototypeOf(result.data.metrics)).toBeNull();
+    expect(Object.getPrototypeOf(result.data.requested)).toBeNull();
+    expect(result.data.requested[name]).toEqual({ status: 'available', text: '0.000003', currency: 'USD' });
+  });
+  it('reports a requested __proto__ metric missing as an own unavailable key when the record lacks it', () => {
+    const result = readFinancialSummary(request({ metricNames: ['__proto__'] }));
+    if (result.status !== 'ready') throw new Error('expected ready');
+    expect(Object.hasOwn(result.data.requested, '__proto__')).toBe(true);
+    expect(result.data.missingMetrics).toEqual(['__proto__']);
+  });
+  it('returns a refusal, and does not throw, for a 10 MB string payload', () => {
+    const big = json({ ...valid(), summary_id: 'x'.repeat(10 * 1024 * 1024) });
+    const result = readFinancialSummary(request({ delivery: { kind: 'payload', json: big } }));
+    expect(result).toMatchObject({ status: 'refused', code: 'PAYLOAD_TOO_LARGE' });
+  });
+  it('converts an exception thrown by the producer kit into a typed refusal', () => {
+    const throwing = { ...kit, parseContractVersion: () => { throw new RangeError('boom'); } };
+    expect(readFinancialSummary(request({ kit: throwing }))).toMatchObject({ status: 'refused', code: 'KIT_FAILURE' });
+    const throwingCheck = { ...kit, checkFinancialSummary: () => { throw new Error('boom'); } };
+    expect(readFinancialSummary(request({ kit: throwingCheck }))).toMatchObject({ status: 'refused', code: 'KIT_FAILURE' });
+  });
+  it.each([[Number.NaN], [Number.POSITIVE_INFINITY], [-1]])('refuses maxFutureSkewMs=%s with its own path', (value) => {
+    expect(readFinancialSummary(request({ maxFutureSkewMs: value }))).toMatchObject({ status: 'refused', code: 'INVALID_TRUST_CONTEXT', path: '/maxFutureSkewMs' });
+  });
+  it.each([[Number.NaN], [Number.POSITIVE_INFINITY], [-1]])('refuses maxAgeMs=%s with its own path', (value) => {
+    expect(readFinancialSummary(request({ maxAgeMs: value }))).toMatchObject({ status: 'refused', code: 'INVALID_TRUST_CONTEXT', path: '/maxAgeMs' });
+  });
+  it('refuses an unparseable host clock', () => {
+    expect(readFinancialSummary(request({ now: 'not a time' }))).toMatchObject({ status: 'refused', code: 'INVALID_TRUST_CONTEXT' });
   });
 });

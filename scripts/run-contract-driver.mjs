@@ -2,7 +2,8 @@
 // Local runner for contracts/contract-driver.mjs. Verifies the provisioned package against the committed pin
 // (fail closed), writes a binding config shaped like the producer's, runs the driver in a child with a minimal
 // environment, and checks the single JSON receipt it prints. This runner is not the driver: it may spawn processes.
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { verifyInstalledPackage } from './package-verify.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,15 +14,11 @@ const pin = JSON.parse(readFileSync(join(root, 'contracts/shared-contracts.pin.j
 const snapshot = join(root, 'node_modules/@jevelopers/shared-contracts');
 const fail = (message) => { console.error('CONTRACT_DRIVER_BLOCKED: ' + message); process.exit(1); };
 if (!existsSync(snapshot)) fail('shared-contracts is not provisioned; run `npm run contracts:provision` (needs network for the public git clone only)');
+// Verify with code that is NOT imported from the unverified package, before trusting any manifest entry or running package code.
+const problem = verifyInstalledPackage(snapshot, pin);
+if (problem) fail(problem);
 const read = (path) => JSON.parse(readFileSync(join(snapshot, path), 'utf8'));
-const packageJson = read('package.json');
-if (packageJson.name !== pin.package || packageJson.version !== pin.version) fail('installed package name/version differs from the pin');
 const content = read('generated/package-content-manifest.json'), fixtureManifest = read('generated/fixture-manifest.json');
-if (content.digest !== pin.package_content_digest) fail('package content digest differs from the pin');
-if (fixtureManifest.digest !== pin.fixture_digest) fail('fixture digest differs from the pin');
-for (const [path, expected] of Object.entries(content.files)) {
-  if ('sha256:' + createHash('sha256').update(readFileSync(join(snapshot, path))).digest('hex') !== expected) fail('installed file bytes differ from the pin: ' + path);
-}
 const roles = ['CommonEnvelope', 'EvidenceProjection', 'ErrorEnvelope', 'PartialFailure', 'JobStatus', 'JobProgress', 'Cancellation', 'JobCommandAcknowledgement', 'FinancialSummary', 'FulfillmentStatus', 'EvaluationEvidence'];
 const requiredFixtures = roles.map((contract) => {
   const row = fixtureManifest.contracts.find((entry) => entry.contract === contract);

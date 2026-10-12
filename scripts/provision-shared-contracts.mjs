@@ -10,13 +10,22 @@ import { join, resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const pin = JSON.parse(readFileSync(join(root, 'contracts/shared-contracts.pin.json'), 'utf8'));
 const work = join(root, '.shared-contracts');
-const nodeBin = process.env.SHARED_CONTRACTS_NODE_BIN ?? '/Users/completetech/.cache/acv1-toolchains/node-v22.23.3-darwin-arm64/bin';
-const fail = (message) => { console.error('PROVISION_FAILED: ' + message); process.exit(1); };
-const env = { ...process.env, PATH: nodeBin + ':' + process.env.PATH, npm_config_fund: 'false', npm_config_audit: 'false' };
+// Producer toolchain: SHARED_CONTRACTS_NODE_BIN (a bin directory) if set, otherwise whatever `node` is first on PATH.
+// Either way the exact pinned version is asserted below; no machine-specific default exists.
+const nodeBin = process.env.SHARED_CONTRACTS_NODE_BIN;
+const installedPackage = join(root, 'node_modules/@jevelopers/shared-contracts');
+const dropInstalled = () => rmSync(installedPackage, { recursive: true, force: true });
+// Never leave a previously installed, now-unverified package behind: remove it first and on every failure path.
+dropInstalled();
+const fail = (message) => { dropInstalled(); console.error('PROVISION_FAILED: ' + message); process.exit(1); };
+process.on('uncaughtException', (error) => fail('unexpected error: ' + (error && error.code ? error.code : error?.message ?? 'unknown')));
+const env = { ...process.env, PATH: nodeBin ? nodeBin + ':' + process.env.PATH : process.env.PATH, npm_config_fund: 'false', npm_config_audit: 'false' };
 const run = (cwd, cmd, args, extra = {}) => execFileSync(cmd, args, { cwd, env: { ...env, ...extra }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 
-const nodeVersion = run(root, join(nodeBin, 'node'), ['--version']).trim();
-if (nodeVersion !== 'v' + pin.producer_toolchain_node) fail('producer toolchain must be Node ' + pin.producer_toolchain_node + ', got ' + nodeVersion);
+const nodeCmd = nodeBin ? join(nodeBin, 'node') : 'node';
+let nodeVersion = 'unavailable';
+try { nodeVersion = run(root, nodeCmd, ['--version']).trim(); } catch { /* reported below */ }
+if (nodeVersion !== 'v' + pin.producer_toolchain_node) fail('producer toolchain must be Node ' + pin.producer_toolchain_node + ', got ' + nodeVersion + '; put that Node first on PATH or set SHARED_CONTRACTS_NODE_BIN to its bin directory');
 
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work, { recursive: true });
@@ -25,7 +34,7 @@ run(work, 'git', ['clone', '--quiet', pin.repository, src]);
 run(src, 'git', ['checkout', '--quiet', '--detach', pin.head]);
 if (run(src, 'git', ['rev-parse', 'HEAD']).trim() !== pin.head) fail('head mismatch');
 if (run(src, 'git', ['rev-parse', 'HEAD^{tree}']).trim() !== pin.tree) fail('tree mismatch');
-const npmCli = join(nodeBin, 'npm');
+const npmCli = nodeBin ? join(nodeBin, 'npm') : 'npm';
 run(src, npmCli, ['ci']);
 run(src, npmCli, ['run', 'build']);
 const packed = run(src, npmCli, ['pack', '--pack-destination', work]).trim().split('\n').pop();
@@ -47,6 +56,5 @@ if (installed.version !== pin.version) fail('installed version mismatch');
 // Expose to the repo as a resolvable node_modules entry without touching package.json/lock.
 const link = join(root, 'node_modules/@jevelopers');
 mkdirSync(link, { recursive: true });
-rmSync(join(link, 'shared-contracts'), { recursive: true, force: true });
 run(root, 'cp', ['-R', join(prefix, 'node_modules/@jevelopers/shared-contracts'), join(link, 'shared-contracts')]);
 console.log('installed', installed.name + '@' + installed.version, readdirSync(link).join(','));
