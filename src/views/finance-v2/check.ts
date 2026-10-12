@@ -124,6 +124,8 @@ function referencePath(summaries: readonly unknown[], trusted: FinanceV2TrustedR
   for (const [index, entry] of summaries.entries()) {
     const base = `/canonicalSummaries/${index}`;
     if (!record(entry) || !record(entry.metrics)) return `${base}/metrics`;
+    // Every independently pinned metric key must be present: deleting an entry (or emptying `metrics`) is refused, not skipped.
+    for (const name of Object.keys(trusted.metrics)) if (!Object.hasOwn(entry.metrics, name)) return `${base}/metrics/${name}`;
     for (const name of Object.keys(entry.metrics)) {
       const metric = entry.metrics[name];
       const own = Object.hasOwn(trusted.metrics, name) ? trusted.metrics[name] : undefined;

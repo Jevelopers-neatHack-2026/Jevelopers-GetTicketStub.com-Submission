@@ -8,7 +8,7 @@ import registry from '../../tests/fixtures/finance-v2-conformance/definition-reg
 import { financeV2Fixture, financeV2FixtureNames, syntheticQueryContentHash, syntheticSummaryContentHash, type FinanceV2FixtureName } from '../../src/views/finance-v2/fixtures';
 
 /**
- * SYNTHETIC_CONFORMANCE_ONLY fixture-host data: the reviewed synthetic Finance-producer pages, hydrated through the same read port and views as the other
+ * SYNTHETIC_CONFORMANCE_ONLY fixture-host data: the synthetic Finance-producer pages, hydrated through the same read port and views as the other
  * fixtures. Not live Finance data, not a grant, not a production acknowledgement. The identities below are host literals stated independently of each page;
  * `tests/components/finance-v2-conformance.test.tsx` re-hashes the committed files and checks these literals against its own.
  */

@@ -75,7 +75,7 @@ function MetricsTable({ caption, metrics, currency }: { caption: string; metrics
 
 function Banner({ page }: { page: FinanceV2Page }) {
   return <>
-    <p role="note"><strong>SYNTHETIC_PROPOSAL</strong>: offline synthetic data for the unaccepted Finance v2 proposal. SYNTHETIC_CONFORMANCE only: reviewed synthetic producer outputs, not live Finance data, not an observation, not a production acknowledgement and not owner-accepted. Metric definitions are pending owner acknowledgement.</p>
+    <p role="note"><strong>SYNTHETIC_PROPOSAL</strong>: offline synthetic data for the unaccepted Finance v2 proposal. Synthetic data only; a payload cannot attest its own provenance. Not live Finance data, not an observation, not a production acknowledgement and not owner-accepted. Metric definitions are pending owner acknowledgement.</p>
     <ScopeContext scope={{ status: 'available', projectLabel: page.scope.projectId, periodLabel: `${page.period.start} to ${page.period.end}`, currencyLabel: page.summary.currencies.map((entry) => `${entry.currency} (scale ${entry.scale})`).join(', ') || 'None delivered' }} />
     <Section label="Snapshot and scope" title="Snapshot and scope">
       <dl>

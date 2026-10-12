@@ -42,7 +42,7 @@ const portCalls = (page: Page) => page.evaluate(() => (window as unknown as { __
 
 test('conformance-unknown-simulated hydrates simulated expense as partial / 5 USD / Amount unknown / 1 beside an unknown actual expense', async ({ page }) => {
   await open(page, 'ai-costs', 'conformance-unknown-simulated');
-  await expect(page.getByRole('note')).toContainText('SYNTHETIC_CONFORMANCE');
+  await expect(page.getByRole('note')).toContainText('Synthetic data only');
   await expect(page.getByRole('note')).toContainText('not a production acknowledgement');
   const simulated = region(page, 'USD simulated').getByRole('table', { name: 'USD simulated amounts' });
   expect(await cells(simulated.getByRole('rowheader', { name: 'Simulated expense' }).locator('xpath=ancestor::tr'))).toEqual(['partial', '5 USD', 'Amount unknown', '1']);

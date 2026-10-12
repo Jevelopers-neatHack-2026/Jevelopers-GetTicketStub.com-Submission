@@ -7,7 +7,7 @@ import { financeV2Fixture } from '../../src/views/finance-v2/fixtures';
 import { hostFixture } from '../../integration/fixture-host/conformance';
 
 /**
- * SYNTHETIC_CONFORMANCE_ONLY. The pages are reviewed synthetic Finance-producer outputs committed byte for byte; nothing here is a live grant, production data
+ * SYNTHETIC_CONFORMANCE_ONLY. The pages are synthetic Finance-producer outputs committed byte for byte and pinned by digest; nothing here is a live grant, production data
  * or an owner/production acknowledgement. Every host expectation below is a literal stated in this test, never read from the page under test.
  */
 const DIR = 'tests/fixtures/finance-v2-conformance/';
@@ -126,6 +126,18 @@ describe('trusted references come from the pinned registry, not the payload', ()
     const policy = clone('unknown'); policy.canonicalSummaries[0].policy_ref.content_hash = 'sha256:' + 'f'.repeat(64);
     expect(accept('unknown', policy)).toEqual({ ok: false, code: 'REFERENCE_MISMATCH', path: '/canonicalSummaries/0/policy_ref' });
   });
+  it('refuses every deleted pinned metric key and empty metrics, yet keeps a legitimately empty canonicalSummaries array', () => {
+    for (const name of Object.keys(trusted().metrics)) {
+      const page = clone('unknown'); delete page.canonicalSummaries[0].metrics[name];
+      expect(accept('unknown', page), name).toEqual({ ok: false, code: 'REFERENCE_MISMATCH', path: `/canonicalSummaries/0/metrics/${name}` });
+    }
+    const emptied = clone('unknown'); emptied.canonicalSummaries[0].metrics = {};
+    expect(accept('unknown', emptied)).toEqual({ ok: false, code: 'REFERENCE_MISMATCH', path: '/canonicalSummaries/0/metrics/expense' });
+    const none = clone('unknown'); none.canonicalSummaries = [];
+    expect(accept('unknown', none).ok).toBe(true);
+    expect((json(EXPECTED.budget.file) as { canonicalSummaries: unknown[] }).canonicalSummaries).toEqual([]);
+    expect(accept('budget').ok).toBe(true);
+  });
   it('refuses an unknown metric name, including prototype-shaped names, instead of resolving it through the registry object', () => {
     const invented = clone('unknown'); invented.canonicalSummaries[0].metrics.inventedMetric = invented.canonicalSummaries[0].metrics.expense;
     expect(accept('unknown', invented)).toMatchObject({ ok: false, code: 'REFERENCE_MISMATCH', path: '/canonicalSummaries/0/metrics/inventedMetric/definition_ref' });
@@ -234,9 +246,10 @@ describe('actual artifacts hydrate the budget, breakdown and detail views with e
     expect(region('Transaction record')).toHaveTextContent('Amount unknown');
     expect(region('Detail states')).toHaveTextContent('unknown');
   });
-  it('labels every view SYNTHETIC_CONFORMANCE with pending definitions and no production acknowledgement, and shows the snapshot identity and watermark', () => {
+  it('labels every view as synthetic only, never as a reviewed producer output, with pending definitions and no production acknowledgement, and shows the snapshot identity and watermark', () => {
     view('pg', 'breakdown');
-    expect(screen.getByRole('note')).toHaveTextContent('SYNTHETIC_CONFORMANCE');
+    expect(screen.getByRole('note')).toHaveTextContent('Synthetic data only');
+    expect(screen.getByRole('note')).not.toHaveTextContent(/reviewed|producer output/iu);
     expect(screen.getByRole('note')).toHaveTextContent('not a production acknowledgement');
     const snapshot = region('Snapshot and scope');
     for (const text of [EXPECTED.pg.snapshot, EXPECTED.pg.query, EXPECTED.pg.summary, EXPECTED.pg.scope.tenantId, 'PENDING FINANCE-OWNER SIGN-OFF', 'proposal_only_owner_ack_pending', 'ci08-reporting-policy-2.0.0', 'sha256:a41061a3f46b3a33c330a25597c8fb9bdd55241793d9bde3a2fcb6ab3ab1704f', 'immutable_finance_inputs partial']) expect(snapshot).toHaveTextContent(text);
@@ -312,7 +325,7 @@ describe('registry-pinned references bind through the view props and the async r
   it('the connected view hydrates every actual artifact through the port with the registry references bound', async () => {
     for (const key of ['base', 'budget', 'unknown', 'pg'] as const) {
       const { unmount } = connected(key, json(EXPECTED[key].file));
-      expect(await screen.findByRole('note'), key).toHaveTextContent('SYNTHETIC_CONFORMANCE');
+      expect(await screen.findByRole('note'), key).toHaveTextContent('Synthetic data only');
       expect(screen.queryByText('Report refused'), key).toBeNull();
       unmount();
     }
@@ -334,7 +347,19 @@ describe('registry-pinned references bind through the view props and the async r
   it('without host references nothing is bound, so a page cannot vouch for itself (documented limit, not an acceptance)', async () => {
     const page = clone('unknown'); page.canonicalSummaries[0].policy_ref.content_hash = 'sha256:' + 'f'.repeat(64);
     connected('unknown', page, null);
-    expect(await screen.findByRole('note')).toHaveTextContent('SYNTHETIC_CONFORMANCE');
+    expect(await screen.findByRole('note')).toHaveTextContent('Synthetic data only');
+  });
+  it('the connected view refuses a deleted canonical metric or empty metrics and shows no amounts', async () => {
+    const deleted = clone('unknown'); delete deleted.canonicalSummaries[0].metrics.expense;
+    const emptied = clone('unknown'); emptied.canonicalSummaries[0].metrics = {};
+    for (const [name, page, path] of [['deleted metric', deleted, '/canonicalSummaries/0/metrics/expense'], ['empty metrics', emptied, '/canonicalSummaries/0/metrics/expense']] as const) {
+      const { unmount } = connected('unknown', page);
+      const alert = await screen.findByRole('alert');
+      expect(alert, name).toHaveTextContent('REFERENCE_MISMATCH');
+      expect(alert, name).toHaveTextContent(path);
+      expect(document.body.textContent, name).not.toMatch(/\d+ (USD|EUR)/u);
+      unmount();
+    }
   });
   it('changing the pinned references invalidates a settled answer instead of showing it', async () => {
     const page = json(EXPECTED.unknown.file); const e = EXPECTED.unknown;
@@ -362,6 +387,12 @@ describe('fixture-host routes serve the actual produced pages (SYNTHETIC_CONFORM
     expect(f.input).toEqual(financeV2Fixture('ready').input);
     expect(f.expectedReferences).toBeUndefined();
     expect(f.expectedSnapshotId).toBe(financeV2Fixture('ready').expectedSnapshotId);
+  });
+  it('makes no reviewed-producer claim on the hand-authored proposal fixture route', () => {
+    const f = hostFixture('ready');
+    render(<FinanceV2View mode="SYNTHETIC_PROPOSAL" view="breakdown" input={f.input} expectedScope={f.expectedScope} expectedSnapshotId={f.expectedSnapshotId} />);
+    expect(screen.getByRole('note')).toHaveTextContent('Synthetic data only');
+    expect(screen.getByRole('note')).not.toHaveTextContent(/reviewed|producer output/iu);
   });
 });
 
