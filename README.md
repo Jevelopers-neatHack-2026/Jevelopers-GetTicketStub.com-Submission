@@ -25,8 +25,9 @@ This revision delivers the **TD-01 local package, route and state foundation**, 
 - A private, unpublished package exporting JS, declarations and isolated CSS; React/React DOM `19.3.0` are exact peers matching the **unaccepted host candidate**, not a claim of WP02 agreement.
 - A typed route manifest with loading, empty, error, restricted and unavailable boundaries. Missing upstream integration renders unavailable, never financial zero.
 - Presentation components that display supplied values only, with synthetic display samples that are not producer-approved finance fixtures.
+- A server-only, provider-agnostic authorization seam (`@jevelopers/team-dashboard/server`): an injected host session verifier, a proposed capability matrix and guarded reads that fail closed. Browser `HostAccess` projections are never credentials ([TD-07 trusted host](docs/integration/TD-07-trusted-host.md)).
 
-Not delivered: financial domain views, server authorization, authoritative financial adapters, exports, or actual host integration. No standalone production server or identity provider is included.
+Not delivered: financial domain views, a host verifier implementation or identity provider, authoritative financial adapters, exports, or actual host integration. No standalone production server or identity provider is included.
 
 Open items:
 
@@ -67,6 +68,7 @@ Browser tests block external HTTP requests and need no provider secrets. CI runs
 | [Local development](docs/development.md) | Toolchain, install, scripts, fixture host, environment variables |
 | [Mount and rollback contract](docs/integration/mount-contract.md) | Exports, injected host boundary, routes, styles, rollback |
 | [TD-01 coverage](docs/integration/TD-01-coverage.md) | TD-01.A–E local scope vs external obligations, producer blockers |
+| [TD-07 trusted host](docs/integration/TD-07-trusted-host.md) | Server authorization seam, fail-closed rules, permission matrix, owner decisions |
 | [TD-10 components](docs/integration/TD-10-components.md) | Shared presentation components and their limits |
 | [TD-11 CI validation](docs/integration/TD-11-ci.md) | Workflow, reports, retention |
 | [Runtime and provenance decision](docs/decisions/TD-01-runtime-mount.md) | Dependency pins, host evidence, brand token source |

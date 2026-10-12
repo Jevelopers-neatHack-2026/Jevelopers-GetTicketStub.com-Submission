@@ -16,7 +16,12 @@ await symlink(resolve(destination, 'package'), `${destination}/node_modules/@jev
 await writeFile(`${destination}/consumer.ts`, `import { Dashboard, AmountText, MetricCard, StateBadge, FilterSelect, Pagination, DataTable, BreakdownChart, Tooltip, ScopeContext, EvidenceLink, ReturnToResults, type AmountDisplay, type EvidencePolicy, type DisplayColumn, type DisplayRow, type ChartItem, type TableSort, type HostAccess, type RouteProvider } from '@jevelopers/team-dashboard';
 import { createElement } from 'react';
 import { routeHref } from '@jevelopers/team-dashboard/integration';
+import { createDashboardAuthorizer, createGuardedRouteReader, toHostAccessProjection, type HostSessionVerifier } from '@jevelopers/team-dashboard/server';
 import '@jevelopers/team-dashboard/style.css';
+const verifier: HostSessionVerifier = { async verify() { return { ok: false, reason: 'missing' }; } };
+const authorizer = createDashboardAuthorizer({ verifier, audience: 'fixture.audience' });
+const guarded = createGuardedRouteReader<string>({ authorizer, basePath: '/admin/finance', async read() { return { status: 'unavailable' }; } });
+void guarded; void authorizer.authorize({ credential: undefined, route: 'overview' }).then(toHostAccessProjection);
 const access: HostAccess = { status: 'restricted' };
 const provider: RouteProvider<string> = { mode: 'integrated', async readRoute() { return { status: 'unavailable' }; } };
 Dashboard({ basePath: '/admin/finance', pathname: routeHref('/admin/finance', 'overview'), navigate() {}, access, provider });

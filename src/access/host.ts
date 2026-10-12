@@ -1,4 +1,7 @@
-/** Presentation context supplied by the host. This is not server authorization. */
+/**
+ * Presentation context supplied by the host. This is not server authorization and never a credential:
+ * the server entry derives it from a verified host session (see `toHostAccessProjection`) and accepts none back.
+ */
 export type HostScope = Readonly<{ tenantId: string; projectId: string }>;
 export type HostAccess =
   | { status: 'authorized'; scope: HostScope; revision: string }
