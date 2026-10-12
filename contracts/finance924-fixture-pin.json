@@ -1,0 +1,31 @@
+{
+  "mode": "synthetic-captured-fixture-consumer",
+  "producer": "924cdd2b5489681434790b5d1d7aac138198ccfd",
+  "producerTree": "88c0bcaeaaee050678ca59261229c5f9ad1bfd13",
+  "testedCandidate": "4ce2b986c5aa068d5ace66cf2cadb6848c5f8f7a",
+  "candidateRun": 38248332764,
+  "candidateArtifact": 11747500337,
+  "ownerAcceptance": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2#issuecomment-6124267724",
+  "node": "22.23.3",
+  "historicalUnknownSource": "22a3237dd44f376017969ac881586ff396f19cf8",
+  "pageSchemaAndRegistryHeritage": "22a3237dd44f376017969ac881586ff396f19cf8; byte-identical Git blobs at924cdd2 verified before fixture import",
+  "canonicalSchema": {
+    "source": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+    "version": "0.3.0",
+    "archiveSha256": "29032c3caae8f5d45a9665ef2263e7014e429b94d4b4267d36826c0790de88f2",
+    "status": "proposal_only",
+    "adoptionAccepted": false
+  },
+  "files": {
+    "pagination.json": "0b69c52a47e13cb181c0abcf388a15753ed9673dc74b583da0a0d305330e4423",
+    "refusals.json": "eefdaa7f7f55ce9f5340d63e0fe527a63dd12126f9ccf030b950af6fbfe74953",
+    "historical22-unknown-simulated.json": "a2fc429439d1a7488ed037ce499acb1d97aaf614997fd1d17afb1bebdfcf4755",
+    "page-schema.json": "862900ad30b1e5684c98852cb93f0010eb73504d2fd9f58018673c9334ddf814",
+    "definition-registry.json": "577ce8801855db08ba393f115c00ac670df3a47a5cc9e9a5a78f8b0132cb34e1",
+    "historical22-manifest.json": "201f3cf567b2a877b95ea99f7f658f846be51e5df125276110841debf7309f45",
+    "accepted-handoff.json": "a193d27f4bbfea7211a809be2f312606312daef531913b4163ea465a6798fded",
+    "FinancialSummary-schema.json": "8d73d97e86d0684ccbb84fc1838de9d7802438966be60bd1f2da3347833067d9",
+    "CommonEnvelope-schema.json": "8b805d89efd8104bb2b88f6ba441f0ce42cc5b4df1ffcb1c8bd7f5126d102bb2",
+    "ErrorEnvelope-schema.json": "9a27a2b9a8f1a1ec9f8c56d67b9e5b9d74e0dc9b7e87dea1be1fd87729f8f93c"
+  }
+}
