@@ -1,3 +1,4 @@
+import { acquireDisclosure, validateDisclosure, bindDisclosure, sealDisclosureSuccess } from './disclosure-fence.js';
 import { Type, type Static } from '@sinclair/typebox';
 import { createHash } from 'node:crypto';
 import { Value } from '@sinclair/typebox/value';
@@ -149,8 +150,13 @@ export async function prepareReportingExport(value: ReportingExportRequest, port
     const request = freezeExportValue(value);
     if (!Value.Check(ReportingExportRequestSchema, request)) return reject('VALIDATION_ERROR', 'The reporting export request does not match its exact version.');
     const bridge = reportingExportBridge(ports);
+    const acquired = await acquireDisclosure(bridge?.disclosureFence, request.scope, request.requestId);
+    if (!acquired.ok) return failure(acquired.error);
+    const disclosure = acquired.value;
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     const authorize = () => authorizeExportAccess(ports, request, bridge);
     let auth = await authorize(); if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     const boundary = validateReportingExportRequestBoundary(request); if (!boundary.ok) return failure(boundary.error);
     if (!bridge?.artifactStoreV2) return reject('SOURCE_UNAVAILABLE', 'Reporting export requires the verified Finance reader, registry and artifact store.', true);
     const expected = request.summarySnapshot;
@@ -159,14 +165,19 @@ export async function prepareReportingExport(value: ReportingExportRequest, port
     const key = hashExportCanonical({ encoding: 'reporting-export-2.0.0', scope: request.scope, idempotencyKey: request.idempotencyKey });
     const requestHash = hashExportCanonical({ scope: request.scope, snapshot: withoutTransport(expected), destination: request.destination, format: request.format, evidenceMode: request.evidenceMode });
     auth = await authorize(); if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     const lookup = await bridge.artifactStoreV2.lookup(key);
     const existing = lookup === null ? null : freezeExportValue(lookup);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     auth = await authorize(); if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     if (existing && !validReportingStoredExport(existing)) return reject('SOURCE_UNAVAILABLE', 'The immutable reporting export could not be verified.', true);
     if (existing && existing.requestHash !== requestHash) return reject('IDEMPOTENCY_CONFLICT', 'This export key is already bound to different reporting content.');
     const received = await bridge.readVerifiedSnapshotV2({ scope: request.scope, snapshotId: expected.snapshotId, queryContentHash: expected.queryContentHash, summaryContentHash: expected.summaryContentHash });
     const source = received === null ? null : freezeExportValue(received);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     auth = await authorize(); if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     if (source === null || !bounded(source) || !validateFinancialSummaryPageV2Boundary(source).ok) return reject('SOURCE_UNAVAILABLE', 'The verified reporting snapshot is unavailable.', true);
     if (canonicalExportJson(source.scope) !== canonicalExportJson(request.scope)) return reject('FORBIDDEN_SCOPE', 'The reporting export exceeds the authenticated scope.');
     if (hashExportCanonical(source.summary) !== source.summaryContentHash || canonicalExportJson(withoutTransport(source)) !== canonicalExportJson(withoutTransport(expected))) return reject('IDEMPOTENCY_CONFLICT', 'The submitted page differs from the verified original aggregate first page.');
@@ -190,12 +201,20 @@ export async function prepareReportingExport(value: ReportingExportRequest, port
         || original.prepared.manifest.itemCount !== source.summary.currencies.length * 11) return reject('SOURCE_UNAVAILABLE', 'The immutable export does not match its verified reporting source.', true);
     if (!allowPrepare && !existing) return reject('SOURCE_UNAVAILABLE', 'No immutable reporting export exists for this request.', true);
     auth = await authorize(); if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     const stored = existing ?? freezeExportValue(await bridge.artifactStoreV2.commitImmutable(key, original));
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     auth = await authorize(); if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     if (!validReportingStoredExport(stored) || stored.requestHash !== requestHash || hashExportCanonical(preparedBinding(stored.prepared)) !== hashExportCanonical(preparedBinding(original.prepared))
         || (existing !== null && stored.prepared.manifest.createdAt !== existing.prepared.manifest.createdAt)) return reject('SOURCE_UNAVAILABLE', 'The immutable reporting export could not be verified.', true);
     if (!await bridge.artifactStoreV2.verifyOriginal(key, stored)) return reject('SOURCE_UNAVAILABLE', 'The original reporting preparation could not be authenticated.', true);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     auth = await authorize(); if (!auth.ok) return failure(auth.error);
-    return { ok: true, value: stored.prepared };
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
+    bindDisclosure(stored.prepared, disclosure);
+    const sealed = sealDisclosureSuccess(stored.prepared);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
+    return sealed;
   } catch { return reject('SOURCE_UNAVAILABLE', 'Reporting export preparation is temporarily unavailable.', true); }
 }

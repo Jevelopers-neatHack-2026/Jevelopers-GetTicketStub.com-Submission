@@ -20,7 +20,7 @@ mounted host acceptance, consumer ACK and CFO import remain pending.
 
 ## Concrete host composition
 
-`createReportingExportRuntimePorts(reportingPorts, legacyStore, reportingStore)`
+`createReportingExportRuntimePorts(reportingPorts, legacyStore, reportingStore, disclosureFence)`
 composes the existing public Finance PostgreSQL snapshot readers. The stores
 are reviewed host artifact storage, never financial balances. Shared
 `RuntimePorts` is unchanged; integrations defines its optional local extension.
@@ -30,6 +30,7 @@ const ports = createReportingExportRuntimePorts(
   reportingPorts,
   createFileExportArtifactStore({ directory, receiptKey }),
   createFileReportingExportArtifactStore({ directory, receiptKey }),
+  disclosureFence, // reviewed coherent current host capability
 );
 const result = await exportSummaryV2(request, ports);
 ```
@@ -66,6 +67,33 @@ await. Dashboard `finance.read` / `finance.export` actions are not these Finance
 permissions; reviewed Product adapter and mounted issuer acceptance remain
 external prerequisites. A low-level store is a trusted host port, not a public
 authorized endpoint.
+
+## Coherent final disclosure capability
+
+The optional fourth port is `ExportDisclosureFencePort`, local to integrations.
+For both query-backed versions, its absence fails all creation and retrieval
+paths with `SOURCE_UNAVAILABLE` before snapshot/artifact I/O. Three-argument
+compositions cannot disclose bytes. The standalone mocked legacy fixture
+remains separately qualified; it does not establish query-backed authority.
+
+`acquire` issues a private, immutable, owner-bound permit for the complete scope
+and exact read/export tuple. `validateCurrent` is synchronous: it returns one
+immutable current snapshot of context, principal revision and both grants from
+the same authoritative state. It must reject an expired permit, foreign scope,
+revocation, source replacement, and any intervening revision (including a
+revoke/restore sequence). Independent remote async checks cannot implement this
+contract. The exporter checks after each source/storage/authority wait and again
+in the resumed public wrapper immediately before handing off immutable bytes.
+The trusted clock is read before that final synchronous validation. Private
+per-invocation bindings prevent concurrent calls exchanging permits.
+
+The test adapter owns one private synthetic record and monotonic generation.
+Closed transitions update context, principal, scope, grants and expiry; private
+WeakMap permits bind the entire record generation. Unsupported callback/object/
+accessor replacement fails closed. Await hooks only drive these transitions;
+they do not supply arbitrary authorization responses. This adapter is a
+synthetic conformance fixture, with no mounted session or actual host adoption.
+A real host must independently provide the reviewed coherent capability.
 
 ## Amounts, tables and privacy
 

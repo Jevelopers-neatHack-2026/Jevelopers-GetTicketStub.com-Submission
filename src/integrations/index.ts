@@ -1,3 +1,5 @@
+import { releaseDisclosure, sealDisclosureSuccess } from './disclosure-fence.js';
+import { reportingExportBridge } from './reporting-bridge.js';
 import { Type, type Static } from '@sinclair/typebox';
 import { TrustedScopeSchema, validateRequest, type ApiResult, type Validation } from '../shared/contracts.js';
 import { validateFinancialSummaryPageBoundary, FinancialSummaryPageSchema, type FinancialSummaryPage } from '../reporting/index.js';
@@ -106,7 +108,9 @@ export function serializeSafeFinancialSummaryCsv(summary: SharedFinancialSummary
 
 export async function exportSummary(request: ExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<ExportManifest>> {
   const prepared = await prepareExport(request, ports, true);
-  return prepared.ok ? { ok: true, value: prepared.value.manifest } : prepared;
+  const response = prepared.ok ? sealDisclosureSuccess(prepared.value.manifest) : prepared;
+  const released = releaseDisclosure(prepared, ports.clock, !!reportingExportBridge(ports));
+  return released.ok ? response : released;
 }
 
 export { exportSummaryV2, getPreparedExportArtifacts, hashExportCanonical, ExportArtifactManifestV2Schema } from './runtime.js';
@@ -115,3 +119,5 @@ export { createFileExportArtifactStore, createFileReportingExportArtifactStore }
 export { createReportingExportRuntimePorts, REPORTING_EXPORT_REGISTRY_PIN } from './reporting-bridge.js';
 export { validateReportingExportRequestBoundary, ReportingExportRequestSchema, ReportingExportManifestSchema, ReportingExportReceiptSchema } from './reporting-export.js';
 export type { ReportingExportRequest, ReportingExportManifest, ReportingPreparedExportArtifacts, ReportingStoredExportArtifacts, ReportingExportArtifactStorePort } from './reporting-export.js';
+
+export type { ExportDisclosureFencePort, ExportDisclosureFenceRequest, ExportDisclosureFenceResult, ExportAccessPermit, CurrentExportAccessSnapshot } from './disclosure-fence.js';

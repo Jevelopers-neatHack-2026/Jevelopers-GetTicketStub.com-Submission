@@ -8,7 +8,7 @@ function store() {
 }
 async function setup(version, replay) {
   const scope = fixtureScope(); const host = hostPorts(scope, syntheticSqlPort(scope, [posting(scope, 'expense')]));
-  const legacy = store(), rich = store(); const ports = finance.createReportingExportRuntimePorts(host.ports, legacy, rich);
+  const legacy = store(), rich = store(); const ports = finance.createReportingExportRuntimePorts(host.ports, legacy, rich, host.fence);
   let q = query(scope); if (version === '1.0.0') { q = { ...q, schemaVersion: version, filters: { ...q.filters, currency: 'USD' } }; delete q.policyVersion; delete q.groupings; }
   const page = await checked((version === '1.0.0' ? finance.querySummary : finance.querySummaryV2)(q, host.ports));
   const request = exportRequest(page, scope); const selected = version === '1.0.0' ? legacy : rich;
@@ -22,7 +22,7 @@ for (const version of ['1.0.0', '2.0.0']) for (const replay of [false, true]) {
       const x = await setup(version, replay); const action = x.selected[gate]; let triggered = false;
       x.selected[gate] = async (...args) => {
         const original = await action(...args); if (gate === 'verifyOriginal') assert.equal(original, true);
-        x.host.ports.trustedContext.resolve = async () => context === 'null' ? null : { ...x.scope, projectId: 'foreign-context-project' };
+        x.host.controller.setContext(context === 'null' ? 'absent' : 'present', { ...x.scope, projectId: 'foreign-context-project' });
         triggered = true; return original;
       };
       const result = await x.call(x.request, x.ports);
@@ -32,18 +32,13 @@ for (const version of ['1.0.0', '2.0.0']) for (const replay of [false, true]) {
   }
   for (const transition of ['expiry', 'foreign']) test(`${path}: delayed context resolution ${transition} fails at the final gate`, async () => {
     const x = await setup(version, replay); const verify = x.selected.verifyOriginal; let verified = false, waited = false;
-    x.selected.verifyOriginal = async (...args) => { const original = await verify(...args); assert.equal(original, true); verified = true; return original; };
-    x.host.ports.trustedContext.resolve = async requested => {
-      if (verified) { await Promise.resolve(); waited = true; if (transition === 'expiry') x.host.state.clock = '2026-10-12T22:01:01.000Z'; else return { ...requested, billingMode: 'simulated' }; }
-      return { ...requested };
-    };
+    x.selected.verifyOriginal = async (...args) => { const original = await verify(...args); assert.equal(original, true); verified = true; x.host.controller.onBoundary('context.resolve', async controller => { await Promise.resolve(); waited = true; if (transition === 'expiry') controller.advanceTime('2026-10-12T22:01:01.000Z'); else controller.setContext('present', { ...x.scope, billingMode: 'simulated' }); }); return original; };
     const result = await x.call(x.request, x.ports); assert.equal(verified, true); assert.equal(waited, true);
     assert.equal(result.ok, false); assert.equal(result.error.code, 'FORBIDDEN_SCOPE');
   });
   test(`${path}: unchanged independent context veto and grants preserve original authenticated bytes`, async () => {
     const x = await setup(version, replay); let verified = false, finalContextChecked = false; const verify = x.selected.verifyOriginal;
-    x.selected.verifyOriginal = async (...args) => { const original = await verify(...args); assert.equal(original, true); verified = true; return original; };
-    x.host.ports.trustedContext.resolve = async requested => { if (verified) finalContextChecked = true; assert.deepEqual(requested, x.scope); return { ...x.scope }; };
+    x.selected.verifyOriginal = async (...args) => { const original = await verify(...args); assert.equal(original, true); verified = true; x.host.controller.onBoundary('context.resolve', () => { finalContextChecked = true; }); return original; };
     const result = await checked(x.call(x.request, x.ports)); assert.equal(finalContextChecked, true);
     if (replay) assert.deepEqual(result, x.first); else assert.deepEqual(await finance.getPreparedExportArtifacts(x.request, x.ports), { ok: true, value: result });
   });

@@ -29,7 +29,7 @@ await test('real disposable PostgreSQL ledger → query → verified snapshot �
       await checked(finance.appendLedgerEvent(payload, host.ports));
     }
     const storeOptions = { directory, receiptKey: new Uint8Array(32).fill(49) };
-    const ports = finance.createReportingExportRuntimePorts(host.ports, finance.createFileExportArtifactStore(storeOptions), finance.createFileReportingExportArtifactStore(storeOptions));
+    const ports = finance.createReportingExportRuntimePorts(host.ports, finance.createFileExportArtifactStore(storeOptions), finance.createFileReportingExportArtifactStore(storeOptions), host.fence);
     const q = query(scope); const page = await checked(finance.querySummaryV2(q, host.ports));
     const request = exportRequest(page, scope);
     return { scope, host, ports, q, page, request, storeOptions };
@@ -67,7 +67,7 @@ await test('real disposable PostgreSQL ledger → query → verified snapshot �
       assert.deepEqual(await finance.getPreparedExportArtifacts(replay, x.ports), { ok: true, value: receipt });
       assert.equal((await finance.exportSummaryV2({ ...x.request, format: 'csv' }, x.ports)).error.code, 'IDEMPOTENCY_CONFLICT');
       x.host.state.clock = '2026-10-12T22:01:00.000Z';
-      const restarted = finance.createReportingExportRuntimePorts(x.host.ports, finance.createFileExportArtifactStore(x.storeOptions), finance.createFileReportingExportArtifactStore(x.storeOptions));
+      const restarted = finance.createReportingExportRuntimePorts(x.host.ports, finance.createFileExportArtifactStore(x.storeOptions), finance.createFileReportingExportArtifactStore(x.storeOptions), x.host.fence);
       assert.deepEqual(await finance.getPreparedExportArtifacts(x.request, restarted), { ok: true, value: receipt });
       const another = await checked(finance.exportSummaryV2({ ...x.request, idempotencyKey: 'second-preparation' }, restarted));
       assert.deepEqual(another.artifacts, receipt.artifacts); assert.equal(another.manifest.artifactSetHash, receipt.manifest.artifactSetHash);
@@ -144,11 +144,11 @@ await test('real disposable PostgreSQL ledger → query → verified snapshot �
       for (const permission of ['denyRead', 'denyExport']) { x.host.state[permission] = true; assert.equal((await finance.getPreparedExportArtifacts(x.request, x.ports)).ok, false); x.host.state[permission] = false; }
       for (const [key, value] of [['tenantId', 'foreign-tenant'], ['projectId', 'foreign-project'], ['actorId', 'foreign-actor'], ['environment', 'production'], ['billingMode', 'simulated']]) {
         const reads = x.host.state.reads; const changed = structuredClone(x.request); changed.scope[key] = value;
-        assert.equal((await finance.exportSummaryV2(changed, x.ports)).error.code, 'FORBIDDEN_SCOPE'); assert.equal(x.host.state.reads, reads);
+        assert.equal((await finance.exportSummaryV2(changed, x.ports)).error.code, 'SOURCE_UNAVAILABLE'); assert.equal(x.host.state.reads, reads);
       }
       const store = finance.createFileReportingExportArtifactStore(x.storeOptions);
       const verify = store.verifyOriginal; store.verifyOriginal = async (...args) => { const valid = await verify(...args); x.host.state.denied = true; return valid; };
-      const revoked = finance.createReportingExportRuntimePorts(x.host.ports, finance.createFileExportArtifactStore(x.storeOptions), store);
+      const revoked = finance.createReportingExportRuntimePorts(x.host.ports, finance.createFileExportArtifactStore(x.storeOptions), store, x.host.fence);
       assert.equal((await finance.getPreparedExportArtifacts(x.request, revoked)).error.code, 'FORBIDDEN_SCOPE');
       for (const version of ['1.0.0', '2.0.0']) for (const replay of [false, true]) for (const denied of ['denyRead', 'denyExport']) {
         const current = await setup(); let page = current.page;
@@ -160,7 +160,7 @@ await test('real disposable PostgreSQL ledger → query → verified snapshot �
         const legacyStore = finance.createFileExportArtifactStore(current.storeOptions);
         const richStore = finance.createFileReportingExportArtifactStore(current.storeOptions);
         const selected = version === '1.0.0' ? legacyStore : richStore;
-        const ports = finance.createReportingExportRuntimePorts(current.host.ports, legacyStore, richStore);
+        const ports = finance.createReportingExportRuntimePorts(current.host.ports, legacyStore, richStore, current.host.fence);
         const first = replay ? await checked(finance.exportSummaryV2(request, ports)) : null;
         const originalVerification = selected.verifyOriginal; let triggered = false;
         selected.verifyOriginal = async (...args) => {
@@ -184,20 +184,39 @@ await test('real disposable PostgreSQL ledger → query → verified snapshot �
         const request = exportRequest(page, current.scope);
         const legacyStore = finance.createFileExportArtifactStore(current.storeOptions), richStore = finance.createFileReportingExportArtifactStore(current.storeOptions);
         const selected = version === '1.0.0' ? legacyStore : richStore;
-        const ports = finance.createReportingExportRuntimePorts(current.host.ports, legacyStore, richStore);
+        const ports = finance.createReportingExportRuntimePorts(current.host.ports, legacyStore, richStore, current.host.fence);
         const first = replay ? await checked(finance.exportSummaryV2(request, ports)) : null;
-        const verify = selected.verifyOriginal, resolve = current.host.ports.trustedContext.resolve; let triggered = false;
+        const verify = selected.verifyOriginal; let triggered = false;
         selected.verifyOriginal = async (...args) => {
           const original = await verify(...args); assert.equal(original, true);
-          if (!triggered) { current.host.ports.trustedContext.resolve = async () => context === 'null' ? null : { ...current.scope, projectId: 'foreign-context-project' }; triggered = true; }
+          if (!triggered) { current.host.controller.setContext(context === 'null' ? 'absent' : 'present', { ...current.scope, projectId: 'foreign-context-project' }); triggered = true; }
           return original;
         };
         const response = await (replay ? finance.getPreparedExportArtifacts : finance.exportSummaryV2)(request, ports);
         assert.equal(triggered, true); assert.equal(response.ok, false); assert.equal(response.error.code, 'FORBIDDEN_SCOPE');
         assert.equal(current.host.state.denyRead, false); assert.equal(current.host.state.denyExport, false);
-        current.host.ports.trustedContext.resolve = resolve;
+        current.host.controller.setContext('present', current.scope);
         const control = await checked(finance.getPreparedExportArtifacts(request, ports));
         if (first) assert.deepEqual(control, first); else assert.equal(control.manifest.createdAt, '2026-10-12T22:00:00.000Z');
+      }
+
+      // F3: real stored receipt verification followed by governed context-await revocation.
+      for (const version of ['1.0.0', '2.0.0']) for (const replay of [false, true]) for (const permission of ['finance.summary.read', 'finance.summary.export']) {
+        const current = await setup(); let page = current.page;
+        if (version === '1.0.0') { const q = { ...current.q, schemaVersion: version, filters: { ...current.q.filters, currency: 'USD' } }; delete q.policyVersion; delete q.groupings; page = await checked(finance.querySummary(q, current.host.ports)); }
+        const request = exportRequest(page, current.scope);
+        const legacyStore = finance.createFileExportArtifactStore(current.storeOptions), richStore = finance.createFileReportingExportArtifactStore(current.storeOptions);
+        const selected = version === '1.0.0' ? legacyStore : richStore;
+        const ports = finance.createReportingExportRuntimePorts(current.host.ports, legacyStore, richStore, current.host.fence);
+        const first = replay ? await checked(finance.exportSummaryV2(request, ports)) : null;
+        const verify = selected.verifyOriginal; let verified = false, waited = false;
+        selected.verifyOriginal = async (...args) => { const original = await verify(...args); assert.equal(original, true); verified = true; current.host.controller.onBoundary('context.resolve', async controller => { await Promise.resolve(); waited = true; controller.setGrant(permission, 'denied'); }); return original; };
+        const result = await (replay ? finance.getPreparedExportArtifacts : finance.exportSummaryV2)(request, ports);
+        assert.equal(verified, true); assert.equal(waited, true); assert.equal(result.ok, false); assert.equal(result.error.code, 'FORBIDDEN_SCOPE'); assert.equal(Object.hasOwn(result, 'value'), false);
+        selected.verifyOriginal = verify; current.host.controller.setGrant(permission, 'allowed');
+        let positiveWaited = false;
+        selected.verifyOriginal = async (...args) => { const original = await verify(...args); assert.equal(original, true); current.host.controller.onBoundary('context.resolve', async () => { await Promise.resolve(); positiveWaited = true; }); return original; };
+        const control = await checked(finance.getPreparedExportArtifacts(request, ports)); assert.equal(positiveWaited, true); if (first) assert.deepEqual(control, first); else assert.equal(control.manifest.createdAt, '2026-10-12T22:00:00.000Z');
       }
 
     });

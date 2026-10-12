@@ -23,3 +23,4 @@ declare module 'node:crypto' {
   export function createHmac(algorithm: 'sha256', key: Uint8Array): Hmac;
   export function timingSafeEqual(left: Uint8Array, right: Uint8Array): boolean;
 }
+declare module 'node:util' { export const types: { isProxy(value: unknown): boolean }; }

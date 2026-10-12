@@ -1,3 +1,4 @@
+import type { ExportDisclosureFencePort } from './disclosure-fence.js';
 import { Value } from '@sinclair/typebox/value';
 import { createReportingSnapshotReader, readVerifiedSummarySnapshotV2, REPORTING_CANONICAL_REFERENCE_REGISTRY, ReportingMetricDefinitionSchema, ReportingPolicyDefinitionSchema, type FinancialSummaryPageV2, type ReportingPorts } from '../reporting/index.js';
 import { checkFinancialSummary, type VersionedReference } from '@jevelopers/shared-contracts';
@@ -29,6 +30,7 @@ const PINNED_REGISTRY = pinRegistry(REPORTING_CANONICAL_REFERENCE_REGISTRY);
 type SnapshotReference = { readonly scope: TrustedScope; readonly snapshotId: string; readonly queryContentHash: string; readonly summaryContentHash: string };
 export type ReportingExportBridge = {
   readonly registry: Registry;
+  readonly disclosureFence?: ExportDisclosureFencePort;
   readonly artifactStoreV2?: ReportingExportArtifactStorePort;
   resolveCurrentContext(request: { readonly scope: TrustedScope; readonly requestId: string }): Promise<ApiResult<TrustedScope>>;
   authorizeCurrentRead(request: { readonly scope: TrustedScope; readonly requestId: string }): Promise<FinanceAuthorizationResult>;
@@ -41,10 +43,11 @@ const bridges = new WeakMap<object, ReportingExportBridge>();
  * summary, requestedBy label, or generic "verified" flag establishes provenance.
  * Each reader freshly enforces reporting permission in addition to export permission.
  */
-export function createReportingExportRuntimePorts(ports: ReportingPorts, artifactStore: ExportArtifactStorePort, artifactStoreV2?: ReportingExportArtifactStorePort): ExportRuntimePorts {
+export function createReportingExportRuntimePorts(ports: ReportingPorts, artifactStore: ExportArtifactStorePort, artifactStoreV2?: ReportingExportArtifactStorePort, disclosureFence?: ExportDisclosureFencePort): ExportRuntimePorts {
   const configured = Object.freeze({ snapshotReader: Object.freeze(createReportingSnapshotReader(ports)), artifactStore });
   bridges.set(configured, Object.freeze({
     registry: PINNED_REGISTRY,
+    ...(disclosureFence ? { disclosureFence } : {}),
     ...(artifactStoreV2 ? { artifactStoreV2 } : {}),
     async resolveCurrentContext(request: { readonly scope: TrustedScope; readonly requestId: string }): Promise<ApiResult<TrustedScope>> {
       try {

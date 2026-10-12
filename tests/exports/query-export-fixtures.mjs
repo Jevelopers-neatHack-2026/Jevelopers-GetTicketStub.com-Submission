@@ -1,3 +1,4 @@
+import { createSyntheticDisclosureHost } from './synthetic-disclosure-host.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import * as finance from '../../dist/index.js';
@@ -37,21 +38,17 @@ export function exportRequest(page, scope, extra = {}) { return { schemaVersion:
 export async function checked(result) { const actual = await result; assert.equal(actual.ok, true, JSON.stringify(actual)); return actual.value; }
 
 export function hostPorts(scope, database) {
-  const state = { denied: false, denyRead: false, denyExport: false, calls: 0, reads: 0, clock: FIXTURE_TIME };
+  const host = createSyntheticDisclosureHost(scope, FIXTURE_TIME);
+  const state = host.state;
   const ports = {
-    clock: { now: () => new Date(state.clock) }, storage: { isAvailable: async () => true }, providerSource: { isAvailable: async () => false },
-    trustedContext: { resolve: async requested => hash(requested) === hash(scope) ? structuredClone(scope) : null },
-    financeAuthority: { authorizeCurrent: async request => {
-      state.calls++;
-      if (state.denied || (state.denyRead && request.permission === 'finance.summary.read') || (state.denyExport && request.permission === 'finance.summary.export') || hash(request.requestedScope) !== hash(scope)) return { status: 'denied', operation: request.operation, permission: request.permission };
-      return { status: 'allowed', decisionId: 'synthetic-current-host-issuer', operation: request.operation, permission: request.permission, scope: structuredClone(scope),
-        principal: { kind: 'service', actorId: scope.actorId, serviceStatus: 'active', serviceGrantRevision: 'synthetic-current-revision' }, verifiedAt: state.clock, expiresAt: new Date(Date.parse(state.clock) + 60_000).toISOString() };
-    } },
+    clock: host.clock, storage: { isAvailable: async () => true }, providerSource: { isAvailable: async () => false },
+    trustedContext: host.trustedContext, financeAuthority: host.financeAuthority,
     reporting: { database: { connect: async () => { const client = await database.connect(); return { release: () => client.release(), query: async (...args) => { state.reads++; return client.query(...args); } }; } },
       producer: { sourceRevision: '22a3237dd44f376017969ac881586ff396f19cf8', buildRevision: 'export-synthetic-fixture' }, cursorSigningKey: 'synthetic-only-pagination-key-0000000000000000000' },
     database,
   };
-  return { ports, state };
+  host.controller.bindPorts(ports);
+  return { ports, state, fence: host.fence, controller: host.controller, counters: host.counters };
 }
 /** A read-only SQL fixture port for pure composition probes; NEVER a PostgreSQL receipt or independent ledger. */
 export function syntheticSqlPort(scope, payloads) {

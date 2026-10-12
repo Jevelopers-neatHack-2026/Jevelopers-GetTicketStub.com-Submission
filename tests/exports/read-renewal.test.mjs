@@ -15,7 +15,7 @@ function store() {
 }
 async function setup(version, replay) {
   const scope = fixtureScope(); const sql = syntheticSqlPort(scope, [posting(scope, 'expense')]); const host = hostPorts(scope, sql);
-  const legacy = store(); const rich = store(); const ports = finance.createReportingExportRuntimePorts(host.ports, legacy, rich);
+  const legacy = store(); const rich = store(); const ports = finance.createReportingExportRuntimePorts(host.ports, legacy, rich, host.fence);
   let q = query(scope);
   if (version === '1.0.0') { q = { ...q, schemaVersion: version, filters: { ...q.filters, currency: 'USD' } }; delete q.policyVersion; delete q.groupings; }
   const page = await checked((version === '1.0.0' ? finance.querySummary : finance.querySummaryV2)(q, host.ports));
@@ -56,11 +56,8 @@ for (const version of ['1.0.0', '2.0.0']) for (const replay of [false, true]) {
 }
 
 test('both permission decisions remain unexpired after the slower authority await completes', async () => {
-  const x = await setup('2.0.0', false); const authorize = x.host.ports.financeAuthority.authorizeCurrent;
-  x.host.ports.financeAuthority.authorizeCurrent = async request => {
-    if (request.permission === 'finance.summary.read') { await Promise.resolve(); x.host.state.clock = '2026-10-12T22:01:01.000Z'; }
-    return authorize(request);
-  };
+  const x = await setup('2.0.0', false);
+  x.host.controller.onBoundary('authority.read', async controller => { await Promise.resolve(); controller.advanceTime('2026-10-12T22:01:01.000Z'); });
   const result = await x.call(x.request, x.ports);
   assert.equal(result.ok, false); assert.equal(result.error.code, 'FORBIDDEN_SCOPE'); assert.equal(x.selected.calls.lookup, 0);
 });

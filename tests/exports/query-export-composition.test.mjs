@@ -18,7 +18,7 @@ async function setup(scope = fixtureScope(), options = {}) {
   const payloads = options.payloads ?? [posting(scope, 'expense', { amount: '1', valuation: 'estimated', dimensions: { provider: 'provider-canary-identifier' } }), posting(scope, 'operating', { amount: '5', classification: 'operating_expense' })];
   const sql = syntheticSqlPort(scope, payloads); const host = hostPorts(scope, sql);
   const legacyStore = memoryStore(); const store = memoryStore();
-  const ports = finance.createReportingExportRuntimePorts(host.ports, legacyStore, store);
+  const ports = finance.createReportingExportRuntimePorts(host.ports, legacyStore, store, host.fence);
   const q = query(scope); const page = await checked(finance.querySummaryV2(q, host.ports));
   return { scope, payloads, sql, host, legacyStore, store, ports, q, page, request: exportRequest(page, scope) };
 }
@@ -111,17 +111,17 @@ test('both current read and export permissions are required and rechecked before
   x.store.commitImmutable = async (...args) => { const stored = await original(...args); x.host.state.denied = true; return stored; };
   assert.equal((await finance.exportSummaryV2(x.request, x.ports)).error.code, 'FORBIDDEN_SCOPE');
   const foreign = await setup(); const changed = structuredClone(foreign.request); changed.scope.projectId = 'foreign-project';
-  const reads = foreign.host.state.reads; assert.equal((await finance.exportSummaryV2(changed, foreign.ports)).error.code, 'FORBIDDEN_SCOPE'); assert.equal(foreign.host.state.reads, reads);
+  const reads = foreign.host.state.reads; assert.equal((await finance.exportSummaryV2(changed, foreign.ports)).error.code, 'SOURCE_UNAVAILABLE'); assert.equal(foreign.host.state.reads, reads);
 });
 
 test('v2 filesystem artifact receipt persists exact bytes and preparation time across adapter restart', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'ci08x-v2-artifacts-'));
   try {
     const x = await setup(); const options = { directory, receiptKey: new Uint8Array(32).fill(63) };
-    const ports = finance.createReportingExportRuntimePorts(x.host.ports, x.legacyStore, finance.createFileReportingExportArtifactStore(options));
+    const ports = finance.createReportingExportRuntimePorts(x.host.ports, x.legacyStore, finance.createFileReportingExportArtifactStore(options), x.host.fence);
     const first = await checked(finance.exportSummaryV2(x.request, ports));
     x.host.state.clock = '2026-10-12T22:01:00.000Z';
-    const restarted = finance.createReportingExportRuntimePorts(x.host.ports, x.legacyStore, finance.createFileReportingExportArtifactStore(options));
+    const restarted = finance.createReportingExportRuntimePorts(x.host.ports, x.legacyStore, finance.createFileReportingExportArtifactStore(options), x.host.fence);
     assert.deepEqual(await finance.getPreparedExportArtifacts(x.request, restarted), { ok: true, value: first });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -142,15 +142,12 @@ test('v2 shared adapter mutation after authentication cannot change creation or 
     if (replay) first = await checked(finance.exportSummaryV2(x.request, x.ports));
     let verified = false; let shared;
     const verify = x.store.verifyOriginal;
-    x.store.verifyOriginal = async (key, value) => { const valid = await verify(key, value); shared = x.store.records.get(key); verified = true; return valid; };
-    const authorize = x.host.ports.financeAuthority.authorizeCurrent;
-    x.host.ports.financeAuthority.authorizeCurrent = async request => {
+    x.store.verifyOriginal = async (key, value) => { const valid = await verify(key, value); shared = x.store.records.get(key); verified = true; x.host.controller.onBoundary('authority.export', () => {
       if (verified) {
         shared.prepared.artifacts[0].content += 'PRIVATE_MUTATION_CANARY';
         shared.prepared.manifest.createdAt = '2030-01-01T00:00:00.000Z';
       }
-      return authorize(request);
-    };
+    }); return valid; };
     const result = await checked(finance.exportSummaryV2(x.request, x.ports));
     assert.equal(JSON.stringify(result).includes('PRIVATE_MUTATION_CANARY'), false);
     assert.equal(result.manifest.createdAt, '2026-10-12T22:00:00.000Z');

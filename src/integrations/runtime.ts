@@ -1,3 +1,4 @@
+import { acquireDisclosure, validateDisclosure, bindDisclosure, sealDisclosureSuccess, releaseDisclosure } from './disclosure-fence.js';
 import { createHash } from 'node:crypto';
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
@@ -304,11 +305,16 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
   if (!envelope.ok) return failure(envelope.error);
   const configuredExports = ports.exports;
   const capturedBridge = reportingExportBridge(ports);
+  const acquired = capturedBridge ? await acquireDisclosure(capturedBridge.disclosureFence, envelope.value.scope, envelope.value.requestId) : { ok: true as const, value: undefined };
+  if (!acquired.ok) return failure(acquired.error);
+  const disclosure = acquired.value;
+  const entryFence = validateDisclosure(disclosure, ports.clock); if (!entryFence.ok) return entryFence;
   const frozenRegistry = configuredExports?.syntheticFixtureRegistry === undefined ? undefined : freezeCopy(configuredExports.syntheticFixtureRegistry);
   const authorize = () => authorizeExportAccess(ports, envelope.value, capturedBridge);
   const reject = (code: ErrorCode, message: string, retryable = false) => failure(errorEnvelope('integrations', 'exportSummary', code, envelope.value.requestId, message, retryable));
   const initial = await authorize();
   if (!initial.ok) return failure(initial.error);
+  { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
   if (!contentBound(frozenRequest)) return reject('VALIDATION_ERROR', 'The export request exceeds supported content bounds.');
   const validated = validateExportRequestBoundary(frozenRequest);
   if (!validated.ok) return failure(validated.error);
@@ -321,15 +327,20 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
     const fingerprint = requestFingerprint(parsed);
     let auth = await authorize();
     if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     const lookupResult = await configuredExports.artifactStore.lookup(key);
     const existing = lookupResult === null ? null : freezeCopy(lookupResult);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     if (existing !== null && !validStoredExport(existing)) return reject('SOURCE_UNAVAILABLE', 'The prepared export could not be verified.', true);
     if (existing !== null && existing.requestHash !== fingerprint) return reject('IDEMPOTENCY_CONFLICT', 'This export key is already bound to different financial content.');
     const source = await configuredExports.snapshotReader.readVerifiedSnapshot({ scope: parsed.scope, snapshotId: parsed.summarySnapshot.snapshotId, summaryContentHash: parsed.summaryContentHash, queryContentHash: parsed.summarySnapshot.queryContentHash });
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     if (source === null || !contentBound(source)) return reject('SOURCE_UNAVAILABLE', 'The verified query snapshot is unavailable.', true);
     const pageValidation = validateFinancialSummaryPageBoundary(source, { module: 'integrations', operation: 'exportSummary' });
     if (!pageValidation.ok) return reject('SOURCE_UNAVAILABLE', 'The verified query snapshot could not be validated.', true);
@@ -360,14 +371,20 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
     }
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     const artifacts = freezeCopy(buildArtifacts(page, parsed, bridge));
     if (existing !== null) {
       if (!storedMatchesSource(existing, page, parsed, key)
           || hashExportCanonical(artifacts) !== hashExportCanonical(existing.prepared.artifacts)) return reject('SOURCE_UNAVAILABLE', 'The prepared export does not match the verified query snapshot.', true);
       if (!await configuredExports.artifactStore.verifyOriginal(key, existing)) return reject('SOURCE_UNAVAILABLE', 'The original preparation receipt could not be authenticated.', true);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
       auth = await authorize();
       if (!auth.ok) return failure(auth.error);
-      return { ok: true, value: existing.prepared };
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
+      bindDisclosure(existing.prepared, disclosure);
+      const sealed = sealDisclosureSuccess(existing.prepared);
+      { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
+      return sealed;
     }
     if (!allowPrepare) return reject('SOURCE_UNAVAILABLE', 'No immutable prepared export exists for this request.', true);
     const createdAt = ports.clock.now().toISOString();
@@ -392,17 +409,25 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
     if (!validStoredExport(candidate)) return reject('SOURCE_UNAVAILABLE', 'The prepared export could not be verified.', true);
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     const stored = freezeCopy(await configuredExports.artifactStore.commitImmutable(key, candidate));
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     if (!validStoredExport(stored)) return reject('SOURCE_UNAVAILABLE', 'The prepared export could not be verified.', true);
     if (stored.requestHash !== fingerprint) return reject('IDEMPOTENCY_CONFLICT', 'This export key is already bound to different financial content.');
     if (!storedMatchesSource(stored, page, parsed, key)
         || hashExportCanonical(stored.prepared.artifacts) !== hashExportCanonical(artifacts)) return reject('SOURCE_UNAVAILABLE', 'The prepared export does not match the verified query snapshot.', true);
     if (!await configuredExports.artifactStore.verifyOriginal(key, stored)) return reject('SOURCE_UNAVAILABLE', 'The original preparation receipt could not be authenticated.', true);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
     auth = await authorize();
     if (!auth.ok) return failure(auth.error);
-    return { ok: true, value: stored.prepared };
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
+    bindDisclosure(stored.prepared, disclosure);
+    const sealed = sealDisclosureSuccess(stored.prepared);
+    { const current = validateDisclosure(disclosure, ports.clock); if (!current.ok) return current; }
+    return sealed;
   } catch (error) {
     return error instanceof UnsupportedExport
       ? reject('UNSUPPORTED_VERSION', 'The summary contains an unsupported metric definition or currency.')
@@ -413,12 +438,14 @@ export async function prepareExport(request: ExportRequest, ports: ExportRuntime
 export function exportSummaryV2(request: ReportingExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<ReportingPreparedExportArtifacts>>;
 export function exportSummaryV2(request: ExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts>>;
 export async function exportSummaryV2(request: ExportRequest | ReportingExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts | ReportingPreparedExportArtifacts>> {
-  return request?.schemaVersion === '2.0.0' ? prepareReportingExport(request, ports, true) : prepareExport(request as ExportRequest, ports, true);
+  const result = await (request?.schemaVersion === '2.0.0' ? prepareReportingExport(request, ports, true) : prepareExport(request as ExportRequest, ports, true));
+  return releaseDisclosure<PreparedExportArtifacts | ReportingPreparedExportArtifacts>(result, ports.clock, !!reportingExportBridge(ports));
 }
 export function getPreparedExportArtifacts(request: ReportingExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<ReportingPreparedExportArtifacts>>;
 export function getPreparedExportArtifacts(request: ExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts>>;
 export async function getPreparedExportArtifacts(request: ExportRequest | ReportingExportRequest, ports: ExportRuntimePorts): Promise<ApiResult<PreparedExportArtifacts | ReportingPreparedExportArtifacts>> {
-  return request?.schemaVersion === '2.0.0' ? prepareReportingExport(request, ports, false) : prepareExport(request as ExportRequest, ports, false);
+  const result = await (request?.schemaVersion === '2.0.0' ? prepareReportingExport(request, ports, false) : prepareExport(request as ExportRequest, ports, false));
+  return releaseDisclosure<PreparedExportArtifacts | ReportingPreparedExportArtifacts>(result, ports.clock, !!reportingExportBridge(ports));
 }
 
 export { canonicalJson as canonicalExportJson, freezeCopy as freezeExportValue };

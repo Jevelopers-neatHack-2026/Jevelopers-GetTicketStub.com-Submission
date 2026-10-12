@@ -11,6 +11,7 @@ import './prepared-exports.test.mjs';
 import './query-export-composition.test.mjs';
 import './read-renewal.test.mjs';
 import './context-renewal.test.mjs';
+import './disclosure-fence.test.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const integrationApi = await import('../../dist/integrations/index.js');
