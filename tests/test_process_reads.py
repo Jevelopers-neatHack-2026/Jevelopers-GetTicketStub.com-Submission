@@ -1,3 +1,4 @@
+import errno
 import os
 import socket
 import sys
@@ -94,21 +95,37 @@ def test_offline_command_cannot_write_outside_task_directory(tmp_path: Path, loc
         addressed = writable / "link"
         addressed.symlink_to(target)
     output = tmp_path / "stdout"
+    program = """import errno,pathlib,sys
+print('runtime-started',flush=True)
+print('write-attempted',flush=True)
+try:
+ pathlib.Path(sys.argv[1]).write_text('bad')
+except OSError as error:
+ if error.errno not in (errno.EPERM,errno.EACCES,errno.EROFS):
+  raise
+ print(f'write-denied:{error.errno}',flush=True)
+else:
+ raise RuntimeError('outside write unexpectedly succeeded')
+"""
     # When the actual contained runtime attempts to overwrite the input.
     with output.open("w+b") as stream:
         result = invoke(
             (
                 sys.executable,
                 "-c",
-                "import pathlib,sys; pathlib.Path(sys.argv[1]).write_text('bad')",
+                program,
                 str(addressed),
             ),
             ProcessSettings(
                 checkout, os.environ, b"", stream, 5, offline=True, writable_directory=writable
             ),
         )
-    # Then the input survives unchanged and the runtime reports failure.
-    assert result != 0
+    # Then the real write attempt reports an expected denial and leaves the input unchanged.
+    lines = output.read_text().splitlines()
+    assert lines[:2] == ["runtime-started", "write-attempted"]
+    assert len(lines) == 3
+    assert lines[2] in {f"write-denied:{code}" for code in (errno.EPERM, errno.EACCES, errno.EROFS)}
+    assert result == 0
     assert target.read_text() == "immutable-input"
 
 
@@ -217,3 +234,20 @@ except OSError as error:
     # Then the unrelated descriptor cannot bypass the path read policy.
     assert result == 0
     assert output.read_text() == "runtime-started\ndescriptor-closed\n"
+
+
+@pytest.mark.parametrize("location", ["checkout", "outside", "symlink"])
+def test_write_denial_oracle_rejects_failure_before_payload(
+    tmp_path: Path, location: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given a real contained process that exits before running the intended write payload.
+    original_invoke = invoke
+
+    def fail_before_payload(_command: tuple[str, ...], settings: ProcessSettings) -> int:
+        return original_invoke((sys.executable, "-c", "raise SystemExit(71)"), settings)
+
+    monkeypatch.setattr(sys.modules[__name__], "invoke", fail_before_payload)
+    # When the same outside-write oracle evaluates that failed launch.
+    with pytest.raises(AssertionError, match="runtime-started"):
+        test_offline_command_cannot_write_outside_task_directory(tmp_path, location)
+    # Then startup failure cannot masquerade as a permission-enforcement pass.

@@ -51,9 +51,43 @@ jobs:
           set +e
           {
             id
+            uname -sr
             bwrap --version
-            bwrap --unshare-pid --die-with-parent --unshare-net --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 -- /bin/true
-            printf 'namespace_probe_exit=%s\n' "$?"
+            bwrap --help > reports/runs/verification/bwrap-help.txt
+            stat -Lc 'bwrap_mode=%a uid=%u gid=%g' "$(command -v bwrap)"
+            if command -v getcap >/dev/null; then getcap "$(command -v bwrap)"; fi
+            for namespace in user pid net mnt; do
+              printf 'host_namespace[%s]=' "$namespace"
+              readlink "/proc/self/ns/$namespace"
+            done
+            for fact in /proc/self/uid_map /proc/self/gid_map /proc/self/attr/current /proc/sys/user/max_user_namespaces /proc/sys/kernel/unprivileged_userns_clone /proc/sys/kernel/apparmor_restrict_unprivileged_userns /sys/module/apparmor/parameters/enabled; do
+              printf 'fact[%s]=' "$fact"
+              if test -r "$fact"; then head -c 1024 "$fact"; else printf 'unavailable\n'; fi
+              printf '\n'
+            done
+            awk '/^(Uid|Gid|CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp):/' /proc/self/status
+            run_probe() {
+              probe_name="$1"
+              shift
+              printf 'probe=%s additional_args=' "$probe_name"
+              printf '%s ' "$@"
+              printf '\n'
+              timeout 15s bwrap "$@" --unshare-pid --die-with-parent --unshare-net --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --proc /proc -- /bin/sh -eu -c '
+                printf "payload_started=1\n"
+                id
+                test "$(id -u)" -ne 0
+                for namespace in user pid net mnt; do
+                  printf "child_namespace[%s]=" "$namespace"
+                  readlink "/proc/self/ns/$namespace"
+                done
+                cat /proc/self/uid_map /proc/self/gid_map
+                awk "/^(Uid|Gid|CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp):/" /proc/self/status
+              '
+              printf 'probe_exit[%s]=%s\n' "$probe_name" "$?"
+            }
+            run_probe baseline
+            run_probe explicit-user-namespace --unshare-user
+            run_probe explicit-current-id --unshare-user --uid "$(id -u)" --gid "$(id -g)"
           } > reports/runs/verification/linux-isolation-capability.log 2>&1
           set -e
           .venv/bin/python -m pytest tests/test_process_reads.py tests/test_process_inputs.py tests/test_process_seccomp.py --junitxml=reports/runs/verification/linux-read-junit.xml

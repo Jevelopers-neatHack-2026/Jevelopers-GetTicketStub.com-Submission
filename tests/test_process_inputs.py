@@ -63,12 +63,7 @@ def test_staged_inputs_remain_readonly_during_real_execution(tmp_path: Path) -> 
     _ = driver.write_text("owned-driver")
     _ = stage_contract_inputs(settings, inputs, driver)
     output = writable / "stdout"
-    program = """import os
-import sys
-from dataclasses import replace
-from pathlib import Path
-
-import pytest
+    program = """from pathlib import Path
 import errno,sys
 source=Path('driver.mjs')
 Path(sys.argv[1]).write_text(source.read_text())
