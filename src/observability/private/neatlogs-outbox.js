@@ -390,6 +390,20 @@ function canResumeUnpostedRecovery(batch) {
       && (call.result === null || ['not_configured', 'aborted'].includes(call.result.status)));
 }
 
+function retryAfterPending(batch) {
+  const now = Date.now();
+  if (!Number.isSafeInteger(now)) throw new NeatlogsOutboxError('INVALID_RETRY_CLOCK');
+  // The validated durable call history owns this constraint, not the current
+  // send summary. A later interrupted/refused call or a recovery generation
+  // must not erase a receiver minimum. Start conservatively at completion;
+  // use integer arithmetic even when a saturated minimum exceeds Date range.
+  return batch.dispatches.some(intent => intent.calls.some(call => {
+    const minimum = call.result?.retryAfterMinimumMs;
+    return minimum > 0
+      && BigInt(now) < BigInt(Date.parse(call.completedAt)) + BigInt(minimum);
+  }));
+}
+
 function holdForLeak(batch, findings) {
   batch.state = 'blocked';
   batch.deliveryHold = { reasonCode: 'LEAK_GATE_FAILED', findings };
@@ -418,6 +432,7 @@ async function sendPersistedIntent(batch, persist, config, tags, scan, fetchImpl
   if (!Number.isSafeInteger(requestedAttempts) || requestedAttempts < 1 || requestedAttempts > 5) {
     throw new NeatlogsOutboxError('INVALID_SEND_ATTEMPTS');
   }
+  if (retryAfterPending(batch)) return;
   const call = { ordinal: intent.calls.length + 1, startedAt: new Date().toISOString(),
     postsStarted: 0, completedAt: null, result: null };
   intent.calls.push(call);
@@ -542,7 +557,7 @@ export async function drainNeatlogsOutbox({
         batch.state = 'held';
         batch.deliveryHold = { reasonCode: 'RECOVERY_GENERATION_LIMIT_REACHED', outcomeResolved: false };
         persist();
-      } else {
+      } else if (!retryAfterPending(batch)) {
         const missing = (batch.readback?.traces ?? []).filter(trace => trace.status === 'missing').map(trace => trace.traceId);
         const wanted = currentPlan.traces.filter(trace => missing.includes(trace.traceId)).map(trace => trace.traceId);
         if (wanted.length !== missing.length || wanted.length === 0) throw new NeatlogsOutboxError('RECOVERY_PLAN_MISMATCH');
