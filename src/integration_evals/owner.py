@@ -122,6 +122,7 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
                         timeout=case.timeout_seconds,
                         offline=settings.mode in {Mode.MOCK, Mode.RECORDED},
                         writable_directory=Path(isolated),
+                        test_invocation=settings.test_invocation,
                     ),
                 )
             output = read_bytes(Path(isolated) / "stdout")
@@ -152,6 +153,7 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
                         timeout=min(case.timeout_seconds, 30),
                         offline=settings.mode in {Mode.MOCK, Mode.RECORDED},
                         writable_directory=Path(isolated),
+                        test_invocation=settings.test_invocation,
                     ),
                 )
                 if cleanup != 0:

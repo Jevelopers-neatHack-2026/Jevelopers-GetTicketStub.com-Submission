@@ -15,6 +15,7 @@ from integration_evals.models import (
     Outcome,
     Status,
 )
+from integration_evals.processes import TestInvocation
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +30,7 @@ class Settings:
     authorize_paid: bool = False
     seed: int = 17
     artifact_root: Path | None = None
+    test_invocation: TestInvocation | None = None
 
     @property
     def artifacts(self) -> Path:

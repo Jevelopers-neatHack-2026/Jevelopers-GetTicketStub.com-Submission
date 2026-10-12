@@ -10,6 +10,7 @@ from integration_evals.artifacts import load_record, read_bytes
 from integration_evals.execution import Settings
 from integration_evals.models import Catalog, Outcome, Run, Status, Suite
 from integration_evals.print_setup import CONFIGURATION_PATH, PROFILE_PATH
+from integration_evals.processes import TestInvocation
 from integration_evals.release import audit, export_audit
 from integration_evals.reporting import Tracker, save_run
 from integration_evals.runner import execute
@@ -17,14 +18,26 @@ from integration_evals.specifications import Requirements
 
 
 @pytest.fixture(scope="module")
-def verified_print_workspace(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def print_invocation() -> TestInvocation | None:
+    return None
+
+
+@pytest.fixture(scope="module")
+def verified_print_workspace(
+    tmp_path_factory: pytest.TempPathFactory, print_invocation: TestInvocation | None
+) -> Path:
     # Given the original case, original fixture bytes and reviewed source configuration.
-    workspace = workspace_at(tmp_path_factory.mktemp("print-consumer").resolve())
+    workspace = workspace_at(
+        tmp_path_factory.mktemp("print-consumer").resolve(),
+        browser_in_container=print_invocation is not None,
+    )
     repository = workspace / "integration-evals"
     suite = load_record(repository / "scenarios/suite.json", Suite)
     catalog = load_record(repository / "fixtures/catalog.json", Catalog)
     tracker = load_record(repository / "planning/acceptance-checklist.json", Tracker)
-    settings = Settings(repository, workspace, workspace / "assembly.json")
+    settings = Settings(
+        repository, workspace, workspace / "assembly.json", test_invocation=print_invocation
+    )
     destination = Path(os.environ["IE_PRINT_EVIDENCE"]).resolve()
     inputs = destination / "inputs"
     inputs.mkdir(parents=True, exist_ok=False)
@@ -66,11 +79,14 @@ def verified_print_workspace(tmp_path_factory: pytest.TempPathFactory) -> Path:
     "mutation", ["schema", "hash", "runtime", "case", "mode", "replay", "cleanup-lock", "positive"]
 )
 def test_print_protocol_rejects_unsupported_inputs(
-    verified_print_workspace: Path, mutation: Mutation
+    verified_print_workspace: Path, mutation: Mutation, print_invocation: TestInvocation | None
 ) -> None:
     # Given an exact reviewed owner snapshot and a single scoped protocol change.
     # When the real source command runs under the unchanged evaluator containment.
     # Then the control checks the actual exit, response and cleanup, preserving diagnostics.
     protocol_control(
-        verified_print_workspace, mutation, Path(os.environ["IE_PRINT_EVIDENCE"]) / "protocol"
+        verified_print_workspace,
+        mutation,
+        Path(os.environ["IE_PRINT_EVIDENCE"]) / "protocol",
+        test_invocation=print_invocation,
     )

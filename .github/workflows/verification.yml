@@ -9,6 +9,10 @@ on:
         description: Run the development-only distinct-role print lifetime falsification suite
         type: boolean
         default: false
+      guarded_print_protocol:
+        description: Run the experimental guarded backend against the original print evaluator and protocol
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -29,7 +33,7 @@ jobs:
       - run: uv run ruff check --config ruff-stdlib.toml tools tests/test_audit_evidence.py tests/test_rerun_report.py
       - run: uv run integration-evals validate
       - name: Verify print source preparation and default-off runtime gates
-        run: uv run pytest component_tests/test_print_setup.py component_tests/test_container_defaults.py component_tests/test_container_pidfd.py --junitxml=reports/runs/verification/print-defaults-junit.xml
+        run: uv run pytest component_tests/test_print_setup.py component_tests/test_container_defaults.py component_tests/test_container_pidfd.py component_tests/test_guarded_defaults.py --junitxml=reports/runs/verification/print-defaults-junit.xml
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Jevelopers-neatHack-2026/shared-contracts
@@ -168,6 +172,66 @@ jobs:
         with:
           name: print-lifetime-prototype-${{ github.sha }}
           path: ${{ runner.temp }}/lifetime-evidence.tar
+          if-no-files-found: error
+          retention-days: 30
+
+  print-guarded-protocol-development:
+    if: github.event_name == 'workflow_dispatch' && inputs.guarded_print_protocol
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+      IE_PRINT_CONTAINER_PROTOTYPE: guarded-development
+    steps:
+      - name: Initialize isolated prototype paths
+        run: |
+          {
+            printf 'UV_PYTHON_INSTALL_DIR=%s/guarded-python\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_SOURCE=%s/guarded-producer\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_LIFETIME_EVIDENCE=%s/guarded-lifetime-evidence\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_EVIDENCE=%s/guarded-print-evidence\n' "$RUNNER_TEMP"
+            printf 'IE_CONTRACT_SOURCE=%s/guarded-contracts\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.10.4
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/print-production
+          ref: 0ef7398bb94caacf6b48068747142883470fbdaf
+          path: .guarded-producer
+          persist-credentials: false
+      - name: Stage a fresh local clone without inherited Git credentials
+        run: |
+          mv .guarded-producer "$RUNNER_TEMP/guarded-checkout"
+          git clone --no-hardlinks "$RUNNER_TEMP/guarded-checkout" "$IE_PRINT_SOURCE"
+          git -C "$IE_PRINT_SOURCE" checkout --detach 0ef7398bb94caacf6b48068747142883470fbdaf
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/shared-contracts
+          ref: d432ad5c895a67155affeaa05cd8423c758d95c3
+          path: .guarded-contracts
+          persist-credentials: false
+      - run: mv .guarded-contracts "$IE_CONTRACT_SOURCE"
+      - name: Run all lifetime cases and the original owner protocol through the explicit test backend
+        run: bash component_tests/guarded-print-ci.sh
+      - name: Archive private staging without disposing unknown containers
+        if: always()
+        run: |
+          mkdir -p "$IE_PRINT_LIFETIME_EVIDENCE" "$IE_PRINT_EVIDENCE"
+          sudo -n tar --exclude='*/control/lease' -cf "$RUNNER_TEMP/guarded-lifetime-evidence.tar" -C "$RUNNER_TEMP" guarded-lifetime-evidence guarded-print-evidence
+          sudo -n chmod 0644 "$RUNNER_TEMP/guarded-lifetime-evidence.tar"
+      - name: Preserve prototype diagnostics even when falsified
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: print-guarded-development-${{ github.sha }}
+          path: ${{ runner.temp }}/guarded-lifetime-evidence.tar
           if-no-files-found: error
           retention-days: 30
 

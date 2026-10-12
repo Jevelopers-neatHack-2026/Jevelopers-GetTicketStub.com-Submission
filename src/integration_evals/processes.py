@@ -8,9 +8,17 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO
+from typing import IO, Protocol
 
 from integration_evals.errors import fail
+
+
+class TestInvocation(Protocol):
+    """Explicit development-test dependency; no CLI or ambient backend selection."""
+
+    def __call__(self, command: tuple[str, ...], settings: "ProcessSettings") -> int:
+        """Invoke one command with the test's independently verified containment."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +32,7 @@ class ProcessSettings:
     timeout: float
     offline: bool = False
     writable_directory: Path | None = None
+    test_invocation: TestInvocation | None = None
 
 
 def terminate_group(process: subprocess.Popen[bytes]) -> None:
@@ -80,6 +89,8 @@ def contained_command(command: tuple[str, ...], settings: ProcessSettings) -> tu
 
 def invoke(command: tuple[str, ...], settings: ProcessSettings) -> int:
     """Own a session and reap its leader on success, timeout and cancellation."""
+    if settings.test_invocation is not None:
+        return settings.test_invocation(command, settings)
     with subprocess.Popen(  # noqa: S603 - reviewed command in a new task-owned session
         contained_command(command, settings),
         cwd=settings.checkout,

@@ -17,7 +17,7 @@ from integration_evals.models import Assembly, Outcome, Suite
 from integration_evals.output_evidence import retain
 from integration_evals.owner import compare_response
 from integration_evals.print_setup import CONFIGURATION_PATH, PrintConfiguration
-from integration_evals.processes import ProcessSettings, invoke
+from integration_evals.processes import ProcessSettings, TestInvocation, invoke
 from integration_evals.reporting import OwnerResponse
 
 Mutation = Literal[
@@ -32,6 +32,7 @@ class Invocation:
     workspace: Path
     home: Path
     mutation: Mutation
+    test_invocation: TestInvocation | None = None
 
     def settings(self, stdout: IO[bytes]) -> ProcessSettings:
         repository = self.workspace / "integration-evals"
@@ -93,6 +94,7 @@ class Invocation:
             30,
             offline=True,
             writable_directory=self.home,
+            test_invocation=self.test_invocation,
         )
 
     def retain(self, data: bytes, destination: Path) -> JsonValue:
@@ -122,7 +124,13 @@ class Invocation:
         )
 
 
-def protocol_control(workspace: Path, mutation: Mutation, destination: Path) -> None:
+def protocol_control(
+    workspace: Path,
+    mutation: Mutation,
+    destination: Path,
+    *,
+    test_invocation: TestInvocation | None = None,
+) -> None:
     """Retain observations even when an actual unsupported Linux runtime fails."""
     runtime = load_record(Path(os.environ["IE_PRINT_RUNTIME"]), ContractRuntime)
     command = (runtime.path, "dist/scripts/integration-evals/cli.js")
@@ -132,7 +140,7 @@ def protocol_control(workspace: Path, mutation: Mutation, destination: Path) -> 
         with TemporaryDirectory(prefix="print-protocol-") as directory:
             home = Path(directory).resolve()
             (home / "artifacts").mkdir()
-            invocation = Invocation(workspace, home, mutation)
+            invocation = Invocation(workspace, home, mutation, test_invocation)
             with (home / "stdout").open("w+b") as stdout:
                 settings = invocation.settings(stdout)
                 run_command = (

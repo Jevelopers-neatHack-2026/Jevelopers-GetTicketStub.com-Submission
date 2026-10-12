@@ -158,3 +158,61 @@ failure remain intact. Local Docker has no daemon: these Linux tests are
 **unexecuted until a real job receipt exists**. Independent review, hostile-test
 results and an explicit reviewed role profile are required before any subsequent
 official backend integration or feasibility claim.
+
+## Explicit guarded evaluator development path
+
+The additional `guarded_print_protocol=true` workflow-dispatch input runs the
+experimental `print-guarded-protocol-development` job. Ordinary CLI execution and
+`contained_command` remain unchanged. The immutable evaluator/process settings
+accept an explicit test invocation object, default `None`; environment variables
+cannot choose this path. The new job first reruns all nine original lifecycle
+cases, then runs the original evaluator fixture and eight producer protocol
+controls through fresh containers. No skips, exception-to-pass conversion or
+producer implementation replacement is added. The original `print-component`
+job retains its failing nested Bubblewrap reproduction.
+
+The host evaluator commits the same typed synthetic negative configuration with
+`/ms-playwright` as the original image's browser path. Its existence and exact
+browser bytes are checked by the unchanged producer inside the actual container.
+Each actual `run` or `cleanup` command gets its own container and kernel EOF lease.
+The exact image, source revision `0ef7398`, seccomp, AppArmor, non-root roles, zero
+capabilities, private namespaces and resource limits are preserved. The host
+checks the real Node PID, executable hash, argv, exact sanitized environment,
+role, capabilities, seccomp, namespace and cgroup before forwarding the identical
+bounded request. Successful responses are buffered with a 1-MiB limit and written
+to evaluator capture only after inspected namespace termination and removal.
+The original response, retention, cleanup, SQL, hash, logical-clock and protocol
+oracles continue to decide the result.
+
+Additional readonly mounts expose only fresh clean tracked evaluator/configuration
+and pinned print projections at their original paths, plus the original verified
+runtime build. Only the single owned HOME/artifact root and canary diagnostic
+staging are writable host binds. Git configuration checks inspect key names only
+and reject credential header/helper keys. Guarded workflow preparation uses a
+fresh local clone instead of mounting the Actions checkout's Git metadata.
+Ownership changes are limited to the owned print clone and isolated HOME;
+escaping symlinks, hardlinks, alias roots and overlapping mounts are rejected first.
+The print clone's root ownership is restored only after proved namespace teardown.
+
+Every invocation runs hostile guard/init signal, ptrace, FD and control-socket
+probes, a host-only read probe and a real denied network connection. A detached
+closed-stdio sibling occupies the same namespace as the original Node command.
+Additional SIGKILL tests pause the creator at Docker exec launch, attach and the
+real original owner awaiting its request. They inspect kernel pidfds for both
+live Docker clients, require their death and namespace termination within five
+seconds, and require an unrelated live sentinel to survive. These checkpoints
+explicitly do **not** claim death midway through producer compose after request
+delivery. Cancellation, original deadline and unreachable teardown tests preserve
+errors. If termination/removal cannot be verified, the original HOME is renamed
+into root-owned quarantine without copying or publishing its response, and all
+unknown-container records remain intact for independent recovery.
+
+Root-owned receipts outside owner-writable storage name the selected development
+backend and bind source/configuration/request hashes, actual owner process,
+inspected mounts, captured full ID, output identity, owner exit and teardown.
+Product acceptance stays blocked. This new combined path requires independent
+whole-candidate security review and actual Linux execution; local macOS unit/type
+checks do not establish those effects. The earlier nine-case Linux prototype pass
+at `f0937ad` and the separately failing legacy workflow remain historical facts,
+not proof for the new backend. No revised owner runtime profile, ART-03/ART-04
+acceptance, paid execution authority or product release is claimed.
