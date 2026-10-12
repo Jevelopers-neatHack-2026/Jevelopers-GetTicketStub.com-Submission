@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   authorizeReservation, changeBudgetPolicy, readCapacity,
-  markReservationDispatched, settleReservation, releaseReservation,
+  markReservationDispatched, normalizedBudgetRequest, settleReservation, releaseReservation,
 } from '../../dist/index.js';
 import {
   loadReserveFixture, setBudgetLimit, reservationPool, makePorts, makeScope, policyChange, reservationRequest,
@@ -133,6 +133,7 @@ function scriptedLifecycle(row, storedCommand = []) {
 }
 
 async function run(command, fn, row, storedCommand) {
+  if(row && !row.authorization_request) row={...row,authorization_request:{schemaVersion:'1.0.0',requestId:'scripted',idempotencyKey:'scripted',scope:command.scope,sourceAuthorityRef:command.sourceAuthorityRef,canonicalRequest:{expires_at:'2026-10-12T05:00:00.000Z'},estimate:{completeness:'complete'},attemptBinding:ATTEMPT,authorityBinding:{mappingVersion:'ci-reservation-authority-1.0.0',budgetScopeId:'scripted-budget',grantRef:'scripted-grant',accountRef:'scripted-account',projectRef:'scripted-project',provider:'synthetic-provider',model:'synthetic-model',operation:'generate',targetBindingSha256:`sha256:${'a'.repeat(64)}`,leaseRef:'ci05a-lease',leaseExpiresAt:'2026-10-12T05:00:00.000Z'}}};
   const script = scriptedLifecycle(row, storedCommand);
   const result = await fn(command, scriptedPorts(command.scope, async () => script.client));
   return { script, result };
@@ -223,7 +224,7 @@ test('CI-05A.1 a lifecycle command key reused for a different command is a typed
   const dispatch = markDispatchedCommand(scope, R1, 1, { attemptBinding: ATTEMPT });
   const storedDispatch = {
     reservation_id: R1, event_type: 'dispatched', event_sequence: 2, currency: 'USD', consumed_amount: '0', released_amount: '0',
-    usage_finality: 'unknown', settlement_sequence: null, expected_revision: 1, attempt_binding: structuredClone(ATTEMPT),
+    usage_finality: 'unknown', settlement_sequence: null, expected_revision: 1, attempt_binding: structuredClone(ATTEMPT),actor_reference:dispatch.actorReference,source_authority_ref:dispatch.sourceAuthorityRef,command_evidence:normalizedBudgetRequest(dispatch),
   };
   const same = await run(dispatch, markReservationDispatched, reservationRow({ revision: 2, last_type: 'dispatched', ever_dispatched: true }), [storedDispatch]);
   assert.equal(same.result.ok && same.result.value.status, 'replay');

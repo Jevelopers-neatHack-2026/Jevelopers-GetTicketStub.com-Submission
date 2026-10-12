@@ -10,11 +10,14 @@ import {
   appendLedgerEvent,
   authorize,
   authorizeFinanceOperation,
+  acknowledgePartial,
+  budgetDigest,
   changeBudget,
   estimate,
   estimateV2,
   exportSummary,
   getReconciliation,
+  getReservationSnapshot,
   ingestFinancial,
   ingestUsage,
   markDispatched,
@@ -25,6 +28,7 @@ import {
   registerPricingRuleV2,
   registerRateCardV2,
   release,
+  revalidateAuthorization,
   safeCsvCell,
   settle,
   startReconciliation,
@@ -86,6 +90,27 @@ function versionedRef(contract, id) {
   return { contract, schema_version: '1.0.0', id, revision: 1, content_hash: `sha256:${'a'.repeat(64)}` };
 }
 
+// These are independent, explicitly synthetic offline issuers, not production grants.
+function syntheticBudgetIssuers(expectedScope, clock) {
+  const inScope = query => JSON.stringify(query.scope) === JSON.stringify(expectedScope);
+  const times = () => ({ verifiedAt: clock.now().toISOString(), expiresAt: new Date(clock.now().getTime()+60000).toISOString() });
+  return {
+    budgetEvidence: { verifyCurrent: async query => inScope(query) ? {
+      status: 'verified', queryDigest: await budgetDigest(query), ...times(),
+    } : null },
+    reservationAuthority: { verifyCurrent: async query => inScope(query) ? {
+      status: 'allowed', revoked: false, queryDigest: await budgetDigest(query), ...times(),
+      evidenceRef: 'ci09-synthetic-host', evidenceSha256: `sha256:${'b'.repeat(64)}`,
+    } : null },
+  };
+}
+function syntheticBudgetBinding(budgetScopeId) {
+  return { mappingVersion:'ci-reservation-authority-1.0.0', budgetScopeId,
+    grantRef:'ci09-synthetic-grant', accountRef:'ci09-synthetic-account', projectRef:'ci09-synthetic-project',
+    provider:'synthetic_provider', model:'synthetic_model', operation:'generate',
+    targetBindingSha256:`sha256:${'b'.repeat(64)}`, leaseRef:'ci09-worker-lease', leaseExpiresAt:'2026-10-11T03:31:00.000Z' };
+}
+
 function ledgerRequest(targetScope, suffix = randomUUID()) {
   const sourceEventId = `source-${suffix}`;
   const sourceObjectId = `object-${suffix}`;
@@ -122,7 +147,7 @@ test('operation policy has explicit least-privilege grants, distinct read/action
   assert.equal(fixture.production_trust_root, false);
   const expectedOperations = [
     'metering.ingestUsage', 'pricing.estimate', 'pricing.estimateV2', 'pricing.registerPricingRuleV2',
-    'pricing.registerRateCardV2', 'pricing.registerFxRateV2', 'pricing.resolveEvidence', 'budgets.authorize',
+    'pricing.registerRateCardV2', 'pricing.registerFxRateV2', 'pricing.resolveEvidence', 'budgets.readReservation', 'budgets.authorize',
     'budgets.markDispatched', 'budgets.settle', 'budgets.release', 'budgets.changeBudget',
     'budgets.recordExpenseAdjustment', 'ledger.ingestFinancial', 'ledger.appendLedgerEvent',
     'ledger.rebuildLedgerProjection', 'ledger.resolveQuarantine', 'ledger.readSnapshot', 'reporting.querySummary',
@@ -473,9 +498,12 @@ test('all exposed APIs request their operation grant before domain access', asyn
   };
   const budgetAuthorize = {
     ...common, schemaVersion: '1.0.0', requestId: 'security-budget-authorize', idempotencyKey: 'security-budget-authorize-idem',
-    canonicalRequest: { ...reserve, tenant_id: scope.tenantId, project_id: scope.projectId },
+    canonicalRequest: { ...reserve, tenant_id: scope.tenantId, project_id: scope.projectId,
+      environment:scope.environment,billing_mode:scope.billingMode,idempotency_key:'security-budget-authorize-idem',
+      expires_at:'2026-10-11T03:31:00.000Z',requested:{amount:'0.37',currency:'USD',scale:2} },
     estimate: { completeness: 'complete', knownSubtotal: '0.37', currency: 'USD', rateCardRef: null, missingDimensions: [] },
     allowPartialAuthorization: false, attemptBinding,
+    authorityBinding:syntheticBudgetBinding(reserve.budget_scope_id),sourceAuthorityRef:fixtureRef,
   };
   const lifecycleBase = {
     ...common, requestId: 'security-lifecycle', idempotencyKey: 'security-lifecycle-idem', reservationId,
@@ -500,6 +528,7 @@ test('all exposed APIs request their operation grant before domain access', asyn
     ...common, requestId: 'security-budget-change', idempotencyKey: 'security-budget-change-idem',
     newLimit: '10.00', currency: 'USD', expectedPolicyRevision: 1, expectedLedgerRevision: 0,
     actorReference: 'ci09-actor-reference', reasonReference: 'ci09-security-fixture',
+    sourceAuthorityRef:fixtureRef,
   };
   const expenseAdjustment = {
     ...common, requestId: 'security-expense-adjustment', idempotencyKey: 'security-expense-adjustment-idem',
@@ -540,6 +569,10 @@ test('all exposed APIs request their operation grant before domain access', asyn
     summaryContentHash, destination: 'cfo.ai', format: 'csv', requestedAt: now, evidenceMode: 'mocked', requestedBy: 'ci09-security-test',
   };
 
+  const snapshotRequest={...common,requestId:'security-current-snapshot',reservationId};
+  const currentRequest={...snapshotRequest,attemptBinding,authorityBinding:budgetAuthorize.authorityBinding,phase:'preparation'};
+  const revisedPlan={requestedUnits:1,unit:'synthetic_work_unit',unitMaximumAmount:'0.1'};
+  const acknowledgement={...lifecycleBase,allowedAmount:'0.1',allowedWorkUnits:1,unit:revisedPlan.unit,revisedPlan,revisedPlanHash:await budgetDigest(revisedPlan)};
   const routes = [
     ['pricing.estimate', () => estimate(v1Estimate, runtimePortsForRoute())],
     ['pricing.estimateV2', () => estimateV2(v2Estimate, runtimePortsForRoute())],
@@ -548,6 +581,10 @@ test('all exposed APIs request their operation grant before domain access', asyn
     ['pricing.registerFxRateV2', () => registerFxRateV2({ ...common, schemaVersion: '2.0.0', requestId: 'security-fx', idempotencyKey: 'security-fx-idem', fxRate: pricing.fx_rate }, runtimePortsForRoute())],
     ['metering.ingestUsage', () => ingestUsage({ ...common, requestId: 'security-usage', idempotencyKey: 'security-usage-idem', usageEvent: event, evidenceMode: 'mocked', verificationStatus: 'verified', evidenceProvenanceRef: 'ci09-synthetic' }, runtimePortsForRoute())],
     ['budgets.authorize', () => authorize(budgetAuthorize, runtimePortsForRoute())],
+    ['budgets.readReservation', () => getReservationSnapshot(snapshotRequest,runtimePortsForRoute())],
+    ['budgets.readReservation', () => revalidateAuthorization(currentRequest,runtimePortsForRoute())],
+    ['budgets.readReservation', () => revalidateAuthorization({...currentRequest,phase:'post_transport_ack',dispatchIntentRef:fixtureRef,transportAttemptId:attemptBinding.transportAttemptId},runtimePortsForRoute())],
+    ['budgets.markDispatched', () => acknowledgePartial(acknowledgement,runtimePortsForRoute())],
     ['budgets.markDispatched', () => markDispatched(dispatchedRequest, runtimePortsForRoute())],
     ['budgets.settle', () => settle(settleRequest, runtimePortsForRoute())],
     ['budgets.release', () => release(releaseRequest, runtimePortsForRoute())],
@@ -561,10 +598,17 @@ test('all exposed APIs request their operation grant before domain access', asyn
     ['reconciliation.getReconciliation', () => getReconciliation(reconcile, runtimePortsForRoute())],
     ['integrations.exportSummary', () => exportSummary(exportRequest, runtimePortsForRoute())],
   ];
-  function runtimePortsForRoute() { return runtimePorts({ calls: currentCalls }); }
+  function runtimePortsForRoute() {
+    const ports=runtimePorts({calls:currentCalls,deny:routeDenied});
+    ports.budgets={database:ports.database,...syntheticBudgetIssuers(scope,ports.clock)};
+    routePorts.push(ports);return ports;
+  }
   let currentCalls = [];
+  let routePorts=[];
+  let routeDenied=false;
   for (const [operation, invoke] of routes) {
     currentCalls = [];
+    routePorts=[];routeDenied=false;
     const result = await invoke();
     assert.ok(currentCalls.length > 0, `${operation} must invoke the current authority; result=${JSON.stringify(result)}`);
     assert.ok(currentCalls.every(call => call.operation === operation), `${operation} must not reuse another operation's permission`);
@@ -573,9 +617,27 @@ test('all exposed APIs request their operation grant before domain access', asyn
       assert.notEqual(result.error.code, 'VALIDATION_ERROR', `${operation} route fixture reaches authorization`);
       assert.ok(result.error.safe_message.length <= 240);
     }
+    currentCalls=[];routePorts=[];routeDenied=true;
+    const denied=await invoke();assert.equal(denied.ok,false,`${operation} denied grant refuses`);
+    assert.equal(denied.error.code,'FORBIDDEN_SCOPE',`${operation} denies before domain access`);
+    assert.ok(currentCalls.length>0&&currentCalls.every(call=>call.operation===operation&&call.permission===FINANCE_OPERATION_POLICY[operation].permission));
+    assert.ok(routePorts.every(ports=>ports.connects===0),`${operation} denied grant never opens persistence`);
   }
-  assert.equal(Object.keys(FINANCE_OPERATION_POLICY).length - 3, routes.length,
-    'every currently exposed API is covered; the three explicit future operations have no handler yet');
+  const futureOperations=['pricing.resolveEvidence','ledger.resolveQuarantine','ledger.readSnapshot'];
+  assert.deepEqual([...new Set(routes.map(([operation])=>operation))].sort(),
+    Object.keys(FINANCE_OPERATION_POLICY).filter(operation=>!futureOperations.includes(operation)).sort(),
+    'every exposed operation is covered; each public current/ack handler additionally checks its exact shared grant');
+
+  for(const invoke of [
+    ports=>getReservationSnapshot(snapshotRequest,ports),
+    ports=>revalidateAuthorization(currentRequest,ports),
+    ports=>revalidateAuthorization({...currentRequest,phase:'post_transport_ack',dispatchIntentRef:fixtureRef,transportAttemptId:attemptBinding.transportAttemptId},ports),
+    ports=>acknowledgePartial(acknowledgement,ports),
+  ]){
+    const unconfigured=runtimePorts();const result=await invoke(unconfigured);
+    assert.equal(result.ok,false);assert.equal(result.error.code,'BUDGET_UNAVAILABLE');
+    assert.equal(unconfigured.connects,0,'an unwired current authority handler never opens persistence');
+  }
 
   const privateMarker = 'CI09_PRIVATE_AUTH_CANARY';
   const deniedCalls = [];
@@ -774,6 +836,7 @@ test('CI-05A PostgreSQL budget reservations recheck grants and isolate tenants',
   const portsFor = expectedScope => ({
     database: { connect: async () => pool.connect() },
     trustedContext: { resolve: async requested => requested }, clock,
+    ...syntheticBudgetIssuers(expectedScope,clock),
     financeAuthority: { authorizeCurrent: async request => {
       if (!active || JSON.stringify(request.requestedScope) !== JSON.stringify(expectedScope)) {
         return { status: 'denied', decisionId: 'ci05a-revoked-or-foreign', operation: request.operation, permission: request.permission };
@@ -783,19 +846,22 @@ test('CI-05A PostgreSQL budget reservations recheck grants and isolate tenants',
   });
   function reservationRequestFor(targetScope, policyRef) {
     const idem = `ci05a-sec-${randomUUID()}`;
+    const logicalOperationId=randomUUID(),billableAttemptId=randomUUID(),budgetScopeId=randomUUID();
     return {
       schemaVersion: '1.0.0', requestId: randomUUID(), idempotencyKey: idem, scope: targetScope,
       canonicalRequest: {
         ...structuredClone(reserve), tenant_id: targetScope.tenantId, project_id: targetScope.projectId,
         environment: targetScope.environment, billing_mode: targetScope.billingMode, currency: 'USD',
         idempotency_key: idem, request_id: randomUUID(), correlation_id: randomUUID(), event_id: randomUUID(),
-        budget_scope_id: randomUUID(), logical_operation_id: randomUUID(), billable_attempt_id: randomUUID(),
+        budget_scope_id: budgetScopeId, logical_operation_id: logicalOperationId, billable_attempt_id: billableAttemptId,
+        expires_at:'2026-10-11T03:31:00.000Z',
         requested: { amount: '0.25', currency: 'USD', scale: 2 },
         policy_ref: policyRef ?? reserve.policy_ref,
       },
       estimate: { completeness: 'complete', knownSubtotal: '0.25', currency: 'USD', rateCardRef: null, missingDimensions: [] },
       allowPartialAuthorization: false,
-      attemptBinding: { logicalOperationId: `logical-${randomUUID()}`, transportAttemptId: 't', providerRequestId: null, providerAttemptId: 'p', billableAttemptId: `billable-${randomUUID()}` },
+      attemptBinding: { logicalOperationId, transportAttemptId: 't', providerRequestId: null, providerAttemptId: 'p', billableAttemptId },
+      authorityBinding:syntheticBudgetBinding(budgetScopeId),sourceAuthorityRef:versionedRef('cost-intelligence.authority',randomUUID()),
     };
   }
   function policyFor(targetScope) {
@@ -807,6 +873,15 @@ test('CI-05A PostgreSQL budget reservations recheck grants and isolate tenants',
     };
   }
   try {
+    let prematureConnects=0;
+    const noDatabase={connect:async()=>{prematureConnects++;throw new Error('missing authority opened persistence');}};
+    const missingSource={...portsFor(tenantA),database:noDatabase};delete missingSource.budgetEvidence;
+    const missingPolicy=await changeBudgetPolicy(policyFor(tenantA),missingSource);assert.equal(missingPolicy.ok,false);assert.equal(missingPolicy.error.code,'BUDGET_UNAVAILABLE');
+    const missingHost={...portsFor(tenantA),database:noDatabase};delete missingHost.reservationAuthority;
+    assert.equal((await authorizeReservation(reservationRequestFor(tenantA),missingHost)).value.status,'unavailable');
+    const untrusted={...portsFor(tenantA),database:noDatabase,budgetEvidence:{verifyCurrent:async()=>null}};
+    const refused=await authorizeReservation(reservationRequestFor(tenantA),untrusted);assert.equal(refused.ok,false);assert.equal(refused.error.code,'FORBIDDEN_SCOPE');
+    assert.equal(prematureConnects,0,'missing or untrusted issuer evidence never opens persistence');
     const policy = await changeBudgetPolicy(policyFor(tenantA), portsFor(tenantA));
     assert.equal(policy.ok, true, policy.ok ? '' : policy.error.code);
     const policyRef = policy.value.policyRef;
@@ -820,7 +895,8 @@ test('CI-05A PostgreSQL budget reservations recheck grants and isolate tenants',
     assert.equal(stalePolicy.ok, false);
     if (!stalePolicy.ok) assert.equal(stalePolicy.error.code, 'VALIDATION_ERROR');
     const conflicting = structuredClone(authorizedRequest);
-    conflicting.attemptBinding.billableAttemptId = `billable-${randomUUID()}`;
+    conflicting.attemptBinding.billableAttemptId = randomUUID();
+    conflicting.canonicalRequest.billable_attempt_id=conflicting.attemptBinding.billableAttemptId;
     const conflict = await authorizeReservation(conflicting, portsFor(tenantA));
     assert.equal(conflict.ok, false);
     if (!conflict.ok) assert.equal(conflict.error.code, 'IDEMPOTENCY_CONFLICT');

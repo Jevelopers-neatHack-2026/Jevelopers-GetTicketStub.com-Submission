@@ -106,13 +106,58 @@
     },
     {
       "module": "budgets",
+      "name": "ReservationAuthorityBindingSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ReservationAuthorityBindingSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationAuthorityBindingSchema.json",
+      "completeness": "complete",
+      "sha256": "dcaa0984ff04d11645462219124cf9944a6a4ba295b7fbfcd3c6a09a8e1215b4"
+    },
+    {
+      "module": "budgets",
+      "name": "ReservationWorkPlanSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ReservationWorkPlanSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationWorkPlanSchema.json",
+      "completeness": "complete",
+      "sha256": "eb4a9881c836699e0afbf0e20810fa49c24f3873c53defbe019e5aedf461bebd"
+    },
+    {
+      "module": "budgets",
+      "name": "FinanceReservationAuthoritySchema",
+      "schema_version": "1.0.0",
+      "export_name": "FinanceReservationAuthoritySchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/FinanceReservationAuthoritySchema.json",
+      "completeness": "complete",
+      "sha256": "36bd33b57a57fa5ff4e116aabbc7efc5a776a2a86ee1a591c733a0127cc69f50"
+    },
+    {
+      "module": "budgets",
+      "name": "CurrentReservationRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "CurrentReservationRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/CurrentReservationRequestSchema.json",
+      "completeness": "complete",
+      "sha256": "76daaa1b963924725c8c86eaa5081507cc28eba5c7af10b251ecee50f2b45567"
+    },
+    {
+      "module": "budgets",
+      "name": "PartialAcknowledgementRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "PartialAcknowledgementRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/PartialAcknowledgementRequestSchema.json",
+      "completeness": "complete",
+      "sha256": "34686e778a16d5bbc7d77c6cdbf0383fe9718998659fe8b22062c7fb63b7cd23"
+    },
+    {
+      "module": "budgets",
       "name": "ReservationRequestSchema",
       "schema_version": "1.0.0",
       "export_name": "ReservationRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationRequestSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateReservationRequestBoundary",
-      "sha256": "0f86dd5fcc159473fe42cd2b56b114f660d7dd8c3b4332a1c20b3fe901927c95"
+      "sha256": "23fba5747c396b1b4034be8ef96e4a5e2de426098910c3096187f96472d9c2ba"
     },
     {
       "module": "budgets",
@@ -121,7 +166,7 @@
       "export_name": "AuthorizationDecisionSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/AuthorizationDecisionSchema.json",
       "completeness": "complete",
-      "sha256": "610bcc075fbf5c7290fc289cba8991be249f645ea1752085e05446295800051c"
+      "sha256": "fb8d506dc773d9710f10310084c322dc618061dccec7128238fdea8a89b96169"
     },
     {
       "module": "budgets",
@@ -170,7 +215,7 @@
       "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationSnapshotSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateReservationSnapshotBoundary",
-      "sha256": "a8af847e700930d58c54b97b8c524fc8e3275cbe7f92a0f2d1904577d372f07d"
+      "sha256": "f548b406444efb614c811134c965ef662f267fcb16e3ca3d78756a8894cc25f6"
     },
     {
       "module": "budgets",
@@ -179,7 +224,7 @@
       "export_name": "BudgetChangeRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/BudgetChangeRequestSchema.json",
       "completeness": "complete",
-      "sha256": "50a4087bbceff69627309669b8bd4f1af5eb1cc9654481bc0dbc9edc2e2dcf10"
+      "sha256": "220e24ad1028470b92a5c42493e53970cf863c0e3df43eb17ca025a925f658aa"
     },
     {
       "module": "budgets",
@@ -188,7 +233,7 @@
       "export_name": "BudgetChangeReceiptSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/BudgetChangeReceiptSchema.json",
       "completeness": "complete",
-      "sha256": "d3e2fbdcb5e6901a3e5acb7b4286aea1dbcf70964e07d6325731122d00c57b87"
+      "sha256": "697604caa972e53c88cf2d2809df1bf5aeb135a596a4d1d51830201f85fce3fc"
     },
     {
       "module": "budgets",

@@ -31,7 +31,8 @@ Still typed unavailable: after validation and scope checks, these public methods
 | --- | --- | --- |
 | metering | `ingestUsage` | `SOURCE_UNAVAILABLE` |
 | pricing (1.0.0) | `estimate` | `PRICING_UNKNOWN` |
-| budgets | `authorize`, `markDispatched`, `settle`, `release`, `changeBudget` | `BUDGET_UNAVAILABLE` |
+| budgets | `authorize`, `markDispatched`, `changeBudget`, current lookup/revalidation and partial acknowledgement | Operational with explicitly configured current host/source ports; otherwise `BUDGET_UNAVAILABLE` |
+| budgets | `settle`, `release` | `BUDGET_UNAVAILABLE` pending CI05B |
 | budgets | `recordExpenseAdjustment` | `SOURCE_UNAVAILABLE` |
 | ledger | `ingestFinancial` | `SOURCE_UNAVAILABLE` |
 | reporting | `querySummary` | `SOURCE_UNAVAILABLE` |
@@ -93,3 +94,5 @@ npm run test:migrations -- --offline   # Docker: PostgreSQL 16
 ## Contributing
 
 Follow the organization [contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). No license file is present in this repository.
+
+The [Finance authority mapping](docs/api/budget-authority.md) documents budget composition, exact consumer fields, current source/maximum/replan verification and remaining issuer/canonical acceptance gates.

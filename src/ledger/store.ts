@@ -1416,6 +1416,67 @@ const CURRENT_INTAKE_REQUIRED_COLUMNS = [
   ['financial_projection_snapshots', 'unposted_attempt_count'],
 ] as const;
 
+const BUDGET_AUTHORITY_REQUIRED_COLUMNS = [
+  ['budget_reservation_events','authorization_request'], ['budget_reservation_events','authority_binding'],
+  ['budget_reservation_events','financial_expires_at'], ['budget_reservation_events','authorized_cap'],
+  ['budget_reservation_events','authority_evidence'], ['budget_reservation_events','command_evidence'],
+  ['budget_scope_policies','change_request'],
+  ['budget_policy_decisions','decision_id'], ['budget_policy_decisions','tenant_id'], ['budget_policy_decisions','project_id'],
+  ['budget_policy_decisions','environment'], ['budget_policy_decisions','billing_mode'], ['budget_policy_decisions','currency'],
+  ['budget_policy_decisions','idempotency_key'], ['budget_policy_decisions','actor_reference'], ['budget_policy_decisions','source_authority_ref'],
+  ['budget_policy_decisions','command_request'], ['budget_policy_decisions','command_receipt'], ['budget_policy_decisions','content_hash'],
+  ['budget_reservation_acknowledgements','acknowledgement_id'], ['budget_reservation_acknowledgements','tenant_id'],
+  ['budget_reservation_acknowledgements','project_id'], ['budget_reservation_acknowledgements','environment'],
+  ['budget_reservation_acknowledgements','billing_mode'], ['budget_reservation_acknowledgements','currency'],
+  ['budget_reservation_acknowledgements','reservation_id'], ['budget_reservation_acknowledgements','event_sequence'],
+  ['budget_reservation_acknowledgements','expected_revision'], ['budget_reservation_acknowledgements','idempotency_key'],
+  ['budget_reservation_acknowledgements','actor_reference'], ['budget_reservation_acknowledgements','source_authority_ref'],
+  ['budget_reservation_acknowledgements','attempt_binding'], ['budget_reservation_acknowledgements','command_request'],
+  ['budget_reservation_acknowledgements','content_hash'],
+] as const;
+
+/** Accept known authority health only with the actual additive artifacts, never a future numeric count. */
+async function inspectBudgetAuthorityCapability(client:LedgerTransactionPort,migrationCount:number):Promise<void>{
+  const artifactResult=await client.query(`SELECT
+    to_regclass('cost_intelligence.budget_policy_decisions') IS NOT NULL AS has_decisions,
+    to_regclass('cost_intelligence.budget_reservation_acknowledgements') IS NOT NULL AS has_acknowledgements,
+    to_regclass('cost_intelligence.budget_one_reservation_per_billable_attempt') IS NOT NULL AS has_attempt_index,
+    to_regprocedure('cost_intelligence.guard_budget_revision_append()') IS NOT NULL AS has_revision_function,
+    (SELECT count(*) FROM information_schema.columns WHERE table_schema='cost_intelligence' AND (
+      (table_name='budget_reservation_events' AND column_name IN ('authorization_request','authority_binding','financial_expires_at','authorized_cap','authority_evidence','command_evidence'))
+      OR (table_name='budget_scope_policies' AND column_name='change_request')))::integer AS extension_columns`);
+  const artifacts=artifactResult.rows[0];if(!artifacts)throw new Error('Budget authority capability metadata is unavailable.');
+  const extensionCount=Number(artifacts.extension_columns);
+  const hasAny=artifacts.has_decisions===true||artifacts.has_acknowledgements===true||artifacts.has_attempt_index===true||artifacts.has_revision_function===true||extensionCount>0;
+  if(migrationCount===9){if(hasAny)throw new Error('Partial budget authority artifacts cannot be accepted as legacy intake health.');return;}
+  if(migrationCount!==10||artifacts.has_decisions!==true||artifacts.has_acknowledgements!==true||extensionCount!==7)throw new Error('Budget authority capability is incomplete.');
+  const missing=await client.query(`SELECT required.table_name,required.column_name FROM unnest($1::text[],$2::text[]) AS required(table_name,column_name)
+    WHERE NOT EXISTS(SELECT 1 FROM information_schema.columns c WHERE c.table_schema='cost_intelligence' AND c.table_name=required.table_name AND c.column_name=required.column_name)`,
+    [BUDGET_AUTHORITY_REQUIRED_COLUMNS.map(([table])=>table),BUDGET_AUTHORITY_REQUIRED_COLUMNS.map(([,column])=>column)]);
+  if(missing.rows.length)throw new Error('Budget authority columns are incomplete.');
+  const invariants=await client.query(`SELECT
+    EXISTS(SELECT 1 FROM pg_index i JOIN pg_class idx ON idx.oid=i.indexrelid JOIN pg_namespace ns ON ns.oid=idx.relnamespace
+      WHERE ns.nspname='cost_intelligence' AND idx.relname='budget_one_reservation_per_billable_attempt' AND i.indisunique AND i.indisvalid
+        AND i.indrelid='cost_intelligence.budget_reservation_events'::regclass
+        AND pg_get_expr(i.indpred,i.indrelid)='(event_sequence = 1)'
+        AND pg_get_indexdef(i.indexrelid) LIKE '%(tenant_id, project_id, environment, billing_mode, billable_attempt_id) WHERE%') AS attempt_unique,
+    EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid='cost_intelligence.budget_reservation_acknowledgements'::regclass AND c.contype='u'
+      AND pg_get_constraintdef(c.oid)='UNIQUE (tenant_id, project_id, environment, billing_mode, idempotency_key)') AS ack_key_unique,
+    EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid='cost_intelligence.budget_reservation_acknowledgements'::regclass AND c.contype='u'
+      AND pg_get_constraintdef(c.oid)='UNIQUE (tenant_id, project_id, environment, billing_mode, reservation_id, event_sequence)') AS ack_revision_unique,
+    EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid='cost_intelligence.budget_policy_decisions'::regclass AND c.contype='u'
+      AND pg_get_constraintdef(c.oid)='UNIQUE (tenant_id, project_id, environment, billing_mode, idempotency_key)') AS policy_key_unique,
+    (SELECT count(*) FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid
+      WHERE NOT t.tgisinternal AND t.tgenabled IN ('O','A') AND t.tgtype=7 AND NOT p.prosecdef
+        AND t.tgfoid='cost_intelligence.guard_budget_revision_append()'::regprocedure
+        AND ((t.tgname='budget_reservation_events_revision_guard' AND t.tgrelid='cost_intelligence.budget_reservation_events'::regclass)
+          OR (t.tgname='budget_reservation_acknowledgements_revision_guard' AND t.tgrelid='cost_intelligence.budget_reservation_acknowledgements'::regclass)))::integer AS revision_guards,
+    (SELECT count(*) FROM pg_class c WHERE c.oid IN ('cost_intelligence.budget_policy_decisions'::regclass,'cost_intelligence.budget_reservation_acknowledgements'::regclass)
+      AND c.relrowsecurity AND c.relforcerowsecurity)::integer AS forced_rls_tables`);
+  const row=invariants.rows[0];if(!row||row.attempt_unique!==true||row.ack_key_unique!==true||row.ack_revision_unique!==true||row.policy_key_unique!==true
+    ||Number(row.revision_guards)!==2||Number(row.forced_rls_tables)!==2)throw new Error('Budget authority constraints or revision guards are incomplete.');
+}
+
 type IntakeProjectionCapability = 'legacy' | 'available';
 
 async function inspectIntakeProjectionCapability(client: LedgerTransactionPort): Promise<IntakeProjectionCapability> {
@@ -1449,10 +1510,10 @@ async function inspectIntakeProjectionCapability(client: LedgerTransactionPort):
   const unresolvedCountColumnCount = Number(schema.unresolved_count_columns);
   const hasAnyProjectionExtension = hasIncludedIn || unresolvedCountColumnCount > 0;
   const migrationCount = Number(health.required_migrations_present);
-  const currentCapabilityDetected = migrationCount >= 9 || hasAnyIntakeTable || hasAnyProjectionExtension;
+  const currentCapabilityDetected = migrationCount===9 || migrationCount===10 || hasAnyIntakeTable || hasAnyProjectionExtension;
 
   if (!currentCapabilityDetected && migrationCount >= 3 && migrationCount <= 8) return 'legacy';
-  if (migrationCount !== 9 || !hasAllIntakeTables || !hasIncludedIn || unresolvedCountColumnCount !== 4) {
+  if ((migrationCount !== 9 && migrationCount !== 10) || !hasAllIntakeTables || !hasIncludedIn || unresolvedCountColumnCount !== 4) {
     throw new Error('Usage intake projection capability is incomplete.');
   }
 
@@ -1470,6 +1531,7 @@ async function inspectIntakeProjectionCapability(client: LedgerTransactionPort):
     [tableNames, columnNames],
   );
   if (missingColumns.rows.length !== 0) throw new Error('Usage intake projection columns are incomplete.');
+  await inspectBudgetAuthorityCapability(client,migrationCount);
   return 'available';
 }
 

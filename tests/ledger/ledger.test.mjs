@@ -369,7 +369,7 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     assert.equal(postgresVersion.slice(0, 2), '16', 'ledger acceptance must run on PostgreSQL 16');
     const health = await pool.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 9,
+    assert.equal(Number(health.rows[0].required_migrations_present), 10,
       'the additive pricing history, accounting projection, CI-05A budget reservation, and usage intake migrations extend the complete foundation set');
 
     const scope = makeScope('union');
@@ -2078,4 +2078,31 @@ test('partial current 0009 tables or columns fail projection without hiding unkn
     await observer?.end().catch(() => undefined);
     if (database) await dropProjectionCapabilityDatabase(database.name, database.base);
   }
+});
+
+test('exact integrated health10 requires complete authority artifacts and never accepts future or disguised partial health',async()=>{
+  let database,runtime,observer;
+  try{
+    database=await createProjectionCapabilityDatabase(10);runtime=new Pool({...runtimeDatabaseConfigFromEnvironment(),database:database.name,max:3});
+    observer=new Client({...databaseConfigFromEnvironment('CI_TEST_DB'),database:database.name});await observer.connect();
+    const scope=makeScope('authority-health10');const clock={value:fixedTime};const ports=makePorts(runtime,scope,clock);
+    const request=()=>({schemaVersion:'1.0.0',requestId:randomId('authority-capability'),scope,asOf:'2026-10-11T04:00:00.000Z'});
+    assert.equal((await rebuildLedgerProjection(request(),ports)).ok,true,'genuine health10 with0010 artifacts is supported');
+    const health=await observer.query("SELECT pg_get_viewdef('cost_intelligence.foundation_health'::regclass,true) AS definition");
+    for(const count of [9,11]){
+      await observer.query(`CREATE OR REPLACE VIEW cost_intelligence.foundation_health AS SELECT true AS migrations_ready, ${count}::integer AS required_migrations_present, now() AS checked_at`);
+      const invalid=await rebuildLedgerProjection(request(),ports);assert.equal(invalid.ok,false,`health${count} cannot certify installed authority artifacts`);assert.equal(invalid.error.code,'SOURCE_UNAVAILABLE');
+    }
+    await observer.query(`CREATE OR REPLACE VIEW cost_intelligence.foundation_health AS ${health.rows[0].definition}`);
+    await observer.query('ALTER TABLE cost_intelligence.budget_reservation_acknowledgements RENAME TO budget_ack_partial_test');
+    try{const missing=await rebuildLedgerProjection(request(),ports);assert.equal(missing.ok,false);assert.equal(missing.error.code,'SOURCE_UNAVAILABLE');}
+    finally{await observer.query('ALTER TABLE cost_intelligence.budget_ack_partial_test RENAME TO budget_reservation_acknowledgements');}
+    await observer.query('ALTER INDEX cost_intelligence.budget_one_reservation_per_billable_attempt RENAME TO budget_attempt_partial_test');
+    try{const missing=await rebuildLedgerProjection(request(),ports);assert.equal(missing.ok,false);assert.equal(missing.error.code,'SOURCE_UNAVAILABLE');}
+    finally{await observer.query('ALTER INDEX cost_intelligence.budget_attempt_partial_test RENAME TO budget_one_reservation_per_billable_attempt');}
+    await observer.query('ALTER TABLE cost_intelligence.budget_reservation_events DISABLE TRIGGER budget_reservation_events_revision_guard');
+    try{const missing=await rebuildLedgerProjection(request(),ports);assert.equal(missing.ok,false);assert.equal(missing.error.code,'SOURCE_UNAVAILABLE');}
+    finally{await observer.query('ALTER TABLE cost_intelligence.budget_reservation_events ENABLE TRIGGER budget_reservation_events_revision_guard');}
+    assert.equal((await rebuildLedgerProjection(request(),ports)).ok,true,'restored exact supported artifacts recover without changing ledger economics');
+  }finally{await runtime?.end().catch(()=>{});await observer?.end().catch(()=>{});if(database)await dropProjectionCapabilityDatabase(database.name,database.base);}
 });

@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { budgetDigest } from '../../dist/index.js';
 import { databaseConfigFromEnvironment, runtimeDatabaseConfigFromEnvironment } from '../../scripts/test-db-lifecycle.mjs';
 
 const { Pool } = pg;
@@ -69,6 +70,8 @@ export function makePorts(pool, scope, options = {}) {
     trustedContext: { resolve: async requested => ({ ...requested }) },
     clock,
     authorityWaitMs: options.authorityWaitMs,
+    budgetEvidence: options.budgetEvidence ?? { verifyCurrent: async query => ({status:'verified', queryDigest:await budgetDigest(query), verifiedAt:clock.now().toISOString(),expiresAt:new Date(clock.now().getTime()+60000).toISOString(), ...(options.maximum?{maximum:options.maximum}:{})}) },
+    reservationAuthority: options.reservationAuthority ?? { verifyCurrent: async query => ({status:'allowed',revoked:false,queryDigest:await budgetDigest(query),verifiedAt:clock.now().toISOString(),expiresAt:new Date(clock.now().getTime()+60000).toISOString(),evidenceRef:'synthetic-host-fixture',evidenceSha256:`sha256:${'a'.repeat(64)}`}) },
     financeAuthority: options.financeAuthority ?? {
       authorizeCurrent: async request => {
         if (options.authorityThrows) throw new Error('synthetic authority outage');
@@ -133,14 +136,15 @@ export function reservationRequest(scope, reserveFixture, options = {}) {
   // finance attempt binding below uses independent readable identifiers.
   const canonicalLogicalOperationId = randomUUID();
   const canonicalBillableAttemptId = randomUUID();
-  const logicalOperationId = options.logicalOperationId ?? `logical-${randomUUID()}`;
-  const billableAttemptId = options.billableAttemptId ?? `billable-${randomUUID()}`;
+  const logicalOperationId = options.logicalOperationId ?? canonicalLogicalOperationId;
+  const billableAttemptId = options.billableAttemptId ?? canonicalBillableAttemptId;
   const canonicalRequest = {
     ...structuredClone(reserveFixture),
     tenant_id: scope.tenantId, project_id: scope.projectId, environment: scope.environment, billing_mode: scope.billingMode,
     currency, idempotency_key: idem, request_id: randomUUID(), correlation_id: randomUUID(),
     event_id: randomUUID(), budget_scope_id: randomUUID(),
-    logical_operation_id: canonicalLogicalOperationId, billable_attempt_id: canonicalBillableAttemptId,
+    logical_operation_id: logicalOperationId, billable_attempt_id: billableAttemptId,
+    expires_at: options.expiresAt ?? '2026-10-12T05:00:00.000Z',
     requested: { amount: options.requestedAmount ?? amount, currency, scale: (options.requestedAmount ?? amount).includes('.') ? (options.requestedAmount ?? amount).split('.')[1].length : 0 },
     policy_ref: options.policyRef ?? policyRefs.get(`${scope.tenantId}:${currency}`) ?? reserveFixture.policy_ref,
   };
@@ -150,6 +154,9 @@ export function reservationRequest(scope, reserveFixture, options = {}) {
   return {
     schemaVersion: '1.0.0', requestId: options.requestId ?? `req-${idem}`, idempotencyKey: idem, scope,
     canonicalRequest, estimate,
+    sourceAuthorityRef: options.sourceAuthorityRef ?? authorityRef(),
+    authorityBinding: options.authorityBinding ?? {mappingVersion:'ci-reservation-authority-1.0.0',budgetScopeId:canonicalRequest.budget_scope_id,grantRef:'synthetic-grant',accountRef:'synthetic-account',projectRef:'synthetic-project',provider:'synthetic-provider',model:'synthetic-model',operation:'generate',targetBindingSha256:`sha256:${'b'.repeat(64)}`,leaseRef:'ci05a-lease',leaseExpiresAt:'2026-10-12T05:00:00.000Z'},
+    ...(options.workPlan?{workPlan:options.workPlan}:{}),
     allowPartialAuthorization: options.allowPartialAuthorization ?? false,
     attemptBinding: {
       logicalOperationId, transportAttemptId: `transport-${logicalOperationId}`,
@@ -251,7 +258,7 @@ export function partitionRows(policyRef, limit = '1.00', used = '0') {
     if (sql.includes('FROM cost_intelligence.budget_scope_policies')) {
       return [{ policy_version_id: policyRef.id, policy_revision: policyRef.revision, limit_amount: limit, content_hash: policyRef.content_hash }];
     }
-    if (sql.includes('WITH per_reservation')) return [{ reservation_count: used === '0' ? 0 : 1, consumed: '0', outstanding_holds: used, used }];
+    if (sql.includes('WITH effective_spend')) return [{ reservation_count: used === '0' ? 0 : 1, consumed: '0', outstanding_holds: used, used }];
     return null;
   };
 }

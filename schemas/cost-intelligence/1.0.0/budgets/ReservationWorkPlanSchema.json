@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/budgets/ReservationWorkPlanSchema/1.0.0",
+  "x-schema-completeness": "complete",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "requestedUnits",
+    "unit",
+    "unitMaximumAmount"
+  ],
+  "properties": {
+    "requestedUnits": {
+      "minimum": 1,
+      "maximum": 2147483647,
+      "type": "integer"
+    },
+    "unit": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "unitMaximumAmount": {
+      "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+      "maxLength": 40,
+      "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
+      "type": "string"
+    }
+  }
+}
