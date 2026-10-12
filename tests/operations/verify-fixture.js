@@ -6,13 +6,15 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import process from 'node:process';
 import {
-  buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics,
-  parseOps02RaceDiagnostics, parseOps06ClosePhaseDiagnostics
+  buildOps12RecoveryDiagnosticRecord, buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics,
+  parseOps02RaceDiagnostics, parseOps06ClosePhaseDiagnostics,
+  parseOps12RecoveryDiagnostics, parseOps12RecoveryFailure
 } from './failure-diagnostics.js';
 import { validateOps04PublicPhaseMetrics } from './ops04-failure-diagnostics.js';
 import { parseOperationsCaptureFromTap } from '../../src/internal/private-ops-diagnostics.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const OPS12_RECOVERY_DIAGNOSTIC_PREFIX = 'AH11_OPS_OPS12_RECOVERY_DIAGNOSTIC ';
 const EXPECTED_GROUPS = Object.freeze(Array.from({ length: 13 }, (_, index) => `OPS${String(index + 1).padStart(2, '0')}_`));
 const REQUIRED_LOCAL_CASES = Object.freeze([
   'OPS01.C01', 'OPS01.C02',
@@ -295,6 +297,18 @@ const ops06ClosePhaseDiagnostics = parseOps06ClosePhaseDiagnostics(hasCompleteOp
   bytes: metrics.ops06ClosePhaseDiagnosticBytes,
   diagnosticsComplete: metrics.ops06ClosePhaseDiagnosticsComplete
 } : null);
+const ops12RecoveryMetricKeys = [
+  'ops12RecoveryDiagnosticLines', 'ops12RecoveryDiagnosticCount',
+  'ops12RecoveryDiagnosticBytes', 'ops12RecoveryDiagnosticsComplete'
+];
+const hasCompleteOps12RecoveryChannel = metrics !== null && typeof metrics === 'object'
+  && !Array.isArray(metrics) && ops12RecoveryMetricKeys.every(key => Object.hasOwn(metrics, key));
+const ops12RecoveryDiagnostics = parseOps12RecoveryDiagnostics(hasCompleteOps12RecoveryChannel ? {
+  lines: metrics.ops12RecoveryDiagnosticLines,
+  count: metrics.ops12RecoveryDiagnosticCount,
+  bytes: metrics.ops12RecoveryDiagnosticBytes,
+  diagnosticsComplete: metrics.ops12RecoveryDiagnosticsComplete
+} : null);
 const suiteDiagnostics = buildSafeFailureDiagnostics({
   scenario: fixture,
   phase: 'operation-suite',
@@ -305,7 +319,7 @@ const suiteDiagnostics = buildSafeFailureDiagnostics({
   stdout: testResult.stdout,
   stderr: testResult.stderr,
   missingCases: tapSummary.missingLocalCases,
-  c02ControlReadDiagnostics, ops02RaceDiagnostics, ops06ClosePhaseDiagnostics
+  c02ControlReadDiagnostics, ops02RaceDiagnostics, ops06ClosePhaseDiagnostics, ops12RecoveryDiagnostics
 });
 const publicMetrics = { ...(metrics ?? {}) };
 delete publicMetrics.c02ControlReadFailureLines;
@@ -320,6 +334,10 @@ delete publicMetrics.ops06ClosePhaseDiagnosticLines;
 delete publicMetrics.ops06ClosePhaseDiagnosticCount;
 delete publicMetrics.ops06ClosePhaseDiagnosticBytes;
 delete publicMetrics.ops06ClosePhaseDiagnosticsComplete;
+delete publicMetrics.ops12RecoveryDiagnosticLines;
+delete publicMetrics.ops12RecoveryDiagnosticCount;
+delete publicMetrics.ops12RecoveryDiagnosticBytes;
+delete publicMetrics.ops12RecoveryDiagnosticsComplete;
 
 let runbookArtifact = null;
 let runbookRecoveryArtifact = null;
@@ -364,6 +382,19 @@ if (fixture === 'runbook-clean-start') {
   }
   const recoveryPath = join(artifactDirectory, 'AH-11-OPS-runbook-recovery.jsonl');
   recoveryResult = child(['tests/operations/runbook-recovery-cases.mjs', recoveryPath]);
+  const recoveryFailure = parseOps12RecoveryFailure(recoveryResult.stderr);
+  const recoverySignal = ['SIGABRT', 'SIGINT', 'SIGKILL', 'SIGTERM'].includes(recoveryResult.signal)
+    ? recoveryResult.signal : null;
+  const recoveryCode = Number.isSafeInteger(recoveryResult.status)
+    && recoveryResult.status >= 0 && recoveryResult.status <= 255 ? recoveryResult.status : null;
+  const recoveryDiagnosticRecord = buildOps12RecoveryDiagnosticRecord({
+    code: recoveryCode, signal: recoverySignal
+  }, recoveryCode === 0 ? null : recoveryFailure);
+  const recoveryDiagnosticLine = `${OPS12_RECOVERY_DIAGNOSTIC_PREFIX}${JSON.stringify(recoveryDiagnosticRecord)}\n`;
+  const recoveryChildDiagnostics = parseOps12RecoveryDiagnostics({
+    lines: recoveryDiagnosticLine, count: 1,
+    bytes: Buffer.byteLength(recoveryDiagnosticLine, 'utf8'), diagnosticsComplete: true
+  });
   recoveryDiagnostics = buildSafeFailureDiagnostics({
     scenario: fixture,
     phase: 'recovery-runbook',
@@ -372,7 +403,8 @@ if (fixture === 'runbook-clean-start') {
     signal: recoveryResult.signal,
     error: recoveryResult.error,
     stdout: recoveryResult.stdout,
-    stderr: recoveryResult.stderr
+    stderr: recoveryResult.stderr,
+    ops12RecoveryDiagnostics: recoveryChildDiagnostics
   });
   const recoveryOutput = (recoveryResult.stdout ?? '').trim().split(/\r?\n/u).filter(Boolean);
   let recoverySummary = null;
@@ -465,6 +497,8 @@ const resourceMetricsComplete = metrics !== null
   && ops02RaceDiagnostics.complete === true && ops02RaceDiagnostics.recordCount > 0
   && metrics.ops06ClosePhaseDiagnosticsComplete === true
   && ops06ClosePhaseDiagnostics.complete === true && ops06ClosePhaseDiagnostics.recordCount === 1
+  && metrics.ops12RecoveryDiagnosticsComplete === true
+  && ops12RecoveryDiagnostics.complete === true && ops12RecoveryDiagnostics.recordCount === 1
   && ops04PhaseMetrics.valid === true
   && ops04PhaseMetrics.failureCount === 0
   && metrics.ci1PhaseCaptureOverflow === false

@@ -15,6 +15,7 @@ import {
   TelemetryExporter,
   projectTelemetryEvent
 } from '@jevelopers/agent-harness-runtime';
+import { readOperationsAdmissionBusyDiagnostic } from '../../src/internal/durable-store.js';
 import { OPERATIONS_STORAGE_CAPABILITY } from '../../src/internal/private-ops-store-capability.js';
 import {
   createOperationsDiagnosticSession,
@@ -36,8 +37,9 @@ import { createOperationsWorker } from '../../src/worker/private/worker.js';
 import { readStoreCompatibility, readOperationsHealth, requestOwnerRetention } from '../../src/health/private/health.js';
 import { runBoundedLocalPlan } from '../../src/orchestrator/internal/controller.js';
 import {
-  buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics,
-  parseOps02RaceDiagnostics, parseOps06ClosePhaseDiagnostics
+  buildOps12RecoveryDiagnosticRecord, buildSafeFailureDiagnostics, encodeOps02RaceDiagnostic, parseC02ControlReadDiagnostics,
+  parseOps02RaceDiagnostics, parseOps06ClosePhaseDiagnostics,
+  parseOps12RecoveryDiagnostics, parseOps12RecoveryFailure
 } from './failure-diagnostics.js';
 import { createAdmissionFailureDiagnostic } from './fixtures/admission-store-child.mjs';
 import {
@@ -110,7 +112,11 @@ const METRICS = {
   ops06ClosePhaseDiagnosticLines: '',
   ops06ClosePhaseDiagnosticCount: 0,
   ops06ClosePhaseDiagnosticBytes: 0,
-  ops06ClosePhaseDiagnosticsComplete: true
+  ops06ClosePhaseDiagnosticsComplete: true,
+  ops12RecoveryDiagnosticLines: '',
+  ops12RecoveryDiagnosticCount: 0,
+  ops12RecoveryDiagnosticBytes: 0,
+  ops12RecoveryDiagnosticsComplete: true
 };
 
 const CI1_PHASES = new Set([
@@ -152,10 +158,11 @@ const C02_CONTROL_DIAGNOSTIC_BOUNDARIES = new Set([
   'C02_RUNNER_READY', 'C02_MARKER_CONTROL_READY', 'C02_WATCHDOG_READY',
   'C02_WATCHDOG_TARGET_ACK', 'C02_INERT_DESCENDANT_MARKER', 'C02_WATCHDOG_RESULT'
 ]);
-const OPS02_RACE_DIAGNOSTIC_PREFIX = 'AH11_OPS_OPS02_C02_DIAGNOSTIC ';
+const OPS02_RACE_DIAGNOSTIC_PREFIX = 'AH11_OPS_OPS02_C02_DIAGNOSTIC_V3 ';
 const OPS02_RACE_DIAGNOSTIC_MAX_RECORDS = 64;
 const OPS02_RACE_DIAGNOSTIC_MAX_LINE_BYTES = 320;
 const OPS02_RACE_DIAGNOSTIC_MAX_BYTES = 16_384;
+const OPS02_RACE_PRODUCER_STATES = new WeakMap();
 const OPS02_RACE_DIAGNOSTIC_BOUNDARIES = new Set([
   'case_started', 'diagnostic_no_canary', 'diagnostic_proxy_unread',
   'diagnostic_child_exit', 'diagnostic_child_prefix', 'diagnostic_child_no_canary',
@@ -183,10 +190,43 @@ const OPS02_CHILD_DIAGNOSTIC_STAGES = new Set([
 const OPS02_CHILD_DIAGNOSTIC_CODES = new Set([
   ...OPS02_ADMISSION_FAILURE_CODES, 'none', 'unobserved'
 ]);
+const OPS02_TRANSACTION_BOUNDARIES = new Set(['begin', 'body', 'commit', 'rollback', 'none', 'unobserved']);
+const OPS02_SQLITE_PRIMARY_CODES = new Set([null, 5, 6]);
+const OPS02_ROLLBACK_DISPOSITIONS = new Set([
+  'not_observed', 'inactive', 'unknown', 'rolled_back', 'rollback_failed', 'rollback_check_failed'
+]);
 const OPS06_CLOSE_PHASE_DIAGNOSTIC_PREFIX = 'AH11_OPS_OPS06_CLOSE_PHASES ';
 const OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_RECORDS = 1;
 const OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_LINE_BYTES = 512;
 const OPS06_CLOSE_PHASE_DIAGNOSTIC_MAX_BYTES = 512;
+const OPS06_CLOSE_PHASE_STAGES = new Set([
+  'ready_wait', 'worker_start', 'runner_wait', 'runner_pause', 'worker_stop', 'stop_validate',
+  'record_output', 'signal_delivery', 'flush_barrier', 'supervisor_close_wait',
+  'supervisor_exit', 'stopped_record', 'restart_spawn', 'restart_start', 'restart_wait',
+  'restart_stop', 'restart_verify', 'restart_close',
+  'restart_exit', 'restart_record', 'restart_state', 'complete', 'unknown'
+]);
+const OPS06_CLOSE_PHASE_EXITS = new Set(['zero', 'nonzero', 'signal', 'unknown']);
+const OPS06_CLOSE_PHASE_SIGNALS = new Set(['SIGABRT', 'SIGINT', 'SIGKILL', 'SIGTERM']);
+const OPS12_RECOVERY_DIAGNOSTIC_PREFIX = 'AH11_OPS_OPS12_RECOVERY_DIAGNOSTIC ';
+const OPS12_RECOVERY_DIAGNOSTIC_MAX_RECORDS = 1;
+const OPS12_RECOVERY_DIAGNOSTIC_MAX_LINE_BYTES = 512;
+const OPS12_RECOVERY_DIAGNOSTIC_MAX_BYTES = 1_024;
+const OPS12_RECOVERY_CASES = new Set([
+  'busy_store_spans_stop', 'store_unavailable', 'future_schema',
+  'stuck_runner_review_escalation', 'unknown_hold_restart_escalation', 'unknown', 'none'
+]);
+const OPS12_RECOVERY_STAGES = new Set([
+  'fixture_start', 'case_setup', 'busy_write', 'worker_stop', 'reopen_validate',
+  'compatibility_read', 'future_schema_write', 'worker_open', 'byte_compare',
+  'runner_pause', 'await_park', 'restart', 'hold_setup', 'intent_write',
+  'lease_expiry', 'hold_verify', 'case_complete', 'none', 'unknown'
+]);
+const OPS12_RECOVERY_ERROR_CLASSES = new Set([
+  'assertion', 'sqlite_busy', 'sqlite_other', 'type', 'range', 'error', 'unknown', 'none'
+]);
+const OPS12_RECOVERY_EXIT_DISPOSITIONS = new Set(['zero', 'nonzero', 'signal', 'unknown']);
+const OPS12_RECOVERY_SIGNALS = new Set(['SIGABRT', 'SIGINT', 'SIGKILL', 'SIGTERM']);
 
 function c02OriginalErrorClass(error) {
   if (error instanceof SyntaxError) return 'SyntaxError';
@@ -235,25 +275,71 @@ function markOps02RaceDiagnosticsIncomplete(state = METRICS) {
 }
 
 function parseOps02AdmissionFailure(stderr) {
-  if (typeof stderr !== 'string') return null;
+  if (typeof stderr !== 'string' || Buffer.byteLength(stderr, 'utf8') > 512) return null;
   const lines = stderr.split(/\r?\n/u).filter(line => line.length > 0);
   if (lines.length !== 1 || !lines[0].startsWith('OPS_ADMISSION_FAILURE ')) return null;
   let record;
   try { record = JSON.parse(lines[0].slice('OPS_ADMISSION_FAILURE '.length)); } catch { return null; }
   if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
   const keys = Object.keys(record).sort();
-  if (keys.length !== 3 || keys[0] !== 'code' || keys[1] !== 'schema' || keys[2] !== 'stage'
-      || record.schema !== 'ops-admission-failure.v1'
-      || !OPS02_ADMISSION_FAILURE_STAGES.has(record.stage)
-      || !OPS02_ADMISSION_FAILURE_CODES.has(record.code)) return null;
-  return { stage: record.stage, code: record.code };
+  if (record.schema === 'ops-admission-failure.v1') {
+    if (keys.length !== 3 || keys[0] !== 'code' || keys[1] !== 'schema' || keys[2] !== 'stage'
+        || !OPS02_ADMISSION_FAILURE_STAGES.has(record.stage)
+        || !OPS02_ADMISSION_FAILURE_CODES.has(record.code)) return null;
+    return {
+      stage: record.stage, code: record.code, transactionBoundary: 'none', sqlitePrimaryCode: null,
+      transactionActive: null, rollbackDisposition: 'not_observed'
+    };
+  }
+  if (record.schema !== 'ops-admission-failure.v2'
+      || keys.length !== 7 || keys[0] !== 'code' || keys[1] !== 'rollbackDisposition'
+      || keys[2] !== 'schema' || keys[3] !== 'sqlitePrimaryCode' || keys[4] !== 'stage'
+      || keys[5] !== 'transactionActive' || keys[6] !== 'transactionBoundary'
+      || record.stage !== 'admission' || record.code !== 'STORE_BUSY'
+      || !OPS02_TRANSACTION_BOUNDARIES.has(record.transactionBoundary)
+      || ![5, 6].includes(record.sqlitePrimaryCode)
+      || !(record.transactionActive === null || typeof record.transactionActive === 'boolean')
+      || !OPS02_ROLLBACK_DISPOSITIONS.has(record.rollbackDisposition)) return null;
+  const validDisposition = record.transactionBoundary === 'begin'
+    ? record.transactionActive === null && record.rollbackDisposition === 'not_observed'
+    : ['body', 'commit'].includes(record.transactionBoundary)
+      ? (record.rollbackDisposition === 'inactive' && record.transactionActive === false)
+        || (record.rollbackDisposition === 'rolled_back' && record.transactionActive === true)
+        || (record.rollbackDisposition === 'unknown' && record.transactionActive === null)
+      : record.transactionBoundary === 'rollback'
+        ? (record.rollbackDisposition === 'rollback_failed' && record.transactionActive === true)
+          || (record.rollbackDisposition === 'rollback_check_failed' && record.transactionActive === null)
+        : false;
+  if (!validDisposition) return null;
+  return {
+    stage: record.stage, code: record.code,
+    transactionBoundary: record.transactionBoundary, sqlitePrimaryCode: record.sqlitePrimaryCode,
+    transactionActive: record.transactionActive, rollbackDisposition: record.rollbackDisposition
+  };
 }
 
 function recordOps02RaceDiagnostic({
   boundary, raceKind = 'diagnostic', contender = null, passed,
-  exit = 'not_applicable', childStage = 'none', childCode = 'none'
+  exit = 'not_applicable', childStage = 'none', childCode = 'none',
+  transactionBoundary = 'none', sqlitePrimaryCode = null,
+  transactionActive = null, rollbackDisposition = 'not_observed'
 }, state = METRICS) {
   try {
+    if (state === null || typeof state !== 'object' || Array.isArray(state)
+        || state.ops02RaceDiagnosticsComplete !== true) return false;
+    const prior = OPS02_RACE_PRODUCER_STATES.get(state);
+    if (!prior && (state.ops02RaceDiagnosticCount !== 0
+        || state.ops02RaceDiagnosticBytes !== 0 || state.ops02RaceDiagnosticLines !== '')) {
+      markOps02RaceDiagnosticsIncomplete(state);
+      return false;
+    }
+    const producerState = prior ?? { started: false, childExitGroups: new Set() };
+    if ((!producerState.started && boundary !== 'case_started')
+        || (boundary === 'case_started' && producerState.started)
+        || (boundary === 'child_exit_group' && producerState.childExitGroups.has(raceKind))) {
+      markOps02RaceDiagnosticsIncomplete(state);
+      return false;
+    }
     if (!OPS02_RACE_DIAGNOSTIC_BOUNDARIES.has(boundary)
         || !OPS02_RACE_DIAGNOSTIC_RACES.has(raceKind)
         || !(contender === null || contender === 0 || contender === 1)
@@ -261,17 +347,26 @@ function recordOps02RaceDiagnostic({
         || !OPS02_RACE_DIAGNOSTIC_EXITS.has(exit)
         || !OPS02_CHILD_DIAGNOSTIC_STAGES.has(childStage)
         || !OPS02_CHILD_DIAGNOSTIC_CODES.has(childCode)
+        || !OPS02_TRANSACTION_BOUNDARIES.has(transactionBoundary)
+        || !OPS02_SQLITE_PRIMARY_CODES.has(sqlitePrimaryCode)
+        || !(transactionActive === null || typeof transactionActive === 'boolean')
+        || !OPS02_ROLLBACK_DISPOSITIONS.has(rollbackDisposition)
         || !Number.isSafeInteger(state.ops02RaceDiagnosticCount)
         || !Number.isSafeInteger(state.ops02RaceDiagnosticBytes)
         || typeof state.ops02RaceDiagnosticLines !== 'string') {
       markOps02RaceDiagnosticsIncomplete(state);
       return false;
     }
-    const line = `${OPS02_RACE_DIAGNOSTIC_PREFIX}${JSON.stringify({
-      schema: 'agent-harness.ah11-ops02-race-diagnostic.v1',
-      caseId: 'OPS02.C02', boundary, raceKind, contender, passed,
-      exit, childStage, childCode
-    })}\n`;
+    const encoded = encodeOps02RaceDiagnostic({
+      schema: 'agent-harness.ah11-ops02-race-diagnostic.v3', caseId: 'OPS02.C02',
+      boundary, raceKind, contender, passed, exit, childStage, childCode,
+      transactionBoundary, sqlitePrimaryCode, transactionActive, rollbackDisposition
+    });
+    if (typeof encoded !== 'string') {
+      markOps02RaceDiagnosticsIncomplete(state);
+      return false;
+    }
+    const line = `${encoded}\n`;
     const lineBytes = Buffer.byteLength(line, 'utf8');
     if (state.ops02RaceDiagnosticCount >= OPS02_RACE_DIAGNOSTIC_MAX_RECORDS
         || lineBytes > OPS02_RACE_DIAGNOSTIC_MAX_LINE_BYTES
@@ -282,6 +377,9 @@ function recordOps02RaceDiagnostic({
     state.ops02RaceDiagnosticLines += line;
     state.ops02RaceDiagnosticCount += 1;
     state.ops02RaceDiagnosticBytes += lineBytes;
+    if (boundary === 'case_started') producerState.started = true;
+    if (boundary === 'child_exit_group') producerState.childExitGroups.add(raceKind);
+    if (prior === undefined) OPS02_RACE_PRODUCER_STATES.set(state, producerState);
     return true;
   } catch {
     markOps02RaceDiagnosticsIncomplete(state);
@@ -305,7 +403,11 @@ function recordOps02ContenderResults(raceKind, results, state = METRICS) {
     recordOps02RaceDiagnostic({
       boundary: 'contender_exit', raceKind, contender, passed, exit,
       childStage: childFailure?.stage ?? (exit === 'zero' ? 'none' : 'unobserved'),
-      childCode: childFailure?.code ?? (exit === 'zero' ? 'none' : 'unobserved')
+      childCode: childFailure?.code ?? (exit === 'zero' ? 'none' : 'unobserved'),
+      transactionBoundary: childFailure?.transactionBoundary ?? 'none',
+      sqlitePrimaryCode: childFailure?.sqlitePrimaryCode ?? null,
+      transactionActive: childFailure?.transactionActive ?? null,
+      rollbackDisposition: childFailure?.rollbackDisposition ?? 'not_observed'
     }, state);
   });
   recordOps02RaceDiagnostic({
@@ -320,7 +422,7 @@ function classifyChildExitDisposition({ code, signal } = {}) {
   return 'unknown';
 }
 
-function recordOps06ClosePhaseDiagnostic(record, processCloseElapsedMs, state = METRICS) {
+function recordOps06ClosePhaseDiagnostic(record, processCloseElapsedMs, restartProcessCloseElapsedMs, state = METRICS) {
   try {
     if (state.ops06ClosePhaseDiagnosticCount !== 0
         || !Number.isSafeInteger(state.ops06ClosePhaseDiagnosticCount)
@@ -331,17 +433,25 @@ function recordOps06ClosePhaseDiagnostic(record, processCloseElapsedMs, state = 
       return false;
     }
     const phases = record.phaseElapsedMs;
-    if (!phases || typeof phases !== 'object' || Array.isArray(phases)) {
+    if (!phases || typeof phases !== 'object' || Array.isArray(phases)
+        || !OPS06_CLOSE_PHASE_STAGES.has(record.stage)
+        || !OPS06_CLOSE_PHASE_EXITS.has(record.exitDisposition)
+        || !(record.exitCode === null || (Number.isSafeInteger(record.exitCode)
+          && record.exitCode >= 0 && record.exitCode <= 255))
+        || !(record.exitSignal === null || OPS06_CLOSE_PHASE_SIGNALS.has(record.exitSignal))
+        || !['none', 'assertion', 'child_exit', 'unknown'].includes(record.failureClass)) {
       state.ops06ClosePhaseDiagnosticsComplete = false;
       return false;
     }
     const value = {
-      schema: 'agent-harness.ah11-ops06-close-phases.v1', caseId: 'OPS06.C01',
+      schema: 'agent-harness.ah11-ops06-close-phases.v2', caseId: 'OPS06.C01',
+      stage: record.stage, failureClass: record.failureClass,
+      exitDisposition: record.exitDisposition, exitCode: record.exitCode, exitSignal: record.exitSignal,
       signalToFirstStopElapsedMs: phases.signalToFirstStopElapsedMs,
       restartWorkElapsedMs: phases.restartWorkElapsedMs,
       finalStopElapsedMs: phases.finalStopElapsedMs,
       readyToFinalRecordElapsedMs: phases.readyToFinalRecordElapsedMs,
-      processCloseElapsedMs
+      processCloseElapsedMs, restartOwnership: 'fresh_process', restartProcessCloseElapsedMs
     };
     if (Object.values(value).some(item => typeof item === 'number'
         && (!Number.isFinite(item) || item < 0 || item > 30_000))) {
@@ -349,12 +459,22 @@ function recordOps06ClosePhaseDiagnostic(record, processCloseElapsedMs, state = 
       return false;
     }
     for (const key of [
-      'signalToFirstStopElapsedMs', 'restartWorkElapsedMs', 'finalStopElapsedMs', 'readyToFinalRecordElapsedMs', 'processCloseElapsedMs'
+      'signalToFirstStopElapsedMs', 'restartWorkElapsedMs', 'finalStopElapsedMs',
+      'readyToFinalRecordElapsedMs', 'processCloseElapsedMs', 'restartProcessCloseElapsedMs'
     ]) {
-      if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] < 0 || value[key] > 30_000) {
+      if (!(value[key] === null || (typeof value[key] === 'number'
+          && Number.isFinite(value[key]) && value[key] >= 0 && value[key] <= 30_000))) {
         state.ops06ClosePhaseDiagnosticsComplete = false;
         return false;
       }
+    }
+    if ((value.exitDisposition === 'zero' && (value.exitCode !== 0 || value.exitSignal !== null))
+        || (value.exitDisposition === 'nonzero' && (!Number.isSafeInteger(value.exitCode)
+          || value.exitCode === 0 || value.exitSignal !== null))
+        || (value.exitDisposition === 'signal' && (value.exitCode !== null || value.exitSignal === null))
+        || (value.exitDisposition === 'unknown' && (value.exitCode !== null || value.exitSignal !== null))) {
+      state.ops06ClosePhaseDiagnosticsComplete = false;
+      return false;
     }
     const line = `${OPS06_CLOSE_PHASE_DIAGNOSTIC_PREFIX}${JSON.stringify(value)}\n`;
     const lineBytes = Buffer.byteLength(line, 'utf8');
@@ -369,6 +489,37 @@ function recordOps06ClosePhaseDiagnostic(record, processCloseElapsedMs, state = 
     return true;
   } catch {
     try { state.ops06ClosePhaseDiagnosticsComplete = false; } catch {}
+    return false;
+  }
+}
+
+function recordOps12RecoveryDiagnostic(result, childFailure, state = METRICS) {
+  try {
+    if (state.ops12RecoveryDiagnosticCount !== 0
+        || !Number.isSafeInteger(state.ops12RecoveryDiagnosticCount)
+        || !Number.isSafeInteger(state.ops12RecoveryDiagnosticBytes)
+        || typeof state.ops12RecoveryDiagnosticLines !== 'string') {
+      state.ops12RecoveryDiagnosticsComplete = false;
+      return false;
+    }
+    const value = buildOps12RecoveryDiagnosticRecord(result, childFailure);
+    if (!value) {
+      state.ops12RecoveryDiagnosticsComplete = false;
+      return false;
+    }
+    const line = `${OPS12_RECOVERY_DIAGNOSTIC_PREFIX}${JSON.stringify(value)}\n`;
+    const lineBytes = Buffer.byteLength(line, 'utf8');
+    if (lineBytes > OPS12_RECOVERY_DIAGNOSTIC_MAX_LINE_BYTES
+        || state.ops12RecoveryDiagnosticBytes + lineBytes > OPS12_RECOVERY_DIAGNOSTIC_MAX_BYTES) {
+      state.ops12RecoveryDiagnosticsComplete = false;
+      return false;
+    }
+    state.ops12RecoveryDiagnosticLines += line;
+    state.ops12RecoveryDiagnosticCount += 1;
+    state.ops12RecoveryDiagnosticBytes += lineBytes;
+    return true;
+  } catch {
+    try { state.ops12RecoveryDiagnosticsComplete = false; } catch {}
     return false;
   }
 }
@@ -6305,71 +6456,201 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
   });
 
   await t.test('OPS06.C01 actual repeated mixed signals share one cleanup and close the owned process', async t => {
+  const diagnostic = {
+    stage: 'ready_wait', failureClass: 'unknown', exitDisposition: 'unknown', exitCode: null, exitSignal: null,
+    phaseElapsedMs: {
+      signalToFirstStopElapsedMs: null, restartWorkElapsedMs: null, finalStopElapsedMs: null,
+      readyToFinalRecordElapsedMs: null
+    }
+  };
+  let diagnosticRecorded = false;
+  let processCloseElapsedMs = null;
+  let restartProcessCloseElapsedMs = null;
+  const recordDiagnostic = () => {
+    if (diagnosticRecorded) return;
+    diagnosticRecorded = recordOps06ClosePhaseDiagnostic(
+      diagnostic, processCloseElapsedMs, restartProcessCloseElapsedMs
+    );
+  };
+  t.after(recordDiagnostic);
+
+  const databasePath = join(temporary.directory, 'repeated-signal.sqlite');
   const flushMarker = join(temporary.directory, 'repeated-signal-flush.json');
   const signalChild = spawn(process.execPath, [
-    join(ROOT, 'tests/operations/fixtures/repeated-signal-child.mjs'),
-    join(temporary.directory, 'repeated-signal.sqlite'), flushMarker
+    join(ROOT, 'tests/operations/fixtures/repeated-signal-child.mjs'), databasePath, flushMarker
   ], { cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
   METRICS.processRuns += 1;
   let signalChildClosed = false;
-  t.after(async () => {
-    if (!signalChildClosed) await killOwnedChildAndReap(signalChild, closed);
-  });
   let signalOutput = '';
-  let ready = false;
+  let readyRecord = null;
   signalChild.stdout.setEncoding('utf8');
   signalChild.stdout.on('data', chunk => {
     signalOutput += chunk;
-    ready ||= signalOutput.includes('"event":"ready"');
+    for (const line of signalOutput.split(/\r?\n/u)) {
+      try {
+        const value = JSON.parse(line);
+        if (value.event === 'ready') readyRecord = value;
+      } catch {}
+    }
   });
   signalChild.stderr.setEncoding('utf8');
   signalChild.stderr.on('data', chunk => { signalOutput += chunk; });
   const closed = new Promise(resolvePromise => signalChild.once('close', (code, signal) => resolvePromise({ code, signal })));
+  t.after(async () => {
+    if (!signalChildClosed) await killOwnedChildAndReap(signalChild, closed);
+  });
+
   const readyDeadline = Date.now() + 5_000;
-  while (!ready && Date.now() < readyDeadline && signalChild.exitCode === null) await new Promise(resolvePromise => setTimeout(resolvePromise, 5));
-  assert.equal(ready, true, signalOutput);
+  while (readyRecord === null && Date.now() < readyDeadline && signalChild.exitCode === null) {
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 5));
+  }
+  if (readyRecord === null) {
+    diagnostic.stage = 'ready_wait';
+    diagnostic.failureClass = 'child_exit';
+    diagnostic.exitDisposition = classifyChildExitDisposition({ code: signalChild.exitCode, signal: signalChild.signalCode });
+    diagnostic.exitCode = Number.isSafeInteger(signalChild.exitCode) ? signalChild.exitCode : null;
+    diagnostic.exitSignal = OPS06_CLOSE_PHASE_SIGNALS.has(signalChild.signalCode) ? signalChild.signalCode : null;
+    recordDiagnostic();
+  }
+  assert.ok(readyRecord, signalOutput);
+  diagnostic.stage = 'signal_delivery';
+  diagnostic.failureClass = 'unknown';
   const firstSignalAt = performance.now();
-  assert.equal(signalChild.kill('SIGTERM'), true);
-  METRICS.processSigtermSignalsSent += 1;
+  const firstSignalSent = signalChild.kill('SIGTERM');
+  if (firstSignalSent) METRICS.processSigtermSignalsSent += 1;
+  assert.equal(firstSignalSent, true);
   await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
-  assert.equal(signalChild.kill('SIGINT'), true);
-  METRICS.processSigintSignalsSent += 1;
+  const secondSignalSent = signalChild.kill('SIGINT');
+  if (secondSignalSent) METRICS.processSigintSignalsSent += 1;
+  assert.equal(secondSignalSent, true);
+  diagnostic.stage = 'flush_barrier';
   await waitForPath(flushMarker, signalChild, 2_000);
   await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
-  assert.equal(signalChild.kill('SIGTERM'), true);
-  METRICS.processSigtermSignalsSent += 1;
+  const finalSignalSent = signalChild.kill('SIGTERM');
+  if (finalSignalSent) METRICS.processSigtermSignalsSent += 1;
+  assert.equal(finalSignalSent, true);
+
+  diagnostic.stage = 'supervisor_close_wait';
   const signalExit = await waitForCloseBounded(closed, 2_000);
-  signalChildClosed = Boolean(signalExit);
-  if (!signalExit) await killOwnedChildAndReap(signalChild, closed);
+  if (signalExit) {
+    signalChildClosed = true;
+    processCloseElapsedMs = performance.now() - firstSignalAt;
+    METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, processCloseElapsedMs);
+    METRICS.processCloseSamples += 1;
+    diagnostic.stage = 'supervisor_exit';
+    diagnostic.failureClass = signalExit.code === 0 ? 'none' : 'child_exit';
+    diagnostic.exitDisposition = classifyChildExitDisposition(signalExit);
+    diagnostic.exitCode = Number.isSafeInteger(signalExit.code) ? signalExit.code : null;
+    diagnostic.exitSignal = OPS06_CLOSE_PHASE_SIGNALS.has(signalExit.signal) ? signalExit.signal : null;
+    const stopFailure = signalOutput.match(/^AH11_OPS_OPS06_STOP_FAILURE stage=(worker_start|runner_wait|runner_pause|worker_stop|stop_validate|record_output|unknown) errorClass=(?:type|range|error)$/mu);
+    if (stopFailure) {
+      diagnostic.stage = stopFailure[1];
+      diagnostic.failureClass = 'child_exit';
+    }
+  } else {
+    diagnostic.stage = 'supervisor_close_wait';
+    diagnostic.failureClass = 'child_exit';
+    diagnostic.exitDisposition = 'unknown';
+    diagnostic.exitCode = null;
+    diagnostic.exitSignal = null;
+    recordDiagnostic();
+  }
   assert.ok(signalExit, signalOutput);
-  const processCloseElapsedMs = performance.now() - firstSignalAt;
-  METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, processCloseElapsedMs);
-  METRICS.processCloseSamples += 1;
   assert.equal(signalExit.code, 0, signalOutput);
+  diagnostic.failureClass = 'assertion';
+  diagnostic.stage = 'stopped_record';
   const stoppedLine = signalOutput.split(/\r?\n/u).find(line => line.includes('"event":"stopped"'));
   assert.ok(stoppedLine, signalOutput);
   const stoppedRecord = JSON.parse(stoppedLine);
-  recordOps06ClosePhaseDiagnostic(stoppedRecord, processCloseElapsedMs);
+  diagnostic.phaseElapsedMs.signalToFirstStopElapsedMs = stoppedRecord.phaseElapsedMs?.signalToFirstStopElapsedMs ?? null;
+  diagnostic.phaseElapsedMs.readyToFinalRecordElapsedMs = stoppedRecord.phaseElapsedMs?.readyToFinalRecordElapsedMs ?? null;
+  diagnostic.stage = 'stopped_record';
+  diagnostic.failureClass = 'assertion';
+
   assert.equal(stoppedRecord.stopped.stopped, true);
   assert.equal(stoppedRecord.stopped.childrenReaped, true);
   assert.equal(stoppedRecord.stopped.storeClosed, true);
   assert.equal(stoppedRecord.sinkCalls, 1);
   assert.equal(stoppedRecord.providerCalls, 0);
   assert.equal(stoppedRecord.workAfterStop.state, 'queued');
-  assert.equal(stoppedRecord.afterRestart.state, 'completed');
-  assert.equal(stoppedRecord.afterRestart.workflowState, 'succeeded');
-  assert.ok(stoppedRecord.afterRestart.fence > stoppedRecord.workAfterStop.fence);
   assert.equal(stoppedRecord.attemptCount, 0);
+  assert.equal(stoppedRecord.telemetry.cursor, 0);
+  assert.ok(stoppedRecord.telemetry.pendingRecords > 0);
   assert.ok(processCloseElapsedMs < 1_500, `Actual process close took ${processCloseElapsedMs} ms.`);
-    await t.test('OPS06.C03 clears the losing shutdown timer and distinguishes stop return from process close', () => {
+
+  diagnostic.stage = 'restart_spawn';
+  const restartStartedAt = performance.now();
+  const restart = startOwnedChild(join(ROOT, 'tests/operations/fixtures/repeated-signal-restart-child.mjs'),
+    [databasePath, stoppedRecord.jobId], { timeoutMs: 9_000 });
+  let restartClosed = false;
+  t.after(async () => {
+    if (!restartClosed) await killOwnedChildAndReap(restart.child, restart.closed);
+  });
+  diagnostic.stage = 'restart_close';
+  const restartExit = await waitForCloseBounded(restart.closed, 10_000);
+  if (restartExit) {
+    restartClosed = true;
+    restartProcessCloseElapsedMs = performance.now() - restartStartedAt;
+    diagnostic.stage = 'restart_exit';
+    diagnostic.failureClass = restartExit.code === 0 ? 'none' : 'child_exit';
+    diagnostic.exitDisposition = classifyChildExitDisposition(restartExit);
+    diagnostic.exitCode = Number.isSafeInteger(restartExit.code) ? restartExit.code : null;
+    diagnostic.exitSignal = OPS06_CLOSE_PHASE_SIGNALS.has(restartExit.signal) ? restartExit.signal : null;
+    const restartFailure = restartExit.stderr.match(/^AH11_OPS_OPS06_RESTART_FAILURE stage=(restart_start|restart_wait|restart_stop|restart_verify) errorClass=(?:assertion|error)$/mu);
+    if (restartFailure) {
+      diagnostic.stage = restartFailure[1];
+      diagnostic.failureClass = 'child_exit';
+    }
+  } else {
+    diagnostic.stage = 'restart_close';
+    diagnostic.failureClass = 'child_exit';
+    diagnostic.exitDisposition = 'unknown';
+    diagnostic.exitCode = null;
+    diagnostic.exitSignal = null;
+    recordDiagnostic();
+  }
+  assert.ok(restartExit, 'The fresh restart process must close under its separate bounded owner wait.');
+  assert.equal(restartExit.code, 0, restartExit.stderr);
+  let restartRecord = null;
+  try { restartRecord = JSON.parse(restartExit.stdout.trim()); } catch {}
+  diagnostic.stage = 'restart_record';
+  diagnostic.failureClass = 'assertion';
+  assert.equal(restartRecord?.event, 'restarted');
+  diagnostic.phaseElapsedMs.restartWorkElapsedMs = restartRecord.phaseElapsedMs.restartWorkElapsedMs;
+  diagnostic.phaseElapsedMs.finalStopElapsedMs = restartRecord.phaseElapsedMs.finalStopElapsedMs;
+  diagnostic.stage = 'restart_state';
+  diagnostic.failureClass = 'assertion';
+
+  assert.equal(restartRecord.providerCalls, 0);
+  assert.equal(restartRecord.afterRestart.state, 'completed');
+  assert.equal(restartRecord.afterRestart.workflowState, 'succeeded');
+  assert.ok(restartRecord.afterRestart.generation > stoppedRecord.workAfterStop.generation);
+  assert.ok(restartRecord.afterRestart.fence > stoppedRecord.workAfterStop.fence);
+  assert.equal(restartRecord.attemptCount, 0);
+  assert.ok(processCloseElapsedMs >= stoppedRecord.stopped.elapsedMs,
+    'The parent-observed first process close must include the bounded worker stop interval.');
+  diagnostic.exitDisposition = 'zero';
+  diagnostic.exitCode = 0;
+  diagnostic.exitSignal = null;
+  diagnostic.stage = 'stopped_record';
+  diagnostic.failureClass = 'assertion';
+  await t.test('OPS06.C03 clears the losing shutdown timer and distinguishes stop return from process close', () => {
+    try {
       assert.ok(processCloseElapsedMs >= stoppedRecord.stopped.elapsedMs,
         'The parent-observed process close must include at least the worker stop-return interval.');
       assert.ok(processCloseElapsedMs < 1_500);
       assert.equal(stoppedRecord.telemetry.cursor, 0);
       assert.ok(stoppedRecord.telemetry.pendingRecords > 0);
       assert.equal(stoppedRecord.sinkCalls, 1);
-    });
+    } catch (error) {
+      recordDiagnostic();
+      throw error;
+    }
   });
+  diagnostic.stage = 'complete';
+  diagnostic.failureClass = 'none';
+  recordDiagnostic();
+});
 });
 
 test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpressure and reports headroom', async t => {
@@ -6378,8 +6659,56 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
   const worker = createOperationsWorker({ databasePath: temporary.databasePath, ownerId: 'ops-worker:busy' });
   t.after(async () => { await worker.stop('test'); });
   void worker.start();
+  const diagnosticStore = openStore(temporary.databasePath);
+  t.after(() => diagnosticStore.close());
   const lock = new DatabaseSync(temporary.databasePath, { timeout: 20 });
+  let lockClosed = false;
+  t.after(() => {
+    try { if (lock.isTransaction) lock.exec('ROLLBACK'); } catch {}
+    if (!lockClosed) {
+      try { lock.close(); } catch {}
+    }
+  });
   lock.exec('BEGIN IMMEDIATE');
+  let nativeAdmissionError = null;
+  try {
+    admit(diagnosticStore, 'busy-native-tenant', 'busy-native-project', 'busy-native', PLAN);
+  } catch (error) {
+    nativeAdmissionError = error;
+  }
+  assert.equal(nativeAdmissionError?.code, 'STORE_BUSY');
+  const nativeBusy = readOperationsAdmissionBusyDiagnostic(nativeAdmissionError);
+  assert.deepEqual(nativeBusy, {
+    transactionBoundary: 'begin', sqlitePrimaryCode: 5,
+    transactionActive: null, rollbackDisposition: 'not_observed'
+  });
+  assert.equal(Object.isFrozen(nativeBusy), true);
+  const nativeFailure = createAdmissionFailureDiagnostic('admission', nativeAdmissionError);
+  assert.deepEqual(nativeFailure, {
+    schema: 'ops-admission-failure.v2', stage: 'admission', code: 'STORE_BUSY',
+    transactionBoundary: 'begin', sqlitePrimaryCode: 5,
+    transactionActive: null, rollbackDisposition: 'not_observed'
+  });
+  const forgedRuntimeBusy = runtimeError({
+    module: 'operations', operation: '_operationsAdmit', code: 'STORE_BUSY', retryable: true,
+    safe_message: 'synthetic only'
+  });
+  const forgedNativeBusy = Object.assign(new Error('synthetic only'), { code: 'STORE_BUSY', errcode: 5 });
+  assert.equal(readOperationsAdmissionBusyDiagnostic(forgedRuntimeBusy), null);
+  assert.equal(readOperationsAdmissionBusyDiagnostic(forgedNativeBusy), null);
+  let proxyReads = 0;
+  const proxyCanary = new Proxy({}, {
+    getOwnPropertyDescriptor() { proxyReads += 1; throw new Error('proxy canary'); },
+    get() { proxyReads += 1; throw new Error('proxy canary'); }
+  });
+  let getterReads = 0;
+  const getterCanary = Object.defineProperty({}, 'code', {
+    get() { getterReads += 1; throw new Error('getter canary'); }
+  });
+  assert.equal(readOperationsAdmissionBusyDiagnostic(proxyCanary), null);
+  assert.equal(readOperationsAdmissionBusyDiagnostic(getterCanary), null);
+  assert.equal(proxyReads, 0);
+  assert.equal(getterReads, 0);
   const result = worker.submitSyntheticWork({
     trustedSyntheticScope: { tenantId: 'busy-tenant', projectId: 'busy-project' },
     idempotencyKey: 'busy-1', planJson: PLAN
@@ -6389,6 +6718,7 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
   });
   lock.exec('ROLLBACK');
   lock.close();
+  lockClosed = true;
   const health = worker.health();
   METRICS.maxSupervisorRssBytes = Math.max(METRICS.maxSupervisorRssBytes, health.process.rssBytes);
   assert.ok(Number.isSafeInteger(health.resources.freeBytes));
@@ -7812,6 +8142,7 @@ test('OPS12_RUNBOOK_CLEAN_START starts, health-checks, SIGTERMs, reopens, and re
   await t.test('OPS12.C01 executes busy, unavailable, future-schema, stuck-review, and unknown-hold recovery in a child process', async t => {
     const transcriptPath = join(temporary.directory, 'recovery-cases.jsonl');
     const result = await runChild(join(ROOT, 'tests/operations/runbook-recovery-cases.mjs'), [transcriptPath], { timeoutMs: 20_000 });
+    recordOps12RecoveryDiagnostic(result, parseOps12RecoveryFailure(result.stderr));
     assert.equal(result.code, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout.trim()), { cases: 5, passed: 5, providerCalls: 0 });
     const records = readFileSync(transcriptPath, 'utf8').trim().split(/\r?\n/u).map(line => JSON.parse(line));
@@ -7857,7 +8188,9 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       'c02ControlReadDiagnosticsComplete',
       'ops02RaceDiagnosticLines', 'ops02RaceDiagnosticCount', 'ops02RaceDiagnosticBytes',
       'ops02RaceDiagnosticsComplete', 'ops06ClosePhaseDiagnosticLines',
-      'ops06ClosePhaseDiagnosticCount', 'ops06ClosePhaseDiagnosticBytes', 'ops06ClosePhaseDiagnosticsComplete'
+      'ops06ClosePhaseDiagnosticCount', 'ops06ClosePhaseDiagnosticBytes', 'ops06ClosePhaseDiagnosticsComplete',
+      'ops12RecoveryDiagnosticLines', 'ops12RecoveryDiagnosticCount',
+      'ops12RecoveryDiagnosticBytes', 'ops12RecoveryDiagnosticsComplete'
   ].sort());
   for (const key of [
     'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete', 'ci1PhaseCaptureChildCloseUnconfirmed',
@@ -7909,6 +8242,18 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     lines: METRICS.ops06ClosePhaseDiagnosticLines, count: METRICS.ops06ClosePhaseDiagnosticCount,
     bytes: METRICS.ops06ClosePhaseDiagnosticBytes, diagnosticsComplete: METRICS.ops06ClosePhaseDiagnosticsComplete
   }).complete, true);
+  assert.equal(typeof METRICS.ops12RecoveryDiagnosticLines, 'string');
+  assert.equal(Number.isSafeInteger(METRICS.ops12RecoveryDiagnosticCount), true);
+  assert.equal(METRICS.ops12RecoveryDiagnosticCount, OPS12_RECOVERY_DIAGNOSTIC_MAX_RECORDS);
+  assert.equal(Number.isSafeInteger(METRICS.ops12RecoveryDiagnosticBytes), true);
+  assert.ok(METRICS.ops12RecoveryDiagnosticBytes >= 0
+    && METRICS.ops12RecoveryDiagnosticBytes <= OPS12_RECOVERY_DIAGNOSTIC_MAX_BYTES);
+  assert.equal(typeof METRICS.ops12RecoveryDiagnosticsComplete, 'boolean');
+  assert.equal(Buffer.byteLength(METRICS.ops12RecoveryDiagnosticLines, 'utf8'), METRICS.ops12RecoveryDiagnosticBytes);
+  assert.equal(parseOps12RecoveryDiagnostics({
+    lines: METRICS.ops12RecoveryDiagnosticLines, count: METRICS.ops12RecoveryDiagnosticCount,
+    bytes: METRICS.ops12RecoveryDiagnosticBytes, diagnosticsComplete: METRICS.ops12RecoveryDiagnosticsComplete
+  }).complete, true);
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.blockedExternalNetworkAttempts, 0);
   await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', async t => {
@@ -7924,29 +8269,250 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       assert.equal(classifyChildExitDisposition(control.result), control.exit);
       assert.equal(control.result.code === 2, control.passed);
     }
+    const ops02WireState = () => ({
+      ops02RaceDiagnosticLines: '', ops02RaceDiagnosticCount: 0,
+      ops02RaceDiagnosticBytes: 0, ops02RaceDiagnosticsComplete: true
+    });
+    const all48State = ops02WireState();
+    const all48Expected = [];
+    const appendOps02 = (boundary, raceKind = 'diagnostic', fields = {}) => {
+      const record = {
+        schema: 'agent-harness.ah11-ops02-race-diagnostic.v3', caseId: 'OPS02.C02',
+        boundary, raceKind, contender: null, passed: true, exit: 'not_applicable',
+        childStage: 'none', childCode: 'none', transactionBoundary: 'none',
+        sqlitePrimaryCode: null, transactionActive: null, rollbackDisposition: 'not_observed',
+        ...fields
+      };
+      all48Expected.push(record);
+      assert.equal(recordOps02RaceDiagnostic(record, all48State), true);
+    };
+    for (const boundary of [
+      'case_started', 'diagnostic_no_canary', 'diagnostic_proxy_unread'
+    ]) appendOps02(boundary);
+    appendOps02('diagnostic_child_exit', 'diagnostic', {
+      exit: 'nonzero', childStage: 'config', childCode: 'UNKNOWN'
+    });
+    appendOps02('diagnostic_child_prefix');
+    appendOps02('diagnostic_child_no_canary');
+    const successfulRaces = [
+      ['global_records', 1], ['project_bytes_existing', 1],
+      ['project_bytes_new', 0], ['project_records', 1], ['global_bytes', 3]
+    ];
+    for (const [raceKind, seedCount] of successfulRaces) {
+      for (let index = 0; index < seedCount; index += 1) appendOps02('seed_accept', raceKind);
+      appendOps02('contender_exit', raceKind, { contender: 0, exit: 'zero' });
+      appendOps02('contender_exit', raceKind, { contender: 1, exit: 'zero' });
+      appendOps02('child_exit_group', raceKind);
+      for (const boundary of ['accepted_count', 'refusal_count', 'stored_counter', 'stored_rows']) {
+        appendOps02(boundary, raceKind);
+      }
+      if (raceKind === 'project_bytes_new') appendOps02('reservation', raceKind);
+    }
+    assert.equal(all48State.ops02RaceDiagnosticCount, 48);
+    assert.equal(all48State.ops02RaceDiagnosticsComplete, true);
+    const all48RawLines = all48State.ops02RaceDiagnosticLines.trimEnd().split('\n');
+    assert.equal(all48RawLines.length, 48);
+    assert.ok(all48RawLines.every(line => Buffer.byteLength(`${line}\n`, 'utf8') <= 320));
+    assert.ok(all48State.ops02RaceDiagnosticBytes <= 16_384);
+    const all48Parsed = parseOps02RaceDiagnostics({
+      lines: all48State.ops02RaceDiagnosticLines, count: all48State.ops02RaceDiagnosticCount,
+      bytes: all48State.ops02RaceDiagnosticBytes, diagnosticsComplete: all48State.ops02RaceDiagnosticsComplete
+    });
+    assert.equal(all48Parsed.complete, true);
+    assert.equal(all48Parsed.recordCount, 48);
+    const ops02Fields = record => [
+      record.boundary, record.raceKind, record.contender, record.passed, record.exit,
+      record.childStage, record.childCode, record.transactionBoundary, record.sqlitePrimaryCode,
+      record.transactionActive, record.rollbackDisposition
+    ];
+    assert.deepEqual(all48Parsed.records.map(ops02Fields), all48Expected.map(ops02Fields));
+    const maximumLegalOps02Record = {
+      schema: 'agent-harness.ah11-ops02-race-diagnostic.v3', caseId: 'OPS02.C02',
+      boundary: 'contender_exit', raceKind: 'global_bytes', contender: 1, passed: false,
+      exit: 'unknown', childStage: 'admission', childCode: 'STORE_BUSY',
+      transactionBoundary: 'rollback', sqlitePrimaryCode: 6,
+      transactionActive: null, rollbackDisposition: 'rollback_check_failed'
+    };
+    const maximumLegalOps02 = encodeOps02RaceDiagnostic(maximumLegalOps02Record);
+    assert.equal(typeof maximumLegalOps02, 'string');
+    assert.ok(maximumLegalOps02.startsWith(OPS02_RACE_DIAGNOSTIC_PREFIX));
+    assert.ok(Buffer.byteLength(`${maximumLegalOps02}\n`, 'utf8') <= 320);
+    const maximumWithoutSchema = { ...maximumLegalOps02Record };
+    delete maximumWithoutSchema.schema;
+    assert.equal(encodeOps02RaceDiagnostic(maximumWithoutSchema), null);
+    const maximumWithoutCaseId = { ...maximumLegalOps02Record };
+    delete maximumWithoutCaseId.caseId;
+    assert.equal(encodeOps02RaceDiagnostic(maximumWithoutCaseId), null);
+    const maximumRoundTripState = ops02WireState();
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'case_started', passed: true }, maximumRoundTripState), true);
+    const maximumRoundTripLines = `${maximumRoundTripState.ops02RaceDiagnosticLines}${maximumLegalOps02}\n`;
+    const maximumRoundTrip = parseOps02RaceDiagnostics({
+      lines: maximumRoundTripLines, count: 2,
+      bytes: Buffer.byteLength(maximumRoundTripLines, 'utf8'), diagnosticsComplete: true
+    });
+    assert.equal(maximumRoundTrip.complete, true);
+    assert.equal(maximumRoundTrip.records[1].schema, 'agent-harness.ah11-ops02-race-diagnostic.v3');
+    assert.equal(maximumRoundTrip.records[1].caseId, 'OPS02.C02');
+    assert.deepEqual(ops02Fields(maximumRoundTrip.records[1]), ops02Fields(maximumLegalOps02Record));
+    const wireBoundaryControls = [
+      ['begin', 5, null, 'not_observed'], ['begin', 6, null, 'not_observed'],
+      ['body', 5, false, 'inactive'], ['body', 6, true, 'rolled_back'],
+      ['body', 6, null, 'unknown'],
+      ['commit', 5, false, 'inactive'], ['commit', 6, true, 'rolled_back'], ['commit', 5, null, 'unknown'],
+      ['rollback', 5, true, 'rollback_failed'], ['rollback', 6, null, 'rollback_check_failed']
+    ];
+    // These closed wire tuples validate format only; native provenance is asserted by the held-writer control above.
+    for (const [transactionBoundary, sqlitePrimaryCode, transactionActive, rollbackDisposition] of wireBoundaryControls) {
+      const state = ops02WireState();
+      assert.equal(recordOps02RaceDiagnostic({ boundary: 'case_started', passed: true }, state), true);
+      assert.equal(recordOps02RaceDiagnostic({
+        boundary: 'contender_exit', raceKind: 'project_bytes_existing', contender: 0,
+        passed: false, exit: 'nonzero', childStage: 'admission', childCode: 'STORE_BUSY',
+        transactionBoundary, sqlitePrimaryCode, transactionActive, rollbackDisposition
+      }, state), true);
+      const parsed = parseOps02RaceDiagnostics({
+        lines: state.ops02RaceDiagnosticLines, count: state.ops02RaceDiagnosticCount,
+        bytes: state.ops02RaceDiagnosticBytes, diagnosticsComplete: state.ops02RaceDiagnosticsComplete
+      });
+      assert.equal(parsed.complete, true);
+      assert.equal(parsed.records[1].sqlitePrimaryCode, sqlitePrimaryCode);
+      assert.equal(parsed.records[1].transactionBoundary, transactionBoundary);
+      assert.equal(parsed.records[1].transactionActive, transactionActive);
+      assert.equal(parsed.records[1].rollbackDisposition, rollbackDisposition);
+    }
+    const unavailableOps02State = ops02WireState();
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'case_started', passed: true }, unavailableOps02State), true);
+    assert.equal(recordOps02RaceDiagnostic({
+      boundary: 'diagnostic_child_exit', raceKind: 'diagnostic', passed: false,
+      exit: 'unknown', childStage: 'unobserved', childCode: 'unobserved',
+      transactionBoundary: 'unobserved', sqlitePrimaryCode: null,
+      transactionActive: null, rollbackDisposition: 'not_observed'
+    }, unavailableOps02State), true);
+    const unavailableOps02 = parseOps02RaceDiagnostics({
+      lines: unavailableOps02State.ops02RaceDiagnosticLines, count: unavailableOps02State.ops02RaceDiagnosticCount,
+      bytes: unavailableOps02State.ops02RaceDiagnosticBytes, diagnosticsComplete: unavailableOps02State.ops02RaceDiagnosticsComplete
+    });
+    assert.equal(unavailableOps02.complete, true);
+    assert.equal(unavailableOps02.records[1].exit, 'unknown');
+    assert.equal(unavailableOps02.records[1].sqlitePrimaryCode, null);
+    assert.equal(unavailableOps02.records[1].transactionActive, null);
+    assert.equal(unavailableOps02.records[1].rollbackDisposition, 'not_observed');
+    const duplicateGroupState = ops02WireState();
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'case_started', passed: true }, duplicateGroupState), true);
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'child_exit_group', raceKind: 'global_records', passed: true }, duplicateGroupState), true);
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'child_exit_group', raceKind: 'global_records', passed: true }, duplicateGroupState), false);
+    assert.equal(duplicateGroupState.ops02RaceDiagnosticsComplete, false);
+    const duplicateGroupLine = duplicateGroupState.ops02RaceDiagnosticLines.split('\n')[1];
+    const duplicateGroupParserLines = `${duplicateGroupState.ops02RaceDiagnosticLines}${duplicateGroupLine}\n`;
+    assert.equal(parseOps02RaceDiagnostics({
+      lines: duplicateGroupParserLines, count: 3,
+      bytes: Buffer.byteLength(duplicateGroupParserLines, 'utf8'), diagnosticsComplete: true
+    }).complete, false);
+    const repeatedSeedState = ops02WireState();
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'case_started', passed: true }, repeatedSeedState), true);
+    for (let index = 0; index < 3; index += 1) {
+      assert.equal(recordOps02RaceDiagnostic({ boundary: 'seed_accept', raceKind: 'global_bytes', passed: true }, repeatedSeedState), true);
+    }
+    const repeatedSeeds = parseOps02RaceDiagnostics({
+      lines: repeatedSeedState.ops02RaceDiagnosticLines, count: repeatedSeedState.ops02RaceDiagnosticCount,
+      bytes: repeatedSeedState.ops02RaceDiagnosticBytes, diagnosticsComplete: repeatedSeedState.ops02RaceDiagnosticsComplete
+    });
+    assert.equal(repeatedSeeds.complete, true);
+    assert.equal(repeatedSeeds.records.filter(record => record.boundary === 'seed_accept').length, 3);
+    const malformedOps02Line = `${OPS02_RACE_DIAGNOSTIC_PREFIX}[\n`;
+    assert.equal(parseOps02RaceDiagnostics({
+      lines: malformedOps02Line, count: 1, bytes: Buffer.byteLength(malformedOps02Line, 'utf8'), diagnosticsComplete: true
+    }).complete, false);
+    const wrongLengthOps02Line = `${OPS02_RACE_DIAGNOSTIC_PREFIX}${JSON.stringify([0])}\n`;
+    assert.equal(parseOps02RaceDiagnostics({
+      lines: wrongLengthOps02Line, count: 1, bytes: Buffer.byteLength(wrongLengthOps02Line, 'utf8'), diagnosticsComplete: true
+    }).complete, false);
+    const duplicateStarted = `${all48State.ops02RaceDiagnosticLines}${all48State.ops02RaceDiagnosticLines.split('\n')[0]}\n`;
+    assert.equal(parseOps02RaceDiagnostics({
+      lines: duplicateStarted, count: 49, bytes: Buffer.byteLength(duplicateStarted, 'utf8'), diagnosticsComplete: true
+    }).complete, false);
+    const truncatedOps02 = all48State.ops02RaceDiagnosticLines.slice(0, -2);
+    assert.equal(parseOps02RaceDiagnostics({
+      lines: truncatedOps02, count: 48, bytes: Buffer.byteLength(truncatedOps02, 'utf8'), diagnosticsComplete: true
+    }).complete, false);
+    const invalidOps02Wire = `${OPS02_RACE_DIAGNOSTIC_PREFIX}${JSON.stringify([99, 99, null, true, 0, 0, 0, 0, null, null, 0])}\n`;
+    assert.equal(parseOps02RaceDiagnostics({
+      lines: invalidOps02Wire, count: 1, bytes: Buffer.byteLength(invalidOps02Wire, 'utf8'), diagnosticsComplete: true
+    }).complete, false);
+    const oversizedOps02Line = `${OPS02_RACE_DIAGNOSTIC_PREFIX}${'x'.repeat(320)}\n`;
+    assert.equal(parseOps02RaceDiagnostics({
+      lines: oversizedOps02Line, count: 1, bytes: Buffer.byteLength(oversizedOps02Line, 'utf8'), diagnosticsComplete: true
+    }).complete, false);
+    const incompleteOps02State = ops02WireState();
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'case_started', passed: true }, incompleteOps02State), true);
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'case_started', passed: true }, incompleteOps02State), false);
+    assert.equal(incompleteOps02State.ops02RaceDiagnosticsComplete, false);
+    const incompleteCount = incompleteOps02State.ops02RaceDiagnosticCount;
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'diagnostic_no_canary', passed: true }, incompleteOps02State), false);
+    assert.equal(incompleteOps02State.ops02RaceDiagnosticCount, incompleteCount);
+    assert.equal(parseOps02RaceDiagnostics({
+      lines: incompleteOps02State.ops02RaceDiagnosticLines,
+      count: incompleteOps02State.ops02RaceDiagnosticCount,
+      bytes: incompleteOps02State.ops02RaceDiagnosticBytes,
+      diagnosticsComplete: incompleteOps02State.ops02RaceDiagnosticsComplete
+    }).complete, false);
+    const rawOps02Line = values => `${OPS02_RACE_DIAGNOSTIC_PREFIX}${JSON.stringify(values)}\n`;
+    const ops02CaseStartedWire = rawOps02Line([0, 0, null, true, 0, 8, 14, 4, null, null, 0]);
+    const rejectOps02TupleAfterStart = tuple => {
+      const lines = `${ops02CaseStartedWire}${rawOps02Line(tuple)}`;
+      return parseOps02RaceDiagnostics({
+        lines, count: 2, bytes: Buffer.byteLength(lines, 'utf8'), diagnosticsComplete: true
+      }).complete === false;
+    };
+    assert.equal(rejectOps02TupleAfterStart([7, 2, 0, true, 1, 4, 3, 0, 5, null, 0]), true);
+    assert.equal(rejectOps02TupleAfterStart([7, 1, 0, false, 0, 8, 14, 4, null, null, 0]), true);
+    assert.equal(rejectOps02TupleAfterStart([7, 2, 0, false, 2, 4, 3, 1, 5, true, 4]), true);
+
     const ops02ControlRecords = [
       {
-        schema: 'agent-harness.ah11-ops02-race-diagnostic.v1', caseId: 'OPS02.C02',
+        schema: 'agent-harness.ah11-ops02-race-diagnostic.v3', caseId: 'OPS02.C02',
         boundary: 'case_started', raceKind: 'diagnostic', contender: null,
-        passed: true, exit: 'not_applicable', childStage: 'none', childCode: 'none'
+        passed: true, exit: 'not_applicable', childStage: 'none', childCode: 'none',
+        transactionBoundary: 'none', sqlitePrimaryCode: null,
+        transactionActive: null, rollbackDisposition: 'not_observed'
       },
       {
-        schema: 'agent-harness.ah11-ops02-race-diagnostic.v1', caseId: 'OPS02.C02',
+        schema: 'agent-harness.ah11-ops02-race-diagnostic.v3', caseId: 'OPS02.C02',
         boundary: 'contender_exit', raceKind: 'global_records', contender: 1,
-        passed: false, exit: 'nonzero', childStage: 'open', childCode: 'ERR_SQLITE_ERROR'
+        passed: false, exit: 'nonzero', childStage: 'admission', childCode: 'STORE_BUSY',
+        transactionBoundary: 'begin', sqlitePrimaryCode: 5,
+        transactionActive: null, rollbackDisposition: 'not_observed'
+      },
+      {
+        schema: 'agent-harness.ah11-ops02-race-diagnostic.v3', caseId: 'OPS02.C02',
+        boundary: 'contender_exit', raceKind: 'project_bytes_existing', contender: 0,
+        passed: false, exit: 'nonzero', childStage: 'admission', childCode: 'STORE_BUSY',
+        transactionBoundary: 'commit', sqlitePrimaryCode: 6,
+        transactionActive: true, rollbackDisposition: 'rolled_back'
       }
     ];
     const ops02ControlLines = ops02ControlRecords
-      .map(record => `AH11_OPS_OPS02_C02_DIAGNOSTIC ${JSON.stringify(record)}\n`).join('');
+      .map(record => `${encodeOps02RaceDiagnostic(record)}\n`).join('');
     const ops02Control = parseOps02RaceDiagnostics({
       lines: ops02ControlLines, count: ops02ControlRecords.length,
       bytes: Buffer.byteLength(ops02ControlLines, 'utf8'), diagnosticsComplete: true
     });
     assert.equal(ops02Control.complete, true);
-    assert.equal(ops02Control.records[1].childCode, 'ERR_SQLITE_ERROR');
-    const unsafeOps02Line = `AH11_OPS_OPS02_C02_DIAGNOSTIC ${JSON.stringify({
+    assert.equal(ops02Control.records[1].childCode, 'STORE_BUSY');
+    assert.equal(ops02Control.records[1].transactionBoundary, 'begin');
+    assert.equal(ops02Control.records[1].transactionActive, null);
+    assert.equal(ops02Control.records[1].rollbackDisposition, 'not_observed');
+    assert.equal(ops02Control.records[2].transactionBoundary, 'commit');
+    assert.equal(ops02Control.records[2].transactionActive, true);
+    assert.equal(ops02Control.records[2].rollbackDisposition, 'rolled_back');
+    const privateOps02Record = {
       ...ops02ControlRecords[1], childCode: 'SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d'
-    })}\n`;
+    };
+    assert.equal(encodeOps02RaceDiagnostic(privateOps02Record), null);
+    assert.equal(encodeOps02RaceDiagnostic({
+      ...ops02ControlRecords[1], passed: true, exit: 'nonzero'
+    }), null);
+    const unsafeOps02Line = `AH11_OPS_OPS02_C02_DIAGNOSTIC_V3 ${JSON.stringify(privateOps02Record)}\n`;
     const unsafeOps02 = parseOps02RaceDiagnostics({
       lines: `${ops02ControlLines.split('\n')[0]}\n${unsafeOps02Line}`,
       count: 2, bytes: Buffer.byteLength(`${ops02ControlLines.split('\n')[0]}\n${unsafeOps02Line}`, 'utf8'),
@@ -7954,11 +8520,99 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     });
     assert.equal(unsafeOps02.complete, false);
     assert.doesNotMatch(JSON.stringify(unsafeOps02), /SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d/u);
+    const admissionBusy = createAdmissionFailureDiagnostic('admission', Object.assign(
+      new Error('AH11_RAW_ADMISSION_PRIVATE_CANARY'), { code: 'STORE_BUSY' }
+    ), {
+      transactionBoundary: 'commit', sqlitePrimaryCode: 6,
+      transactionActive: true, rollbackDisposition: 'rolled_back'
+    });
+    assert.deepEqual(admissionBusy, {
+      schema: 'ops-admission-failure.v2', stage: 'admission', code: 'STORE_BUSY',
+      transactionBoundary: 'commit', sqlitePrimaryCode: 6,
+      transactionActive: true, rollbackDisposition: 'rolled_back'
+    });
+    const admissionFailureLine = `OPS_ADMISSION_FAILURE ${JSON.stringify(admissionBusy)}\n`;
+    assert.deepEqual(parseOps02AdmissionFailure(admissionFailureLine), {
+      stage: 'admission', code: 'STORE_BUSY', transactionBoundary: 'commit', sqlitePrimaryCode: 6,
+      transactionActive: true, rollbackDisposition: 'rolled_back'
+    });
+    assert.doesNotMatch(admissionFailureLine, /private details/u);
+    assert.doesNotMatch(admissionFailureLine, /AH11_RAW_ADMISSION_PRIVATE_CANARY/u);
+    const rawAdmissionError = Object.assign(
+      new Error('AH11_RAW_ADMISSION_PRIVATE_CANARY'), { code: 'STORE_BUSY' }
+    );
+    const rawAdmissionV1Expected = {
+      schema: 'ops-admission-failure.v1', stage: 'admission', code: 'STORE_BUSY'
+    };
+    const parsedAdmissionV1Expected = {
+      stage: 'admission', code: 'STORE_BUSY', transactionBoundary: 'none',
+      sqlitePrimaryCode: null, transactionActive: null, rollbackDisposition: 'not_observed'
+    };
+    for (const transactionBoundary of ['body', 'commit']) {
+      const impossibleRollbackFailure = {
+        transactionBoundary, sqlitePrimaryCode: 5,
+        transactionActive: true, rollbackDisposition: 'rollback_failed'
+      };
+      // The formatter's optional tuple is a synthetic control seam, not native provenance.
+      const fallbackDiagnostic = createAdmissionFailureDiagnostic(
+        'admission', rawAdmissionError, impossibleRollbackFailure
+      );
+      assert.deepEqual(fallbackDiagnostic, rawAdmissionV1Expected);
+      const fallbackLine = `OPS_ADMISSION_FAILURE ${JSON.stringify(fallbackDiagnostic)}\n`;
+      assert.deepEqual(parseOps02AdmissionFailure(fallbackLine), parsedAdmissionV1Expected);
+      const impossibleRawV2 = {
+        schema: 'ops-admission-failure.v2', stage: 'admission', code: 'STORE_BUSY',
+        ...impossibleRollbackFailure
+      };
+      assert.equal(parseOps02AdmissionFailure(
+        `OPS_ADMISSION_FAILURE ${JSON.stringify(impossibleRawV2)}\n`
+      ), null);
+      assert.doesNotMatch(fallbackLine, /AH11_RAW_ADMISSION_PRIVATE_CANARY/u);
+    }
+    const rollbackBoundaryDiagnostic = createAdmissionFailureDiagnostic('admission', rawAdmissionError, {
+      transactionBoundary: 'rollback', sqlitePrimaryCode: 5,
+      transactionActive: true, rollbackDisposition: 'rollback_failed'
+    });
+    assert.deepEqual(rollbackBoundaryDiagnostic, {
+      schema: 'ops-admission-failure.v2', stage: 'admission', code: 'STORE_BUSY',
+      transactionBoundary: 'rollback', sqlitePrimaryCode: 5,
+      transactionActive: true, rollbackDisposition: 'rollback_failed'
+    });
+    const rollbackBoundaryLine = `OPS_ADMISSION_FAILURE ${JSON.stringify(rollbackBoundaryDiagnostic)}\n`;
+    const rollbackBoundaryParsed = parseOps02AdmissionFailure(rollbackBoundaryLine);
+    assert.deepEqual(rollbackBoundaryParsed, {
+      stage: 'admission', code: 'STORE_BUSY', transactionBoundary: 'rollback',
+      sqlitePrimaryCode: 5, transactionActive: true, rollbackDisposition: 'rollback_failed'
+    });
+    assert.doesNotMatch(rollbackBoundaryLine, /AH11_RAW_ADMISSION_PRIVATE_CANARY/u);
+    const rawAdmissionChainState = ops02WireState();
+    assert.equal(recordOps02RaceDiagnostic({ boundary: 'case_started', passed: true }, rawAdmissionChainState), true);
+    assert.equal(recordOps02ContenderResults('project_bytes_existing', [{
+      code: 1, signal: null, stderr: rollbackBoundaryLine
+    }], rawAdmissionChainState), false);
+    assert.doesNotMatch(rawAdmissionChainState.ops02RaceDiagnosticLines, /AH11_RAW_ADMISSION_PRIVATE_CANARY/u);
+    const rawAdmissionChain = parseOps02RaceDiagnostics({
+      lines: rawAdmissionChainState.ops02RaceDiagnosticLines,
+      count: rawAdmissionChainState.ops02RaceDiagnosticCount,
+      bytes: rawAdmissionChainState.ops02RaceDiagnosticBytes,
+      diagnosticsComplete: rawAdmissionChainState.ops02RaceDiagnosticsComplete
+    });
+    assert.equal(rawAdmissionChain.complete, true);
+    assert.equal(rawAdmissionChain.records[1].schema, 'agent-harness.ah11-ops02-race-diagnostic.v3');
+    assert.equal(rawAdmissionChain.records[1].caseId, 'OPS02.C02');
+    assert.deepEqual(ops02Fields(rawAdmissionChain.records[1]), [
+      'contender_exit', 'project_bytes_existing', 0, false, 'nonzero',
+      'admission', 'STORE_BUSY', 'rollback', 5, true, 'rollback_failed'
+    ]);
+    assert.equal(rawAdmissionChain.records[2].boundary, 'child_exit_group');
+    assert.equal(rawAdmissionChain.records[2].passed, false);
+    assert.doesNotMatch(JSON.stringify(rawAdmissionChain), /AH11_RAW_ADMISSION_PRIVATE_CANARY/u);
     const ops06ControlRecord = {
-      schema: 'agent-harness.ah11-ops06-close-phases.v1', caseId: 'OPS06.C01',
+      schema: 'agent-harness.ah11-ops06-close-phases.v2', caseId: 'OPS06.C01',
+      stage: 'complete', failureClass: 'none', exitDisposition: 'zero', exitCode: 0, exitSignal: null,
       signalToFirstStopElapsedMs: 12.5, restartWorkElapsedMs: 120,
       finalStopElapsedMs: 3.25, readyToFinalRecordElapsedMs: 150,
-      processCloseElapsedMs: 180
+      processCloseElapsedMs: 180, restartOwnership: 'fresh_process', restartProcessCloseElapsedMs: 300
     };
     const ops06ControlLines = `AH11_OPS_OPS06_CLOSE_PHASES ${JSON.stringify(ops06ControlRecord)}\n`;
     const ops06Control = parseOps06ClosePhaseDiagnostics({
@@ -7967,6 +8621,20 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     });
     assert.equal(ops06Control.complete, true);
     assert.equal(ops06Control.records[0].processCloseElapsedMs, 180);
+    const ops06UnknownRecord = {
+      ...ops06ControlRecord, stage: 'supervisor_close_wait', failureClass: 'child_exit',
+      exitDisposition: 'unknown', exitCode: null, exitSignal: null,
+      signalToFirstStopElapsedMs: null, restartWorkElapsedMs: null, finalStopElapsedMs: null,
+      readyToFinalRecordElapsedMs: null, processCloseElapsedMs: null, restartProcessCloseElapsedMs: null
+    };
+    const ops06UnknownLine = `AH11_OPS_OPS06_CLOSE_PHASES ${JSON.stringify(ops06UnknownRecord)}\n`;
+    const ops06Unknown = parseOps06ClosePhaseDiagnostics({
+      lines: ops06UnknownLine, count: 1,
+      bytes: Buffer.byteLength(ops06UnknownLine, 'utf8'), diagnosticsComplete: true
+    });
+    assert.equal(ops06Unknown.complete, true);
+    assert.equal(ops06Unknown.records[0].stage, 'supervisor_close_wait');
+    assert.equal(ops06Unknown.records[0].exitDisposition, 'unknown');
     const unsafeOps06Line = `AH11_OPS_OPS06_CLOSE_PHASES ${JSON.stringify({
       ...ops06ControlRecord, message: 'SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d'
     })}\n`;
@@ -7976,6 +8644,91 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     });
     assert.equal(unsafeOps06.complete, false);
     assert.doesNotMatch(JSON.stringify(unsafeOps06), /SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d/u);
+    const ops12UnknownFailure = {
+      schema: 'agent-harness.ah11-ops12-recovery-failure.v1',
+      caseId: 'unknown', stage: 'unknown', errorClass: 'unknown', nativePrimaryCode: null
+    };
+    const ops12UnknownFailureLine = `AH11_OPS_OPS12_RECOVERY_FAILURE ${JSON.stringify(ops12UnknownFailure)}\n`;
+    const ops12UnknownScenarios = [
+      { name: 'missing marker', result: { code: 1, signal: null }, stderr: '' },
+      { name: 'malformed marker', result: { code: null, signal: 'SIGTERM' }, stderr: 'AH11_OPS_OPS12_RECOVERY_FAILURE {broken}\n' },
+      { name: 'duplicate marker', result: { code: 2, signal: null }, stderr: `${ops12UnknownFailureLine}${ops12UnknownFailureLine}` },
+      { name: 'truncated marker', result: { code: null, signal: null }, stderr: 'AH11_OPS_OPS12_RECOVERY_FAILURE {"schema":' }
+    ];
+    for (const scenario of ops12UnknownScenarios) {
+      const state = {
+        ops12RecoveryDiagnosticLines: '', ops12RecoveryDiagnosticCount: 0,
+        ops12RecoveryDiagnosticBytes: 0, ops12RecoveryDiagnosticsComplete: true
+      };
+      const failure = parseOps12RecoveryFailure(scenario.stderr);
+      assert.equal(failure, null, scenario.name);
+      assert.equal(recordOps12RecoveryDiagnostic(scenario.result, failure, state), true, scenario.name);
+      const parsed = parseOps12RecoveryDiagnostics({
+        lines: state.ops12RecoveryDiagnosticLines, count: state.ops12RecoveryDiagnosticCount,
+        bytes: state.ops12RecoveryDiagnosticBytes, diagnosticsComplete: state.ops12RecoveryDiagnosticsComplete
+      });
+      assert.equal(parsed.complete, true, scenario.name);
+      assert.equal(parsed.records[0].caseId, 'unknown', scenario.name);
+      assert.equal(parsed.records[0].stage, 'unknown', scenario.name);
+      assert.equal(parsed.records[0].exitDisposition,
+        scenario.result.code === null && scenario.result.signal === null ? 'unknown'
+          : scenario.result.signal ? 'signal' : 'nonzero', scenario.name);
+      assert.equal(parsed.records[0].exitCode,
+        Number.isSafeInteger(scenario.result.code) ? scenario.result.code : null, scenario.name);
+      assert.equal(parsed.records[0].exitSignal, scenario.result.signal ?? null, scenario.name);
+    }
+    assert.match(evidenceVerifier, /buildOps12RecoveryDiagnosticRecord\(/u);
+    assert.deepEqual(buildOps12RecoveryDiagnosticRecord({ code: null, signal: 'SIGTERM' }, null), {
+      schema: 'agent-harness.ah11-ops12-recovery-child.v1', caseId: 'unknown', stage: 'unknown',
+      errorClass: 'unknown', nativePrimaryCode: null,
+      exitDisposition: 'signal', exitCode: null, exitSignal: 'SIGTERM'
+    });
+    const ops12MarkedUnknownState = {
+      ops12RecoveryDiagnosticLines: '', ops12RecoveryDiagnosticCount: 0,
+      ops12RecoveryDiagnosticBytes: 0, ops12RecoveryDiagnosticsComplete: true
+    };
+    const parsedUnknownMarker = parseOps12RecoveryFailure(ops12UnknownFailureLine);
+    assert.equal(parsedUnknownMarker.caseId, 'unknown');
+    assert.equal(recordOps12RecoveryDiagnostic({ code: 7, signal: null }, parsedUnknownMarker, ops12MarkedUnknownState), true);
+    const parsedMarkedUnknown = parseOps12RecoveryDiagnostics({
+      lines: ops12MarkedUnknownState.ops12RecoveryDiagnosticLines, count: ops12MarkedUnknownState.ops12RecoveryDiagnosticCount,
+      bytes: ops12MarkedUnknownState.ops12RecoveryDiagnosticBytes,
+      diagnosticsComplete: ops12MarkedUnknownState.ops12RecoveryDiagnosticsComplete
+    });
+    assert.equal(parsedMarkedUnknown.complete, true);
+    assert.equal(parsedMarkedUnknown.records[0].caseId, 'unknown');
+    assert.equal(parsedMarkedUnknown.records[0].exitDisposition, 'nonzero');
+    assert.equal(parsedMarkedUnknown.records[0].exitCode, 7);
+    assert.doesNotMatch(parsedMarkedUnknown.records[0].caseId, /private|canary/u);
+
+    const ops12Failure = {
+      schema: 'agent-harness.ah11-ops12-recovery-failure.v1',
+      caseId: 'unknown_hold_restart_escalation', stage: 'hold_verify',
+      errorClass: 'assertion', nativePrimaryCode: null
+    };
+    const ops12FailureLine = `AH11_OPS_OPS12_RECOVERY_FAILURE ${JSON.stringify(ops12Failure)}\n`;
+    assert.deepEqual(parseOps12RecoveryFailure(ops12FailureLine), ops12Failure);
+    const ops12Diagnostic = {
+      ...ops12Failure, schema: 'agent-harness.ah11-ops12-recovery-child.v1',
+      exitDisposition: 'nonzero', exitCode: 1, exitSignal: null
+    };
+    const ops12DiagnosticLine = `AH11_OPS_OPS12_RECOVERY_DIAGNOSTIC ${JSON.stringify(ops12Diagnostic)}\n`;
+    const ops12Parsed = parseOps12RecoveryDiagnostics({
+      lines: ops12DiagnosticLine, count: 1,
+      bytes: Buffer.byteLength(ops12DiagnosticLine, 'utf8'), diagnosticsComplete: true
+    });
+    assert.equal(ops12Parsed.complete, true);
+    assert.equal(ops12Parsed.records[0].caseId, 'unknown_hold_restart_escalation');
+    assert.doesNotMatch(JSON.stringify(ops12Parsed), /private details|SYNTHETIC_PRIVATE_DIAGNOSTIC_CANARY_96d/u);
+    const ops12Success = {
+      schema: 'agent-harness.ah11-ops12-recovery-child.v1', caseId: 'none', stage: 'none',
+      errorClass: 'none', nativePrimaryCode: null, exitDisposition: 'zero', exitCode: 0, exitSignal: null
+    };
+    const ops12SuccessLine = `AH11_OPS_OPS12_RECOVERY_DIAGNOSTIC ${JSON.stringify(ops12Success)}\n`;
+    assert.equal(parseOps12RecoveryDiagnostics({
+      lines: ops12SuccessLine, count: 1,
+      bytes: Buffer.byteLength(ops12SuccessLine, 'utf8'), diagnosticsComplete: true
+    }).complete, true);
     assert.match(evidenceVerifier, /missingLocalCases/u);
     assert.match(evidenceVerifier, /OPS_CI1_OWNED_GROUP_REGISTRY/u);
     assert.match(evidenceVerifier, /validatedCi1RegistryPathFromEnvironment/u);

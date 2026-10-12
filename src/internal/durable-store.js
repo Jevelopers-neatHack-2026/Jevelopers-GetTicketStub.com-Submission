@@ -39,6 +39,7 @@ const LOCAL_CHECKPOINT_KIND = 'agent-harness.private-bounded-local-checkpoint';
 const LOCAL_STEP_ID = /^[a-z][a-z0-9_-]{0,47}$/u;
 const CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS = new WeakSet();
 const CONFIRMED_LOCAL_ADMISSION_BUSY_ERRORS = new WeakSet();
+const OPERATIONS_ADMISSION_BUSY_DIAGNOSTICS = new WeakMap();
 const OPS_EVENT_RESERVATION = 96;
 const OPS_MAX_WORKER_GENERATIONS = 16;
 const OPS_GENERATION_WRITE_RESERVE_BYTES = 16_384;
@@ -687,19 +688,72 @@ function isRawSqliteBusyPrimary(error) {
     && (errcode & 0xff) === 5;
 }
 
+function sqliteBusyPrimaryCode(error) {
+  if (!utilTypes.isNativeError(error) || error instanceof RuntimeError) return null;
+  let code;
+  let errcode;
+  try {
+    code = Object.getOwnPropertyDescriptor(error, 'code')?.value;
+    errcode = Object.getOwnPropertyDescriptor(error, 'errcode')?.value;
+  } catch {
+    return null;
+  }
+  if (code !== 'ERR_SQLITE_ERROR' || !Number.isSafeInteger(errcode)
+      || errcode < 0 || errcode > 0x7fffffff) return null;
+  const primary = errcode & 0xff;
+  return primary === 5 || primary === 6 ? primary : null;
+}
+
+/** @internal Read the fixed native BUSY boundary captured by private operations admission. */
+export function readOperationsAdmissionBusyDiagnostic(error) {
+  if (error === null || typeof error !== 'object' || utilTypes.isProxy(error)) return null;
+  return OPERATIONS_ADMISSION_BUSY_DIAGNOSTICS.get(error) ?? null;
+}
+
 function inTransaction(db, operation, callback) {
+  let boundary = 'begin';
+  let transactionActive = null;
+  let rollbackDisposition = 'not_observed';
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
+      boundary = 'body';
       const value = callback();
+      boundary = 'commit';
       db.exec('COMMIT');
       return value;
     } catch (error) {
-      if (db.isTransaction) db.exec('ROLLBACK');
+      const failureBoundary = boundary;
+      try {
+        const active = db.isTransaction;
+        transactionActive = typeof active === 'boolean' ? active : null;
+        if (active) {
+          boundary = 'rollback';
+          rollbackDisposition = 'rollback_attempted';
+          db.exec('ROLLBACK');
+          rollbackDisposition = 'rolled_back';
+        } else rollbackDisposition = transactionActive === false ? 'inactive' : 'unknown';
+      } catch (rollbackError) {
+        boundary = 'rollback';
+        rollbackDisposition = transactionActive === true ? 'rollback_failed' : 'rollback_check_failed';
+        throw rollbackError;
+      }
+      boundary = failureBoundary;
       throw error;
     }
   } catch (error) {
-    throw mapStorageError(operation, error);
+    const mapped = mapStorageError(operation, error);
+    const sqlitePrimaryCode = sqliteBusyPrimaryCode(error);
+    if (operation === '_operationsAdmit' && mapped instanceof RuntimeError
+        && mapped.code === 'STORE_BUSY' && sqlitePrimaryCode !== null) {
+      OPERATIONS_ADMISSION_BUSY_DIAGNOSTICS.set(mapped, Object.freeze({
+        transactionBoundary: boundary,
+        sqlitePrimaryCode,
+        transactionActive,
+        rollbackDisposition
+      }));
+    }
+    throw mapped;
   }
 }
 

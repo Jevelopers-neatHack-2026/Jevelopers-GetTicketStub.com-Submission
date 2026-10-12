@@ -1,7 +1,9 @@
 import { writeFileSync, writeSync } from 'node:fs';
 import { types as utilTypes } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { DurableWorkflowStore } from '../../../src/internal/durable-store.js';
+import {
+  DurableWorkflowStore, readOperationsAdmissionBusyDiagnostic
+} from '../../../src/internal/durable-store.js';
 import { OPERATIONS_STORAGE_CAPABILITY } from '../../../src/internal/private-ops-store-capability.js';
 import { operationsStoragePolicy, readOperationsConfig, validateLocalPlanWork } from '../../../src/worker/private/config.js';
 
@@ -12,8 +14,13 @@ const FAILURE_CODES = new Set([
   'UNSUPPORTED_SCHEMA_VERSION', 'UNVERSIONED_DATA', 'INVALID_INPUT',
   'ERR_SQLITE_ERROR', 'ERR_INVALID_ARG_TYPE', 'EACCES', 'ENOENT', 'ENOSPC'
 ]);
+const FAILURE_TRANSACTION_BOUNDARIES = new Set(['begin', 'body', 'commit', 'rollback']);
+const FAILURE_ROLLBACK_DISPOSITIONS = new Set([
+  'not_observed', 'inactive', 'unknown', 'rollback_attempted',
+  'rolled_back', 'rollback_failed', 'rollback_check_failed'
+]);
 
-export function createAdmissionFailureDiagnostic(stage, error) {
+export function createAdmissionFailureDiagnostic(stage, error, transactionFailure = undefined) {
   const safeStage = typeof stage === 'string' && FAILURE_STAGES.has(stage) ? stage : 'unknown';
   let safeCode = 'UNKNOWN';
   if (error !== null && typeof error === 'object' && !utilTypes.isProxy(error)) {
@@ -22,6 +29,37 @@ export function createAdmissionFailureDiagnostic(stage, error) {
       if (descriptor && Object.hasOwn(descriptor, 'value')
           && typeof descriptor.value === 'string' && FAILURE_CODES.has(descriptor.value)) {
         safeCode = descriptor.value;
+      }
+    } catch {}
+  }
+  const transaction = transactionFailure === undefined
+    ? readOperationsAdmissionBusyDiagnostic(error) : transactionFailure;
+  if (safeStage === 'admission' && safeCode === 'STORE_BUSY'
+      && transaction !== null && typeof transaction === 'object' && !Array.isArray(transaction)
+      && !utilTypes.isProxy(transaction)) {
+    try {
+      const boundary = Object.getOwnPropertyDescriptor(transaction, 'transactionBoundary')?.value;
+      const sqlitePrimaryCode = Object.getOwnPropertyDescriptor(transaction, 'sqlitePrimaryCode')?.value;
+      const transactionActive = Object.getOwnPropertyDescriptor(transaction, 'transactionActive')?.value;
+      const rollbackDisposition = Object.getOwnPropertyDescriptor(transaction, 'rollbackDisposition')?.value;
+      const validDisposition = boundary === 'begin'
+        ? transactionActive === null && rollbackDisposition === 'not_observed'
+        : ['body', 'commit'].includes(boundary)
+          ? (rollbackDisposition === 'inactive' && transactionActive === false)
+            || (rollbackDisposition === 'rolled_back' && transactionActive === true)
+            || (rollbackDisposition === 'unknown' && transactionActive === null)
+          : boundary === 'rollback'
+            ? (rollbackDisposition === 'rollback_failed' && transactionActive === true)
+              || (rollbackDisposition === 'rollback_check_failed' && transactionActive === null)
+            : false;
+      if (FAILURE_TRANSACTION_BOUNDARIES.has(boundary)
+          && (sqlitePrimaryCode === 5 || sqlitePrimaryCode === 6)
+          && (transactionActive === null || typeof transactionActive === 'boolean')
+          && FAILURE_ROLLBACK_DISPOSITIONS.has(rollbackDisposition) && validDisposition) {
+        return Object.freeze({
+          schema: 'ops-admission-failure.v2', stage: safeStage, code: safeCode,
+          transactionBoundary: boundary, sqlitePrimaryCode, transactionActive, rollbackDisposition
+        });
       }
     } catch {}
   }

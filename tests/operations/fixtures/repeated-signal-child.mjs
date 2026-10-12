@@ -43,8 +43,8 @@ const worker = createOperationsWorker({
 });
 let removeHandlers;
 let runnerPid = null;
-let restartWorker;
 let firstSignalObservedAt = null;
+let stage = 'worker_start';
 const observeFirstSignal = () => {
   if (firstSignalObservedAt === null) firstSignalObservedAt = performance.now();
 };
@@ -56,6 +56,7 @@ process.on('SIGTERM', observeFirstSignal);
 process.on('SIGINT', observeFirstSignal);
 try {
   removeHandlers = worker.installSignalHandlers();
+  stage = 'runner_wait';
   const loop = worker.start();
   const submitted = worker.submitSyntheticWork({
     trustedSyntheticScope: scope, idempotencyKey: 'repeated-signals', planJson
@@ -63,6 +64,7 @@ try {
   if (!submitted.accepted) throw new Error('The signal cleanup fixture was not admitted.');
   const startDeadline = Date.now() + 5_000;
   while (worker.activeChildCount === 0 && Date.now() < startDeadline) await delay(2);
+  stage = 'runner_pause';
   if (worker.activeChildCount !== 1) throw new Error('The actual owned runner did not start.');
   const pgrep = spawnSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' });
   if (pgrep.status !== 0) throw new Error('The actual owned runner PID was not observable in the fixture process.');
@@ -71,7 +73,10 @@ try {
     throw new Error('The fixture could not pause only its actual owned runner child.');
   }
   const readyWrittenAt = performance.now();
-  process.stdout.write(JSON.stringify({ event: 'ready', providerCalls: 0, childPaused: true }) + '\n');
+  process.stdout.write(JSON.stringify({
+    event: 'ready', providerCalls: 0, childPaused: true, jobId: submitted.jobId
+  }) + '\n');
+  stage = 'worker_stop';
   await loop;
   const stopped = await worker.stop('signal');
   const signalToFirstStopElapsedMs = firstSignalObservedAt === null
@@ -88,65 +93,42 @@ try {
   const stoppedCounters = afterStop.prepare('SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1').get();
   const attemptCount = Number(afterStop.prepare('SELECT COUNT(*) AS count FROM operation_attempts').get().count);
   afterStop.close();
+  stage = 'stop_validate';
   if (stoppedJob?.state !== 'queued' || Number(stoppedCounters.in_flight) !== 0 || attemptCount !== 0) {
     throw new Error('Shutdown did not durably requeue pure local work or changed provider-attempt state.');
   }
-
-  const restartStartedAt = performance.now();
-  restartWorker = createOperationsWorker({ databasePath, ownerId: 'review-worker-restart' });
-  const restartLoop = restartWorker.start();
-  const end = Date.now() + 8_000;
-  let completed = null;
-  while (Date.now() < end) {
-    completed = restartWorker.readScopedWorkPage({ trustedSyntheticScope: scope, limit: 10 }).items
-      .find(item => item.jobId === submitted.jobId);
-    if (completed?.state === 'completed') break;
-    await delay(10);
-  }
-  if (completed?.state !== 'completed') throw new Error('Restart did not resume the accepted pure local plan.');
-  const restartWorkElapsedMs = elapsedMs(restartStartedAt);
-  const finalStopStartedAt = performance.now();
-  const finalStop = await restartWorker.stop('test');
-  const finalStopElapsedMs = elapsedMs(finalStopStartedAt);
-  if (!finalStop.stopped || !finalStop.childrenReaped) throw new Error('The restarted worker did not stop cleanly.');
-  const final = new DatabaseSync(databasePath, { readOnly: true });
-  const completedJob = final.prepare('SELECT state, generation, fence_token FROM operations_work WHERE job_id=?').get(submitted.jobId);
-  const completedWorkflow = final.prepare('SELECT state, fence_token FROM workflows WHERE workflow_id=(SELECT workflow_id FROM operations_work WHERE job_id=?)').get(submitted.jobId);
-  const finalAttempts = Number(final.prepare('SELECT COUNT(*) AS count FROM operation_attempts').get().count);
-  final.close();
-  if (completedJob.state !== 'completed' || completedWorkflow.state !== 'succeeded'
-      || Number(completedJob.generation) <= Number(stoppedJob.generation)
-      || Number(completedWorkflow.fence_token) <= Number(stoppedJob.fence_token)
-      || finalAttempts !== 0) {
-    throw new Error('Restart did not settle the same local job under a higher generation and fence.');
-  }
   const phaseElapsedMs = {
     signalToFirstStopElapsedMs,
-    restartWorkElapsedMs,
-    finalStopElapsedMs,
+    restartWorkElapsedMs: null,
+    finalStopElapsedMs: null,
     readyToFinalRecordElapsedMs: elapsedMs(readyWrittenAt)
   };
+  stage = 'record_output';
   process.stdout.write(JSON.stringify({
     event: 'stopped', stopped, sinkCalls, providerCalls: 0,
     phaseElapsedMs,
     telemetry: { cursor: diagnostics.cursor, pendingRecords: diagnostics.pendingRecords, state: diagnostics.state },
     workAfterStop: { state: stoppedJob.state, generation: Number(stoppedJob.generation), fence: Number(stoppedJob.fence_token) },
-    afterRestart: { state: completedJob.state, workflowState: completedWorkflow.state,
-      generation: Number(completedJob.generation), fence: Number(completedWorkflow.fence_token) },
-    attemptCount: finalAttempts
+    jobId: submitted.jobId,
+    attemptCount
   }) + '\n');
 } catch (error) {
   if (runnerPid !== null) {
     try { process.kill(runnerPid, 'SIGCONT'); } catch {}
   }
-  process.stderr.write(`Repeated-signal fixture failed: ${error?.message ?? 'unknown'}\n`);
+  const failureStage = new Set([
+    'worker_start', 'runner_wait', 'runner_pause', 'worker_stop',
+    'stop_validate', 'record_output'
+  ]).has(stage) ? stage : 'unknown';
+  const errorClass = error instanceof TypeError ? 'type'
+    : error instanceof RangeError ? 'range' : 'error';
+  process.stderr.write(`AH11_OPS_OPS06_STOP_FAILURE stage=${failureStage} errorClass=${errorClass}\n`);
   process.exitCode = 1;
 } finally {
   process.off('SIGTERM', observeFirstSignal);
   process.off('SIGINT', observeFirstSignal);
   try { removeHandlers?.(); } catch {}
   try { if (worker.lifecycle !== 'stopped') await worker.stop('test'); } catch {}
-  try { if (restartWorker && restartWorker.lifecycle !== 'stopped') await restartWorker.stop('test'); } catch {}
   try { tokenizer.destroy(); } catch {}
   try { store.close(); } catch {}
 }
