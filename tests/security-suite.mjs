@@ -366,7 +366,7 @@ test("asset redirects are manual, bounded, and revalidated against the allowlist
     transport: { async request(request) {
       requests.push(request);
       return requests.length === 1
-        ? assetResponse(request, { status: 302, headers: { location: "https://cdn.example.test/final.png" }, body: new Uint8Array() })
+        ? assetResponse(request, { status: 302, headers: { Location: "https://cdn.example.test/final.png" }, body: new Uint8Array() })
         : assetResponse(request);
     } }
   });
@@ -382,6 +382,23 @@ test("asset redirects are manual, bounded, and revalidated against the allowlist
 });
 
 test("asset byte count, media declaration, and magic bytes are enforced", async () => {
+  const mixedCaseHeaders = assetPorts({ request: (request) => assetResponse(request, {
+    headers: { "Content-Type": "image/png", "Content-Length": String(PNG.byteLength) }
+  }) });
+  const mixedCaseAsset = await security.retrieveApprovedAsset({
+    url: "https://assets.example.test/file.png", mode: "simulated", trustedScope: scope,
+    policy: ASSET_POLICY, resolver: mixedCaseHeaders.resolver, transport: mixedCaseHeaders.transport
+  });
+  assert.equal(mixedCaseAsset.contentType, "image/png");
+
+  const duplicateHeaders = assetPorts({ request: (request) => assetResponse(request, {
+    headers: { "Content-Type": "image/png", "content-type": "image/png" }
+  }) });
+  await expectSecurityFailure(security.retrieveApprovedAsset({
+    url: "https://assets.example.test/file.png", mode: "simulated", trustedScope: scope,
+    policy: ASSET_POLICY, resolver: duplicateHeaders.resolver, transport: duplicateHeaders.transport
+  }), "asset_response_invalid");
+
   const declaredOversize = assetPorts({ request: (request) => assetResponse(request, {
     headers: { "content-type": "image/png", "content-length": "2048" }
   }) });
