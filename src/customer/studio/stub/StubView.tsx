@@ -6,6 +6,7 @@
 // Back (flipped): setlist / score / cast / programme by event.type, note, friends, "Memory page" QR, Ts stamp.
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useId, useMemo, useRef, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { activeCorrection } from "../facts/corrections";
 import { currentVersion, type ArtLayer, type Edition, type Fact, type Stub } from "../types";
 import { EDITION_META, type EditionMeta } from "./editions";
 import { Foil, foilTextClass } from "./Foil";
@@ -161,6 +162,16 @@ function Chip({ c, f }: { c: Ctx; f: Fact }) {
   );
 }
 
+// Open-Meteo weather is CC BY 4.0: wherever it shows, on screen or in print, its credit sits next to it (#48).
+// "live" matters: demo and pending weather also name Open-Meteo as their source. A value the person typed over the
+// research is theirs, not Open-Meteo's. Public projections carry no correction history, so there it stays credited.
+const fromOpenMeteo = (stub: Stub) => (f: Fact) =>
+  f.id === "weather" && f.provenance === "live" && f.source.startsWith("Open-Meteo") && activeCorrection(stub, f.id)?.kind !== "correct";
+
+function WeatherCredit() {
+  return <span className={s.weatherCredit}>Weather data by Open-Meteo.com</span>;
+}
+
 function Facts({ c, className, sep = " · ", upper }: { c: Ctx; className?: string; sep?: string; upper?: boolean }) {
   if (!c.show("facts")) return null;
   const line = c.kept.map((f) => f.label).join(sep);
@@ -179,6 +190,7 @@ function Facts({ c, className, sep = " · ", upper }: { c: Ctx; className?: stri
           ))}
         </span>
       )}
+      {[...c.kept, ...c.unsure].some(fromOpenMeteo(c.stub)) && <WeatherCredit />}
     </div>
   );
 }
@@ -480,15 +492,26 @@ function BackList({ c }: { c: Ctx }) {
       </ul>
     );
   }
-  const items = e.programme?.length ? e.programme : e.facts.filter((f) => c.show(f.id)).map((f) => f.label);
+  const shown = e.programme?.length ? [] : e.facts.filter((f) => c.show(f.id));
+  // The list clips at its last row, so the credit takes a row of the cap rather than overflowing. Weather that would
+  // land in that last row, with no room left for its credit, is left off the back instead.
+  const om = fromOpenMeteo(c.stub);
+  const credited = shown.slice(0, cap - 1).some(om);
+  const listed = shown.slice(0, credited || (shown[cap - 1] && om(shown[cap - 1])) ? cap - 1 : cap);
+  const items = e.programme?.length ? e.programme.slice(0, cap) : listed.map((f) => f.label);
   return (
     <ul className={s.backList}>
-      {items.slice(0, cap).map((p, i) => (
+      {items.map((p, i) => (
         <li key={i}>
           <span className={s.backIdx}>·</span>
           <span>{p}</span>
         </li>
       ))}
+      {credited && (
+        <li>
+          <WeatherCredit />
+        </li>
+      )}
     </ul>
   );
 }
