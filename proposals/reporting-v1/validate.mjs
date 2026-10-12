@@ -181,6 +181,9 @@ export function checkFixtureStructure(fx) {
 const safeLocation = (p) => (/^(\/[A-Za-z0-9_]{1,40}){0,12}$/.test(p) ? p : '/?');
 const summariseErrors = (errors) => (errors ?? []).slice(0, 5).map((e) => ({ keyword: String(e.keyword).replace(/[^A-Za-z0-9$]/g, '').slice(0, 24), at: safeLocation(e.instancePath) }));
 
+// error_at denotes an exact JSON Pointer or a containing subtree. Match only at
+// segment boundaries: /rows/1 must not match /rows/10, nor /currency a sibling
+// named /currency_extra. The empty pointer still covers the whole document.
 export function evaluate(fx, validators) {
   const byId = checkFixtureStructure(fx);
   const failures = [];
@@ -194,7 +197,9 @@ export function evaluate(fx, validators) {
     let reason = null;
     if (c.expect === 'valid' && !ok) reason = 'expected_valid_got_invalid';
     else if (c.expect === 'invalid' && ok) reason = 'expected_invalid_got_valid';
-    else if (c.expect === 'invalid' && !(errors ?? []).some((e) => e.instancePath.startsWith(c.error_at) && (!c.keyword || e.keyword === c.keyword))) reason = 'error_location_mismatch';
+    else if (c.expect === 'invalid' && !(errors ?? []).some((e) =>
+      (e.instancePath === c.error_at || e.instancePath.startsWith(c.error_at + '/')) &&
+      (!c.keyword || e.keyword === c.keyword))) reason = 'error_location_mismatch';
     if (reason) {
       counts.failed++;
       failures.push({ ordinal: i + 1, reason, errors: summariseErrors(errors) });

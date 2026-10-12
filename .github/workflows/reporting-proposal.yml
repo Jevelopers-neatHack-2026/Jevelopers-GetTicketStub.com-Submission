@@ -1,0 +1,77 @@
+name: Reporting proposal
+on:
+  pull_request:
+    paths:
+      - 'proposals/reporting-v1/**'
+      - 'tests/reporting-*.test.mjs'
+      - 'ci/reporting/**'
+      - '.github/workflows/reporting-proposal.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'proposals/reporting-v1/**'
+      - 'tests/reporting-*.test.mjs'
+      - 'ci/reporting/**'
+      - '.github/workflows/reporting-proposal.yml'
+permissions:
+  contents: read
+jobs:
+  reporting-proposal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.23.3', '24.21.0']
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Record exact source and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/reporting-evidence"
+          {
+            git rev-parse HEAD
+            git rev-parse HEAD^{tree}
+            node --version
+            npm --version
+            sha256sum proposals/reporting-v1/*.json proposals/reporting-v1/validate.mjs \
+              tests/reporting-*.test.mjs ci/reporting/package*.json
+          } | tee "$RUNNER_TEMP/reporting-evidence/identity.txt"
+      - name: Provision locked test dependencies outside the checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/reporting-deps"
+          cp ci/reporting/package.json ci/reporting/package-lock.json "$RUNNER_TEMP/reporting-deps/"
+          npm ci --prefix "$RUNNER_TEMP/reporting-deps" --ignore-scripts --include=dev --no-audit --no-fund \
+            2>&1 | tee "$RUNNER_TEMP/reporting-evidence/provisioning.log"
+      - name: Run offline reporting proposal validation and regressions
+        shell: bash
+        env:
+          SC_AJV_ROOT: ${{ runner.temp }}/reporting-deps/node_modules
+          npm_config_offline: 'true'
+          npm_config_audit: 'false'
+          npm_config_fund: 'false'
+        run: |
+          set -euo pipefail
+          node --check proposals/reporting-v1/validate.mjs
+          node proposals/reporting-v1/validate.mjs \
+            2>&1 | tee "$RUNNER_TEMP/reporting-evidence/fixtures.json"
+          node --test --test-reporter=tap tests/reporting-proposal.test.mjs \
+            tests/reporting-error-location.test.mjs tests/reporting-error-location-integration.test.mjs \
+            2>&1 | tee "$RUNNER_TEMP/reporting-evidence/tests.tap"
+          git diff --exit-code
+      - name: Retain evidence including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: reporting-proposal-${{ matrix.node }}-${{ github.sha }}
+          path: ${{ runner.temp }}/reporting-evidence
+          if-no-files-found: error
+          retention-days: 30
