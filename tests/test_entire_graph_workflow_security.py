@@ -22,11 +22,64 @@ ACTION_USE = re.compile(r"(?im)^\s*-\s*uses:\s*([^\s#]+)")
 CHECKOUT_USE = re.compile(r"(?im)^\s*-\s*uses:\s*actions/checkout@")
 
 
+def _trigger_policy_violations(document):
+    """Check the workflow's narrow trigger map without YAML 1.1 coercing ``on``."""
+    lines = [line.split("#", 1)[0].rstrip() for line in document.splitlines()]
+    on_headers = [
+        index
+        for index, line in enumerate(lines)
+        if re.fullmatch(r"(?:on|'on'|\"on\"):\s*.*", line)
+    ]
+    if len(on_headers) != 1:
+        return ["unsupported top-level trigger syntax"]
+
+    on_index = on_headers[0]
+    if lines[on_index].split(":", 1)[1].strip():
+        return ["unsupported top-level trigger syntax"]
+
+    event_headers = []
+    end = len(lines)
+    for index in range(on_index + 1, len(lines)):
+        line = lines[index]
+        if line.strip() and not line[0].isspace():
+            end = index
+            break
+        event = re.fullmatch(
+            r"  (?:([A-Za-z][A-Za-z0-9_-]*)|'([^']+)'|\"([^\"]+)\"):\s*(.*)",
+            line,
+        )
+        if event:
+            name = event.group(1) or event.group(2) or event.group(3)
+            event_headers.append((index, name, event.group(4)))
+
+    names = [name for _, name, _ in event_headers]
+    if sorted(names) != ["push", "schedule"] or any(value for _, _, value in event_headers):
+        return ["unexpected top-level workflow trigger"]
+
+    violations = []
+    for offset, (header_index, name, _) in enumerate(event_headers):
+        body_end = event_headers[offset + 1][0] if offset + 1 < len(event_headers) else end
+        body = [line for line in lines[header_index + 1 : body_end] if line.strip()]
+        if name == "push":
+            if len(body) != 1 or not re.fullmatch(
+                r" {4}branches:\s*\[\s*(?:main|'main'|\"main\")\s*\]", body[0]
+            ):
+                violations.append("push is not restricted exactly to main")
+        elif name == "schedule":
+            if len(body) != 1 or not re.fullmatch(
+                r" {4}- cron:\s*(?:'17 4 \* \* 1'|\"17 4 \* \* 1\"|17 4 \* \* 1)",
+                body[0],
+            ):
+                violations.append("schedule does not match the intended trigger")
+    return violations
+
+
 def _workflow_violations(document):
     """Return conservative policy failures without requiring a YAML dependency."""
     lines = [line.split("#", 1)[0].rstrip() for line in document.splitlines()]
     clean = "\n".join(lines)
     violations = []
+    violations.extend(_trigger_policy_violations(document))
 
     if WRITE_PERMISSION.search(clean):
         violations.append("write permission")
@@ -131,17 +184,44 @@ class EntireGraphWorkflowSecurityTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    def test_workflow_runs_only_from_main_and_has_no_pr_or_manual_ref_event(self):
-        self.assertRegex(self.workflow, r"(?m)^  push:\s*$")
-        self.assertRegex(self.workflow, r"(?m)^  schedule:\s*$")
-        self.assertRegex(self.workflow, r"(?m)^\s+branches:\s*\[main\]\s*$")
-        self.assertNotRegex(
-            self.workflow,
-            r"(?m)^  (?:pull_request|pull_request_target|workflow_dispatch|workflow_run)\s*:",
-        )
+    def test_workflow_has_exact_main_push_and_intended_schedule_triggers(self):
+        self.assertEqual(_trigger_policy_violations(self.workflow), [])
+        # GitHub treats this as the string key "on"; keep that semantics explicit
+        # if a safe YAML 1.1 parser would otherwise coerce the unquoted key.
+        quoted_on = self.workflow.replace("\non:\n", "\n'on':\n", 1)
+        self.assertNotEqual(quoted_on, self.workflow)
+        self.assertEqual(_trigger_policy_violations(quoted_on), [])
         self.assertNotIn("publish-agent-instructions", self.workflow)
         self.assertNotIn("push_branch", self.workflow)
         self.assertEqual(_workflow_violations(self.workflow), [])
+
+    def test_unexpected_top_level_workflow_events_are_rejected(self):
+        for event in (
+            "repository_dispatch",
+            "workflow_run",
+            "pull_request",
+            "workflow_dispatch",
+            "release",
+            "future_untrusted_event",
+        ):
+            with self.subTest(event=event):
+                unsafe = self.workflow.replace(
+                    "  schedule:\n", f"  {event}:\n  schedule:\n", 1
+                )
+                self.assertIn(
+                    "unexpected top-level workflow trigger",
+                    _workflow_violations(unsafe),
+                )
+
+    def test_trigger_mutations_cannot_broaden_push_or_change_schedule(self):
+        for old, new in (
+            ("branches: [main]", "branches: [main, feature]"),
+            ("branches: [main]", "branches: [main]\n    paths: ['**']"),
+            ("17 4 * * 1", "17 4 * * 2"),
+        ):
+            with self.subTest(mutation=new):
+                unsafe = self.workflow.replace(old, new, 1)
+                self.assertNotEqual(_trigger_policy_violations(unsafe), [])
 
     def test_pull_request_and_manual_workflows_with_write_scope_are_rejected(self):
         for event in ("pull_request", "workflow_dispatch"):
