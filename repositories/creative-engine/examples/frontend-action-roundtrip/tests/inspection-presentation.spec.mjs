@@ -1,8 +1,8 @@
-import { test, expect } from './capture-test.mjs';
+import { test, expect, resetFixture } from './capture-test.mjs';
 import AxeBuilder from '@axe-core/playwright';
 
 test('presentation-only inspection scenarios retain stable references, unknown costs and keyboard/focus semantics without requests', async ({ page, request }, testInfo) => {
-  await request.post('/__fixture/reset', { data: {} });
+  await resetFixture(request, {});
   const before = await (await request.get('/api/counters')).json(), posts = [], errors = [], exceptions = [];
   page.on('request', req => { if (req.method() === 'POST') posts.push(req.url()); });
   page.on('pageerror', error => errors.push(error.message));
@@ -47,7 +47,7 @@ test('presentation-only inspection scenarios retain stable references, unknown c
 });
 
 test('malformed presentation-only input stays private with fixed focused error and zero authority', async ({ page, request }) => {
-  await request.post('/__fixture/reset', { data: {} }); const before = await (await request.get('/api/counters')).json();
+  await resetFixture(request, {}); const before = await (await request.get('/api/counters')).json();
   const posts = []; page.on('request', req => { if (req.method() === 'POST') posts.push(req.url()); });
   await page.route('**/inspection-inputs.json', async route => {
     const value = await (await route.fetch()).json();

@@ -28,7 +28,7 @@ const hostEnvelope = (action, principal) => ({ contract: 'CreativeApiRequest', s
 export async function createIntegratedHost(directory, { principal = fixturePrincipal, lockLogo = true, enableComposition = false, nativeFormat = 'png', preferences = [{ preference_id: 'style', value: 'calm' }, { preference_id: 'name_size', value: 'medium' }, { preference_id: 'layout', value: 'centered' }] } = {}) {
   const fixturePrincipal = Object.freeze({ ...principal });
   const actor = () => hostActor(fixturePrincipal), envelope = action => hostEnvelope(action, fixturePrincipal);
-  let host, released, closed=false; let clock = NOW;
+  let host, released, closed=false; let adapterClosed = false, storeClosed = false; let clock = NOW;
   const counters = { image_calls: 0, jev_calls: 0, reservations: 0, releases: 0, holds: 0, bootstrap_image_calls: 0, publication_waits: 0, transport_acks: 0, observer_calls: 0, independent_decision_calls: 0, dependent_choice_calls: 0, independent_questions: 0, dependent_questions: 0, inspection_usage_observations: 0, observer_sends:0, independent_decision_sends:0, dependent_choice_sends:0 };
   const policy = { can_apply: true, available_operations: ['composition.update', 'artwork.edit'], permitted_asset_ids: ['asset-1'], logo_asset_id: 'asset-1' };
   if (enableComposition) Object.assign(counters, { composition_resolves: 0, composition_previews: 0, composition_assertions: 0 });
@@ -40,6 +40,17 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
     return value;
   };
   const store = new CreativeVersionStore({ databasePath: join(directory, 'creative.sqlite'), objectRoot: join(directory, 'objects'), now: () => clock });
+  let adapter, inspection, composition;
+  const closeComponents = () => {
+    if (closed) return;
+    const errors = [];
+    if (!adapterClosed) { try { adapter?.close(); adapterClosed = true; } catch (error) { errors.push(error); } }
+    if (!storeClosed) { try { store.close(); storeClosed = true; } catch (error) { errors.push(error); } }
+    closed = adapterClosed && storeClosed;
+    if (errors.length === 1) throw errors[0];
+    if (errors.length) throw new AggregateError(errors, 'MOCK host close failed');
+  };
+  try {
   let gate = null, gateKind, waiting, waitingBinding;
   const wait = async (kind,binding) => { if (gateKind === kind) { waiting=kind;waitingBinding=binding;try{await gate;}finally{waiting=undefined;waitingBinding=undefined;} } };
   let brief;
@@ -128,7 +139,6 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
     counters.bootstrap_image_calls = counters.image_calls; counters.image_calls = 0; counters.reservations = 0; counters.transport_acks = 0;
   }
   if (enableComposition) attachOfflineComposition(ports, { store, policy, counters, wait, now: () => clock });
-  let adapter, inspection, composition;
   const readContext = () => {
     const current = store.getBrief({ scope, brief_id: brief.brief_id });
     return { brief: current, selection: store.getSelection({ scope, brief_id: brief.brief_id }), design: store.getCurrentDesignVersion({ scope, brief_id: brief.brief_id }),
@@ -136,7 +146,7 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
       composition: { status: 'unavailable', bridge: 'creative.composition.consume/1' }, policy, actor: currentActor() };
   };
   const reopenAdapter = () => {
-    adapter?.close(); adapter = new CreativeControlsAdapter({ path: join(directory, 'controls.sqlite'), ports, readContext, now: () => clock }); inspection = new InspectionControlsAdapter({ controls: adapter, ports, now: () => clock });
+    adapter?.close(); adapterClosed = false; adapter = new CreativeControlsAdapter({ path: join(directory, 'controls.sqlite'), ports, readContext, now: () => clock }); inspection = new InspectionControlsAdapter({ controls: adapter, ports, now: () => clock });
     if (enableComposition) composition = new CompositionControlsAdapter({ database: adapter.db, ports, readContext, now: () => clock,
       readPolicy: () => fixtureCompositionPolicy(clock, [...(lockLogo ? ['logo_position'] : []), ...(policy.locked_fields ?? [])]) });
   };
@@ -164,6 +174,7 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
         mapping_status: usage.status, target_binding_sha256: usage.target_binding_sha256,
         attempt_binding_sha256: usage.attempt_binding_sha256, billable_attempt_id: usage.billable_attempt_id };
     },
+    waitForFixture(kind) { return wait(kind); },
     get waiting() { return waiting; },
     get waitingBinding() { return waitingBinding; },
     block(kind) { gateKind = kind; gate = new Promise(resolve => { released = resolve; }); },
@@ -199,7 +210,16 @@ export async function createIntegratedHost(directory, { principal = fixturePrinc
     selection() { return store.getSelection({ scope, brief_id: brief.brief_id }); },
     async compare(target) { return api.invoke(currentActor(), { ...envelope('fixture-compare'), operation: 'compare', payload: { brief_id: brief.brief_id, left_design_version_id: this.selection().design_version_id, right_design_version_id: target } }); },
     async restore(target, revision, actionId) { return api.invoke(currentActor(), { ...envelope(actionId), operation: 'restore', payload: { brief_id: brief.brief_id, target_design_version_id: target, expected_selection_revision: revision } }); },
-    close() { if(closed)return; closed=true; this.release(); adapter.close(); store.close(); },
+    close() { this.release(); closeComponents(); },
   };
   return host;
+  } catch (error) {
+    try { closeComponents(); }
+    catch (cleanup) {
+      const failure = new AggregateError([error, ...(cleanup instanceof AggregateError ? cleanup.errors : [cleanup])], 'MOCK host initialization and cleanup failed');
+      Object.defineProperty(failure, 'fixtureCleanup', { value: closeComponents });
+      throw failure;
+    }
+    throw error;
+  }
 }
