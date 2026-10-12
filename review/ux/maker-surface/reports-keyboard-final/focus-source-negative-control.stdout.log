@@ -1,0 +1,55 @@
+✔ wheel keeps moving forward/backward after the 3D loop exits on context loss (1.388ms)
+✔ an animation exception cannot strand wheel input and starts readable static art (0.347292ms)
+✔ display-only rail tracks native scrolling/resizing without rendering frames (0.31525ms)
+✔ rail is decorative and passes pointer input through (0.159917ms)
+✔ switching to static art restores scene copy hidden by an interrupted 3D frame (0.314084ms)
+✖ native navigation reaches scenes and maker, with reduced motion false (1.24075ms)
+✖ native navigation reaches scenes and maker, with reduced motion true (0.474041ms)
+✔ user wheel input cancels pending maker focus (0.368625ms)
+✔ seamless hero wrap uses an immediate native jump (0.467208ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 7
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 78.910833
+
+✖ failing tests:
+
+test at tests/scroll.test.mjs:182:3
+✖ native navigation reaches scenes and maker, with reduced motion false (1.24075ms)
+  AssertionError [ERR_ASSERTION]: active maker focus permits native scrolling of the input into view
+      at TestContext.<anonymous> (file:///private/tmp/lp-maker-readable-surface/tests/scroll.test.mjs:192:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests/scroll.test.mjs:182:3
+✖ native navigation reaches scenes and maker, with reduced motion true (0.474041ms)
+  AssertionError [ERR_ASSERTION]: active maker focus permits native scrolling of the input into view
+      at TestContext.<anonymous> (file:///private/tmp/lp-maker-readable-surface/tests/scroll.test.mjs:192:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

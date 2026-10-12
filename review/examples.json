@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "Existing illustrative assets retained for local review; release blocked",
-  "pageSha256": "a078774df18e59b884bdff968f2bec3e4a5b2a009458d30c8320242f595858f6",
+  "pageSha256": "2bc1c248336d17ee0beb402882cc697925721a42f94b6e8f2fa187da36227a92",
   "source": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
     "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
@@ -659,8 +659,28 @@
   "recheckBy": "2026-11-12",
   "auditedSource": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
-    "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
-    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html"
+    "revision": "36c0a841d5b5c5f6e7c3870e65c541825026d214",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/36c0a841d5b5c5f6e7c3870e65c541825026d214/site/index.html"
   },
-  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval."
+  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval.",
+  "historicalSourceReferences": [
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html",
+      "relationship": "Previous verified immutable author audit before the CSS-only maker reading surface; preserved without upgrading owner or publication approval."
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "b5205f0c749ec81e1d75e3da75cc236dd79f692e",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b5205f0c749ec81e1d75e3da75cc236dd79f692e/site/index.html",
+      "relationship": "Earlier CSS-only maker surface audit before the reduced-motion correction; preserved as historical, not approval."
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "3c510591150e3bb44eb1fa44e9993ae32677ad3d",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/3c510591150e3bb44eb1fa44e9993ae32677ad3d/site/index.html",
+      "relationship": "Earlier maker surface/motion audit before native overflow and no-JavaScript escape; historical only, not current approval."
+    }
+  ]
 }

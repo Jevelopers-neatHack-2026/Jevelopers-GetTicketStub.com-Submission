@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "scope": "Safe provisional copy draft; not approved public release",
-  "pageSha256": "a078774df18e59b884bdff968f2bec3e4a5b2a009458d30c8320242f595858f6",
-  "visibleTextSha256": "fa8589d48462ce281ccf259f9f5267f3d5a9050e6d75164af43be242e02ef705",
+  "pageSha256": "2bc1c248336d17ee0beb402882cc697925721a42f94b6e8f2fa187da36227a92",
+  "visibleTextSha256": "ed3b6f30f775c6184b3fccc77c0ba12606bcf6e2ab5e029493a4a54da38c4f29",
   "source": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
     "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
@@ -1248,12 +1248,51 @@
       "recheckBy": "2026-11-12",
       "recheckTrigger": "Any source, copy, route, product capability, asset or approval change; before external publication",
       "sourceNote": "New author proposal in CTA patch; immutable base is behavior provenance, not wording approval."
+    },
+    {
+      "id": "LP-NOJS-NOTICE",
+      "location": "site/index.html noscript .nojs-studio",
+      "exactCopy": "The interactive preview requires JavaScript. You can open the studio separately; this page sends no preview text.",
+      "evidenceClass": "pending",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/4cc7cea5f879545f3758b05eaab9bc9f1d0b1324/site/index.html"
+      },
+      "productEvidence": "Source-backed noninteractive fallback; current approved public-navigation-only URL, no input/query/form; root browser validation pending.",
+      "upstreamOwner": "Product and frontend; receiving application owner",
+      "approval": "PENDING",
+      "authorAudit": "draft-audited",
+      "reviewer": "Product/frontend and accessibility/QA review pending",
+      "reviewDate": "2026-10-12",
+      "recheckBy": "2026-11-12",
+      "recheckTrigger": "Any source, approved destination, JS-disabled fallback, capture or approval change; before external publication"
     }
   ],
   "auditedSource": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
-    "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
-    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html"
+    "revision": "36c0a841d5b5c5f6e7c3870e65c541825026d214",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/36c0a841d5b5c5f6e7c3870e65c541825026d214/site/index.html"
   },
-  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval."
+  "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval.",
+  "historicalSourceReferences": [
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/329fc4f27e7b9792e60eabcf4f2401f4541254a5/site/index.html",
+      "relationship": "Previous verified immutable author audit before the CSS-only maker reading surface; preserved without upgrading owner or publication approval."
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "b5205f0c749ec81e1d75e3da75cc236dd79f692e",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/b5205f0c749ec81e1d75e3da75cc236dd79f692e/site/index.html",
+      "relationship": "Earlier CSS-only maker surface audit before the reduced-motion correction; preserved as historical, not approval."
+    },
+    {
+      "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "3c510591150e3bb44eb1fa44e9993ae32677ad3d",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/3c510591150e3bb44eb1fa44e9993ae32677ad3d/site/index.html",
+      "relationship": "Earlier maker surface/motion audit before native overflow and no-JavaScript escape; historical only, not current approval."
+    }
+  ]
 }

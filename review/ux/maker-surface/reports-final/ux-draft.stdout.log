@@ -1,0 +1,20 @@
+✔ wheel keeps moving forward/backward after the 3D loop exits on context loss (1.634709ms)
+✔ an animation exception cannot strand wheel input and starts readable static art (0.385958ms)
+✔ display-only rail tracks native scrolling/resizing without rendering frames (0.478958ms)
+✔ rail is decorative and passes pointer input through (0.253375ms)
+✔ switching to static art restores scene copy hidden by an interrupted 3D frame (0.463041ms)
+✔ native navigation reaches scenes and maker, with reduced motion false (0.541042ms)
+✔ native navigation reaches scenes and maker, with reduced motion true (0.792083ms)
+✔ user wheel input cancels pending maker focus (0.43275ms)
+✔ seamless hero wrap uses an immediate native jump (0.489958ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 87.72275
+ux: source checks and real-handler scroll tests passed; 5 unresolved review/evidence items; browser/WCAG/lab performance not certified
+PASS_DRAFT ux
+PASS_DRAFT selected suites: release approvals remain pending

@@ -1,0 +1,44 @@
+{
+  "sourceCommit": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
+  "sourcePageSHA": "72b2d9171203664dd513b899d0a0761d7e8ce4422cfa0ec06d5211847f573b65",
+  "url": "http://127.0.0.1:4181/",
+  "observedAt": "2026-10-12T14:46:18.017Z",
+  "status": "LOCAL_NO_JAVASCRIPT_FALLBACK_OBSERVED",
+  "observation": {
+    "h": 721,
+    "heroTransform": "none",
+    "interactiveBoardDisplay": "none",
+    "loaderDisplay": "none",
+    "nativeLink": {
+      "href": "https://getticketstub.com/make",
+      "rect": {
+        "bottom": 261.1875,
+        "height": 57.5,
+        "left": 48,
+        "right": 206.265625,
+        "top": 203.6875,
+        "width": 158.265625,
+        "x": 48,
+        "y": 203.6875
+      }
+    },
+    "note": {
+      "rect": {
+        "bottom": 261.1875,
+        "height": 129.5,
+        "left": 48,
+        "right": 752,
+        "top": 131.6875,
+        "width": 704,
+        "x": 48,
+        "y": 131.6875
+      },
+      "text": "The interactive preview requires JavaScript. You can open the studio separately; this page sends no preview text. Open studio"
+    },
+    "rootClass": "",
+    "w": 1523,
+    "y": 5523
+  },
+  "action": "Script execution disabled; reload; native keyboard Make yours anchor activation",
+  "limitation": "No-JavaScript mode only, not all script/network failure states"
+}

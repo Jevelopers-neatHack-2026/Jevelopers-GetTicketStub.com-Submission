@@ -29,6 +29,16 @@ export function validateCtaSource(html, config) {
   assert.match(html, /\.finale\.typing \.fin-copy>p:not\(#demoUnavailable\)\{display:none\}/);
   assert.ok(!/\.fin-note\{display:none\}/.test(html), 'Local feedback must remain visible on mobile');
   const result = exerciseJourney(html);
+  // Runtime withdrawal cannot modify noscript markup. Every shipped native link
+  // must match the current approved config, including the no-JS escape route.
+  for (const tag of html.matchAll(/<a\b[^>]*>/gi)) {
+    const attributes = [...tag[0].matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)];
+    const hrefs = attributes.filter(attribute => attribute[1].toLowerCase() === 'href');
+    assert(hrefs.length <= 1, 'Duplicate href attributes make native navigation ambiguous');
+    const attribute = hrefs[0];
+    const href = attribute?.[2] ?? attribute?.[3] ?? attribute?.[4];
+    if (href && !href.startsWith('#')) assert.equal(href, result.destination, 'Static native link differs from approved destination or remains after withdrawal');
+  }
   const entry = config.destinations[config.environment];
   if (entry?.status !== 'APPROVED' || entry.availability !== 'verified') assert.equal(result.destination, null, 'Pending/unavailable destination must remain disabled');
   const link = html.match(/<a\b[^>]*id="demoLink"[^>]*>/)?.[0];

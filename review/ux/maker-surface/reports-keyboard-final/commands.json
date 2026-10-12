@@ -1,0 +1,177 @@
+[
+  {
+    "id": "all-tests",
+    "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+    "arguments": [
+      "--test",
+      "tests/content-proof.test.mjs",
+      "tests/cta.test.mjs",
+      "tests/foundation.test.mjs",
+      "tests/metadata.test.mjs",
+      "tests/privacy.test.mjs",
+      "tests/scroll.test.mjs",
+      "tests/ux.test.mjs"
+    ],
+    "startedAt": "2026-10-12T14:57:32.586Z",
+    "endedAt": "2026-10-12T14:57:33.642Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/all-tests.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/all-tests.stderr.log"
+  },
+  {
+    "id": "foundation-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "foundation",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:57:33.643Z",
+    "endedAt": "2026-10-12T14:57:34.727Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/foundation-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/foundation-draft.stderr.log"
+  },
+  {
+    "id": "content-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "content",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:57:34.727Z",
+    "endedAt": "2026-10-12T14:57:34.858Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/content-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/content-draft.stderr.log"
+  },
+  {
+    "id": "proof-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "proof",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:57:34.858Z",
+    "endedAt": "2026-10-12T14:57:35.092Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/proof-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/proof-draft.stderr.log"
+  },
+  {
+    "id": "cta-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "cta",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:57:35.093Z",
+    "endedAt": "2026-10-12T14:57:35.547Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/cta-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/cta-draft.stderr.log"
+  },
+  {
+    "id": "privacy-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "privacy",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:57:35.547Z",
+    "endedAt": "2026-10-12T14:57:35.692Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/privacy-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/privacy-draft.stderr.log"
+  },
+  {
+    "id": "metadata-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "metadata",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:57:35.692Z",
+    "endedAt": "2026-10-12T14:57:36.034Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/metadata-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/metadata-draft.stderr.log"
+  },
+  {
+    "id": "ux-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "ux",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:57:36.035Z",
+    "endedAt": "2026-10-12T14:57:36.283Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/ux-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/ux-draft.stderr.log"
+  },
+  {
+    "id": "ux-release",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "ux"
+    ],
+    "startedAt": "2026-10-12T14:57:36.284Z",
+    "endedAt": "2026-10-12T14:57:36.528Z",
+    "exitCode": 1,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/ux-release.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/ux-release.stderr.log"
+  },
+  {
+    "id": "focus-source-negative-control",
+    "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+    "arguments": [
+      "--test",
+      "tests/scroll.test.mjs"
+    ],
+    "environment": {
+      "SCROLL_TEST_HTML": "/tmp/lp-maker-focus-before.html"
+    },
+    "fixtureSourceRevision": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
+    "fixtureSourcePath": "site/index.html",
+    "startedAt": "2026-10-12T14:59:26.499Z",
+    "endedAt": "2026-10-12T14:59:26.638Z",
+    "exitCode": 1,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-keyboard-final/focus-source-negative-control.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-keyboard-final/focus-source-negative-control.stderr.log"
+  }
+]

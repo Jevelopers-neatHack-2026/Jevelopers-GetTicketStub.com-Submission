@@ -1,0 +1,31 @@
+{
+  "sourceCommit": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
+  "sourcePageSHA": "a078774df18e59b884bdff968f2bec3e4a5b2a009458d30c8320242f595858f6",
+  "url": "http://127.0.0.1:4179/",
+  "observedAt": "2026-10-12T14:35:45.545Z",
+  "status": "FAIL_VISUAL_LOCKED_LOADER_WITH_SCRIPTS_DISABLED",
+  "observation": {
+    "h": 900,
+    "heroHeadingTransform": "matrix(1, 0, 0, 1, 0, 148.23)",
+    "loader": {
+      "display": "grid",
+      "opacity": "1",
+      "rect": {
+        "bottom": 900,
+        "height": 900,
+        "left": 0,
+        "right": 1425,
+        "top": 0,
+        "width": 1425,
+        "x": 0,
+        "y": 0
+      },
+      "text": "getticketstub.com · stub 000001KEEP THENIGHT.sec — · row — · seat — 0Loading the preview"
+    },
+    "noscriptCount": 0,
+    "rootClass": "",
+    "w": 1440
+  },
+  "action": "Emulation.setScriptExecutionDisabled true; reload; actual DOM and screenshot capture",
+  "limitation": "No-JavaScript mode only, not all script/network failure states"
+}

@@ -189,7 +189,7 @@ for (const reduced of [false, true]){
     assert.equal(h.context.scrollY, 17388);
     assert.ok(h.calls.some(call => call.hash === '#make'));
     h.frames.shift()(16);
-    assert.ok(h.calls.some(call => call.focus?.preventScroll === true), 'maker receives focus without moving the page');
+    assert.ok(h.calls.some(call => Object.hasOwn(call, 'focus') && call.focus === undefined), 'active maker focus permits native scrolling of the input into view');
     assert.equal(click('#top'), true);
     assert.equal(h.context.scrollY, 0);
     assert.equal(click('#missing'), false, 'missing targets keep ordinary browser behavior');

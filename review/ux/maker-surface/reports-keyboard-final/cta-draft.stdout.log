@@ -1,0 +1,25 @@
+✔ actual source config, no-JS markup and local editor boundary are explicit (7.362083ms)
+✔ no-JS escape is explicit, query-free and uses the same approved native destination (1.874625ms)
+✔ a mismatched or hidden duplicate static fallback link cannot escape the approved config (11.030083ms)
+✔ duplicate mixed-case href attributes are rejected instead of choosing one (2.679333ms)
+✔ withdrawn config requires static no-JS navigation to be withdrawn too (2.48875ms)
+✔ missing/invalid config cannot expose any external navigation (7.851458ms)
+✔ approved-shaped link fixtures carry only exact owner-allowlisted URL in each environment (6.6055ms)
+✔ unavailable service, pending owner or absent/nonimmutable/mismatched approval receipts disable the link (20.130083ms)
+✔ invalid scheme/origin/path, queries, fragments, credentials and private destinations fail closed (24.415333ms)
+✔ real pointer/Enter/preview/example/navigation handlers keep synthetic input local with reduced motion and blocked surfaces (3.50325ms)
+✔ tampered source config, named input and sending confirmation are rejected (2.095ms)
+✔ limited thread receipt rejects malformed observation/approval scope and cannot migrate to another environment (13.925708ms)
+✔ actual live navigation target stays byte-identical after editing, chips, button clicks and Enter (1.103375ms)
+✔ invalid config must remove the real pre-existing native href; deletion mutant fails the safety assertion (2.693208ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 211.459834
+cta: local input stays local; no form/query handoff; owner-approved Open studio navigation only; deployment/release/browser evidence PENDING
+PASS_DRAFT cta
+PASS_DRAFT selected suites: release approvals remain pending

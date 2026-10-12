@@ -302,12 +302,12 @@ a{color:inherit}
 .board-copy h2.out{opacity:0;transform:translateY(-14px)}
 .tally{font-family:var(--cond);font-weight:900;font-size:clamp(40px,5vw,80px);line-height:.8;text-align:right;font-variant-numeric:tabular-nums;text-shadow:0 4px 30px rgba(0,0,0,.6)}
 .tally small{display:block;white-space:nowrap;font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.1em;margin-top:8px}
-.finale{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:0 var(--gutter);pointer-events:none;opacity:0;transition:opacity .3s}
+.finale{position:absolute;inset:0;display:grid;place-items:safe center;align-content:safe center;overflow-y:auto;max-height:100dvh;text-align:center;padding:0 var(--gutter);pointer-events:none;opacity:0;transition:opacity .3s}
 .finale .eyebrow{font-family:var(--mono);font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);background:var(--foil);padding:6px 12px 5px;border-radius:999px}
 .finale.on{opacity:1;pointer-events:auto}
 .finale:before{content:"";position:absolute;inset:0;background:radial-gradient(62% 62% at 50% 52%,rgba(23,20,15,.9),rgba(23,20,15,.62) 70%,rgba(23,20,15,.18))}
 .finale .in{position:relative;display:grid;grid-template-columns:minmax(0,700px) auto;justify-content:center;gap:clamp(30px,5vw,90px);align-items:center;width:100%;text-align:left}
-.fin-copy{display:grid;gap:18px;justify-items:start}
+.fin-copy{display:grid;gap:18px;justify-items:start;min-width:0;width:100%;padding:clamp(18px,2vw,28px);background:var(--ink);border-radius:12px}
 .finale .eyebrow{display:inline-flex;align-items:center;gap:9px}.eb-stamp{width:12px;height:15px;color:var(--punch)}
 .fin-try{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font:500 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#cfc4b0}
 .fin-try button{font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;background:transparent;color:var(--stock);text-decoration:none;border:1.5px solid rgba(244,236,221,.4);border-radius:999px;padding:9px 13px 8px;transition:border-color .2s,background .2s}
@@ -581,8 +581,15 @@ footer a{text-decoration:none;opacity:.85}footer a:hover{opacity:1;text-decorati
   .hero{padding-top:calc(114px + env(safe-area-inset-top,0px))}
   .finale{overflow-y:auto;max-height:100dvh;align-content:start;place-items:start center;padding-top:calc(114px + env(safe-area-inset-top,0px));padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
 }
-@media (prefers-reduced-motion:reduce){.marquee .track,.disc svg,.search .caret{animation:none}}
+@media (prefers-reduced-motion:reduce){.marquee .track,.disc svg,.search .caret{animation:none}.finale,.finale h2,.fin-card .ts-stub{transition:none}}
 </style>
+<noscript><style>
+#loader,#gl,#boardUI,.disc,.marquee,.floaters,.loopzone,.hero-clone,.loop-stubs{display:none!important}
+.hero{min-height:auto}.hero h1 .l>span{transform:none;transition:none}
+.board{height:auto;padding:32px var(--gutter);background:var(--stock);color:var(--ink)}.board .stage{display:none}
+#make{position:static!important;bottom:auto!important;display:block;scroll-margin-top:114px}
+.nojs-studio{max-width:44rem}.nojs-studio p{font-size:18px;line-height:1.5}
+</style></noscript>
 </head><body>
 
 <a class="skip" href="#make">Skip to make your stub</a>
@@ -722,6 +729,10 @@ footer a{text-decoration:none;opacity:.85}footer a:hover{opacity:1;text-decorati
   <section class="board" id="wall" data-nav="#f4ecdd">
     <div class="stage"><div class="fallback-wall" id="fallback" aria-hidden="true"></div></div>
     <span id="make" style="position:absolute;bottom:100vh"></span>
+    <noscript><div class="nojs-studio">
+      <p>The interactive preview requires JavaScript. You can open the studio separately; this page sends no preview text.</p>
+      <a class="btn solid" id="nojsStudio" href="https://getticketstub.com/make" target="_blank" rel="noopener noreferrer">Open studio</a>
+    </div></noscript>
   </section>
 </main>
 
@@ -1496,7 +1507,7 @@ const ev = document.getElementById('ev');
 function focusMaker(){   // wait until the finale is actually showing, then put the cursor in the field
   const t0 = performance.now(); let stopped = false; const stop = () => { stopped = true; };
   addEventListener('wheel', stop, { once: true, passive: true }); addEventListener('touchstart', stop, { once: true, passive: true });
-  const tryFocus = () => { if (stopped) return; if (!finale.inert){ ev.focus({ preventScroll: true }); return; } if (performance.now() - t0 < 2500) requestAnimationFrame(tryFocus); };
+  const tryFocus = () => { if (stopped) return; if (!finale.inert){ ev.focus(); return; } if (performance.now() - t0 < 2500) requestAnimationFrame(tryFocus); };
   requestAnimationFrame(tryFocus);
 }
 document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
