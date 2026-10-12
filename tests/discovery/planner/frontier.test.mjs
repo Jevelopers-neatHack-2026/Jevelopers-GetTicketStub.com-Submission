@@ -29,7 +29,7 @@ function sourceRef(url, evidenceId, contentHash = HASH_A) {
   };
 }
 
-async function harness(t, { clock = { value: Date.UTC(2026, 9, 10) }, tenantId = 'tenant-a' } = {}) {
+async function harness(t, { clock = { value: Date.UTC(2026, 9, 10) }, tenantId = 'tenant-a', tenantLimits } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'ei-frontier-'));
   const stores = new Set();
   const openStore = () => {
@@ -38,6 +38,7 @@ async function harness(t, { clock = { value: Date.UTC(2026, 9, 10) }, tenantId =
       resolveTenant: (request) => request?.principal?.tenantId,
       now: () => clock.value,
       lockTimeoutMs: 10_000,
+      ...(tenantLimits ? { tenantLimits } : {}),
     });
     stores.add(store);
     return store;
@@ -48,7 +49,7 @@ async function harness(t, { clock = { value: Date.UTC(2026, 9, 10) }, tenantId =
   });
   const store = openStore();
   const scope = await store.scopeForAuthenticatedRequest({ principal: { tenantId } });
-  return { directory, clock, openStore, store, scope, tenantId };
+  return { directory, clock, openStore, store, scope, tenantId, tenantLimits };
 }
 
 async function seedRun(store, scope, runId, seeds = ['https://events.example.com/root'], limits) {
@@ -252,6 +253,11 @@ test('actual pinned v1 frontier migrates unknown admissions without restoring tr
   const untouchedCapacity = await current.getTransportProgress(scope, untouchedInput.runId);
   assert.equal(untouchedCapacity.legacyUnknownRuns, 0);
   assert.equal(untouchedCapacity.availableBytes, 100 * 1024 * 1024);
+  const tenantCapacity = await current.getTenantProgress(scope);
+  assert.equal(tenantCapacity.legacyUnknownRuns, 2);
+  assert.equal(tenantCapacity.untrackedAttempts, 0, 'v1 admissions are covered by their full-run holds');
+  assert.equal(tenantCapacity.reservedBytes, 200 * 1024 * 1024);
+  assert.equal(tenantCapacity.availableReservedBytes, 0, 'migration preserves over-limit exposure without refunding it');
   current.close();
   const reopened = h.openStore();
   const reopenedScope = await reopened.scopeForAuthenticatedRequest({ principal: { tenantId: h.tenantId } });
@@ -1113,7 +1119,9 @@ test('a sealed partial draft preserves queued candidates but permanently denies 
 });
 
 test('independent SQLite connections cannot overspend the last decoded capacity reservation', async (t) => {
-  const { store, scope, openStore } = await harness(t);
+  // Four unresolved transport leases and two racing workers are intentional.
+  // This case isolates the original per-run byte limit from the tenant limit.
+  const { store, scope, openStore } = await harness(t, { tenantLimits: { maxInFlightLeases: 6 } });
   await seedRun(store, scope, 'transport-capacity-race', [
     'https://events.example.com/a', 'https://events.example.com/b',
     'https://events.example.com/c', 'https://events.example.com/d',
@@ -1164,7 +1172,9 @@ test('independent SQLite connections cannot overspend the last decoded capacity 
 });
 
 test('separate OS processes cannot overspend the last decoded capacity reservation', async (t) => {
-  const { directory, clock, store, scope } = await harness(t);
+  // Match the six-lease synthetic policy in every process from first binding.
+  // The original 20 MiB reservations and 100 MiB run bound stay unchanged.
+  const { directory, clock, store, scope, tenantLimits } = await harness(t, { tenantLimits: { maxInFlightLeases: 6 } });
   const runId = 'transport-multiprocess-race';
   await seedRun(store, scope, runId, [
     'https://events.example.com/a', 'https://events.example.com/b',
@@ -1193,7 +1203,7 @@ test('separate OS processes cannot overspend the last decoded capacity reservati
   const leftKey = 'process-last-left';
   const rightKey = 'process-last-right';
   const args = (claim, attemptKey) => [directory, runId, claim.leaseToken, attemptKey,
-    claim.candidate.canonicalUrl, String(clock.value), barrierDirectory];
+    claim.candidate.canonicalUrl, String(clock.value), barrierDirectory, JSON.stringify(tenantLimits)];
   const leftPending = runTransportWorker(args(left, leftKey));
   const rightPending = runTransportWorker(args(right, rightKey));
   const waitForReadyWorkers = async () => {

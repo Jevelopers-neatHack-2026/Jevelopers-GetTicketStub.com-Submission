@@ -38,6 +38,83 @@ garbage-collection policy; the application composition root must provide a
 private storage directory and an approved lifecycle before relying on it for
 long-lived or customer data.
 
+### Shared tenant admission
+
+The trusted store constructor accepts an optional `tenantLimits` policy. It
+defaults to `maxInFlightLeases: 4` and `maxReservedDecodedBytes: 104857600`
+(100 MiB). The policy applies across every run in one tenant database and
+every store instance or process opening it. The configured directory, identity
+resolver and numeric settings belong to the host; these component defaults
+are not an attestation of deployed tenant policy or host containment.
+
+Both values must be ordinary safe integers. Lease capacity accepts 1–512,
+derived from the existing 128-run and four-lease ceilings. Outstanding byte
+capacity accepts 20 MiB–12,800 MiB, derived from the existing per-hop reservation
+and per-run/store ceilings. Per-run limits retain their existing values and
+cannot be raised by a larger tenant policy. Unknown keys, getters, string
+coercions, fractions, non-finite values and out-of-range values fail with
+`FRONTIER_INVALID_INPUT` before storage access.
+
+The normalized complete policy is persisted on the tenant's first successful
+database operation. A later instance must supply that same policy, including
+when it omits `tenantLimits` and therefore requests the defaults. A larger or
+smaller mismatched policy fails with `FRONTIER_CONFLICT`; caller mutation after
+construction cannot change the captured policy. Policy binding and schema
+migration use the same `BEGIN IMMEDIATE` transaction. Schema selection happens
+after acquiring that lock, so a peer's completed migration is rechecked before
+binding or validating the policy. There is no policy reset,
+automatic renewal or policy-change API.
+
+Concurrency counts distinct `(run_id, lease_token)` pairs that still have a
+leased claim, an unsettled transport hop, or an admission without a transport
+row. Redirects of one lease count once toward concurrency while their separate
+byte reservations all count. Cancellation, deadline expiry, planner completion
+and `markUnresolved` never remove uncertain transport exposure from this count.
+An unused lease can be released through the existing confirmed
+`cancelled_before_dispatch` path only when no attempt was admitted.
+
+Outstanding bytes include every `reserved`, `dispatch_intent`,
+`response_received` or `unknown` hop at its existing 20 MiB reservation. A raw
+`admitAttempt` has no transport observation, so each such untracked admission
+also conservatively reserves 20 MiB for this tenant policy, even after planner
+completion. It cannot be converted to a new transport permit by replaying its
+key through `admitTransportHop`. The existing v1 full-run uncertainty reserves
+100 MiB per affected run instead of double-counting its untracked attempts.
+No reconciliation authority or refund path is invented for these unknowns.
+
+Known-zero and complete-body settlement release the corresponding **outstanding
+tenant reservation**. Complete-body settlement still records exact decoded
+spend against the original cumulative per-run limit. The tenant policy is a
+resource admission bound, not a cumulative financial budget or a fresh budget
+per new run ID. The old per-run `getTransportProgress` describes tracked
+transport and v1 full-run uncertainty; it does not project current raw
+`admitAttempt` records or imply zero usage for them. `getTenantProgress` exposes
+the separate tenant projection, including untracked admission counts.
+
+New claims wait with `tenant_in_flight_limit` when tenant concurrency is full.
+New admissions return `denied` with `tenant_decoded_budget` when another 20 MiB
+reservation would exceed capacity. Over-limit migrated concurrency also denies
+new admissions for existing leases. Admission and accounting occur atomically;
+exact historical replay remains deduplicated at full capacity and never grants
+another dispatch. Denial leaves the new attempt and its counters uncommitted.
+
+Schema 4 migrates v1–v3 databases atomically, retaining their old rows, run
+configuration hashes, deadlines, counters and uncertainty. Exposure already
+above the new tenant limit is preserved; available capacity saturates at zero.
+History and existing settlement remain accessible with the matching policy,
+while new work stays bounded. V3 and older binaries reject schema 4, so reverting
+the code is not a database downgrade procedure. Missing or corrupted schema-4
+policy metadata fails with `FRONTIER_VERSION`, without silently rebinding or
+clearing debt. The host owner must coordinate any later policy migration or
+rollback; no production database or policy was changed by the local fixtures.
+
+The tenant tests use real temporary SQLite databases, independent Node
+processes and synthetic identities/settings without transport or provider
+calls. Two older per-run byte-contention fixtures explicitly select six tenant
+lease slots to retain their four unsettled reservations and two racing workers;
+their original 20 MiB and 100 MiB assertions remain intact. This is a scoped
+EI-02 AC4 mechanism and does not close issue #8, the release gate or the epic.
+
 ## Durable operations
 
 `createDiscoveryFrontierStore` requires a trusted local directory and a

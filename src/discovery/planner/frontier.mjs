@@ -4,7 +4,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { hasSensitiveUrlMaterial, parseAndValidateUrl } from '../../security/url-policy.mjs';
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const CLAIM_BINDING_VERSION = 1;
 const MAX_SEEDS = 10;
 const MAX_DEPTH = 2;
@@ -17,6 +17,8 @@ const MAX_RUNS_PER_TENANT = 128;
 const MAX_DATABASE_BYTES = 64 * 1024 * 1024;
 const MAX_DECODED_BYTES_PER_RUN = 100 * 1024 * 1024;
 const RESERVED_DECODED_BYTES_PER_HOP = 20 * 1024 * 1024;
+const MAX_TENANT_IN_FLIGHT = MAX_RUNS_PER_TENANT * MAX_IN_FLIGHT;
+const MAX_TENANT_RESERVED_BYTES = MAX_RUNS_PER_TENANT * MAX_DECODED_BYTES_PER_RUN;
 const MAX_DATABASE_PAGES = 16_384;
 const MAX_JSON_BYTES = 32 * 1024 * 1024;
 const MAX_SQLITE_TIMEOUT_MS = 10_000;
@@ -29,6 +31,11 @@ const DEFAULT_LIMITS = Object.freeze({
   maxInFlightLeases: 4,
   durationMs: 120_000,
   maxSuggestionsPerCompletion: 16,
+});
+
+const DEFAULT_TENANT_LIMITS = Object.freeze({
+  maxInFlightLeases: MAX_IN_FLIGHT,
+  maxReservedDecodedBytes: MAX_DECODED_BYTES_PER_RUN,
 });
 
 const ERROR_MESSAGES = Object.freeze({
@@ -273,6 +280,18 @@ function normalizeRunInput(value) {
   return { runId: input.runId, seeds, limits, config, configJson: stableJson(config), configHash: digest(stableJson(config)) };
 }
 
+function normalizeTenantLimits(value) {
+  const supplied = value === undefined ? {} : ownRecord(value, new Set(Object.keys(DEFAULT_TENANT_LIMITS)));
+  if (!supplied) fail();
+  const limits = { ...DEFAULT_TENANT_LIMITS, ...supplied };
+  if (!Number.isSafeInteger(limits.maxInFlightLeases) || limits.maxInFlightLeases < 1
+    || limits.maxInFlightLeases > MAX_TENANT_IN_FLIGHT
+    || !Number.isSafeInteger(limits.maxReservedDecodedBytes)
+    || limits.maxReservedDecodedBytes < RESERVED_DECODED_BYTES_PER_HOP
+    || limits.maxReservedDecodedBytes > MAX_TENANT_RESERVED_BYTES) fail();
+  return Object.freeze(limits);
+}
+
 function normalizeWorkerInput(value) {
   const input = ownRecord(value, new Set(['workerId', 'claimKey']));
   if (!input || !validId(input.workerId, 96) || !validId(input.claimKey, 128)) fail();
@@ -351,6 +370,11 @@ function safeStorageError(error) {
 
 function schemaSql() {
   return `
+    CREATE TABLE IF NOT EXISTS frontier_tenant_policy (
+      tenant_hash TEXT PRIMARY KEY,
+      policy_json TEXT NOT NULL,
+      policy_hash TEXT NOT NULL
+    ) STRICT;
     CREATE TABLE IF NOT EXISTS frontier_runs (
       tenant_hash TEXT NOT NULL,
       run_id TEXT NOT NULL,
@@ -517,7 +541,7 @@ function safeIntegerTime(value) {
   return value;
 }
 
-async function openDatabase(directory, tenantHash, deadline, signal) {
+async function openDatabase(directory, tenantHash, tenantPolicy, deadline, signal) {
   const tenantDirectory = path.join(directory, tenantHash);
   const databasePath = path.join(tenantDirectory, 'frontier.sqlite');
   while (true) {
@@ -551,10 +575,26 @@ async function openDatabase(directory, tenantHash, deadline, signal) {
         PRAGMA foreign_keys = ON;
         PRAGMA max_page_count = ${MAX_DATABASE_PAGES};
       `);
-      const version = database.prepare('PRAGMA user_version').get().user_version;
-      if (version !== 0 && version !== 1 && version !== 2 && version !== SCHEMA_VERSION) fail('FRONTIER_VERSION');
       database.exec('BEGIN IMMEDIATE');
       try {
+        // A peer may finish migration before this connection obtains the lock.
+        // Read the version under the lock before choosing binding or validation.
+        const version = database.prepare('PRAGMA user_version').get().user_version;
+        if (![0, 1, 2, 3, SCHEMA_VERSION].includes(version)) fail('FRONTIER_VERSION');
+        if (version === SCHEMA_VERSION) {
+          // A missing policy in a current database is corruption, not permission
+          // to bind a new limit. Old binaries reject this schema version.
+          const policyTable = database.prepare(`SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'frontier_tenant_policy'`).get();
+          if (!policyTable) fail('FRONTIER_VERSION');
+          const policies = database.prepare('SELECT * FROM frontier_tenant_policy').all();
+          if (policies.length !== 1 || policies[0].tenant_hash !== tenantHash
+            || typeof policies[0].policy_json !== 'string'
+            || policies[0].policy_hash !== digest(policies[0].policy_json)) fail('FRONTIER_VERSION');
+          if (policies[0].policy_json !== tenantPolicy.json || policies[0].policy_hash !== tenantPolicy.hash) {
+            fail('FRONTIER_CONFLICT');
+          }
+        }
         database.exec(schemaSql());
         const claimColumns = new Set(database.prepare('PRAGMA table_info(frontier_claims)').all()
           .map((column) => column.name));
@@ -580,6 +620,12 @@ async function openDatabase(directory, tenantHash, deadline, signal) {
             (tenant_hash, run_id, reserved_bytes)
             SELECT tenant_hash, run_id, ${MAX_DECODED_BYTES_PER_RUN}
             FROM frontier_attempts GROUP BY tenant_hash, run_id`).run();
+        }
+        if (version !== SCHEMA_VERSION) {
+          // Bind once in the same atomic migration. Retain every historical
+          // row even when its exposure already exceeds the selected policy.
+          database.prepare(`INSERT INTO frontier_tenant_policy (tenant_hash, policy_json, policy_hash)
+            VALUES (?, ?, ?)`).run(tenantHash, tenantPolicy.json, tenantPolicy.hash);
         }
         if (version !== SCHEMA_VERSION) database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
         checkOperationSignal(signal);
@@ -765,7 +811,44 @@ function insertObservation(database, tenantHash, run, { kind, parentCandidateId 
   return { candidate, disposition };
 }
 
-function admitAttemptInTransaction(database, tenantHash, runIdValue, run, input) {
+function tenantCapacityInTransaction(database, tenantHash, limits) {
+  // Count a lease once across redirects, using separate SQL tuple columns.
+  // Completion/unresolved status cannot release an uncertain transport lease.
+  const inFlightLeases = database.prepare(`SELECT COUNT(*) AS count FROM (
+    SELECT run_id, lease_token FROM frontier_claims WHERE tenant_hash = ? AND state = 'leased'
+    UNION
+    SELECT run_id, lease_token FROM frontier_transport_hops WHERE tenant_hash = ?
+      AND state IN ('reserved', 'dispatch_intent', 'response_received', 'unknown')
+    UNION
+    SELECT a.run_id, a.lease_token FROM frontier_attempts AS a
+      LEFT JOIN frontier_transport_hops AS h ON h.tenant_hash = a.tenant_hash
+        AND h.run_id = a.run_id AND h.attempt_key = a.attempt_key
+      WHERE a.tenant_hash = ? AND h.attempt_key IS NULL
+  )`).get(tenantHash, tenantHash, tenantHash).count;
+  const transport = database.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(reservation_bytes), 0) AS bytes
+    FROM frontier_transport_hops WHERE tenant_hash = ?
+      AND state IN ('reserved', 'dispatch_intent', 'response_received', 'unknown')`).get(tenantHash);
+  const legacy = database.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(reserved_bytes), 0) AS bytes
+    FROM frontier_transport_legacy_uncertainty WHERE tenant_hash = ?`).get(tenantHash);
+  const untrackedAttempts = database.prepare(`SELECT COUNT(*) AS count FROM frontier_attempts AS a
+    LEFT JOIN frontier_transport_hops AS h ON h.tenant_hash = a.tenant_hash
+      AND h.run_id = a.run_id AND h.attempt_key = a.attempt_key
+    WHERE a.tenant_hash = ? AND h.attempt_key IS NULL AND NOT EXISTS (
+      SELECT 1 FROM frontier_transport_legacy_uncertainty AS l
+      WHERE l.tenant_hash = a.tenant_hash AND l.run_id = a.run_id
+    )`).get(tenantHash).count;
+  const reservedBytes = transport.bytes + legacy.bytes + untrackedAttempts * RESERVED_DECODED_BYTES_PER_HOP;
+  if (![inFlightLeases, transport.count, transport.bytes, legacy.count, legacy.bytes,
+    untrackedAttempts, reservedBytes].every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    fail('FRONTIER_STORAGE');
+  }
+  return deepFreeze({ limits, inFlightLeases, reservedBytes,
+    availableInFlightLeases: Math.max(0, limits.maxInFlightLeases - inFlightLeases),
+    availableReservedBytes: Math.max(0, limits.maxReservedDecodedBytes - reservedBytes),
+    unsettledTransportHops: transport.count, untrackedAttempts, legacyUnknownRuns: legacy.count });
+}
+
+function admitAttemptInTransaction(database, tenantHash, runIdValue, run, input, tenantLimits) {
   const previous = database.prepare(`SELECT * FROM frontier_attempts
     WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ?`)
     .get(tenantHash, runIdValue, input.attemptKey);
@@ -804,6 +887,15 @@ function admitAttemptInTransaction(database, tenantHash, runIdValue, run, input)
         .get(tenantHash, runIdValue, candidate.candidate_id, input.canonicalUrl);
       if (seen) fail('FRONTIER_CONFLICT');
     }
+  }
+  const tenantCapacity = tenantCapacityInTransaction(database, tenantHash, tenantLimits);
+  // This lease is already counted. Over-limit migrated state permits history
+  // and settlement, but cannot admit more work for an existing lease either.
+  if (tenantCapacity.inFlightLeases > tenantLimits.maxInFlightLeases) {
+    return deepFreeze({ state: 'denied', reason: 'tenant_in_flight_limit' });
+  }
+  if (tenantCapacity.availableReservedBytes < RESERVED_DECODED_BYTES_PER_HOP) {
+    return deepFreeze({ state: 'denied', reason: 'tenant_decoded_budget' });
   }
   const sequence = run.attempts_admitted + 1;
   database.prepare(`INSERT INTO frontier_attempts
@@ -1098,7 +1190,7 @@ function appendStopSnapshot(database, tenantHash, runId, reason, nowMs, halt) {
 }
 
 export function createDiscoveryFrontierStore(options) {
-  const config = ownRecord(options, new Set(['directory', 'resolveTenant', 'now', 'lockTimeoutMs']));
+  const config = ownRecord(options, new Set(['directory', 'resolveTenant', 'now', 'lockTimeoutMs', 'tenantLimits']));
   if (!config || !validText(config.directory, 4_096) || !path.isAbsolute(config.directory)
     || typeof config.resolveTenant !== 'function'
     || (config.now !== undefined && typeof config.now !== 'function')) fail();
@@ -1106,6 +1198,9 @@ export function createDiscoveryFrontierStore(options) {
   if (!Number.isSafeInteger(lockTimeoutMs) || lockTimeoutMs < 1 || lockTimeoutMs > MAX_SQLITE_TIMEOUT_MS) fail();
   const directory = path.resolve(config.directory);
   const now = config.now ?? Date.now;
+  const tenantLimits = normalizeTenantLimits(config.tenantLimits);
+  const tenantPolicyJson = stableJson({ schema: 'ei-private-tenant-admission/v1', limits: tenantLimits });
+  const tenantPolicy = Object.freeze({ json: tenantPolicyJson, hash: digest(tenantPolicyJson) });
   const tenantScopes = new WeakMap();
   let closed = false;
 
@@ -1120,7 +1215,7 @@ export function createDiscoveryFrontierStore(options) {
     if (!scopeInfo) fail('FRONTIER_DENIED');
     checkOperationSignal(signal);
     const deadline = performance.now() + lockTimeoutMs;
-    const database = await openDatabase(directory, scopeInfo.tenantHash, deadline, signal);
+    const database = await openDatabase(directory, scopeInfo.tenantHash, tenantPolicy, deadline, signal);
     try {
       assertOpen();
       checkOperationSignal(signal);
@@ -1201,6 +1296,9 @@ export function createDiscoveryFrontierStore(options) {
       const inFlight = database.prepare(`SELECT COUNT(*) AS count FROM frontier_candidates
         WHERE tenant_hash = ? AND run_id = ? AND state = 'leased'`).get(tenantHash, runIdValue).count;
       if (inFlight >= run.max_in_flight) return deepFreeze({ state: 'waiting', reason: 'in_flight_limit' });
+      if (tenantCapacityInTransaction(database, tenantHash, tenantLimits).availableInFlightLeases === 0) {
+        return deepFreeze({ state: 'waiting', reason: 'tenant_in_flight_limit' });
+      }
       const eligible = database.prepare(`SELECT * FROM frontier_candidates
         WHERE tenant_hash = ? AND run_id = ? AND state = 'queued' AND best_depth <= ?`)
         .all(tenantHash, runIdValue, run.max_depth)
@@ -1244,7 +1342,7 @@ export function createDiscoveryFrontierStore(options) {
     return withScope(scope, (database, { tenantHash }) => {
       let run = getRun(database, tenantHash, runIdValue);
       run = advanceClock(database, tenantHash, run, now);
-      return admitAttemptInTransaction(database, tenantHash, runIdValue, run, input);
+      return admitAttemptInTransaction(database, tenantHash, runIdValue, run, input, tenantLimits);
     }, signal);
   }
 
@@ -1303,7 +1401,7 @@ export function createDiscoveryFrontierStore(options) {
       if (capacity.availableBytes < RESERVED_DECODED_BYTES_PER_HOP) {
         return deepFreeze({ state: 'denied', reason: 'decoded_budget', capacity });
       }
-      const admission = admitAttemptInTransaction(database, tenantHash, runIdValue, run, input);
+      const admission = admitAttemptInTransaction(database, tenantHash, runIdValue, run, input, tenantLimits);
       if (admission.state !== 'admitted') return deepFreeze({ ...admission, capacity });
       database.prepare(`INSERT INTO frontier_transport_hops
         (tenant_hash, run_id, attempt_key, lease_token, state, reservation_bytes, decoded_bytes, updated_at_ms)
@@ -1396,6 +1494,11 @@ export function createDiscoveryFrontierStore(options) {
       getRun(database, tenantHash, runIdValue);
       return transportCapacityInTransaction(database, tenantHash, runIdValue);
     }, signal);
+  }
+
+  async function getTenantProgress(scope, signal) {
+    return withScope(scope, (database, { tenantHash }) =>
+      tenantCapacityInTransaction(database, tenantHash, tenantLimits), signal);
   }
 
   async function completeCandidate(scope, runIdValue, value, signal) {
@@ -1564,6 +1667,7 @@ export function createDiscoveryFrontierStore(options) {
     settleTransportHopBodyComplete,
     markTransportHopUnknown,
     getTransportProgress,
+    getTenantProgress,
     completeCandidate,
     markUnresolved,
     stopRun,
