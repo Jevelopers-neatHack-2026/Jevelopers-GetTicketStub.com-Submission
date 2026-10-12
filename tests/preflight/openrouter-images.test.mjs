@@ -682,3 +682,31 @@ test('a caller getter that mutates the target while dispatch reads its input is 
     assert.equal(dispatches, 0, name);
   }
 });
+
+test('getters on the dispatch input that switch values after N reads never reach the host or the checks', async () => {
+  const seen = [];
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch(args) { seen.push(args); return {}; } } });
+  const input = billable('image_generation', { scope: { ...fixtureScope } });
+  const prepared = await adapter.prepare(input);
+  const evilTarget = structuredClone(input.target);
+  evilTarget.model = 'evil-author/evil-model';
+  const after = (count, real, evil) => { let reads = 0; return () => (++reads > count ? evil : real); };
+  const din = { run_id: input.run_id, prepared, deadline_at: input.deadline_at, configuration: input.configuration };
+  Object.defineProperty(din, 'cell_id', { enumerable: true, value: input.cell_id });
+  Object.defineProperty(din, 'target', { enumerable: true, get: after(1, input.target, evilTarget) });
+  Object.defineProperty(din, 'scope', { enumerable: true, get: after(1, input.scope, { ...input.scope, project_ref: 'project:evil' }) });
+  Object.defineProperty(din, 'grant_ref', { enumerable: true, get: after(1, input.grant_ref, 'grant:evil') });
+  await adapter.dispatch(din);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].target, input.target);
+  assert.equal(seen[0].target.model, input.target.model);
+  assert.equal(seen[0].scope.project_ref, input.scope.project_ref);
+  assert.ok(Object.isFrozen(seen[0].scope));
+  assert.equal(seen[0].grant_ref, input.grant_ref);
+  // A getter that throws, or an input that is not a record, fails closed.
+  const second = await adapter.prepare(input);
+  await assert.rejects(adapter.dispatch({ ...input, prepared: second, get run_id() { return 1; }, get zz() { throw new Error('boom'); } }),
+    (error) => error.code === 'credential_unavailable');
+  await assert.rejects(adapter.dispatch(null), (error) => error.code === 'credential_unavailable');
+});

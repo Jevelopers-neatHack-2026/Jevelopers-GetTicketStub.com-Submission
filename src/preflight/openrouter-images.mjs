@@ -391,35 +391,51 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
           scope: hostScope, credential }) : undefined;
       assertTargetUnchanged();
       const prepared = Object.freeze({ prepared: true });
-      preparedState.set(prepared, { cell_id, target, targetDigest, grant_ref, scope, deadline_at, credential, hostPrepared });
+      preparedState.set(prepared, { cell_id, target, targetDigest, grant_ref, scope, hostScope, deadline_at, credential, hostPrepared });
       return prepared;
     };
     adapter.dispatch = async (input) => {
-      validateOpenRouterImageTarget(input.cell_id, input.target);
-      const state = isRecord(input.prepared) ? preparedState.get(input.prepared) : undefined;
-      if (!state || state.cell_id !== input.cell_id || state.target !== input.target
-        || state.grant_ref !== input.grant_ref || state.deadline_at !== input.deadline_at
-        || !isRecord(input.scope) || input.scope.account_ref !== state.scope?.account_ref
-        || input.scope.project_ref !== state.scope?.project_ref) {
+      // One snapshot of the caller's input: each own enumerable property is read exactly once (so a getter cannot
+      // answer differently for the checks and for the host), and only `args` is used from here on.
+      let args;
+      try {
+        if (!isRecord(input)) throw new TypeError('input');
+        args = { ...input };
+      } catch {
+        throw error('credential_unavailable', 'The dispatch input could not be read.');
+      }
+      validateOpenRouterImageTarget(args.cell_id, args.target);
+      const state = isRecord(args.prepared) ? preparedState.get(args.prepared) : undefined;
+      let accountRef;
+      let projectRef;
+      try {
+        if (isRecord(args.scope)) { accountRef = args.scope.account_ref; projectRef = args.scope.project_ref; }
+      } catch { accountRef = undefined; projectRef = undefined; }
+      if (!state || state.cell_id !== args.cell_id || state.target !== args.target
+        || state.grant_ref !== args.grant_ref || state.deadline_at !== args.deadline_at
+        || !isRecord(args.scope) || accountRef !== state.scope.account_ref || projectRef !== state.scope.project_ref) {
         throw error('credential_unavailable', 'Prepared credentials are not bound to this grant, deadline, scope, and target.');
       }
       // A prepared value is single use: it is consumed before the host port can run, so a replay is refused. That
       // includes a refusal below: a target whose content moved since prepare consumes the value and fails closed.
-      preparedState.delete(input.prepared);
+      preparedState.delete(args.prepared);
       const remaining = Date.parse(state.deadline_at) - readClock(now);
       if (!Number.isFinite(remaining) || remaining <= 0) throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
       // The runner passes its cancellation signal (operator abort combined with the operation deadline) as
       // `metering.signal`. The host port gets that signal combined with this adapter's own deadline timeout.
-      const callerSignal = input.metering?.signal;
+      const callerSignal = args.metering?.signal;
       if (callerSignal !== undefined && !(callerSignal instanceof AbortSignal)) {
         throw error('adapter_unavailable', 'The runner cancellation signal must be a native AbortSignal.');
       }
       const timeout = AbortSignal.timeout(Math.min(remaining, 120_000));
-      // The runner passes the bound target's configuration; the host always sees that one, never a divergent copy.
-      const hostArgs = { ...input, configuration: state.target.configuration, prepared: state.hostPrepared, credential: state.credential,
+      // The bound fields come from the prepared state after the spread, as in prepare: the host sees the values that
+      // were checked and bound, never a re-read of the caller's input. The runner passes the bound target's configuration.
+      const hostArgs = { ...args, cell_id: state.cell_id, target: state.target, configuration: state.target.configuration,
+        grant_ref: state.grant_ref, deadline_at: state.deadline_at, scope: state.hostScope,
+        prepared: state.hostPrepared, credential: state.credential,
         signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout };
-      // Every read of the caller's input (including getters on `metering` or enumerable properties) is done above, so
-      // the target content check runs last, immediately before the host port, and nothing can move it afterwards.
+      // The target content check runs last, immediately before the host port. This guarantees the target was intact
+      // when the host call began; the host holds the bound target object itself and is trusted not to mutate it.
       if (targetContentDigest(state.cell_id, state.target) !== state.targetDigest) {
         throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was prepared.');
       }
