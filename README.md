@@ -26,7 +26,11 @@ Imagine a fan who wants to remember a show. Our clearest repeatable example uses
 
 We replayed the sample, saved its PNG, and checked its wall on October 12. The sample facts, art, and agent replies are simulated. This proves the demo flow, not live research. It is a use case, not a customer testimonial.
 
-![Real TicketStub editor showing The Pale Hours sample, its facts, styles, and visible demo labels.](docs/assets/submission/studio-demo-desktop.jpg)
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/assets/submission/studio-demo-mobile.jpg">
+  <img src="docs/assets/submission/studio-demo-desktop.jpg" alt="Real TicketStub editor showing The Pale Hours sample and visible demo labels.">
+</picture>
+
 *Real app screenshot from a local demo; no paid model or printer was used.*
 
 <details>
