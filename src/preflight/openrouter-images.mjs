@@ -499,7 +499,7 @@ function freezeTargetCopy(cellId, target, digestOfTarget) {
 }
 
 function safeCredentialEvidence(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)
+  if (!value || typeof value !== 'object' || nativeArrayIsArray(value)
     || typeof value.ref !== 'string' || !SAFE_REF.test(value.ref)
     || typeof value.sha256 !== 'string' || !HASH.test(value.sha256)
     || typeof value.pinned_revision !== 'string' || !SAFE_REF.test(value.pinned_revision)
@@ -511,7 +511,9 @@ function safeCredentialEvidence(value) {
 }
 
 function snapshotCredentialResponse(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  // Resolver records can contain private or discarded fields. Even their type
+  // and key guards must not pass those records to a caller-replaced global.
+  if (!value || typeof value !== 'object' || nativeArrayIsArray(value)) {
     throw error('credential_unavailable', 'Trusted credential resolver did not return a response object.');
   }
   const decision = value.decision;
@@ -525,16 +527,16 @@ function snapshotCredentialResponse(value) {
   const expiresAt = value.expires_at;
   const sourceBinding = value.binding;
   const sourceEvidence = value.evidence;
-  if (!sourceBinding || typeof sourceBinding !== 'object' || Array.isArray(sourceBinding)
-    || !sourceEvidence || typeof sourceEvidence !== 'object' || Array.isArray(sourceEvidence)) {
+  if (!sourceBinding || typeof sourceBinding !== 'object' || nativeArrayIsArray(sourceBinding)
+    || !sourceEvidence || typeof sourceEvidence !== 'object' || nativeArrayIsArray(sourceEvidence)) {
     throw error('credential_unavailable', 'Credential binding and pinned evidence must be response records.');
   }
-  const bindingFields = nativeObjectFreeze(Object.keys(sourceBinding));
+  const bindingFields = nativeObjectFreeze(nativeObjectKeys(sourceBinding));
   const binding = nativeObjectFreeze({ service: sourceBinding.service, account_ref: sourceBinding.account_ref,
     project_ref: sourceBinding.project_ref, target_binding_sha256: sourceBinding.target_binding_sha256,
     grant_ref: sourceBinding.grant_ref });
   const sourceReview = sourceEvidence.independent_review;
-  if (!sourceReview || typeof sourceReview !== 'object' || Array.isArray(sourceReview)) {
+  if (!sourceReview || typeof sourceReview !== 'object' || nativeArrayIsArray(sourceReview)) {
     throw error('credential_unavailable', 'Credential evidence must include an independent review.');
   }
   const evidence = nativeObjectFreeze({ ref: sourceEvidence.ref, sha256: sourceEvidence.sha256,
@@ -560,7 +562,7 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
       ...(grantRef ? { grant_ref: grantRef } : {}),
     });
     const resolved = snapshotCredentialResponse(await credentialPort.resolveCredential(request));
-    if (!resolved || typeof resolved !== 'object' || Array.isArray(resolved)
+    if (!resolved || typeof resolved !== 'object' || nativeArrayIsArray(resolved)
       || resolved.decision !== 'resolved' || resolved.evidence_mode !== 'live') {
       throw error('credential_unavailable', 'Trusted credential resolver did not confirm this provider scope.');
     }

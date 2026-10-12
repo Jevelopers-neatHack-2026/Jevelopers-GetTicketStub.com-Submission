@@ -1904,11 +1904,11 @@ for (const operation of ['prepare', 'dispatch']) {
   }
 }
 
-for (const boundary of ['freeze', 'weakmap-set', 'weakmap-get', 'weakmap-delete', 'weakmap-constructor', 'trim', 'regexp-exec']) {
+for (const boundary of ['freeze', 'weakmap-set', 'weakmap-get', 'weakmap-delete', 'weakmap-constructor', 'trim', 'regexp-exec', 'array-is-array']) {
   test(`credential-bearing intrinsics remain private after replacing ${boundary}`, async () => {
     const original = { apply: Reflect.apply, freeze: Object.freeze, WeakMap,
       set: WeakMap.prototype.set, get: WeakMap.prototype.get, delete: WeakMap.prototype.delete,
-      trim: String.prototype.trim, exec: RegExp.prototype.exec };
+      trim: String.prototype.trim, exec: RegExp.prototype.exec, isArray: Array.isArray };
     let exposures = 0;
     let constructors = 0;
     const host = [];
@@ -1936,6 +1936,7 @@ for (const boundary of ['freeze', 'weakmap-set', 'weakmap-get', 'weakmap-delete'
       if (boundary === 'regexp-exec') RegExp.prototype.exec = function (value) {
         inspect(value); return original.apply(original.exec, this, [value]);
       };
+      if (boundary === 'array-is-array') Array.isArray = (value) => { inspect(value); return original.isArray(value); };
     };
     const { fetchImpl, requests } = interceptedFetch();
     try {
@@ -1959,10 +1960,59 @@ for (const boundary of ['freeze', 'weakmap-set', 'weakmap-get', 'weakmap-delete'
       original.WeakMap.prototype.delete = original.delete;
       String.prototype.trim = original.trim;
       RegExp.prototype.exec = original.exec;
+      Array.isArray = original.isArray;
     }
     assert.equal(exposures, 0, 'global replacements cannot observe even synthetic private credentials');
     assert.equal(constructors, 0, 'private prepared state must use the captured native constructor');
     assert.deepEqual(host, [['prepare', true], ['dispatch', true]]);
+    assert.equal(requests.length, 0);
+  });
+}
+
+for (const [guard, record] of [
+  ['array-is-array', 'binding'], ['array-is-array', 'evidence'],
+  ['array-is-array', 'review'], ['object-keys', 'binding'],
+]) {
+  test(`credential response ${record} stays private from a replaced ${guard} guard`, async () => {
+    const original = { isArray: Array.isArray, keys: Object.keys };
+    let rawRecord;
+    let exposures = 0;
+    const host = [];
+    const { fetchImpl, requests } = interceptedFetch();
+    const port = grantCredentialPort({ mutate(value) {
+      rawRecord = record === 'binding' ? value.binding
+        : record === 'evidence' ? value.evidence : value.evidence.independent_review;
+      // A resolver can return extra fields. Reject or discard them without giving
+      // an unrelated mutable guard the raw record, even on the refusal path.
+      rawRecord.discarded_secret = TOKEN_CANARY;
+      return value;
+    } });
+    const inspect = (value) => {
+      if (value === rawRecord && value?.discarded_secret === TOKEN_CANARY) exposures += 1;
+    };
+    try {
+      const input = billable();
+      const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: port, fetchImpl,
+        get dispatchPort() {
+          if (guard === 'array-is-array') Array.isArray = (value) => { inspect(value); return original.isArray(value); };
+          if (guard === 'object-keys') Object.keys = (value) => { inspect(value); return original.keys(value); };
+          return { async prepare(args) { host.push(['prepare', args.credential.token === TOKEN_CANARY]); },
+            async dispatch(args) { host.push(['dispatch', args.credential.token === TOKEN_CANARY]); } };
+        },
+      });
+      if (record === 'binding') {
+        await assert.rejects(adapter.prepare(input), (error) => error.code === 'credential_unavailable');
+      } else {
+        const prepared = await adapter.prepare(input);
+        await adapter.dispatch(dispatchInput(input, prepared));
+        await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
+      }
+    } finally {
+      Array.isArray = original.isArray;
+      Object.keys = original.keys;
+    }
+    assert.equal(exposures, 0, 'credential-response records must not reach replacement guards');
+    assert.deepEqual(host, record === 'binding' ? [] : [['prepare', true], ['dispatch', true]]);
     assert.equal(requests.length, 0);
   });
 }
