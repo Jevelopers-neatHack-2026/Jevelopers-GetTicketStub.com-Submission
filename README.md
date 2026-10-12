@@ -83,6 +83,8 @@ Open the local address printed in the terminal. Choose **The Pale Hours**, confi
 
 [Timothy Wayne Gregg](https://github.com/CompleteDotTech) · [Lars van der Zande](https://github.com/lmvdz) · [Zachary Wright](https://github.com/zwright8) · [@lajefahemp-collab](https://github.com/lajefahemp-collab). Brand and studio design: Lars.
 
+[Day 1 build post](https://x.com/CompleteTechLLC/status/2109089580159004778) · [Day 2 build post](https://x.com/CompleteTechLLC/status/2109407386289189284)
+
 [Judge scorecard](docs/judges/EVIDENCE.md#follow-the-scorecard) · [Code versions and dates](docs/judges/EVIDENCE.md#code-history) · [Refresh the collection](docs/judges/SYNC.md)
 
 The source repos keep the original history. Each code copy links to its commit—a saved version of code. Newer copies may go beyond the tested evidence.

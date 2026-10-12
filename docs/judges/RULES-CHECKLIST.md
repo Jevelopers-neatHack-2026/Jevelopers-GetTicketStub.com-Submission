@@ -17,7 +17,7 @@
 | Public code with event-period commits | **Verified** | [14 source commit records](SOURCE-PROVENANCE.json). Each inspected tip is dated October 12. Full code eligibility is a separate open check below. |
 | All code written in the allowed window | **Needs verification** | Website start: October 10, 12:30 PM IST. Tip dates alone cannot prove when every file was written. Review original history and any earlier planning/brand assets; ask organizers about uncertain material. |
 | Video at most three minutes; covers all three tools | **Missing** | [2:50 silent placeholder and recording plan](DEMO.md). The supplied concept animatic is not a verified final demo. |
-| Public quote-post of the official launch post, with demo and all three tags | **Missing** | Use the launch post reached from the official form. Include @neatlogs, @EntireHQ, @arithecfo. Save the resulting public URL. |
+| Public quote-post of the official launch post, with demo and all three tags | **Missing** | Use the [official launch post](https://x.com/bettersayAJ/status/2109639214723932495) linked by the form. Include @neatlogs, @EntireHQ, @arithecfo. Save the resulting public URL. |
 | Complete and confirm the official form | **Missing** | The public form was inspected. No team submission was made here and no confirmation is retained. A draft is not a submitted entry. |
 
 Every requirement above comes from the [rules](https://neatlogs.com/hackathon); the quote-post and confirmation sequence is also shown by the [form](https://neatlogs.com/submission).
@@ -26,7 +26,7 @@ Every requirement above comes from the [rules](https://neatlogs.com/hackathon); 
 
 1. Confirm the final deadline in Discord.
 2. Record and check the demo, including neatlogs, Entire, and cfo.ai.
-3. In the official form, follow **View launch post**. Its linked X address was identified, but X access was not verified here; do not substitute a guessed post.
+3. Use **View launch post** in the official form. It links to Ajay Yadav’s October 12 neatlogs launch, verified in Chrome.
 4. Quote that post publicly with the demo and all required tags. Keep a public URL and check it while signed out.
 5. The team leader completes all form steps, reviews the entry, selects **Submit project**, and saves the confirmation.
 
@@ -36,4 +36,4 @@ The project’s [master checklist](../../repositories/integration-evals/planning
 
 ## Public access notes
 
-The form loaded without authentication and showed three steps: Quote post, Project & team, Review & submit. We did not enter data or request an email code. Discord invite access did not expose organizer messages. The product loaded in Chrome. An early automated request received 403; the later unauthenticated link check returned 200. Access was verified at check time, not guaranteed for every client.
+The form loaded without authentication and showed three steps: Quote post, Project & team, Review & submit. We did not enter data or request an email code. Discord invite access did not expose organizer messages. The product loaded in Chrome. An early automated request received 403; the later unauthenticated link check returned 200. Access was verified at check time, not guaranteed for every client. The launch post and two team build posts were read in signed-in Chrome; their URLs returned HTTP 200 without authentication. Full signed-out X rendering was not separately checked.

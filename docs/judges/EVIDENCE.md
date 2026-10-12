@@ -11,7 +11,7 @@
 | Agent · 30% | Can it finish a useful task? | [Sample output and live-evidence gap](#agent-task) |
 | Required tools · 25% | How did the three tools help? | [neatlogs](#neatlogs), [Entire](#entire), [cfo.ai](#cfoai) |
 | Demo · 20% | Can I see the work clearly? | [Placeholder and 2:50 plan](DEMO.md) |
-| Building in public · 15% | What did the team share? | [Public work and missing posts](#building-in-public) |
+| Building in public · 15% | What did the team share? | [Public build posts and code](#building-in-public) |
 | Usefulness and originality · 10% | Why would someone want it? | A stub joins a night’s facts and art in one editable keepsake. [Real sample output](../assets/submission/sample-stub-download.png); no user-demand study or sales claim. |
 
 Weights come from the [official rules](https://neatlogs.com/hackathon). This is a reading map, not a self-awarded score.
@@ -73,9 +73,13 @@ The reviewer workbook has four blank-safe formula corrections made through the C
 
 ## Building in public
 
-**Verified public work:** the [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46), and [Entire graph Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) expose work and discussion. Those are code records, not evidence of tagged social posts or community engagement.
+**Verified build posts:** [Day 1 · October 10](https://x.com/CompleteTechLLC/status/2109089580159004778) introduces TicketStub. [Day 2 · October 11](https://x.com/CompleteTechLLC/status/2109407386289189284) shares the product and a stream link. Both use #neatHack and name @neatlogs, @EntireHQ, and @arithecfo. We opened each exact post in Chrome on October 12. Their URLs also returned HTTP 200 without authentication. Full signed-out X rendering was not separately checked.
 
-**Missing:** no verified project post tagged #neatHack, final demo quote-post, or public engagement record was found in the inspected evidence and focused public search. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) is a draft. Add exact public URLs after checking them. Do not treat the official launch post as our team’s post.
+The posts prove public updates, not every product claim in their copy. Day 1’s printing language is not proof of physical fulfillment. Day 2’s usage and cost figures are owner reports, not audited metrics. We did not verify the linked stream or its recordings and do not count them as the final demo.
+
+The [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46), and [Entire graph Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) also expose work and discussion.
+
+**Still missing:** a verified final demo quote-post of the official launch post. The two build posts predate that launch and do not satisfy this step. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. No engagement or customer-demand score is claimed here.
 
 ## Code history
 

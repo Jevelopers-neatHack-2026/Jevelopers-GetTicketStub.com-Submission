@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-12T17:15:18.029137+00:00",
+  "checked_at": "2026-10-12T17:24:11.921481+00:00",
   "method": "Unauthenticated HTTP GET; does not prove form completion or page claims.",
   "links": [
     {
@@ -126,6 +126,21 @@
       "url": "https://neatlogs.com/submission",
       "status": 200,
       "final_url": "https://neatlogs.com/submission"
+    },
+    {
+      "url": "https://x.com/CompleteTechLLC/status/2109089580159004778",
+      "status": 200,
+      "final_url": "https://x.com/CompleteTechLLC/status/2109089580159004778"
+    },
+    {
+      "url": "https://x.com/CompleteTechLLC/status/2109407386289189284",
+      "status": 200,
+      "final_url": "https://x.com/CompleteTechLLC/status/2109407386289189284"
+    },
+    {
+      "url": "https://x.com/bettersayAJ/status/2109639214723932495",
+      "status": 200,
+      "final_url": "https://x.com/bettersayAJ/status/2109639214723932495"
     }
   ]
 }
