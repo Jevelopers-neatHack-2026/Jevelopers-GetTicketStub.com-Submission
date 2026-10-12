@@ -19,6 +19,7 @@ from integration_evals.output_evidence import check_claim, retain
 from integration_evals.processes import ProcessSettings, invoke
 from integration_evals.report_validation import validate_cost
 from integration_evals.reporting import OwnerResponse
+from integration_evals.retrieval_inputs import OwnerInputs, prepare_owner_inputs
 
 
 def compare_response(
@@ -64,12 +65,13 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
         )
     started = monotonic()
     response: OwnerResponse | None = None
-    reason: str | None = None
+    reason, exit_code, output_digest, request = None, None, None, ""
     outcome = Outcome.ERROR
-    exit_code: int | None = None
     cleanup_status: Literal["not-run", "passed", "failed", "unknown"] = "not-run"
-    output_digest: str | None = None
-    with TemporaryDirectory(prefix=f"integration-evals-{context.run_id}-") as isolated:
+    with (
+        TemporaryDirectory(prefix=f"integration-evals-{context.run_id}-") as isolated,
+        TemporaryDirectory(prefix="integration-owner-inputs-") as input_directory,
+    ):
         environment = {
             **{key: os.environ[key] for key in ("PATH", "SYSTEMROOT") if key in os.environ},
             "HOME": isolated,
@@ -93,35 +95,34 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
         staging = Path(isolated) / "artifacts"
         staging.mkdir()
         environment["IE_ARTIFACT_DIR"] = str(staging)
-        request = json.dumps(
-            {
-                "case": case.model_dump(mode="json"),
-                "run_id": context.run_id,
-                "component_revision": component.revision,
-                "configuration_artifact": str(
-                    settings.workspace
-                    / context.assembly.configuration_component
-                    / (context.assembly.configuration_artifact_path or "")
-                ),
-                "artifact_directory": str(staging),
-                "namespace": environment["IE_NAMESPACE"],
-                "seed": settings.seed,
-                "clock": context.clock.isoformat(),
-                "providers": [p.model_dump(mode="json") for p in context.assembly.providers],
-            }
-        )
+        inputs: OwnerInputs | None = None
         try:
+            inputs = prepare_owner_inputs(case, context, component, Path(input_directory))
+            request = json.dumps(
+                {
+                    "case": case.model_dump(mode="json"),
+                    "run_id": context.run_id,
+                    "component_revision": component.revision,
+                    "configuration_artifact": str(inputs.configuration),
+                    "artifact_directory": str(staging),
+                    "namespace": environment["IE_NAMESPACE"],
+                    "seed": settings.seed,
+                    "clock": context.clock.isoformat(),
+                    "providers": [p.model_dump(mode="json") for p in context.assembly.providers],
+                }
+            )
             with (Path(isolated) / "stdout").open("w+b") as stdout:
                 exit_code = invoke(
-                    component.command,
+                    inputs.command,
                     ProcessSettings(
-                        checkout=settings.workspace / component.repository,
-                        environment=environment,
+                        checkout=inputs.checkout,
+                        environment={**environment, **dict(inputs.environment)},
                         payload=request.encode(),
                         stdout=stdout,
                         timeout=case.timeout_seconds,
                         offline=settings.mode in {Mode.MOCK, Mode.RECORDED},
                         writable_directory=Path(isolated),
+                        network=inputs.network,
                     ),
                 )
             output = read_bytes(Path(isolated) / "stdout")
@@ -141,25 +142,27 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
             reason = "invalid owner response or runtime failure; private payload withheld"
             response = None
         finally:
-            try:
-                cleanup = invoke(
-                    component.cleanup_command,
-                    ProcessSettings(
-                        checkout=settings.workspace / component.repository,
-                        environment=environment,
-                        payload=request.encode(),
-                        stdout=subprocess.DEVNULL,
-                        timeout=min(case.timeout_seconds, 30),
-                        offline=settings.mode in {Mode.MOCK, Mode.RECORDED},
-                        writable_directory=Path(isolated),
-                    ),
-                )
-                if cleanup != 0:
-                    outcome, reason = Outcome.ERROR, "owner cleanup failed"
-                cleanup_status = "passed" if cleanup == 0 else "failed"
-            except (subprocess.TimeoutExpired, OSError, InvalidArtifactError):
-                outcome, reason = Outcome.ERROR, "owner cleanup timeout/runtime failure"
-                cleanup_status = "unknown"
+            if inputs is not None:
+                try:
+                    cleanup = invoke(
+                        inputs.cleanup_command,
+                        ProcessSettings(
+                            checkout=inputs.checkout,
+                            environment={**environment, **dict(inputs.environment)},
+                            payload=request.encode(),
+                            stdout=subprocess.DEVNULL,
+                            timeout=min(case.timeout_seconds, 30),
+                            offline=settings.mode in {Mode.MOCK, Mode.RECORDED},
+                            writable_directory=Path(isolated),
+                            network=inputs.network,
+                        ),
+                    )
+                    if cleanup != 0:
+                        outcome, reason = Outcome.ERROR, "owner cleanup failed"
+                    cleanup_status = "passed" if cleanup == 0 else "failed"
+                except (subprocess.TimeoutExpired, OSError, InvalidArtifactError):
+                    outcome, reason = Outcome.ERROR, "owner cleanup timeout/runtime failure"
+                    cleanup_status = "unknown"
     result = CaseResult(
         case_id=case.id,
         requirements=case.requirements,

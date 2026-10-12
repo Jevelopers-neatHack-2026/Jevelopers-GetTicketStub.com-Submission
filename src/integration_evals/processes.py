@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import IO
 
 from integration_evals.errors import fail
+from integration_evals.process_network import OfflineNetwork, require_network_boundary
 from integration_evals.process_reads import (
     linux_reads,
     owned_directory,
@@ -31,6 +32,7 @@ class ProcessSettings:
     timeout: float
     offline: bool = False
     writable_directory: Path | None = None
+    network: OfflineNetwork = OfflineNetwork.DENY
 
 
 def terminate_group(process: subprocess.Popen[bytes]) -> None:
@@ -45,6 +47,7 @@ def contained_command(
     command: tuple[str, ...], settings: ProcessSettings, filter_descriptor: int | None = None
 ) -> tuple[str, ...]:
     """Contain detached children in Linux PID namespaces; prohibit forks on macOS."""
+    require_network_boundary(settings.network, offline=settings.offline)
     directory = settings.writable_directory
     if settings.offline and directory is None:
         return fail("offline_writable_directory_missing", "owner-command")
@@ -90,7 +93,7 @@ def contained_command(
 def invoke(command: tuple[str, ...], settings: ProcessSettings) -> int:
     """Own a session and reap its leader on success, timeout and cancellation."""
     with (
-        network_filter(offline=settings.offline) as descriptor,
+        network_filter(offline=settings.offline, policy=settings.network) as descriptor,
         subprocess.Popen(  # noqa: S603 - reviewed command in a new task-owned session
             contained_command(command, settings, descriptor),
             cwd=settings.checkout,

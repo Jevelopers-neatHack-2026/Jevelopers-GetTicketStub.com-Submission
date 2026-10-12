@@ -33,7 +33,7 @@ remount prevents writes to unmounted namespace paths while preserving the separa
 task-output and device/proc mounts. It retains
 `--unshare-pid`, `--die-with-parent`, and
 `--unshare-net`, and receives an offline seccomp filter compiled with the system
-`libseccomp.so.2`. The filter rejects socket creation/use, socketpair, and io_uring
+`libseccomp.so.2`. The default filter rejects socket creation/use, socketpair, and io_uring
 entry points with EPERM; this covers pathname Unix sockets that a mounted task
 file could otherwise expose despite network namespace isolation. libseccomp owns
 native syscall resolution, multiplexing, and architecture checks. Missing library,
@@ -52,6 +52,28 @@ this snapshot read-only to the child; chmod is not the enforcement boundary.
 HOME, TMPDIR, stdout and artifacts use a separate writable directory. Receipts
 continue to identify the original producer/evaluator and package pins. Staging
 neither changes those pins nor grants acceptance.
+
+The evaluator-owned `ssrf-egress` mock retrieval adapter has one explicit private-IP
+capability. Selection requires its exact command/cleanup shape, evaluator location
+and unchanged adapter-module bytes, reviewed case/mode/profile, clean pinned
+assembly, and matching runtime digest. Neither owner output nor ambient environment
+selects this capability. It requires Linux offline execution with the same new
+network namespace, PID/parent-death controls, read closure and read-only root.
+Its libseccomp rules permit AF_INET/AF_INET6 socket operations only inside that
+namespace; AF_UNIX, other families, socketpair and io_uring remain denied, and
+unrelated host socket descriptors close before execution. Generic offline owners
+retain the default socket denial.
+
+Retrieval stages tracked producer files, the exact runtime, unchanged evaluator
+adapter modules, profile, catalog and negative fixture into one read-only owned
+input checkout. It copies only the fixed OpenSSL configuration needed by the
+existing certificate fixture and points OpenSSL at that staged copy; no host
+configuration directory is granted. The original adapter and producer behavior is
+unchanged. Run and bounded cleanup share the staged lifetime. Original manifest
+commands/revisions and owner artifact roots remain intact. Evaluator-owned input
+hash/origin records live under `input-staging/<run-id>/ssrf-egress.json` in the
+artifact root, separate from owner business evidence; the component tests retain
+these records and check source pins/bytes without changing their original oracles.
 
 The native tests exercise positive checkout reads, task writes, retained owner
 output and real canonical source/package execution alongside outside-file and
@@ -73,13 +95,13 @@ control must succeed with a nonzero UID before the payload checks execute.
 
 | Context | Required work | Evidence boundary |
 | --- | --- | --- |
-| Ubuntu 22.04, ordinary user | All 98 native cases: 38 new read/input/seccomp cases, 52 existing owner/lifetime/diagnostic/reporting cases, and 8 history/archive cases; complete old and opt-in canonical scripts, including 21 old and 14 opt-in tests and eight source/installed CLI matrix runs | Mandatory unprivileged containment and canonical verification; test failures remain fatal |
+| Ubuntu 22.04, ordinary user | All original 98 native cases plus retrieval-input/private-IP regressions; all 17 actual retrieval component baseline/mutant cases; complete old and opt-in canonical scripts, including 21 old and 14 opt-in tests and eight source/installed CLI matrix runs | Mandatory unprivileged containment and canonical verification; test failures remain fatal |
 | Ubuntu 24.04 standard workflow | Original ordinary, privileged-owner, canonical and retrieval regression selectors, including the reporting execution case | Existing baseline regression coverage; privileged execution is not unprivileged containment evidence |
 | Ubuntu 24.04 ordinary-user diagnostics | Bounded baseline, explicit user-namespace and current-UID mapping probes, plus kernel/runtime facts and retained stderr/status | Diagnostic capture is mandatory; its completion does not mean the namespace startup succeeded |
 | Native macOS | Existing read/write, owner, staging and cancellation scenarios | Fork-denial evidence; Linux-only skips do not establish Linux behavior |
 
-The three new read/input/seccomp files run on Ubuntu 22.04 and stay excluded from
-the Ubuntu 24.04 ordinary suite. All pre-existing Ubuntu 24.04 selectors remain.
+The read/input/seccomp and retrieval-input/private-IP test files run on Ubuntu
+22.04 and stay excluded from the Ubuntu 24.04 ordinary suite. All pre-existing Ubuntu 24.04 selectors remain.
 The 52 owner cases and 8 history cases also run on Ubuntu 22.04; these are duplicate
 platform invocations of the same case IDs. Canonical checks repeated across
 workflows likewise do not create additional unique conformance cases.

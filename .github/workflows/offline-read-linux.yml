@@ -30,6 +30,12 @@ jobs:
           ref: d432ad5c895a67155affeaa05cd8423c758d95c3
           path: .contract-producer/old
           persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/event-intelligence
+          ref: d91e08d666abc243ae456a7f9f1bc9c745ca4f8d
+          path: .event-producer
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.23.3'
@@ -75,8 +81,9 @@ jobs:
           test "$probe_status" -eq 0
       - name: Run actual containment owner lifetime and diagnostic scenarios as runner
         run: |
-          env -i PATH="$PATH" HOME="$HOME" CI=true IE_PROCESS_EVIDENCE="$PWD/reports/runs/offline-read-linux22/write-probes" .venv/bin/python -m pytest tests/test_process_reads.py tests/test_process_inputs.py tests/test_process_seccomp.py tests/test_processes.py tests/test_owner_output.py tests/test_retrieval_capability.py tests/test_diagnostic_execution.py tests/test_diagnostic_denials.py tests/test_seeded_history.py tests/test_evidence_index_execution.py tests/test_history_archive.py --junitxml=reports/runs/offline-read-linux22/native-junit.xml
+          env -i PATH="$PATH" HOME="$HOME" CI=true IE_PROCESS_EVIDENCE="$PWD/reports/runs/offline-read-linux22/write-probes" .venv/bin/python -m pytest tests/test_private_network.py tests/test_retrieval_inputs.py tests/test_process_reads.py tests/test_process_inputs.py tests/test_process_seccomp.py tests/test_processes.py tests/test_owner_output.py tests/test_retrieval_capability.py tests/test_diagnostic_execution.py tests/test_diagnostic_denials.py tests/test_seeded_history.py tests/test_evidence_index_execution.py tests/test_history_archive.py --junitxml=reports/runs/offline-read-linux22/native-junit.xml
       - name: Run complete source and installed canonical checks as runner
+        id: canonical
         if: ${{ !cancelled() && steps.namespace_startup.outcome == 'success' }}
         shell: bash
         run: |
@@ -85,6 +92,10 @@ jobs:
             "$PWD/.contract-producer/new" "$PWD/.contract-producer/old" \
             "$RUNNER_TEMP/offline-contract-opt-in" "$PWD/reports/runs/offline-read-linux22/canonical" \
             "$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc"
+      - name: Verify all original retrieval cases as runner
+        if: ${{ !cancelled() && steps.canonical.outcome == 'success' }}
+        run: |
+          env -i PATH="$PATH" HOME="$HOME" CI=true IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer/old" IE_CONTRACT_RUNTIME="$RUNNER_TEMP/offline-contract-opt-in/old-runtime/source-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/runs/offline-read-linux22/retrieval-component" .venv/bin/python -m pytest component_tests --junitxml=reports/runs/offline-read-linux22/component-junit.xml
       - name: Preserve exact capability outcomes and receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
