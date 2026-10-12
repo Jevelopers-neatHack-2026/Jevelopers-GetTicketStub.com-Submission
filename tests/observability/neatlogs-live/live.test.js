@@ -55,8 +55,8 @@ let plan;
 function configured(overrides = {}) {
   return loadNeatlogsConfig({
     env: {
-      NEATLOGS_API_KEY: INGEST_KEY,
-      NEATLOGS_TOKEN: READ_TOKEN,
+      NEATLOGS_INGEST_KEY: INGEST_KEY,
+      NEATLOGS_READ_TOKEN: READ_TOKEN,
       NEATLOGS_PROJECT_ID: PROJECT_ID,
       ...overrides
     }
@@ -213,16 +213,16 @@ describe('configuration', () => {
     const file = join(scratch, 'neatlogs.env');
     writeFileSync(file, [
       '# comment',
-      `NEATLOGS_API_KEY="${INGEST_KEY}"`,
+      `NEATLOGS_INGEST_KEY="${INGEST_KEY}"`,
       `export NEATLOGS_PROJECT_ID=${PROJECT_ID}`,
-      'NEATLOGS_TOKEN=',
+      'NEATLOGS_READ_TOKEN=',
       'UNRELATED_SECRET=should-not-be-read',
       ''
     ].join('\n'));
     assert.deepEqual(Object.keys(readNeatlogsEnvFile(file)).sort(), [
-      'NEATLOGS_API_KEY', 'NEATLOGS_PROJECT_ID', 'NEATLOGS_TOKEN'
+      'NEATLOGS_INGEST_KEY', 'NEATLOGS_PROJECT_ID', 'NEATLOGS_READ_TOKEN'
     ]);
-    const config = loadNeatlogsConfig({ env: { NEATLOGS_TOKEN: READ_TOKEN }, envFile: file });
+    const config = loadNeatlogsConfig({ env: { NEATLOGS_READ_TOKEN: READ_TOKEN }, envFile: file });
     assert.equal(config.summary.region, 'us');
     assert.equal(config.summary.ingestReady, true);
     assert.equal(config.summary.readbackReady, true);
@@ -246,13 +246,32 @@ describe('configuration', () => {
       error => error.code === 'INVALID_ORIGIN');
     assert.throws(() => configured({ NEATLOGS_PROJECT_ID: 'not-a-uuid' }),
       error => error.code === 'INVALID_PROJECT_ID');
-    assert.throws(() => configured({ NEATLOGS_API_KEY: 'has space in it 0123456789' }),
+    assert.throws(() => configured({ NEATLOGS_INGEST_KEY: 'has space in it 0123456789' }),
       error => error.code === 'INVALID_CREDENTIAL' && !error.message.includes('space'));
   });
 
+  test('reads the pre-rename names as fallbacks; the new names win when both are set', () => {
+    const legacy = loadNeatlogsConfig({
+      env: { NEATLOGS_API_KEY: INGEST_KEY, NEATLOGS_TOKEN: READ_TOKEN, NEATLOGS_PROJECT_ID: PROJECT_ID }
+    });
+    assert.equal(legacy.ingestKey(), INGEST_KEY);
+    assert.equal(legacy.readbackToken(), READ_TOKEN);
+    assert.equal(legacy.summary.readbackReady, true);
+    const both = loadNeatlogsConfig({
+      env: { NEATLOGS_INGEST_KEY: `${INGEST_KEY}-new`, NEATLOGS_API_KEY: INGEST_KEY,
+        NEATLOGS_READ_TOKEN: `${READ_TOKEN}-new`, NEATLOGS_TOKEN: READ_TOKEN }
+    });
+    assert.equal(both.ingestKey(), `${INGEST_KEY}-new`);
+    assert.equal(both.summary.readbackReady, false, 'the project ID is still required');
+    assert.throws(() => loadNeatlogsConfig({ env: {} }).ingestKey(), error => error.setting === 'NEATLOGS_INGEST_KEY' || /NEATLOGS_INGEST_KEY/.test(String(error.message)));
+    const env = { NEATLOGS_API_KEY: INGEST_KEY, NEATLOGS_TOKEN: READ_TOKEN, NEATLOGS_INGEST_KEY: INGEST_KEY, OTHER: 'x' };
+    scrubNeatlogsEnvironment(env);
+    assert.deepEqual(Object.keys(env), ['OTHER']);
+  });
+
   test('scrubs recognized names from an environment object', () => {
-    const env = { NEATLOGS_API_KEY: INGEST_KEY, NEATLOGS_HOST: 'https://app.neatlogs.com', PATH: '/bin' };
-    assert.deepEqual([...scrubNeatlogsEnvironment(env)], ['NEATLOGS_API_KEY', 'NEATLOGS_HOST']);
+    const env = { NEATLOGS_INGEST_KEY: INGEST_KEY, NEATLOGS_HOST: 'https://app.neatlogs.com', PATH: '/bin' };
+    assert.deepEqual([...scrubNeatlogsEnvironment(env)], ['NEATLOGS_INGEST_KEY', 'NEATLOGS_HOST']);
     assert.deepEqual(env, { PATH: '/bin' });
   });
 });
@@ -752,7 +771,7 @@ describe('send', () => {
 
 describe('readback', () => {
   test('is unavailable without a service-account token and project', async () => {
-    const result = await readbackNeatlogsPlan(configured({ NEATLOGS_TOKEN: '' }), plan);
+    const result = await readbackNeatlogsPlan(configured({ NEATLOGS_READ_TOKEN: '' }), plan);
     assert.equal(result.status, 'readback_unavailable');
     assert.equal(result.reasonCode, 'MISSING_READBACK_TOKEN');
   });

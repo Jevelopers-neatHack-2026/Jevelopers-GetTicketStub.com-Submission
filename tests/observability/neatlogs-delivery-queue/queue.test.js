@@ -31,8 +31,8 @@ function dbPath() {
 function config({ readback = true } = {}) {
   return loadNeatlogsConfig({
     env: {
-      NEATLOGS_API_KEY: FAKE_INGEST_KEY,
-      ...(readback ? { NEATLOGS_TOKEN: FAKE_READ_TOKEN, NEATLOGS_PROJECT_ID: FAKE_PROJECT_ID } : {})
+      NEATLOGS_INGEST_KEY: FAKE_INGEST_KEY,
+      ...(readback ? { NEATLOGS_READ_TOKEN: FAKE_READ_TOKEN, NEATLOGS_PROJECT_ID: FAKE_PROJECT_ID } : {})
     }
   });
 }

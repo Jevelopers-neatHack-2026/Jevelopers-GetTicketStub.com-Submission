@@ -35,7 +35,7 @@ let runOutbox;
 
 function configured() {
   return loadNeatlogsConfig({
-    env: { NEATLOGS_API_KEY: INGEST_KEY, NEATLOGS_TOKEN: READ_TOKEN, NEATLOGS_PROJECT_ID: PROJECT_ID }
+    env: { NEATLOGS_INGEST_KEY: INGEST_KEY, NEATLOGS_READ_TOKEN: READ_TOKEN, NEATLOGS_PROJECT_ID: PROJECT_ID }
   });
 }
 
@@ -124,18 +124,18 @@ after(() => {
 
 describe('opt-in configuration', () => {
   test('is off by default and reads nothing', () => {
-    const env = { NEATLOGS_API_KEY: INGEST_KEY };
+    const env = { NEATLOGS_INGEST_KEY: INGEST_KEY };
     const result = loadNeatlogsTelemetryOptIn({ env, scrubEnv: env });
     assert.deepEqual({ ...result }, { enabled: false });
-    assert.equal(env.NEATLOGS_API_KEY, INGEST_KEY);
+    assert.equal(env.NEATLOGS_INGEST_KEY, INGEST_KEY);
   });
 
   test('when enabled uses the strict loader, scrubs the environment and requires an ingest key', () => {
-    const env = { NEATLOGS_API_KEY: INGEST_KEY, UNRELATED: 'x' };
+    const env = { NEATLOGS_INGEST_KEY: INGEST_KEY, UNRELATED: 'x' };
     const result = loadNeatlogsTelemetryOptIn({ enabled: true, env: { ...env }, scrubEnv: env });
     assert.equal(result.enabled, true);
     assert.equal(result.config.summary.ingestReady, true);
-    assert.equal(Object.hasOwn(env, 'NEATLOGS_API_KEY'), false);
+    assert.equal(Object.hasOwn(env, 'NEATLOGS_INGEST_KEY'), false);
     assert.equal(env.UNRELATED, 'x');
     assert.ok(!JSON.stringify(result.config).includes(INGEST_KEY));
     assert.throws(() => loadNeatlogsTelemetryOptIn({ enabled: true, env: {} }), { code: 'INGEST_NOT_CONFIGURED' });
