@@ -21,6 +21,24 @@
       ]
     },
     {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/fixtures/outbox-intent-child.mjs",
+      "sha256": "d3413183148a8d15c7cdea612e9c4f7df268f8e54b0d0a31ba79fbedbf42b4c0",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "a4ccbd738173d56268b40c1b6185ed36af39a82b",
+      "findings": [
+        "generic-api-key:33:4:33:63"
+      ]
+    },
+    {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/live.test.js",
+      "sha256": "1422ad507b5d1355a59ca752c8047415ff6302ee490640efbb3fc08795f432fd",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "52db7edcc2fb7a69c24b56c5362eb2fec5b28778",
+      "findings": [
+        "generic-api-key:34:8:34:59"
+      ]
+    },
+    {
       "path": "repositories/agent-harness/tests/observability/neatlogs-live/live.test.js",
       "sha256": "1a44380d12ee71591c249b79db89db144589b9e7038ad1de5c450417b5e5f98a",
       "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
@@ -61,6 +79,15 @@
       ]
     },
     {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/outbox-intent.test.js",
+      "sha256": "840f620a0b8997fca15956600bd237305f2e04dfea5b50d38c1a4dfab35fd002",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "a4ccbd738173d56268b40c1b6185ed36af39a82b",
+      "findings": [
+        "generic-api-key:17:8:17:59"
+      ]
+    },
+    {
       "path": "repositories/agent-harness/tests/observability/neatlogs-live/outbox-retry-after.test.js",
       "sha256": "babcecfe9b63c9c948c9a8e6f36f88535b5b191ba17343cd06f574475ed4b877",
       "reason": "Explicit synthetic ingest-key literal in an isolated mock outbox test; no operational credential.",
@@ -78,12 +105,48 @@
       ]
     },
     {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/outbox.test.js",
+      "sha256": "f48e0e2c0e02d2d3c49e9ee792106d14456cd8b98d4c15b18a3a51f0055802e0",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "157048a32b793fd7af7af1931ff9e9e76a7810a1",
+      "findings": [
+        "generic-api-key:21:8:21:59"
+      ]
+    },
+    {
       "path": "repositories/agent-harness/tests/observability/neatlogs-live/runtime-trace-bounds.test.js",
       "sha256": "4e3078f7a4af594f4549cff42da20354d30ed4f3460695b4e132ae512329cd3b",
       "reason": "Explicit synthetic credential literals in validation or mocked integration tests; not operational credentials.",
       "reviewed_source_commit": "2dd61d52c94bede16251ef92e6f9ba325dd3b958",
       "findings": [
         "generic-api-key:18:8:18:59"
+      ]
+    },
+    {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/runtime-trace-bounds.test.js",
+      "sha256": "d59dc97273ae340326e2860f8be706788f3ba68204f6fd94c10a7e4185553d88",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "11f9d4278950c07d7d6d1dc86bac2c3302c73d8e",
+      "findings": [
+        "generic-api-key:16:8:16:59"
+      ]
+    },
+    {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-outbox/fake-neatlogs.js",
+      "sha256": "c3af362cf0c6bfeef45a88e7c751abf2d21bd0f35f84827bed642fc4ab0fa556",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "ff642c0825c6d6dd2b6ca99d0ef357159ebaf8cb",
+      "findings": [
+        "generic-api-key:15:15:15:71"
+      ]
+    },
+    {
+      "path": "repositories/agent-harness/tests/observability/observability.test.js",
+      "sha256": "c691a2916638e48cbeeab9bf36a0be8e85f9699feb017ead669653c71507e2a3",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "156f30372683e59280ecc67a146184168a151513",
+      "findings": [
+        "generic-api-key:24:63:25:28"
       ]
     },
     {
@@ -199,6 +262,16 @@
       "reason": "SHA-256 of public design-token inputs, labeled as such in generated source/report metadata. tokens.json digest checked against the pinned public source.",
       "reviewed_source_commit": "6222a745195e9f15a14069e79210ad45daa16c94",
       "findings": [
+        "generic-api-key:6:25:6:101",
+        "generic-api-key:6:24:6:100"
+      ]
+    },
+    {
+      "path": "repositories/brand-kit/tokens/external-fonts-google.css",
+      "sha256": "e197c96f9db0463aee326cb5db657cd9b9952d47a08e60420de6c6db117ba458",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "28e64ddbd11c0c5a23143fdfe7118494fdbd54fd",
+      "findings": [
         "generic-api-key:6:25:6:101"
       ]
     },
@@ -208,7 +281,26 @@
       "reason": "SHA-256 of public design-token inputs, labeled as such in generated source/report metadata. tokens.json digest checked against the pinned public source.",
       "reviewed_source_commit": "6222a745195e9f15a14069e79210ad45daa16c94",
       "findings": [
+        "generic-api-key:9:25:9:101",
+        "generic-api-key:9:24:9:100"
+      ]
+    },
+    {
+      "path": "repositories/brand-kit/tokens/tailwind.preset.js",
+      "sha256": "af3b702e62cb43965bef1d38385f880a9f90bc966b47e21979811240780b4fc1",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "28e64ddbd11c0c5a23143fdfe7118494fdbd54fd",
+      "findings": [
         "generic-api-key:9:25:9:101"
+      ]
+    },
+    {
+      "path": "repositories/brand-kit/tokens/tokens.css",
+      "sha256": "a536e16aa1d25e45449a02e6ed46eeed376dfdbb71fa7c8a33cbc3a070f359b0",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "28e64ddbd11c0c5a23143fdfe7118494fdbd54fd",
+      "findings": [
+        "generic-api-key:6:25:6:101"
       ]
     },
     {
@@ -217,7 +309,8 @@
       "reason": "SHA-256 of public design-token inputs, labeled as such in generated source/report metadata. tokens.json digest checked against the pinned public source.",
       "reviewed_source_commit": "6222a745195e9f15a14069e79210ad45daa16c94",
       "findings": [
-        "generic-api-key:6:25:6:101"
+        "generic-api-key:6:25:6:101",
+        "generic-api-key:6:24:6:100"
       ]
     },
     {
@@ -230,10 +323,27 @@
     },
     {
       "path": "repositories/cost-intelligence/tests/pricing/pricing.test.mjs",
+      "sha256": "7c73cd25fbf90d3b0084afd31a07d3fae0e5939d959f155180ded7a77d1535df",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "9d93bf9162ca3ca00cd5c130c7db4e2544cc8c92",
+      "findings": [
+        "generic-api-key:372:71:372:117"
+      ]
+    },
+    {
+      "path": "repositories/cost-intelligence/tests/pricing/pricing.test.mjs",
       "sha256": "962dc4a3bc3271268554c110388db9a2c3cd9125ec496e7e6a92666742dd9605",
       "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
       "findings": [
         "generic-api-key:537:71:537:117"
+      ]
+    },
+    {
+      "path": "repositories/cost-intelligence/tests/reporting/reporting.test.mjs",
+      "sha256": "57718099a583cafc78f38a12442329dc4f28d206d9b19a985044c1dc1f37ad74",
+      "reason": "Synthetic reporting-test idempotency key; no operational credential.",
+      "findings": [
+        "generic-api-key:188:75:188:122"
       ]
     },
     {
@@ -245,6 +355,15 @@
       ]
     },
     {
+      "path": "repositories/cost-intelligence/tests/reporting/reporting.test.mjs",
+      "sha256": "f9f0610b5d8df3dcbbca2396f596ba0b0bf0866cd90584962b89d27bb213d49e",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "54f24055b608432d6fe5fdd7284ffff6bd2f2011",
+      "findings": [
+        "generic-api-key:164:75:164:122"
+      ]
+    },
+    {
       "path": "repositories/creative-engine/examples/frontend-action-roundtrip/tests/integrated.spec.mjs",
       "sha256": "84be02b783ce0d544c38987df2c4e2005badb3085f86215943d4b6aaee41fe99",
       "reason": "Explicit synthetic credential literals in validation or mocked integration tests; not operational credentials.",
@@ -252,6 +371,16 @@
       "findings": [
         "github-pat:287:63:287:102",
         "github-pat:290:16:290:55"
+      ]
+    },
+    {
+      "path": "repositories/creative-engine/examples/frontend-action-roundtrip/tests/integrated.spec.mjs",
+      "sha256": "d75a87785fde13a3b2e296e50d08259ffac711ee3e4899365c080d9f905a2e6a",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "ccc9c7437f5d4783181f575679c6a328dee32793",
+      "findings": [
+        "github-pat:245:63:245:102",
+        "github-pat:248:16:248:55"
       ]
     },
     {
@@ -1011,6 +1140,33 @@
       ]
     },
     {
+      "path": "repositories/creative-engine/src/api/v1.d.mts",
+      "sha256": "4b14b54a7ad625a19ef66b8be0928015a9ef87946a8cf2effe226d877d3c0216",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "7cba89a123a19a13e9dd17ed656785dede6b0052",
+      "findings": [
+        "generic-api-key:1468:14:1468:55"
+      ]
+    },
+    {
+      "path": "repositories/creative-engine/src/api/v1.d.mts",
+      "sha256": "bf730ec45c52ecec49902854bc26be35fe055237d4ad9682c9d88270456e43b2",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "27a1e6239d7dbc139497befce65024cbfeafbc2c",
+      "findings": [
+        "generic-api-key:960:14:960:55"
+      ]
+    },
+    {
+      "path": "repositories/creative-engine/tests/api/creative-api.test.mjs",
+      "sha256": "446f62483f8fd8afabac78ca63daa7b86ba28b50cb9e91ecfc1bf9a58a121286",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "95dc815dfe64390d5272baafaa2ae15409660ab8",
+      "findings": [
+        "generic-api-key:916:55:916:93"
+      ]
+    },
+    {
       "path": "repositories/creative-engine/tests/api/creative-api.test.mjs",
       "sha256": "836bfc1445b928e8f4dfff6669a1b0f115b90fd92854a86ac78b97430717377b",
       "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
@@ -1037,6 +1193,15 @@
     },
     {
       "path": "repositories/creative-engine/tests/inspection/inspection.test.mjs",
+      "sha256": "749570cbfc49b831a197be9022c1d21d7535b31f64b09849d1489afdd6c51231",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "3bb6edeb966b95b03c8cfe86eef46d89c287aa40",
+      "findings": [
+        "github-pat:390:110:390:149"
+      ]
+    },
+    {
+      "path": "repositories/creative-engine/tests/inspection/inspection.test.mjs",
       "sha256": "95282a4f40eae37712b3338e6c2576d83fa545003979c0e35999d8bec5043231",
       "reason": "Explicit synthetic credential literals in validation or mocked integration tests; not operational credentials.",
       "reviewed_source_commit": "052e4f4735dcf3cf0e7db6d1ce533a6851736b39",
@@ -1044,6 +1209,16 @@
         "github-pat:614:110:614:149",
         "github-pat:933:87:933:126",
         "github-pat:1062:29:1062:68"
+      ]
+    },
+    {
+      "path": "repositories/creative-engine/tests/inspection/inspection.test.mjs",
+      "sha256": "bd32401e0559c89a368b5bec303d1549890460d2e2d087a5e1e7101825db5501",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "556076d09086a620e85005b260dbe6368ade0e06",
+      "findings": [
+        "github-pat:773:86:773:125",
+        "github-pat:826:29:826:68"
       ]
     },
     {
@@ -1055,6 +1230,25 @@
       ]
     },
     {
+      "path": "repositories/creative-engine/tests/models/openai-images.test.mjs",
+      "sha256": "9ca8cbb91be63f7264f81ef6aaff37aa9d7a9e293a69b10b5bb6e976a1f9a5c4",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74",
+      "findings": [
+        "github-pat:850:52:850:91"
+      ]
+    },
+    {
+      "path": "repositories/creative-engine/tests/preflight/access-preflight.test.mjs",
+      "sha256": "4f81b30d0e535a31a7b799d0e124fee5148be7e5ff132a7220045d2dd299db3c",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "f334fe44c3155d22d28b5b77c4216bdf5b62c357",
+      "findings": [
+        "github-pat:591:40:591:83",
+        "github-pat:592:40:592:87"
+      ]
+    },
+    {
       "path": "repositories/creative-engine/tests/preflight/access-preflight.test.mjs",
       "sha256": "573cbed97b7c6c9d399fc0edc8d60a88393f2c4934a2c8b5a8d6c11ae3798dd8",
       "reason": "Two unchanged, deliberately synthetic percent-encoded GitHub-token-shaped URL fixtures on example.invalid; used to test credential rejection. Line numbers moved.",
@@ -1062,6 +1256,17 @@
       "findings": [
         "github-pat:617:40:617:83",
         "github-pat:618:40:618:87"
+      ]
+    },
+    {
+      "path": "repositories/creative-engine/tests/telemetry/evidence.test.mjs",
+      "sha256": "15f27120a5455220086c6d8aa2a4a7ed536e08c88ec33e1247a52c51f9d83bf2",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "fb2486f145f5caf1e95be4dc0b710af54868d12c",
+      "findings": [
+        "github-pat:171:27:171:66",
+        "github-pat:333:9:333:48",
+        "github-pat:356:38:356:77"
       ]
     },
     {
@@ -1091,6 +1296,15 @@
       ]
     },
     {
+      "path": "repositories/event-intelligence/tests/decisions/questions/prepare.test.mjs",
+      "sha256": "72eb610f2b198c8f69d3f469d0a77fede32d33d73a73049d163cca202f5909c4",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "acffeef79bc7392ed66f6b5746ce9a3cad49c6e6",
+      "findings": [
+        "generic-api-key:208:71:208:95"
+      ]
+    },
+    {
       "path": "repositories/event-intelligence/tests/evidence/fixtures/private-run-receipt-v1-legacy.json",
       "sha256": "6e48ff85e930aa2046719d338e79018748279446d4191ed7948b71103ac66ec5",
       "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
@@ -1105,6 +1319,25 @@
       "reviewed_source_commit": "15355c3b57f85606829b97bda02e488ad0775bbc",
       "findings": [
         "generic-api-key:1964:55:1964:106"
+      ]
+    },
+    {
+      "path": "repositories/event-intelligence/tests/research/private-retrieval.test.mjs",
+      "sha256": "d89da5d97c646b96e8e34ecbf6f7aaa285bd52101356f15dfd2a885dc5c476d1",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "9d964a9992f6e740e0e62cd4a90ab4987da23365",
+      "findings": [
+        "generic-api-key:761:55:761:106"
+      ]
+    },
+    {
+      "path": "repositories/fulfillment-connectors/tests/contract-suite.mjs",
+      "sha256": "2abecf7ae7865cc6447ea55a3d403781df1263ca1a56b607b8c7e0b6cf461f13",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "cba79b10457909b23a5d9cfd33f3be0d85f2bcb6",
+      "findings": [
+        "generic-api-key:311:6:311:39",
+        "generic-api-key:468:6:468:39"
       ]
     },
     {
@@ -1162,6 +1395,15 @@
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
         "jwt:6:14:6:2293"
+      ]
+    },
+    {
+      "path": "repositories/fulfillment-connectors/tests/order-authorization-fixtures.mjs",
+      "sha256": "3c2db313068c035491217b36085070e73050b10892ba2065876cba2c664679d3",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "460ca14e4f0ccb6661e96dbd7f3dd9aae8b78d07",
+      "findings": [
+        "generic-api-key:35:15:35:81"
       ]
     },
     {
@@ -1422,10 +1664,56 @@
     },
     {
       "path": "repositories/getticketstub.com/fixtures/context/cross-project-a.json",
+      "sha256": "214a071e1a8f6258584ee70947db433926a710b0dc069f5295ee212db75abae0",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1098"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/cross-project-a.json",
+      "sha256": "41612025fd62a6f0867f0048a9ee7404941d7fd32812c6e85829c148006876f8",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1078"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/cross-project-a.json",
       "sha256": "b9e368f8c3409098837d35b7bfe1de5d603e7ee4db9760a1270005212b185f56",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
-        "jwt:5:14:5:1123"
+        "jwt:5:14:5:1123",
+        "jwt:5:13:5:1122"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/cross-project-a.json",
+      "sha256": "c29529ebb14d1e84c09993f636c9076bf5f9d7e1761a5d2d14daeb477da0d4ed",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1061"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/cross-project-b.json",
+      "sha256": "1821abf26b989dee8a667ef7ca63d253d49d8d42090f2e910d21c66e6903d2ed",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1098"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/cross-project-b.json",
+      "sha256": "450f820375b15416da4348cf9d2d6e9730d3b57a2a84ab7a55f38fd4c4816223",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1078"
       ]
     },
     {
@@ -1433,7 +1721,17 @@
       "sha256": "9f307bcb807a696ca15e7c7b822a73d67fe57c9e0aed49116a27b76029daa1f2",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
-        "jwt:5:14:5:1123"
+        "jwt:5:14:5:1123",
+        "jwt:5:13:5:1122"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/cross-project-b.json",
+      "sha256": "beee6352b45f383b10b7535e437bb0681fd39e26642225f64fae2b0fcf2b2b80",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1061"
       ]
     },
     {
@@ -1441,7 +1739,35 @@
       "sha256": "05e7bcd91ce8718efbc2f31cb51436b41432a08f48f5f3da84da3e82645d4b24",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
-        "jwt:5:14:5:1123"
+        "jwt:5:14:5:1123",
+        "jwt:5:13:5:1122"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/expired.json",
+      "sha256": "0dbfb06675f2cbc13546e11e3e2b918c99a438a5bdf23d5f9c2f486833551ba6",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1098"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/expired.json",
+      "sha256": "343767b98df0275daeb7fd0bf459f25c10fe80ceb688babf5f4edbec145b5ba2",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1061"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/expired.json",
+      "sha256": "7555c8d51d11687d1b53bf1d4529e80f52f0d4005177db5f07822d673914a5e7",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1078"
       ]
     },
     {
@@ -1449,7 +1775,35 @@
       "sha256": "0866b480086d57051ebc022425a827e9a0ecc10cbc454b3978cf252f3dd495b2",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
-        "jwt:5:14:5:1123"
+        "jwt:5:14:5:1123",
+        "jwt:5:13:5:1122"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/forged.json",
+      "sha256": "3895fbe0a88275ddb28f85ef129d0f8f6d975b4dea40f0749742f67c401dd1be",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1061"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/forged.json",
+      "sha256": "4140e9da9c0fc760cd8b63e75226276d3168a13573c0ad3a8022192b459b0638",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1098"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/forged.json",
+      "sha256": "a12234e65f6ba800b40aff3755d5ee3b0a096d13495ced51854ce46dfc1608d6",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1078"
       ]
     },
     {
@@ -1465,7 +1819,53 @@
       "sha256": "2aa10536b62023884affc0425862f38936299c01d98e87f28f8282b6c137324b",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
-        "jwt:5:14:5:1123"
+        "jwt:5:14:5:1123",
+        "jwt:5:13:5:1122"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/owner.json",
+      "sha256": "64cde3bd647c97484ef5502fadf838cb0758cbbb1b170760c5e98638b82734db",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1061"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/owner.json",
+      "sha256": "6d47d473b3ddd275f0b4ce91cd281e13b374f0197b4ea71b32fecafbc186c7a2",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1078"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/owner.json",
+      "sha256": "bfb2a8cfd4bf03756f8280090aea4260a7e59ce8c4a4b972e8dd7c28ad822e05",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1098"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/revoked.json",
+      "sha256": "3b6f1d301c9345eb96bea1df335bbfcf378758640795a0fb9d7e6032cacd2400",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1098"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/revoked.json",
+      "sha256": "3f1ab22f02f77ede496d1d50370fda1002cb67ab29ab2ba6a9289f9b8c4d0cf7",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1061"
       ]
     },
     {
@@ -1473,7 +1873,17 @@
       "sha256": "53766181c1a5f2e9ab092dc75f335e0c13d6ef9823c73e6ee2613090999972c2",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
-        "jwt:5:14:5:1123"
+        "jwt:5:14:5:1123",
+        "jwt:5:13:5:1122"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/revoked.json",
+      "sha256": "df6e41d89a44df288f8e403efeb5281e031d5a809593840dc49859477b02a3e3",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1078"
       ]
     },
     {
@@ -1486,10 +1896,56 @@
     },
     {
       "path": "repositories/getticketstub.com/fixtures/context/stale.json",
+      "sha256": "187941ee40025cb46bdefb5e0aa140717dc11f3ebe63155eec7fe31c163ea386",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1098"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/stale.json",
       "sha256": "202db68894dcfff41944f72294f5909de44826f305e0b69f39370f1ce12397af",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
-        "jwt:5:14:5:1123"
+        "jwt:5:14:5:1123",
+        "jwt:5:13:5:1122"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/stale.json",
+      "sha256": "33bf4470b0a0f62bdd465ad205a5da782a4ff57bd1cc9608189ae69f29f024e8",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1078"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/stale.json",
+      "sha256": "921e0acfae723135a71da67a4cda0616031855ea310545eb3d674efa877f7da8",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1061"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/tenant-a-owner.json",
+      "sha256": "5b22ec5ba4be3e787a0d4e6f707ec90ad97d0dcd9e2f54ba562644d105bddbf0",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1070"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/tenant-a-owner.json",
+      "sha256": "639b55b311d1ec904c28e4b417a9ef8373d19df675fd3c02f7ab30fc20c01b42",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1108"
       ]
     },
     {
@@ -1497,7 +1953,44 @@
       "sha256": "7057df942f236a6cf6a95f762a1d41cef97f17e4dea2787600846fc3dcee9b05",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
-        "jwt:5:14:5:1133"
+        "jwt:5:14:5:1133",
+        "jwt:5:13:5:1132"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/tenant-a-owner.json",
+      "sha256": "79fb7dc0d442429897578fea836728a43781351a686f8c1f54d216f6b475c697",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1088"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/tenant-b-owner.json",
+      "sha256": "3656ebba6ffd124b6628c066340f01f63f6ac38f3ee7b4e41392d9a325fb35ff",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1088"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/tenant-b-owner.json",
+      "sha256": "3b507a132be95ee8422e61d0a0edb2a6c1a5b2e6b43a85d273bc4d92ba394469",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1108"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/tenant-b-owner.json",
+      "sha256": "725873b2262f79b7c8e0beb15f41308ef2a8a17eda473ce8a962ad9993bf2785",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1070"
       ]
     },
     {
@@ -1505,7 +1998,8 @@
       "sha256": "a00d5a2e1ac39d297ac9e2c0a23c2b1cc6ae74e0e354687549d9308b174f9fd1",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
-        "jwt:5:14:5:1133"
+        "jwt:5:14:5:1133",
+        "jwt:5:13:5:1132"
       ]
     },
     {
@@ -1518,10 +2012,55 @@
     },
     {
       "path": "repositories/getticketstub.com/fixtures/context/unsupported-version.json",
+      "sha256": "12f2b6c087feaf072937cea027a3d143012155742039cad609a8ff3c01d52d7a",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "1aa43f4aa18a8b71929a1c3b876415b3ccb09bcd",
+      "findings": [
+        "jwt:5:13:5:1122"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/unsupported-version.json",
+      "sha256": "1620c99fccaad11fbde4b8aa597a2808025ce7e08f4313008afd6aee09534100",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "24dde70c7a44e67672e145920c29afb430234506",
+      "findings": [
+        "jwt:5:13:5:1098"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/unsupported-version.json",
       "sha256": "1b349f55591fc379c7bbca04ef91ded1f2b3d967fa26f6807762b13bc2197eee",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
         "jwt:5:14:5:1123"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/unsupported-version.json",
+      "sha256": "5d03510755dcf60a579fd9e08daa43eed98e40059ec525c50e0bca6ec23bc025",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "d3d92d4a94d951ebebd5cd1bfa7bfdf09a4f66c6",
+      "findings": [
+        "jwt:5:14:5:1061"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/unsupported-version.json",
+      "sha256": "a12749064f712775161f8f685b7fe03f3928061c115675e68c8aec70ec7f16d6",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "232b9e852c70694ffe132a9ceadded9400b0c5a5",
+      "findings": [
+        "jwt:5:13:5:1078"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/unsupported-version.json",
+      "sha256": "a70fafb60008e103a45f4a007a9243a213d4511785a2633d786c9a216ced070d",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "7a737e8f63f002044d244ebef9d571049305c17f",
+      "findings": [
+        "jwt:5:13:5:1078"
       ]
     },
     {
@@ -1581,6 +2120,15 @@
       ]
     },
     {
+      "path": "repositories/getticketstub.com/fixtures/context/v2/economic-live.json",
+      "sha256": "c73f374f5548965e7e4b6ae2a01ff5db64b3916d8f9244545bc61a548e7c87b0",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "232b9e852c70694ffe132a9ceadded9400b0c5a5",
+      "findings": [
+        "jwt:5:14:5:1339"
+      ]
+    },
+    {
       "path": "repositories/getticketstub.com/fixtures/context/v2/economic-none.json",
       "sha256": "332563d34a081fe05566b8c5b6d04b302fdd9aba2b72864835cde53a7be6a6c5",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
@@ -1589,11 +2137,38 @@
       ]
     },
     {
+      "path": "repositories/getticketstub.com/fixtures/context/v2/economic-none.json",
+      "sha256": "c2128f070762ebc2e482ef73087685b820a622d49aa0e5bc7df9a58d304e8cad",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "232b9e852c70694ffe132a9ceadded9400b0c5a5",
+      "findings": [
+        "jwt:5:14:5:1355"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/v2/economic-paid-test.json",
+      "sha256": "25148f16bc9e66c5e1274c384f0f9953ca14c5ec7967714b386f708784670eb4",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "232b9e852c70694ffe132a9ceadded9400b0c5a5",
+      "findings": [
+        "jwt:5:14:5:1354"
+      ]
+    },
+    {
       "path": "repositories/getticketstub.com/fixtures/context/v2/economic-paid-test.json",
       "sha256": "55f7a8877735b5d2eebf1aaa6587472d51d6b556e5ebde5a08684df332fc1d53",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
         "jwt:5:14:5:1354"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/v2/economic-sandbox.json",
+      "sha256": "bf2400f45b17d742a40040e03ab3c0a8e77782dc51859f2317d681bbb1d2c856",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "232b9e852c70694ffe132a9ceadded9400b0c5a5",
+      "findings": [
+        "jwt:5:14:5:1359"
       ]
     },
     {
@@ -1654,6 +2229,15 @@
     },
     {
       "path": "repositories/getticketstub.com/fixtures/context/v2/finance-read-denied.json",
+      "sha256": "1a6683b15aba60e75c81295fbf28f299a8027c221bb44d5551b20e87b3401e30",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "232b9e852c70694ffe132a9ceadded9400b0c5a5",
+      "findings": [
+        "jwt:5:14:5:1257"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/v2/finance-read-denied.json",
       "sha256": "a072ff84873758a8056902f94aa0d571e2539fb9ee8dbf627b7f925286908f7d",
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
@@ -1674,6 +2258,69 @@
       "reason": "Intentionally public fixture-only JWTs; documented public fixture keys and synthetic payloads.",
       "findings": [
         "jwt:5:14:5:869"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/v2/malformed-shapes.json",
+      "sha256": "8bb75cce1150bddd9b64c78283d579d43a3e025b24fb4e2743ba0284af839cc3",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "0f0d912e1887484466e341734edbcb377e2e7e23",
+      "findings": [
+        "jwt:367:18:367:1057",
+        "jwt:376:18:376:1067",
+        "jwt:385:18:385:1042",
+        "jwt:394:18:394:1038",
+        "jwt:403:18:403:1042",
+        "jwt:412:18:412:1057",
+        "jwt:421:18:421:1067",
+        "jwt:430:18:430:1047",
+        "jwt:439:18:439:1043",
+        "jwt:448:18:448:1047",
+        "jwt:457:18:457:1057",
+        "jwt:466:18:466:1067",
+        "jwt:475:18:475:1051",
+        "jwt:484:18:484:1047",
+        "jwt:493:18:493:1051",
+        "jwt:502:18:502:1057",
+        "jwt:511:18:511:1067",
+        "jwt:520:18:520:1047",
+        "jwt:529:18:529:1043",
+        "jwt:538:18:538:1047",
+        "jwt:547:18:547:1057",
+        "jwt:556:18:556:1067",
+        "jwt:565:18:565:1050",
+        "jwt:574:18:574:1046",
+        "jwt:583:18:583:1050",
+        "jwt:592:18:592:1270",
+        "jwt:601:18:601:1281",
+        "jwt:610:18:610:1255",
+        "jwt:619:18:619:1251",
+        "jwt:628:18:628:1255",
+        "jwt:637:18:637:1270",
+        "jwt:646:18:646:1281",
+        "jwt:655:18:655:1261",
+        "jwt:664:18:664:1257",
+        "jwt:673:18:673:1261",
+        "jwt:682:18:682:1270",
+        "jwt:691:18:691:1281",
+        "jwt:700:18:700:1261",
+        "jwt:709:18:709:1257",
+        "jwt:718:18:718:1261",
+        "jwt:727:18:727:1270",
+        "jwt:736:18:736:1281",
+        "jwt:745:18:745:1263",
+        "jwt:754:18:754:1259",
+        "jwt:763:18:763:1263",
+        "jwt:772:18:772:1270",
+        "jwt:781:18:781:1281",
+        "jwt:790:18:790:1261",
+        "jwt:799:18:799:1257",
+        "jwt:808:18:808:1261",
+        "jwt:817:18:817:1270",
+        "jwt:826:18:826:1281",
+        "jwt:835:18:835:1261",
+        "jwt:844:18:844:1257",
+        "jwt:853:18:853:1261"
       ]
     },
     {
@@ -1775,6 +2422,54 @@
         "jwt:853:18:853:1261",
         "jwt:88:18:88:1047",
         "jwt:97:18:97:1083"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/context/v2/malformed-shapes.json",
+      "sha256": "ff335da07ffdbc5e5eb0ea8999f3577cbe8523f0fd1d24bef627065c9f986d23",
+      "reason": "Historical synthetic context JWT; signature checked against the documented public fixture key or explicit forged-test key. Includes deliberately malformed payload tests; no production credential.",
+      "reviewed_source_commit": "232b9e852c70694ffe132a9ceadded9400b0c5a5",
+      "findings": [
+        "jwt:7:18:7:1019",
+        "jwt:16:18:16:1030",
+        "jwt:25:18:25:1017",
+        "jwt:34:18:34:1053",
+        "jwt:43:18:43:1031",
+        "jwt:52:18:52:1057",
+        "jwt:61:18:61:1054",
+        "jwt:70:18:70:1053",
+        "jwt:79:18:79:1214",
+        "jwt:88:18:88:1003",
+        "jwt:97:18:97:1039",
+        "jwt:106:18:106:1021",
+        "jwt:115:18:115:1065",
+        "jwt:124:18:124:642",
+        "jwt:133:18:133:1057",
+        "jwt:142:18:142:1053",
+        "jwt:151:18:151:1257",
+        "jwt:160:18:160:1265",
+        "jwt:169:18:169:1262",
+        "jwt:178:18:178:1243",
+        "jwt:187:18:187:1267",
+        "jwt:196:18:196:1230",
+        "jwt:205:18:205:1266",
+        "jwt:214:18:214:1234",
+        "jwt:223:18:223:1270",
+        "jwt:232:18:232:1234",
+        "jwt:241:18:241:1266",
+        "jwt:250:18:250:1223",
+        "jwt:259:18:259:1261",
+        "jwt:268:18:268:1263",
+        "jwt:277:18:277:1225",
+        "jwt:286:18:286:1229",
+        "jwt:295:18:295:1237",
+        "jwt:304:18:304:1259",
+        "jwt:313:18:313:1266",
+        "jwt:322:18:322:1265",
+        "jwt:331:18:331:1254",
+        "jwt:340:18:340:1217",
+        "jwt:349:18:349:1271",
+        "jwt:358:18:358:1315"
       ]
     },
     {
@@ -1999,6 +2694,15 @@
       "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
       "findings": [
         "generic-api-key:280:82:280:119"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/generate.mjs",
+      "sha256": "eed36300ee09762c20da6f8badb267d152e49fe1922e27ba6f385b8db4a2f197",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "1aa43f4aa18a8b71929a1c3b876415b3ccb09bcd",
+      "findings": [
+        "generic-api-key:279:82:279:119"
       ]
     },
     {
@@ -2227,6 +2931,15 @@
     },
     {
       "path": "repositories/getticketstub.com/src/customer/nav/navState.ts",
+      "sha256": "6d4095c550f851d2e0c65b13017c262f8cbd81c204343e669b9b610557026502",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "ffcae234f3aef9921806f4952771be7bc3bca1d9",
+      "findings": [
+        "generic-api-key:7:8:7:32"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/src/customer/nav/navState.ts",
       "sha256": "adc571c10f851b8cf521dad4d21fa52ecbc532a3019bb466240fc0f775181bfb",
       "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
       "findings": [
@@ -2242,11 +2955,29 @@
       ]
     },
     {
+      "path": "repositories/getticketstub.com/src/customer/pages/commerce.ts",
+      "sha256": "af30af29f7c620a524f587bb3325037c11b9ade7b167a57973f1c032624a9ce5",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "e2dadb052cefd93454e85cab8558c30447496293",
+      "findings": [
+        "generic-api-key:6:15:6:49"
+      ]
+    },
+    {
       "path": "repositories/getticketstub.com/src/customer/studio/editor/Editor.tsx",
       "sha256": "6e3d3a45f80fb16b49924fad7c262048569e8d0ebd18428e14af3240c3e188c1",
       "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
       "findings": [
         "generic-api-key:40:8:40:44"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/src/customer/studio/editor/Editor.tsx",
+      "sha256": "c9a9527065347730f88216095f6fd49d140b6be811882d50677b72c509d7f1c4",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "e2dadb052cefd93454e85cab8558c30447496293",
+      "findings": [
+        "generic-api-key:25:8:25:44"
       ]
     },
     {
@@ -2311,7 +3042,8 @@
         "generic-api-key:688:116:688:201",
         "generic-api-key:7962:146:7962:174",
         "generic-api-key:800:144:800:180",
-        "generic-api-key:882:136:882:168"
+        "generic-api-key:882:136:882:168",
+        "generic-api-key:2396:155:2396:184"
       ]
     },
     {
@@ -2406,6 +3138,15 @@
         "generic-api-key:674:121:674:150",
         "generic-api-key:684:242:684:278",
         "generic-api-key:748:125:748:163"
+      ]
+    },
+    {
+      "path": "repositories/integration-evals/tests/test_artifacts.py",
+      "sha256": "2752fecc7ea54a017043a9a92ad6a4575a424bf22055621cd6ca423ea37cc848",
+      "reason": "Reviewed historical test literal, local-storage key, type name, source checksum, or public graph identifier; no operational credential.",
+      "reviewed_source_commit": "71ada0802ecaf64f5f57540d36c545f08cfd1138",
+      "findings": [
+        "generic-api-key:48:25:48:63"
       ]
     },
     {
