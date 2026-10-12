@@ -41,7 +41,19 @@ The historical response SHA differs from the historical landing HTML SHA. No mat
 
 ## Required browser/manual record
 
-Root is performing current-source local browser checks; no receipt has been supplied to this record yet. Browser results remain `AWAITING_ROOT_RECEIPT` here. Serve the exact artifact locally using `node scripts/build.mjs` and `node scripts/preview.mjs --port 8080`. Retain a reviewed `review/ux/browser-record.md` (or structured equivalent) with the source SHA, manifest hashes, consuming-app/CTA decision, timestamp, browser/OS/device/input versions, reviewer, actual screenshots/reports and each pass/fail/blocked result. Do not substitute a synthetic receipt, mock timing value or screenshot placeholder. Local CUA checks, when supplied, must be identified separately from public deployment and from screen-reader, contrast, failure-mode and lab-performance evidence they do not measure.
+Root supplied the [raw local browser receipt](browser/54dce18/root-browser-evidence.json) at `2026-10-12T11:49:37.518Z`, naming source `54dce1810a5e00d30580e614c8244f9b4ca67c15` at `http://127.0.0.1:4179/`. Its actual JPEG is retained as [mobile maker screenshot](browser/54dce18/mobile-320.jpg); the receipt reports logical viewport 320×568, while the saved JPEG is 305×541 pixels. Receipt/image hashes and the local build manifest association are in `local-source-observation.json`. The receipt identifies the source commit but does not supply an independent served-byte manifest. The record is **PARTIAL_LOCAL_NOT_DEPLOYED**, using an existing browser profile and WebGL-unavailable static fallback. Browser/OS version is not provided.
+
+| Recorded action | Actual observation | Scope |
+|---|---|---|
+| Root-reported reduced-motion maker at 320×568 | Maker `scrollHeight:1065`, `clientHeight:568`; native wheel moved its `scrollTop` from 0 to 497. | Confirms that local maker scroll in this state. Does not cover physical touch, every page dead zone or scrollbar dragging. |
+| Empty Enter | Focus `ev`, `aria-invalid:true`, location remained local `#make`. | One input/error interaction, not a screen-reader announcement or complete keyboard audit. |
+| Fictional Enter | Zero forms; local `#make`; external href stayed exactly `https://getticketstub.com/make`; status said preview text is not included. | Supports the current local editing/navigation boundary; no destination click or downstream result is reported. |
+| Resize/reopen at 375×812, 768×1024, 1440×900 | Input and studio-link bounding rectangles were zero, both after resize and attempted reopen. Receipt reports the scene reset/possible asynchronous state. | **INCONCLUSIVE, NOT PASS.** No usable-maker, overlap or horizontal-reflow acceptance is inferred from these measurements. |
+| Tab after preview | Focus observed on an `A` named `getticketstub.com`. | Single Tab observation, not complete tab order, visible-focus or no-trap acceptance. |
+
+The screenshot contains ticket artwork behind explanatory/status text; no contrast or readability pass is asserted. Screen reader, 200% text zoom, contrast, full keyboard/input matrix, blocked dependencies/media, clean-profile privacy, and three-run mobile performance remain unmeasured. Neither source checks nor this partial browser receipt establish WCAG conformance or deployed identity. The resized zero rectangles must be reproduced with a stable visible maker before the target widths can be accepted. Release remains blocked.
+
+To extend evidence, serve the exact artifact locally using `node scripts/build.mjs` and `node scripts/preview.mjs --port 8080`. Retain a reviewed browser record with the source SHA, manifest hashes, consuming-app/CTA decision, timestamp, browser/OS/device/input versions, reviewer, actual screenshots/reports and each pass/fail/blocked result. Do not substitute a synthetic receipt, mock timing value or screenshot placeholder. Local CUA results must remain separate from public deployment and from screen-reader, contrast, failure-mode and lab-performance evidence they do not measure.
 
 | Scenario | Required actual evidence |
 |---|---|

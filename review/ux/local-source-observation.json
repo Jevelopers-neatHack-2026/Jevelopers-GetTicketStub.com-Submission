@@ -176,11 +176,36 @@
       "skipped": null
     }
   ],
-  "actualBrowserEvidence": "AWAITING_ROOT_RECEIPT",
+  "actualBrowserEvidence": "PARTIAL_LOCAL_ROOT_RECEIPT",
   "actualMobileLabMeasurements": "NOT_RUN",
   "wcagConformance": "NOT_ASSERTED",
   "artifactManifestPath": "review/ux/reports/54dce18/artifact-manifest.json",
   "publicationScope": "Local validation artifact; not deployed by this task. Actual public landing deployment identity is UNKNOWN.",
   "commandRecordsPath": "review/ux/reports/54dce18/commands.json",
-  "commandRecordsSha256": "68f5bbd67624b13f981828271600f73308ba86dc214f5ad4927d5736ba7b42d1"
+  "commandRecordsSha256": "68f5bbd67624b13f981828271600f73308ba86dc214f5ad4927d5736ba7b42d1",
+  "browserEvidence": {
+    "status": "PARTIAL_LOCAL_NOT_DEPLOYED",
+    "sourceCommit": "54dce1810a5e00d30580e614c8244f9b4ca67c15",
+    "observedAt": "2026-10-12T11:49:37.518Z",
+    "url": "http://127.0.0.1:4179/",
+    "receiptPath": "review/ux/browser/54dce18/root-browser-evidence.json",
+    "receiptSha256": "05c6284b73de38bba9e9a9d641a83a0955a84e93cbf78e08ac2f7e5eb6354a9b",
+    "screenshotPath": "review/ux/browser/54dce18/mobile-320.jpg",
+    "screenshotSha256": "bd9d3da73de603eb009f2bcfc912a5bc1b1a2d6f83f00c924c3ccd3cea61f3a1",
+    "screenshotPixels": {
+      "width": 305,
+      "height": 541
+    },
+    "reportedViewport": {
+      "width": 320,
+      "height": 568
+    },
+    "associatedLocalArtifactManifestSha256": "e64d9bcaf5b26f0a1bc1d104e679a5f26a2f4fda30cde023dba506692bdc06ad",
+    "artifactPinScope": "Local reproducible build of recorded source; browser receipt names sourceCommit but supplies no independent served-byte manifest.",
+    "resized3757681440": "INCONCLUSIVE_ZERO_INPUT_AND_LINK_RECTANGLES",
+    "browserVersion": "NOT_RECORDED",
+    "profile": "EXISTING_NOT_CLEAN_CERTIFICATION",
+    "wcagConformance": "NOT_ASSERTED",
+    "performance": "NOT_MEASURED"
+  }
 }
