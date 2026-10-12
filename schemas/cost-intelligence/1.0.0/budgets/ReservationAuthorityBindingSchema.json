@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/budgets/ReservationAuthorityBindingSchema/1.0.0",
+  "x-schema-completeness": "complete",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "mappingVersion",
+    "budgetScopeId",
+    "grantRef",
+    "accountRef",
+    "projectRef",
+    "provider",
+    "model",
+    "operation",
+    "targetBindingSha256",
+    "leaseRef",
+    "leaseExpiresAt"
+  ],
+  "properties": {
+    "mappingVersion": {
+      "const": "ci-reservation-authority-1.0.0",
+      "type": "string"
+    },
+    "budgetScopeId": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "grantRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "accountRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "projectRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "provider": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "model": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "operation": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "targetBindingSha256": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "leaseRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "leaseExpiresAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

@@ -29,7 +29,7 @@ const entries = [
   ['metering', 'UsageObservationSchema'], ['metering', 'IngestionReceiptSchema'],
   ['metering', 'UsageOutboxReplayRequestSchema'], ['metering', 'UsageOutboxReplayReceiptSchema'],
   ['pricing', 'RateCardSchema'], ['pricing', 'EstimateRequestSchema'], ['pricing', 'EstimateResultSchema'],
-  ['budgets', 'ReservationRequestSchema'], ['budgets', 'AuthorizationDecisionSchema'],
+  ['budgets', 'ReservationAuthorityBindingSchema'], ['budgets', 'ReservationWorkPlanSchema'], ['budgets', 'FinanceReservationAuthoritySchema'], ['budgets', 'CurrentReservationRequestSchema'], ['budgets', 'PartialAcknowledgementRequestSchema'], ['budgets', 'ReservationRequestSchema'], ['budgets', 'AuthorizationDecisionSchema'],
   ['budgets', 'MarkDispatchedCommandSchema'], ['budgets', 'SettleReservationCommandSchema'],
   ['budgets', 'ReleaseReservationCommandSchema'], ['budgets', 'ReservationCommandSchema'],
   ['budgets', 'ReservationSnapshotSchema'], ['budgets', 'BudgetChangeRequestSchema'],

@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/budgets/CurrentReservationRequestSchema/1.0.0",
+  "x-schema-completeness": "complete",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "requestId",
+    "scope",
+    "reservationId",
+    "attemptBinding",
+    "authorityBinding",
+    "phase"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0",
+      "type": "string"
+    },
+    "requestId": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "scope": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "tenantId",
+        "projectId",
+        "environment",
+        "billingMode",
+        "actorId"
+      ],
+      "properties": {
+        "tenantId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "projectId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "const": "development",
+              "type": "string"
+            },
+            {
+              "const": "test",
+              "type": "string"
+            },
+            {
+              "const": "production",
+              "type": "string"
+            }
+          ]
+        },
+        "billingMode": {
+          "anyOf": [
+            {
+              "const": "live",
+              "type": "string"
+            },
+            {
+              "const": "sandbox",
+              "type": "string"
+            },
+            {
+              "const": "simulated",
+              "type": "string"
+            }
+          ]
+        },
+        "actorId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        }
+      }
+    },
+    "reservationId": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "attemptBinding": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "logicalOperationId",
+        "transportAttemptId",
+        "providerRequestId",
+        "providerAttemptId",
+        "billableAttemptId"
+      ],
+      "properties": {
+        "logicalOperationId": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "transportAttemptId": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "providerRequestId": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "providerAttemptId": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "billableAttemptId": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        }
+      }
+    },
+    "authorityBinding": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "mappingVersion",
+        "budgetScopeId",
+        "grantRef",
+        "accountRef",
+        "projectRef",
+        "provider",
+        "model",
+        "operation",
+        "targetBindingSha256",
+        "leaseRef",
+        "leaseExpiresAt"
+      ],
+      "properties": {
+        "mappingVersion": {
+          "const": "ci-reservation-authority-1.0.0",
+          "type": "string"
+        },
+        "budgetScopeId": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "grantRef": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "accountRef": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "projectRef": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "provider": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "operation": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "targetBindingSha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "leaseRef": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "leaseExpiresAt": {
+          "format": "date-time",
+          "type": "string"
+        }
+      }
+    },
+    "expectedRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "const": "preparation",
+          "type": "string"
+        },
+        {
+          "const": "post_transport_ack",
+          "type": "string"
+        }
+      ]
+    },
+    "dispatchIntentRef": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "contract",
+        "schema_version",
+        "id",
+        "revision",
+        "content_hash"
+      ],
+      "properties": {
+        "contract": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "content_hash": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "transportAttemptId": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    }
+  }
+}
