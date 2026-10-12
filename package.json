@@ -83,7 +83,7 @@
     "check:inspection": "node scripts/inspection-check.mjs --mode mock --out build/inspection-evidence.json",
     "check:versions": "node fixtures/versions/check.mjs mock",
     "check:creative-metering": "node scripts/creative-metering-check.mjs",
-    "test": "node --test tests/contracts/*.test.mjs tests/api/*.test.mjs tests/composition/*.test.mjs tests/versions/composition-authority.test.mjs tests/controls/composition-integration.test.mjs tests/controls/composition-view.test.mjs"
+    "test": "node --test tests/contracts/*.test.mjs tests/api/*.test.mjs tests/composition/*.test.mjs tests/versions/composition-authority.test.mjs tests/controls/composition-integration.test.mjs tests/controls/composition-view.test.mjs tests/controls/inflight-isolation.test.mjs tests/controls/composition-scope-backend.test.mjs"
   },
   "files": [
     "src/api",

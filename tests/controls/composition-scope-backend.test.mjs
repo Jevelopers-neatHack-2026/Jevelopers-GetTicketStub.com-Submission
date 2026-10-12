@@ -35,7 +35,7 @@ for (const [a,b,actionA,actionB] of pairs) test(`public composition Apply/replay
   const ports = { ...hostA.ports };
   for (const group of ['storage','jobs','planning','composition']) {
     ports[group] = { ...hostA.ports[group] };
-    for (const [key,value] of Object.entries(ports[group])) if (typeof value === 'function')
+    for (const [key,value] of Object.entries(ports[group])) if (typeof value === 'function' && key !== 'assertOperationAvailable')
       ports[group][key] = (input,...rest) => route(input).ports[group][key](input,...rest);
   }
   const makeAdapter = () => new CompositionControlsAdapter({ database:hostA.adapter.db, ports,
