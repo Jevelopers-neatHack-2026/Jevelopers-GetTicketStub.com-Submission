@@ -1,5 +1,6 @@
 import fcntl
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -131,7 +132,8 @@ def cancel_after_probe(observer: Observer) -> None:
 
 
 def invoke_observed(settings: ProcessSettings, observer: Observer, depth: int) -> None:
-    fixture = Path(__file__).parent / "fixtures/process_cancel.py"
+    fixture = settings.checkout / "process_cancel.py"
+    _ = shutil.copyfile(Path(__file__).parent / "fixtures/process_cancel.py", fixture)
     thread = Thread(target=cancel_after_probe, args=(observer,), daemon=True)
     observer.armed.set()
     thread.start()
