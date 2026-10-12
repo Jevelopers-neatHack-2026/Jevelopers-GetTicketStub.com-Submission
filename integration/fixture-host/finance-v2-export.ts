@@ -40,7 +40,7 @@ export const withoutCapability = (access: FinanceV2ExportHostAccess, capability:
 export const withCapability = (access: FinanceV2ExportHostAccess, capability: string): FinanceV2ExportHostAccess => ({ ...access, capabilities: access.capabilities.includes(capability) ? access.capabilities : [...access.capabilities, capability] });
 
 export const exportBehaviors = [
-  'ok', 'forbidden', 'source', 'conflict', 'validation', 'unsupported', 'tamper-snapshot', 'tamper-query', 'tamper-csv-scope', 'delivered', 'legacy', 'extra', 'slow', 'hang', 'fault500', 'revoke-during',
+  'ok', 'csv-control', 'forbidden', 'source', 'conflict', 'validation', 'unsupported', 'tamper-snapshot', 'tamper-query', 'tamper-csv-scope', 'delivered', 'legacy', 'extra', 'slow', 'hang', 'fault500', 'revoke-during',
 ] as const;
 export type ExportBehavior = (typeof exportBehaviors)[number];
 
@@ -60,6 +60,8 @@ export function exportConformancePort(behavior: ExportBehavior, log: ExportPortL
       log.requests.push({ format: request.format, actorId: request.scope.actorId, revision: request.authorization.revision, token: request.authorization.token, snapshotId: request.summarySnapshot.snapshotId, destination: request.destination });
       const receipt = structuredClone(zero.receipt);
       switch (behavior) {
+        // TEST_BUILT CSV control: receipt 0 untouched except `requestedFormat`; its original metrics.csv bytes, contentHash and length are replayed. Not a producer CSV preparation.
+        case 'csv-control': receipt.manifest.requestedFormat = 'csv'; return { ok: true, value: receipt };
         case 'slow': await delay(1500); return { ok: true, value: receipt };
         case 'hang': return new Promise<never>(() => undefined);
         case 'fault500': throw Object.assign(new Error(EXPORT_CANARY), { status: 503 });

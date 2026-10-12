@@ -147,6 +147,7 @@ function FixtureHost() {
         <label><input type="checkbox" checked={v2Token} onChange={(event) => { setV2Token(event.target.checked); bumpRevision(); }} /> Finance v2 host token</label>
         <label><input type="checkbox" checked={v2Available} onChange={(event) => setV2Available(event.target.checked)} /> Finance v2 host available</label>
         {exportMode && <>
+          {exportBehaviorName === 'csv-control' && <p role="note">TEST_BUILT CSV control: the producer captured no CSV preparation. The manifest below is the actual receipt 0 with only requestedFormat set to csv and the original metrics.csv bytes replayed. It is not a producer-prepared CSV request and not production issuer output.</p>}
           <label><input type="checkbox" checked={exportRead} onChange={(event) => { setExportRead(event.target.checked); bumpRevision((access) => (event.target.checked ? withCapability(access, FINANCE_READ) : withoutCapability(access, FINANCE_READ))); }} /> Dashboard read capability</label>
           <label><input type="checkbox" checked={exportCapability} onChange={(event) => { setExportCapability(event.target.checked); bumpRevision((access) => (event.target.checked ? withCapability(access, FINANCE_EXPORT) : withoutCapability(access, FINANCE_EXPORT))); }} /> Dashboard export capability</label>
           <button type="button" onClick={revokeExportSilently}>Revoke export capability silently</button>

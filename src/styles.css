@@ -63,6 +63,6 @@
 
 .team-dashboard .td-export-formats { border: 1px solid var(--td-border); border-radius: var(--ts-radius-control); padding: .5rem 1rem; margin: 0 0 1rem; min-width: 0; }
 .team-dashboard .td-export-formats label { display: flex; align-items: center; gap: .5rem; min-height: 44px; }
-.team-dashboard .td-export-formats input { width: 1.25rem; height: 1.25rem; flex: none; }
+.team-dashboard .td-export-formats input { width: 1.5rem; height: 1.5rem; min-width: 1.5rem; min-height: 1.5rem; flex: none; }
 .team-dashboard .td-export-actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin: 0 0 1rem; }
 .team-dashboard button[aria-disabled="true"] { cursor: progress; border-style: dashed; }

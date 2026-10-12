@@ -104,6 +104,38 @@ test('the CSV request: the radio group is arrow-key operable, and the producer\'
   await noDownload(page);
 });
 
+test('TEST_BUILT CSV control: keyboard select, prepare and download of the original metrics.csv bytes, honestly labelled manual_prepared and not a producer CSV request', async ({ page }) => {
+  const original = (JSON.parse(readFileSync('tests/fixtures/export-conformance/candidate-receipts/receipt-00.json', 'utf8')) as { receipt: { artifacts: { fileName: string; content: string; contentHash: string; byteLength: number }[] } }).receipt.artifacts.find((artifact) => artifact.fileName === 'metrics.csv')!;
+  await open(page, 'v2export=csv-control');
+  const region = exportRegion(page);
+  await expect(page.getByRole('note').filter({ hasText: 'TEST_BUILT CSV control' })).toContainText('not a producer-prepared CSV request');
+  await tabTo(page, region.getByRole('radio', { name: 'JSON (summary.json)' }));
+  await page.keyboard.press('ArrowDown');
+  await expect(region.getByRole('radio', { name: 'CSV (metrics.csv)' })).toBeChecked();
+  await tabTo(page, prepareButton(page));
+  await page.keyboard.press('Enter');
+  const csvButton = region.getByRole('button', { name: 'Download metrics.csv' });
+  await expect(csvButton).toBeVisible();
+  await expect(region).toContainText('manual_prepared (not delivered)');
+  await expect(region).toContainText('Delivery referenceNone');
+  await expect(region).toContainText('Requested formatcsv');
+  await expect(region).toContainText(`metrics.csv${original.byteLength} bytes, ${original.contentHash}`);
+  await expect(region).not.toContainText(/delivered to (the )?CFO(?! )|successfully (sent|exported)/iu);
+  expect((await requests(page)).map((entry) => entry.format)).toEqual(['csv']);
+  await scan(page, 'export-csv-control-prepared');
+  await leaks(page);
+  await tabTo(page, csvButton);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('Enter')]);
+  expect(download.suggestedFilename()).toBe('metrics.csv');
+  const bytes = readFileSync((await download.path())!);
+  expect(bytes.length).toBe(original.byteLength);
+  expect(Buffer.from(original.content, 'utf8').equals(bytes)).toBe(true);
+  expect(`sha256:${sha256(bytes)}`).toBe(original.contentHash);
+  await expect(region).toContainText('Download of metrics.csv started.');
+  await leaks(page);
+  expect(page.url()).not.toContain('blob:');
+});
+
 test('export permission is separate from read permission and both are honoured; nothing is requested without them', async ({ page }) => {
   await open(page);
   const region = exportRegion(page);
