@@ -155,20 +155,20 @@
       "path": "repositories/event-intelligence",
       "url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence",
       "branch": "main",
-      "commit": "6549f9ea7422c7df7b1c6209f4fb4651ef068d9b",
-      "tree": "c770180e2829affd3498855a471940e21e92d548",
-      "committed_at": "2026-10-12T16:49:47-04:00",
+      "commit": "dc97a96d07abd5d7b66c0c18f46021e85fd60cea",
+      "tree": "97a5219526b847405268bbf001775ed87a7e9303",
+      "committed_at": "2026-10-12T17:43:37-04:00",
       "description": "Sourced event facts and research cache: bounded retrieval, evidence provenance and privacy boundaries",
-      "tracked_files": 339,
+      "tracked_files": 340,
       "statistics": {
-        "commits": 250,
-        "text_files": 320,
-        "text_lines": 143928,
-        "source_files": 201,
-        "source_file_lines": 89448,
+        "commits": 253,
+        "text_files": 321,
+        "text_lines": 144223,
+        "source_files": 202,
+        "source_file_lines": 89741,
         "binary_or_non_utf8_files": 19,
         "symlinks": 0,
-        "file_bytes": 7373190
+        "file_bytes": 7388451
       }
     },
     {
