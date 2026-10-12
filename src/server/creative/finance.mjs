@@ -39,11 +39,6 @@ export function initializeCreativeFinanceMapping(database) {
 /** Disabled admission plus bounded recovery of already persisted commands.
  * PostgreSQL remains the authority; local rows/digests cannot mint acceptance. */
 export function createCreativeFinance({ database, pool, authority, currentContext, assertCurrentContext, environment, now = Date.now }) {
-  const save = (row) => {
-    required(!database.isTransaction);
-    database.prepare("INSERT INTO ticketstub_creative_attempts(billable_attempt_id,state) VALUES (?,?) ON CONFLICT(billable_attempt_id) DO UPDATE SET state=excluded.state")
-      .run(row.attempt.billable_attempt_id, JSON.stringify(row));
-  };
   const load = (billable) => {
     required(!database.isTransaction);
     const found = database.prepare("SELECT state FROM ticketstub_creative_attempts WHERE billable_attempt_id=?").get(billable);
@@ -79,7 +74,32 @@ export function createCreativeFinance({ database, pool, authority, currentContex
   // Re-read the private owner source synchronously after every awaited boundary.
   // This is a comparison against held custody, not a new decision authority.
   const currentCustody = (row) => { required(typeof assertCurrentContext === "function"); assertCurrentContext(); return assertCustody(row, authority()); };
-  const hold = (row, reason) => { row.state = "held_for_reconciliation"; row.recovery_reason = reason; save(row); return { status: "held_for_reconciliation", reservation_id: row.reservation_id }; };
+  const identity = (row) => Object.fromEntries(["attempt", "scope", "access", "maximum", "source_ref", "custody", "binding", "attempt_binding", "reserve_request",
+    "reservation_id", "held_amount", "transport_id", "dispatch_ref", "dispatch_command", "common"].map((key) => [key, row[key] ?? null]));
+  // Reload and merge after async owner checks. The exact-byte CAS also protects
+  // distinct request instances/connections sharing this physical SQLite file.
+  // No callback may await, and no successful ACK precedes its durable update.
+  const mutate = (expected, update, checkCurrent = false) => {
+    for (let retries = 0; retries < 8; retries += 1) {
+      required(!database.isTransaction);
+      const found = required(database.prepare("SELECT state FROM ticketstub_creative_attempts WHERE billable_attempt_id=?").get(expected.attempt.billable_attempt_id));
+      const row = JSON.parse(found.state); required(same(identity(row), identity(expected)));
+      if (checkCurrent) currentCustody(row);
+      const result = update(row);
+      const written = database.prepare("UPDATE ticketstub_creative_attempts SET state=? WHERE billable_attempt_id=? AND state=?")
+        .run(JSON.stringify(row), row.attempt.billable_attempt_id, found.state);
+      if (written.changes === 1) return result;
+    }
+    throw new CreativeHostError("creative_finance_unavailable");
+  };
+  const markHeld = (row, reason) => {
+    row.state = "held_for_reconciliation";
+    row.recovery_reasons ??= row.recovery_reason ? [row.recovery_reason] : [];
+    if (!row.recovery_reasons.includes(reason)) row.recovery_reasons.push(reason);
+    row.recovery_reason = reason;
+    return { status: "held_for_reconciliation", reservation_id: row.reservation_id };
+  };
+  const hold = (row, reason) => mutate(row, (current) => markHeld(current, reason));
   const ports = {
     database: pool, clock: { now: () => new Date(now()) }, authorityWaitMs: 2000,
     trustedContext: { async resolve(requested) { const entry = await fresh(); return same(requested, scope(entry)) ? requested : null; } },
@@ -142,20 +162,27 @@ export function createCreativeFinance({ database, pool, authority, currentContex
       required(JSON.stringify(row.dispatch_command) === bytes);
       if (!result.ok || result.value.status !== "replay" || result.value.reservationId !== row.reservation_id || result.value.state !== "dispatched" ||
           result.value.revision !== before.expectedRevision || Number(result.value.outstandingHold) <= 0) return hold(row, "dispatch_recovery_not_replayed");
-      row.dispatch_ack = { status: "replay", owner_revision: result.value.revision };
-      row.state = "dispatched"; save(row); return { status: "recorded" };
+      return mutate(row, (current) => {
+        required(JSON.stringify(current.dispatch_command) === bytes);
+        current.dispatch_ack = { status: "replay", owner_revision: result.value.revision };
+        // A replay ACK does not resolve concurrent unknown usage or custody.
+        if (current.state !== "held_for_reconciliation") current.state = "dispatched";
+        return { status: "recorded" };
+      }, true);
     },
     async recordUsageObservation(input) {
       const row = loadByReservation(input); const observation = validateUsageObservation(input.observation, row.attempt);
       await freshCustody(row); currentCustody(row);
-      row.observations ??= row.observation ? [row.observation] : [];
-      const previous = row.observations.find((item) => item.source_observation_id === observation.source_observation_id);
-      if (previous) required(same(previous, observation)); else row.observations.push(observation);
-      row.observation ??= observation;
-      // Preserve original observations, persisted requests and real old intake
-      // receipts. None supplies the unreleased native custody/adoption ACK.
-      // No UUID/model/quote projection, expense post or outbox drain occurs.
-      return hold(row, ["pending", "retry"].includes(row.intake_receipt?.outboxStatus) ? "usage_outbox_pending" : "public_intake_custody_unavailable");
+      return mutate(row, (current) => {
+        current.observations ??= current.observation ? [current.observation] : [];
+        const previous = current.observations.find((item) => item.source_observation_id === observation.source_observation_id);
+        if (previous) required(same(previous, observation)); else current.observations.push(observation);
+        current.observation ??= observation;
+        // Preserve original observations, persisted requests and real old intake
+        // receipts. None supplies the unreleased native custody/adoption ACK.
+        // No UUID/model/quote projection, expense post or outbox drain occurs.
+        return markHeld(current, ["pending", "retry"].includes(current.intake_receipt?.outboxStatus) ? "usage_outbox_pending" : "public_intake_custody_unavailable");
+      }, true);
     },
     async settleReservation(input) { return hold(loadByReservation(input), "public_settlement_unavailable"); },
     async releaseBeforeDispatch(input) { return hold(loadByReservation(input), "public_release_unavailable"); },

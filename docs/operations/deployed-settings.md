@@ -97,6 +97,8 @@ Actual historical intake `accepted`/`duplicate` with durableCommit preserves int
 
 Current recovery compares the complete held/current service/source/policy and account/project/grant/model/operation record after asynchronous digests, owner SQL reads and exact dispatch replay. It also repeats the existing storage-owned synchronous session/staff/revision/ownership check. Missing/partial old custody is unavailable. A new dispatch cannot be appended: recovery requires an existing dispatched owner state at a revision newer than the persisted command, then the exact owner `replay` outcome with matching reservation/revision/hold. New, missing and divergent commands remain held. Settlement/release stay unavailable until the accepted public contract; no estimate/counter or locally registered request digest supplies finality.
 
+Recovery updates merge into the latest SQLite row with an exact-byte conditional write, including across request instances and connections to the same physical database. Immutable observations, original requests/receipts and prior hold reasons survive concurrent replay acknowledgements. Conflicting bytes for an existing observation ID are denied without replacing the original. This protects recovery evidence; it supplies no lifecycle acceptance.
+
 These delegated service records authorize only the listed creative Finance operations. They grant no Dashboard
 read/export capabilities and do not approve the separate `/2` Finance namespace proposals. The deployed customer
 studio still uses its existing image path; customer creative commissioning requires an owner-approved delegation

@@ -181,6 +181,65 @@ test("Finance-first barrier denies paid routes and direct admission without a ru
   } finally { if (host) await host.close(); globalThis.fetch = originalFetch; for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); }
 });
 
+const recoveryObservation = (row, id = randomUUID()) => ({ schema_version: "creative.metering.proposal/v1", tenant_id: row.attempt.tenant_id, project_id: row.attempt.project_id,
+  budget_scope_id: row.attempt.budget_scope_id, logical_operation_id: row.attempt.logical_operation_id, billable_attempt_id: row.attempt.billable_attempt_id,
+  source_observation_id: id, source: "provider_response", provider_name: "typesafe", model: "jev-1.13.0", transport_attempt_id: row.transport_id,
+  environment: "test", billing_mode: "live", completeness: "complete", missing_fields: [], usage_units: [{ name: "input_tokens", quantity: "10", relation: "standalone" }, { name: "output_tokens", quantity: "4", relation: "standalone" }] });
+
+test("recovery writers preserve concurrent observations and holds across request instances sharing SQLite", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = new DatabaseSync(join(temp, "concurrent-recovery.sqlite")); initializeCreativeFinanceMapping(database);
+  const second = new DatabaseSync(join(temp, "concurrent-recovery.sqlite"));
+  try {
+    // Synthetic held evidence isolates local immutable recovery storage. It is
+    // not Finance admission, a native custody receipt or a released lifecycle.
+    const current = structuredClone(entry); current.decision_access = { provider: "typesafe", model: "jev-1.13.0", accountRef: "fixture-account", projectRef: "fixture-project",
+      grantRef: "fixture-grant", evidenceRef: "fixture-evidence", evidenceSha256: canonicalHash("synthetic recovery evidence"), expiresAt: later(), eligible: true };
+    current.maximums.jev_decision = { amount: "1.00", policy_ref: ref("CreativeMaximumPolicy"), expires_at: later() };
+    const bid = randomUUID(); const logical = randomUUID(); const transport = randomUUID(); const access = current.decision_access;
+    const attempt = { schema_version: "creative.metering.proposal/v1", tenant_id: current.tenant_id, project_id: current.project_id, budget_scope_id: current.budget_scope_id,
+      logical_operation_id: logical, billable_attempt_id: bid, retry_mapping_ref: "synthetic-recovery-storage", operation_kind: "jev_decision", environment: "test", billing_mode: "live",
+      budget: { scope_id: current.budget_scope_id, policy_version: "ci-budget-policy-1.0.0" }, provider: { name: "typesafe", model: "jev-1.13.0", endpoint: "https://api.typesafe.ai/v1/systemone", sdk: { name: "agent-harness-http", version: "0.1.0" } } };
+    const binding = { mappingVersion: "ci-reservation-authority-1.0.0", budgetScopeId: current.budget_scope_id, grantRef: access.grantRef, accountRef: access.accountRef, projectRef: access.projectRef,
+      provider: "typesafe", model: access.model, operation: "decision", targetBindingSha256: canonicalHash("synthetic target"), leaseRef: randomUUID(), leaseExpiresAt: later() };
+    const attemptBinding = { logicalOperationId: logical, transportAttemptId: transport, providerRequestId: null, providerAttemptId: bid, billableAttemptId: bid };
+    const row = { attempt, scope: { tenantId: current.tenant_id, projectId: current.project_id, environment: "test", billingMode: "live", actorId: current.finance_service.actor_id },
+      access: { account_ref: access.accountRef, project_ref: access.projectRef, grant_ref: access.grantRef, evidence_ref: access.evidenceRef, evidence_sha256: access.evidenceSha256, expires_at: access.expiresAt },
+      maximum: current.maximums.jev_decision, source_ref: current.finance_service.source_authority_ref, custody: creativeFinanceCustodySnapshot(current, attempt), binding, attempt_binding: attemptBinding,
+      reserve_request: { sourceAuthorityRef: current.finance_service.source_authority_ref, authorityBinding: binding, attemptBinding, canonicalRequest: { policy_ref: current.budget_policy_ref } },
+      reservation_id: randomUUID(), transport_id: transport, state: "held_for_reconciliation", recovery_reason: "original_unknown", usage_request: { fixture: "opaque original request bytes" } };
+    row.observation = recoveryObservation(row); row.observations = [row.observation];
+    const originalBytes = JSON.stringify(row.observation); const requestBytes = JSON.stringify(row.usage_request);
+    database.prepare("INSERT INTO ticketstub_creative_attempts VALUES (?,?)").run(bid, JSON.stringify(row));
+    const read = () => JSON.parse(database.prepare("SELECT state FROM ticketstub_creative_attempts WHERE billable_attempt_id=?").get(bid).state);
+    const input = { billable_attempt_id: bid, logical_operation_id: logical, reservation_id: row.reservation_id, lease_id: binding.leaseRef, transport_attempt_id: transport };
+    let arrivals = 0; let entered; let resume; let block = true;
+    let enteredPromise = new Promise((resolve) => { entered = resolve; }); let resumed = new Promise((resolve) => { resume = resolve; });
+    const currentContext = async () => { if (block) { if (++arrivals === 2) entered(); await resumed; } };
+    const finance = [database, second].map((db) => createCreativeFinance({ database: db, pool: null, authority: () => current, currentContext, assertCurrentContext() {}, environment: "test" }));
+    const observations = [recoveryObservation(row), recoveryObservation(row)];
+    const concurrent = Promise.all(observations.map((observation, index) => finance[index].metering.recordUsageObservation({ ...input, observation })));
+    await enteredPromise; block = false; resume();
+    assert.deepEqual((await concurrent).map((value) => value.status), ["held_for_reconciliation", "held_for_reconciliation"]);
+    assert.equal(read().observations.length, 3); assert.equal(JSON.stringify(read().observation), originalBytes); assert.equal(JSON.stringify(read().usage_request), requestBytes);
+    for (const observation of observations) assert.deepEqual(read().observations.find((item) => item.source_observation_id === observation.source_observation_id), observation);
+    await Promise.all(finance.map((instance) => instance.metering.recordUsageObservation({ ...input, observation: observations[0] })));
+    assert.equal(read().observations.length, 3, "same-ID identical bytes are idempotent across instances");
+    const conflict = structuredClone(observations[0]); conflict.usage_units[0].quantity = "11";
+    const outcomes = await Promise.allSettled([finance[0].metering.recordUsageObservation({ ...input, observation: observations[0] }), finance[1].metering.recordUsageObservation({ ...input, observation: conflict })]);
+    assert.deepEqual(outcomes.map((value) => value.status), ["fulfilled", "rejected"]);
+    assert.deepEqual(read().observations.find((item) => item.source_observation_id === conflict.source_observation_id), observations[0]);
+    arrivals = 1; block = true; enteredPromise = new Promise((resolve) => { entered = resolve; }); resumed = new Promise((resolve) => { resume = resolve; });
+    const delayed = finance[0].metering.recordUsageObservation({ ...input, observation: recoveryObservation(row) }); await enteredPromise;
+    await Promise.all([finance[1].metering.markAttemptInFlight(input), finance[1].metering.markOutcomeUnknown({ ...input, reason: "concurrent_unknown" }),
+      finance[1].metering.settleReservation(input), finance[1].metering.releaseBeforeDispatch(input)]);
+    block = false; resume(); await delayed;
+    assert.equal(read().observations.length, 4); assert.equal(read().state, "held_for_reconciliation");
+    for (const reason of ["original_unknown", "finance_lifecycle_unavailable", "concurrent_unknown", "public_settlement_unavailable", "public_release_unavailable"]) assert.ok(read().recovery_reasons.includes(reason));
+    assert.equal(JSON.stringify(read().usage_request), requestBytes);
+  } finally { second.close(); database.close(); }
+});
+
 test("real Finance SQL qualifies only existing command replay, current custody and pending intake holds; paid adoption stays blocked", { skip: process.env.TICKETSTUB_OFFLINE_POSTGRES !== "1" }, async (t) => {
   const savedProcessEnvironment = { ...process.env };
   const name = `ticketstub-finance-recovery-${randomBytes(5).toString("hex")}`; const password = randomBytes(32).toString("base64url");
@@ -188,7 +247,7 @@ test("real Finance SQL qualifies only existing command replay, current custody a
   writeFileSync(envFile, `POSTGRES_PASSWORD=${password}\nPOSTGRES_DB=creative_offline\n`, { mode: 0o600 });
   const docker = (args) => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const image = "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d";
-  let admin; let runtime; let failed = false; let database;
+  let admin; let runtime; let failed = false; let database; let secondDatabase;
   try {
     docker(["image", "inspect", image]); docker(["run", "--rm", "--name", name, "-d", "-p", "127.0.0.1::5432", "--env-file", envFile, image]);
     const port = Number(docker(["port", name, "5432/tcp"]).split(":").at(-1));
@@ -259,9 +318,10 @@ test("real Finance SQL qualifies only existing command replay, current custody a
     const req = new Request("https://ticketstub.test/api/creative", { headers: { cookie: `ts_session=${cookie}` } });
     const platform = await getRequestContext(req); const scoped = await getRequestContext(req, { id: entry.application_project_id, kind: "stub" });
     requireCreativeCommissioningContext(platform, scoped);
-    const finance = createCreativeFinance({ database, pool: runtime, environment: "test", authority: () => current,
+    const financeFor = (db) => createCreativeFinance({ database: db, pool: runtime, environment: "test", authority: () => current,
       currentContext: async () => { const fresh = await getRequestContext(req, { id: entry.application_project_id, kind: "stub" }); requireCreativeCommissioningContext(await getRequestContext(req), fresh); },
       assertCurrentContext: () => assertCreativeCommissioningCurrent(req, { platform, scoped }) });
+    const finance = financeFor(database);
     const input = (row) => ({ billable_attempt_id: row.attempt.billable_attempt_id, logical_operation_id: row.attempt.logical_operation_id, reservation_id: row.reservation_id, lease_id: row.binding.leaseRef, transport_attempt_id: row.transport_id });
     const committed = await provision(); const commandBytes = JSON.stringify(committed.dispatch_command);
     // PostgreSQL committed, but the Product response/local acknowledgement was
@@ -308,10 +368,15 @@ test("real Finance SQL qualifies only existing command replay, current custody a
     Object.assign(current, structuredClone(savedAuthority));
     // Preserve the real SQL response. Mutate custody after COMMIT has awaited;
     // the final current source/session fences must deny local ACK.
-    const originalConnect = runtime.connect.bind(runtime); let changeAfterCommit; let commitsUntilChange = 1;
+    const originalConnect = runtime.connect.bind(runtime); let changeAfterCommit; let commitsUntilChange = 1; let pauseAfterCommit; let commitsUntilPause = 1;
     t.mock.method(runtime, "connect", async () => {
       const client = await originalConnect(); const originalQuery = client.query.bind(client);
-      const wrapped = { release: () => client.release(), query: async (...args) => { const result = await originalQuery(...args); if (changeAfterCommit && args[0] === "COMMIT" && --commitsUntilChange === 0) { const change = changeAfterCommit; changeAfterCommit = undefined; change(); } return result; } };
+      const wrapped = { release: () => client.release(), query: async (...args) => {
+        const result = await originalQuery(...args);
+        if (changeAfterCommit && args[0] === "COMMIT" && --commitsUntilChange === 0) { const change = changeAfterCommit; changeAfterCommit = undefined; change(); }
+        if (pauseAfterCommit && args[0] === "COMMIT" && --commitsUntilPause === 0) { const pause = pauseAfterCommit; pauseAfterCommit = undefined; await pause(); }
+        return result;
+      } };
       return wrapped;
     });
     changeAfterCommit = () => { current.finance_service.source_authority_ref = ref("CreativeFinanceSource"); };
@@ -322,10 +387,7 @@ test("real Finance SQL qualifies only existing command replay, current custody a
     await assert.rejects(finance.metering.recordTransportAttempt(input(committed))); assert.equal(changeAfterCommit, undefined);
     await getStorage().createSession(hashToken(cookie), account.id, Date.now(), Date.now() + 60 * 60_000);
     commitsUntilChange = 1;
-    const observationId = randomUUID(); const observation = { schema_version: "creative.metering.proposal/v1", tenant_id: committed.attempt.tenant_id, project_id: committed.attempt.project_id,
-      budget_scope_id: committed.attempt.budget_scope_id, logical_operation_id: committed.attempt.logical_operation_id, billable_attempt_id: committed.attempt.billable_attempt_id,
-      source_observation_id: observationId, source: "provider_response", provider_name: "typesafe", model: "jev-1.13.0", transport_attempt_id: committed.transport_id,
-      environment: "test", billing_mode: "live", completeness: "complete", missing_fields: [], usage_units: [{ name: "input_tokens", quantity: "10", relation: "standalone" }, { name: "output_tokens", quantity: "4", relation: "standalone" }] };
+    const observationId = randomUUID(); const observation = recoveryObservation(committed, observationId);
     const row = read(committed); row.usage_request = { schemaVersion: "1.0.0", requestId: randomUUID(), idempotencyKey: `${observationId}:usage`, scope,
       usageEvent: { ...row.common, contract: "UsageEvent", event_id: randomUUID(), usage_event_id: randomUUID(), source_observation_id: observationId, logical_operation_id: row.attempt.logical_operation_id,
         provider_attempt_id: row.attempt.billable_attempt_id, billable_attempt_id: row.attempt.billable_attempt_id, transport_attempt_id: row.transport_id, provider_request_id: null,
@@ -348,6 +410,25 @@ test("real Finance SQL qualifies only existing command replay, current custody a
     assert.equal(JSON.stringify(read(row).usage_request), usageBytes);
     const repeated = await ingestUsage(row.usage_request, ownerPorts); assert.equal(repeated.ok, true); assert.equal(repeated.value.status, "duplicate");
     assert.equal(repeated.value.outboxStatus, "retry");
+    // Pause the actual owner replay after its final COMMIT. Another request and
+    // SQLite connection durably append usage/unknown evidence before local ACK.
+    secondDatabase = new DatabaseSync(join(temp, "recovery.sqlite")); const secondFinance = financeFor(secondDatabase);
+    let replayEntered; let resumeReplay; const replayBoundary = new Promise((resolve) => { replayEntered = resolve; });
+    const replayResumed = new Promise((resolve) => { resumeReplay = resolve; });
+    commitsUntilPause = 2; pauseAfterCommit = async () => { replayEntered(); await replayResumed; };
+    const replayPromise = finance.metering.recordTransportAttempt(input(row));
+    await Promise.race([replayBoundary, replayPromise.then(() => assert.fail("replay completed before the final owner COMMIT seam"))]);
+    const concurrentObservation = recoveryObservation(row);
+    try {
+      assert.equal((await secondFinance.metering.recordUsageObservation({ ...input(row), observation: concurrentObservation })).status, "held_for_reconciliation");
+      await secondFinance.metering.markOutcomeUnknown({ ...input(row), reason: "concurrent_owner_replay_unknown" });
+    } finally { resumeReplay(); }
+    assert.equal((await replayPromise).status, "recorded"); assert.equal(pauseAfterCommit, undefined, "actual final owner replay COMMIT seam was crossed");
+    const recovered = read(row); assert.equal(recovered.dispatch_ack.status, "replay"); assert.equal(recovered.dispatch_ack.owner_revision, 2);
+    assert.equal(recovered.state, "held_for_reconciliation"); assert.ok(recovered.recovery_reasons.includes("concurrent_owner_replay_unknown"));
+    assert.deepEqual(recovered.observations.map((item) => item.source_observation_id), [observationId, concurrentObservation.source_observation_id]);
+    assert.equal(JSON.stringify(recovered.dispatch_command), commandBytes); assert.equal(JSON.stringify(recovered.usage_request), usageBytes);
+    assert.deepEqual(recovered.intake_receipt, intake.value); assert.deepEqual((await events(row)).map((event) => event.event_type), ["authorized", "dispatched"]);
     const pendingRow = await provision(); const priorObservation = randomUUID(); const nextObservation = randomUUID();
     const priorRequest = structuredClone(row.usage_request); Object.assign(priorRequest, { requestId: randomUUID(), idempotencyKey: `${priorObservation}:usage` });
     Object.assign(priorRequest.usageEvent, { event_id: randomUUID(), usage_event_id: randomUUID(), source_observation_id: priorObservation,
@@ -377,9 +458,9 @@ test("real Finance SQL qualifies only existing command replay, current custody a
     assert.equal(actual.ok, true); assert.ok(Number(actual.value.heldAmount) > 0); assert.equal(Number(actual.value.effectiveConsumedAmount), 0); assert.equal(Number(actual.value.releasedAmount), 0); assert.equal(actual.value.usageFinality, "unknown");
     const queue = await admin.query("SELECT status FROM cost_intelligence.usage_intake_outbox WHERE billable_attempt_id=$1", [row.attempt.billable_attempt_id]); assert.equal(queue.rows[0].status, "retry");
     const ledger = await admin.query("SELECT count(*) AS count FROM cost_intelligence.financial_ledger_events WHERE tenant_id=$1", [scope.tenantId]); assert.equal(Number(ledger.rows[0].count), 0);
-    t.diagnostic("Finance-first unavailable: zero Product admissions/provider writes; real SQL exact persisted dispatch replay ACK only, no duplicate money; missing/uncommitted/divergent commands and stale/partial custody hold. Native recovery intake accepted/retry stays durable with unknown finality, zero consumption/release; no accepted CI05B/publication claim.");
+    t.diagnostic("Finance-first unavailable: zero Product admissions/provider writes; real SQL exact persisted dispatch replay ACK only, no duplicate money; concurrent second-request SQLite observations/receipts/unknown evidence survive final owner replay. Missing/uncommitted/divergent commands and stale/partial custody hold. Native recovery intake accepted/retry stays durable with unknown finality, zero consumption/release; no accepted CI05B/publication claim.");
   } catch (error) { failed = true; throw error; } finally {
-    if (database) database.close(); if (runtime) await runtime.end(); if (admin) await admin.end();
+    if (secondDatabase) secondDatabase.close(); if (database) database.close(); if (runtime) await runtime.end(); if (admin) await admin.end();
     let cleanupFailed = false; try { docker(["rm", "-f", name]); } catch { cleanupFailed = true; }
     unlinkSync(envFile);
     for (const key of Object.keys(process.env)) if (!(key in savedProcessEnvironment)) delete process.env[key]; Object.assign(process.env, savedProcessEnvironment);
