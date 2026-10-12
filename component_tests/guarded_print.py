@@ -117,9 +117,6 @@ class PrintDocker(Docker):
         return (
             *base,
             (self.configuration.directory / "launch", "/run/ie-launch", False),
-            (producer / "dist", "/producer/dist", False),
-            (producer / "node_modules", "/producer/node_modules", False),
-            (producer / "docs", "/producer/docs", False),
             (runtime, str(runtime), False),
             (self.checkout, str(self.checkout), False),
             (self.repository, str(self.repository), False),

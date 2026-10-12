@@ -186,8 +186,8 @@ oracles continue to decide the result.
 
 Additional readonly mounts expose only fresh clean tracked evaluator/configuration
 and pinned print projections at their original paths, plus the verified Node
-archive directory and readonly source observer dist/dependencies/docs. The original
-producer checkout and its Git metadata are not mounted into this backend. Only the single owned HOME/artifact root and canary diagnostic
+archive directory. The original producer checkout and its Git metadata are not
+mounted into this backend. Only the single owned HOME/artifact root and canary diagnostic
 staging are writable host binds. Git configuration checks inspect key names only
 and reject credential header/helper keys. Guarded workflow preparation uses a
 fresh local clone instead of mounting the Actions checkout's Git metadata.
