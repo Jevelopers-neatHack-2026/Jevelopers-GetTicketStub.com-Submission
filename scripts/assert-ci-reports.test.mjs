@@ -10,6 +10,7 @@ import {
   parseReport,
   validateCommandLog,
   validateContrastReport,
+  validateDashboardContrastReport,
   validatePlaywrightReport,
   validateVitestReport,
 } from './assert-ci-reports.mjs';
@@ -86,8 +87,41 @@ test('Playwright rejects failures hidden behind passing aggregate counters', () 
   assert.throws(() => validatePlaywrightReport(malformedErrors), /malformed errors/);
 });
 
-// Independent synthetic gate inputs: these are not browser accessibility evidence.
-function contrastFixture() {
+test('contrast report accepts intentional negative controls only when they match expectation', () => {
+  const report = { source: 'fixture', method: 'fixture calculation', pairs: [{ name: 'negative control', ratio: 2, threshold: 4.5, passes: false, expected: false }] };
+  assert.deepEqual(validateContrastReport(report), { pairs: 1 });
+  assert.throws(() => validateContrastReport({ ...report, pairs: [{ ...report.pairs[0], passes: true }] }), /unexpected result/);
+  assert.throws(() => validateContrastReport({ ...report, pairs: [] }), /checked pairs/);
+});
+
+// TEST_BUILT report variants: exercise the gate, not browser contrast measurement.
+for (const threshold of [3, 4.5]) {
+  const reportWith = (ratio, passes) => ({
+    source: 'fixture', method: 'unrounded fixture comparison',
+    pairs: [{ name: 'fixture contrast pair', ratio, threshold, passes, expected: passes }],
+  });
+
+  test(`contrast rejects a false positive below ${threshold} even when both flags agree`, () => {
+    assert.throws(() => validateContrastReport(reportWith(threshold - 0.001, true)), /inconsistent with its ratio and threshold/);
+  });
+
+  test(`contrast rejects a false negative above ${threshold} even when both flags agree`, () => {
+    assert.throws(() => validateContrastReport(reportWith(threshold + 0.001, false)), /inconsistent with its ratio and threshold/);
+  });
+
+  test(`contrast rejects a false negative exactly at ${threshold}`, () => {
+    assert.throws(() => validateContrastReport(reportWith(threshold, false)), /inconsistent with its ratio and threshold/);
+  });
+
+  test(`contrast uses an inclusive, unrounded comparison at ${threshold}`, () => {
+    for (const [ratio, passes] of [[threshold - 0.001, false], [threshold, true], [threshold + 0.001, true]]) {
+      assert.deepEqual(validateContrastReport(reportWith(ratio, passes)), { pairs: 1 });
+    }
+  });
+}
+
+// Independent TEST_BUILT dashboard reports; not browser accessibility evidence.
+function dashboardContrastFixture() {
   return {
     source: 'brand-kit@3822635aff507cd5918a08a0c636bb0e41705261',
     method: 'WCAG sRGB relative luminance; source-over alpha in sRGB; unrounded comparisons',
@@ -105,141 +139,150 @@ function contrastFixture() {
   };
 }
 
-test('contrast gate accepts all required pairs including intentional negative controls', () => {
-  const report = contrastFixture();
-  assert.deepEqual(validateContrastReport(report), { pairs: 9 });
+test('dashboard contrast policy accepts the nine required pairs in any order', () => {
+  const report = dashboardContrastFixture();
+  assert.deepEqual(validateDashboardContrastReport(report), { pairs: 9 });
   report.pairs.reverse();
-  assert.deepEqual(validateContrastReport(report), { pairs: 9 });
+  assert.deepEqual(validateDashboardContrastReport(report), { pairs: 9 });
 });
 
-test('contrast gate rejects pass flags that disagree with unrounded measured ratios', () => {
+test('dashboard contrast policy rejects omissions, duplicates, extras and unknown names', () => {
   for (let index = 0; index < 9; index += 1) {
-    const report = contrastFixture();
-    const pair = report.pairs[index];
-    pair.ratio = pair.expected ? 2 : 7;
-    assert.throws(() => validateContrastReport(report), /Contrast report/, pair.name);
-  }
-});
-
-test('contrast gate pins thresholds and expected outcomes rather than trusting the report', () => {
-  for (let index = 0; index < 9; index += 1) {
-    const changedThreshold = contrastFixture();
-    changedThreshold.pairs[index].threshold = 1;
-    assert.throws(() => validateContrastReport(changedThreshold), /Contrast report/);
-    const changedExpectation = contrastFixture();
-    const pair = changedExpectation.pairs[index];
-    pair.expected = !pair.expected;
-    pair.passes = pair.expected;
-    pair.ratio = pair.expected ? 7 : 2;
-    assert.throws(() => validateContrastReport(changedExpectation), /Contrast report/);
-  }
-});
-
-test('contrast gate rejects missing, extra, duplicate and unknown pairs even at the right count', () => {
-  for (let index = 0; index < 9; index += 1) {
-    const missing = contrastFixture();
+    const missing = dashboardContrastFixture();
     missing.pairs.splice(index, 1);
-    assert.throws(() => validateContrastReport(missing), /Contrast report/);
-    const duplicate = contrastFixture();
+    assert.throws(() => validateDashboardContrastReport(missing), /every required checked pair/);
+    const duplicate = dashboardContrastFixture();
     duplicate.pairs[index] = { ...duplicate.pairs[(index + 1) % 9] };
-    assert.throws(() => validateContrastReport(duplicate), /Contrast report/);
+    assert.throws(() => validateDashboardContrastReport(duplicate), /duplicate pair/);
   }
-  for (const name of ['', ' ', 'unknown pair', 'body / cream ', '__proto__']) {
-    const unknown = contrastFixture();
-    unknown.pairs[0].name = name;
-    assert.throws(() => validateContrastReport(unknown), /Contrast report/);
-  }
-  const extra = contrastFixture();
+  const extra = dashboardContrastFixture();
   extra.pairs.push({ ...extra.pairs[0] });
-  assert.throws(() => validateContrastReport(extra), /Contrast report/);
-  for (const pairs of [[], null, {}, 'pairs']) {
-    assert.throws(() => validateContrastReport({ ...contrastFixture(), pairs }), /Contrast report/);
+  assert.throws(() => validateDashboardContrastReport(extra), /every required checked pair/);
+  for (const name of ['', ' ', 'unknown', 'body / cream ', '__proto__']) {
+    const report = dashboardContrastFixture();
+    report.pairs[0].name = name;
+    assert.throws(() => validateDashboardContrastReport(report), /unknown or duplicate pair/);
   }
 });
 
-test('contrast gate rejects missing or changed source and method identities', () => {
+test('dashboard contrast policy pins source and method identities', () => {
   for (const key of ['source', 'method']) {
     for (const value of [undefined, null, '', ' ', 'fixture', 42]) {
-      assert.throws(() => validateContrastReport({ ...contrastFixture(), [key]: value }), /Contrast report/);
+      assert.throws(() => validateDashboardContrastReport({ ...dashboardContrastFixture(), [key]: value }), /Contrast report/);
     }
   }
 });
 
-test('contrast gate rejects malformed ratios, flags, thresholds and pair records', () => {
-  for (const ratio of [undefined, null, '7', NaN, Infinity, -Infinity, -1, 0, 0.99, 21.01]) {
-    const report = contrastFixture();
-    report.pairs[0].ratio = ratio;
-    assert.throws(() => validateContrastReport(report), /Contrast report/);
-  }
-  for (const passes of [undefined, null, 'true', 1, false]) {
-    const report = contrastFixture();
-    report.pairs[0].passes = passes;
-    assert.throws(() => validateContrastReport(report), /Contrast report/);
-  }
-  for (const threshold of [undefined, null, '4.5', NaN, Infinity, -1, 0, 22]) {
-    const report = contrastFixture();
-    report.pairs[0].threshold = threshold;
-    assert.throws(() => validateContrastReport(report), /Contrast report/);
-  }
-  for (const expected of [undefined, null, 'true', 1]) {
-    const report = contrastFixture();
-    report.pairs[0].expected = expected;
-    assert.throws(() => validateContrastReport(report), /Contrast report/);
-  }
-  for (const pair of [null, [], 'pair']) {
-    const report = contrastFixture();
-    report.pairs[0] = pair;
-    assert.throws(() => validateContrastReport(report), /Contrast report/);
+test('dashboard contrast policy rejects weakened thresholds and changed expectations', () => {
+  for (let index = 0; index < 9; index += 1) {
+    const changedThreshold = dashboardContrastFixture();
+    const thresholdPair = changedThreshold.pairs[index];
+    thresholdPair.threshold = 1;
+    thresholdPair.passes = true;
+    thresholdPair.expected = true;
+    assert.throws(() => validateDashboardContrastReport(changedThreshold), /pinned threshold or expected outcome/);
+    const changedExpectation = dashboardContrastFixture();
+    const pair = changedExpectation.pairs[index];
+    pair.expected = !pair.expected;
+    pair.passes = pair.expected;
+    pair.ratio = pair.expected ? 7 : 2;
+    assert.throws(() => validateDashboardContrastReport(changedExpectation), /pinned threshold or expected outcome/);
   }
 });
 
-test('contrast gate does not round near-threshold ratios into a pass', () => {
+test('dashboard contrast policy rejects malformed records and impossible ratios', () => {
+  for (const ratio of [undefined, null, '7', NaN, Infinity, -Infinity, -1, 0, 0.99, 21.01]) {
+    const report = dashboardContrastFixture();
+    const index = typeof ratio === 'number' && ratio < 1 ? 6 : 0;
+    report.pairs[index].ratio = ratio;
+    assert.throws(() => validateDashboardContrastReport(report), /Contrast report/);
+  }
+  for (const pairs of [[], null, {}, 'pairs']) {
+    assert.throws(() => validateDashboardContrastReport({ ...dashboardContrastFixture(), pairs }), /Contrast report/);
+  }
+  for (const pair of [null, [], 'pair']) {
+    const report = dashboardContrastFixture();
+    report.pairs[0] = pair;
+    assert.throws(() => validateDashboardContrastReport(report), /Contrast report/);
+  }
+  for (const threshold of [undefined, null, '4.5', NaN, Infinity, -1, 0, 22]) {
+    const report = dashboardContrastFixture();
+    report.pairs[0].threshold = threshold;
+    assert.throws(() => validateDashboardContrastReport(report), /Contrast report/);
+  }
+});
+
+test('dashboard contrast policy preserves unrounded thresholds and physical endpoints', () => {
   for (let index = 0; index < 9; index += 1) {
-    const report = contrastFixture();
+    const report = dashboardContrastFixture();
     const pair = report.pairs[index];
     pair.ratio = pair.expected ? pair.threshold : pair.threshold - 1e-12;
-    assert.deepEqual(validateContrastReport(report), { pairs: 9 });
+    assert.deepEqual(validateDashboardContrastReport(report), { pairs: 9 });
     pair.ratio = pair.expected ? pair.threshold - 1e-12 : pair.threshold;
-    assert.throws(() => validateContrastReport(report), /Contrast report/);
+    assert.throws(() => validateDashboardContrastReport(report), /inconsistent with its ratio and threshold/);
   }
-  const extremes = contrastFixture();
-  extremes.pairs[0].ratio = 21;
-  extremes.pairs[6].ratio = 1;
-  assert.deepEqual(validateContrastReport(extremes), { pairs: 9 });
+  const endpoints = dashboardContrastFixture();
+  endpoints.pairs[0].ratio = 21;
+  endpoints.pairs[6].ratio = 1;
+  assert.deepEqual(validateDashboardContrastReport(endpoints), { pairs: 9 });
+});
+
+test('dashboard contrast policy retains generic rejection of inconsistent or malformed flags', () => {
+  for (let index = 0; index < 9; index += 1) {
+    const report = dashboardContrastFixture();
+    report.pairs[index].ratio = report.pairs[index].expected ? 2 : 7;
+    assert.throws(() => validateDashboardContrastReport(report), /inconsistent with its ratio and threshold/);
+  }
+  for (const key of ['passes', 'expected']) {
+    for (const value of [undefined, null, 'true', 1]) {
+      const report = dashboardContrastFixture();
+      report.pairs[0][key] = value;
+      assert.throws(() => validateDashboardContrastReport(report), /Contrast report/);
+    }
+  }
 });
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 
-test('real contrast producer output satisfies the report gate with all nine checks', () => {
+test('unchanged real CSS contrast producer satisfies the independent dashboard policy', () => {
   const result = spawnSync(process.execPath, ['scripts/check-contrast.mjs'], {
     cwd: repositoryRoot, encoding: 'utf8', timeout: 10000,
   });
   assert.equal(result.error, undefined);
   assert.equal(result.status, 0, result.stderr);
   const report = parseReport('Contrast', result.stdout);
-  assert.deepEqual(validateContrastReport(report), { pairs: 9 });
+  assert.deepEqual(validateDashboardContrastReport(report), { pairs: 9 });
   assert.equal(report.pairs.filter(pair => pair.expected === false).length, 3);
 });
 
-test('report-gate CLI rejects corrupt contrast evidence and recovers with valid input', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'td-contrast-gate-'));
+test('CLI enforces dashboard coverage and recovers with a complete valid report', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'td-contrast-policy-'));
   try {
     const paths = Object.fromEntries(['commands', 'vitest', 'contrast', 'e2e', 'integration'].map(name => [name, join(directory, name)]));
+    // These are synthetic gate inputs, not evidence that these suites ran.
     writeFileSync(paths.commands, REQUIRED_COMMANDS.join('\n'));
     writeFileSync(paths.vitest, JSON.stringify(vitestFixture()));
     writeFileSync(paths.e2e, JSON.stringify(playwrightFixture()));
     writeFileSync(paths.integration, JSON.stringify(playwrightFixture()));
     const args = ['scripts/assert-ci-reports.mjs', ...Object.entries(paths).flatMap(([name, path]) => [`--${name}`, path])];
     const run = () => spawnSync(process.execPath, args, { cwd: repositoryRoot, encoding: 'utf8', timeout: 10000 });
-    const report = contrastFixture();
-    report.pairs[0].ratio = 2;
-    writeFileSync(paths.contrast, JSON.stringify(report));
-    const rejected = run();
-    assert.equal(rejected.error, undefined);
-    assert.equal(rejected.status, 1, rejected.stdout);
-    assert.match(rejected.stderr, /Contrast report/);
-    assert.equal(rejected.stdout, '');
-    writeFileSync(paths.contrast, JSON.stringify(contrastFixture()));
+    const mutations = [
+      report => report.pairs.pop(),
+      report => { report.pairs[0] = { ...report.pairs[1] }; },
+      report => { report.pairs[0].threshold = 1; },
+      report => { Object.assign(report.pairs[0], { ratio: 2, passes: false, expected: false }); },
+    ];
+    for (const mutate of mutations) {
+      const report = dashboardContrastFixture();
+      mutate(report);
+      writeFileSync(paths.contrast, JSON.stringify(report));
+      const rejected = run();
+      assert.equal(rejected.error, undefined);
+      assert.equal(rejected.status, 1, rejected.stdout);
+      assert.match(rejected.stderr, /Contrast report/);
+      assert.equal(rejected.stdout, '');
+    }
+    writeFileSync(paths.contrast, JSON.stringify(dashboardContrastFixture()));
     const recovered = run();
     assert.equal(recovered.error, undefined);
     assert.equal(recovered.status, 0, recovered.stderr);

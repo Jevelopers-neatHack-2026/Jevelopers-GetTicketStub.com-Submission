@@ -1,49 +1,59 @@
-# TD-11 contrast report integrity: focused implementation evidence
+# TD-11 contrast coverage: corrected execution receipt
 
-Refs #16 (TD-11.B/E/F, partial) and #15 (TD-10 contrast verification contributor). No leaf, gate, epic, FIN-10 or DASH-01..04 is accepted by this record.
+Refs #16 and #15, partial only. No leaf, gate, epic, FIN-10 or DASH-01..04 acceptance is asserted.
 
-## Source and execution boundary
+## Correction and preserved history
 
-Execution date: 2026-10-12 UTC. Base: `7f137a41ed8a2169da52ff1f1f9e4f087f3d4fde`; base tree: `6bd241e5c42b1ba97812dca0e2a7d6f400b235d9`. A focused isolated API source snapshot was used because the local runtime could not resolve github.com for cloning. Each original file was checked against its Git blob identity before editing. This was not a full checkout or a pinned-toolchain validation. The required graph command was attempted, but the `entire` executable was unavailable.
+The initial receipt in `d545110115f736242727ac01c71ba0e5cccd1eb6` cited raw TAP files that are not available for corroboration in this execution environment. Its local-run claims and raw TAP digests must not be used for acceptance. The historical commit is retained and the correction is recorded in PR #37 comment 6128488149. The actual fresh executions below supersede those unsupported receipt claims; they are not relabelled old runs.
 
-Runtime actually used: Node v22.16.0, npm 10.9.2, Linux. Node built-in tests ran without dependency installation, provider calls, credentials, browser execution or host integration. The repository-required Node 24.15.0/npm 11.12.1 full workflow remains separate and must be inspected on the PR candidate. Provider mode: N/A for the CSS generator; mock/offline for independently synthetic gate inputs. No paid/live provider operation occurred; provider authorization, budget and cost are N/A for this slice.
+Main advanced through PR #36 to `e7e9aece87eac258369ed551cb9800282575cc45`, tree `c64c1bffa48458e300c9cb262cdeccf5eebbc301`, while the first source was being prepared. This integration retains PR #36's generic comparison and all 13 test bodies verbatim. It adds a separate completeness validator, uses it in the CLI, and restores the original unchanged CSS producer. The integration commit includes both the original branch head and current main as parents; no foreign branch or history is overwritten.
 
-## Exact executable input identities
+## Actual environment and boundaries
 
-| File | Original Git blob | Tested repaired Git blob |
+Execution date: 2026-10-12 UTC. Node v22.16.0, npm 10.9.2, Linux. `git clone --no-checkout https://github.com/Jevelopers-neatHack-2026/team-dashboard.git repository` exited 128 because github.com could not resolve. `entire graph search --repo . --profile full --query 'Validate CI contrast reports against the required pair coverage and measured ratios'` exited 127 because `entire` is not installed. A focused API source snapshot was therefore assembled and its original Git blob hashes verified. This is not a full checkout or the mandated Node24.15.0/npm11.12.1 workflow.
+
+No dependency installation, provider, credential, browser, actual host or finance-runtime call was made locally. CSS measurement is a local calculation; command/Vitest/Playwright inputs used to isolate the CLI are independently TEST_BUILT mock/offline fixtures. They do not mean those suites ran. Paid/live provider authorization, budget and cost are N/A for these runs.
+
+## Exact executed source identities
+
+| File | Refreshed main Git blob | Repaired Git blob |
 | --- | --- | --- |
-| scripts/assert-ci-reports.mjs | 67db87c4ba1821885076321921c585d287095fbf | 91da75a1768bd014f5b6bfe8fcbaf9e0f108d09c |
-| scripts/assert-ci-reports.test.mjs | a30df74be413ebbb3d1a9ebea64ebc869114ac92 | cd3696f96569f0e587344c9b55ebc5016fcb74c9 |
-| scripts/check-contrast.mjs | 7d667c15b6d5b04e50abbbbeb9a5e3a4163e66f2 | a848eeb45893670a4744e525ff2e962e380b9a6e |
-| scripts/contrast-policy.mjs | N/A, new | c4f426cb7da1991b77605e4ab58dfe847aad6eae |
+| scripts/assert-ci-reports.mjs | addf161f486645bc1ab32cee998953bc7f249774 | 16ba4b561a8ea23e020a464948dcaf59eaafd427 |
+| scripts/assert-ci-reports.test.mjs | 1fcbbdcfff99709ec74a5ded3388869b7c9a89f5 | 91471914cde921207e465aad696c1d2e296f978b |
+| scripts/contrast-policy.mjs | N/A, new | 1f7cb563913dafa3d085cb03dd41b7163f4cbd14 |
+| scripts/check-contrast.mjs | 7d667c15b6d5b04e50abbbbeb9a5e3a4163e66f2 | unchanged |
 | src/styles/brand-tokens.css | a53588e92a043918f263d29bff17c1891f0f6468 | unchanged |
 
-The red run combines the original gate/producer/CSS with the repaired test blob above. The green run uses all repaired executable blobs above. Their eventual Git commit is the commit containing these exact blobs; GitHub CI evidence must name its own exact head and candidate rather than borrowing these local results.
+Original pre-PR36 gate/test blobs were also checked as `67db87c4ba1821885076321921c585d287095fbf` and `a30df74be413ebbb3d1a9ebea64ebc869114ac92`. The exact integration commit containing the repaired blobs is recorded in the PR after publication; hosted CI must name its own tested head/candidate and must not borrow these limited local results.
 
-## Executed commands and retained outcomes
+## Actual commands and outcomes
 
-| Command / revision mode | Actual result |
+| Command / source | Outcome |
 | --- | --- |
-| `node --test scripts/assert-ci-reports.test.mjs`, original five tests and original gate | exit 0; 5 passed, 0 failed/skipped/todo |
-| Same command, new regressions against original gate | exit 1; 13 tests, 6 passed, 7 failed, 0 skipped/todo/cancelled |
-| Same command, repaired gate and same regressions | exit 0; 13 passed, 0 failed/skipped/todo/cancelled |
-| `node scripts/check-contrast.mjs`, original and repaired producer with unchanged CSS | exit 0 both; nine checked pairs including three intentional negative controls |
-| `cmp` of retained baseline and repaired contrast JSON | exit 0; byte-for-byte unchanged |
-| `node --check` on each of the four affected `.mjs` files | exit 0 for all four |
+| `node --test scripts/assert-ci-reports.test.mjs`, original pre-PR36 files | exit 0; 5 pass, 0 fail/skip/todo |
+| Same command, exact refreshed main files | exit 0; 13 pass, 0 fail/skip/todo |
+| `node evidence/coverage-probe.mjs`, refreshed-main gate | exit 1; all four required rejection probes failed: actual CLI exit 0 |
+| Same probe, repaired gate | exit 0; all four rejection probes passed: actual CLI exit 1, no success stdout |
+| `node --test scripts/assert-ci-reports.test.mjs`, repaired files | exit 0; 22 pass, 0 fail/skip/todo/cancelled |
+| `node scripts/check-contrast.mjs`, before and after | exit 0; nine pairs with three intentional negatives |
+| `cmp evidence/replay-base-contrast.json evidence/replay-green-contrast.json`, from the snapshot parent | exit 0; identical measurement JSON |
+| `node --check` for gate, gate tests, policy and unchanged producer | exit 0 for all four |
+| Source substring assertions for PR36 generic validator and all original test bodies | pass; retained verbatim |
 
-The seven red failures exercise inconsistent ratios, mutable thresholds/expectations, incomplete or duplicate coverage, wrong source/method, malformed values, near-threshold rounding, and the complete CLI. In the red CLI case a synthetic body-text ratio of 2 with threshold 4.5 and both booleans true exited 0 when rejection was expected. In the green CLI case it exits 1 with no success output; replacing it with valid input then exits 0. The synthetic Vitest, Playwright and command-log inputs used to isolate this CLI behavior are not evidence that those application suites ran.
+The CLI probe was a local harness in `/mnt/data/td-session/evidence/coverage-probe.mjs`, using the snapshot sibling directory. It starts the real CSS producer, creates synthetic passing command/Vitest/Playwright inputs, and mutates one contrast report at a time: omit the final pair; replace pair 0 with pair 1; set pair 0's threshold to 1; or set pair 0's ratio=2, passes=false and expected=false. The committed CLI test covers the same four mutations and valid-input recovery. A red outcome is an actual missed rejection, not a skipped case. The raw outputs are retained below.
 
-Preserved local raw-output SHA-256 identities (the failed result is retained, not relabelled as passing):
+## Immutable raw evidence and digests
 
-| Artifact | SHA-256 |
+All files below contain sanitized synthetic test output only. Their source provenance is the local run above, not hosted, sandbox or live Finance evidence.
+
+| Committed artifact under td11-20261012/ | SHA-256 |
 | --- | --- |
-| baseline-gate-tests.tap | ce6106dff4091d0ccaa03033a4be3143b1fcf17504fe02eb652df258b30b00b6 |
-| red-gate-tests.tap | e0e61fc2257ee1c137c4c4e0c152e276af15853b438a8f86c595518dd1e0d680 |
-| green-gate-tests.tap | 8e50686297a95b093bbe10f9040de9f4d9bb9eba603e9d515d0baf3550fa7186 |
-| baseline-contrast.json and green-contrast.json | d50d1537f7493df9764bfa22a4bcc5c3867379d77dfe00fcdeaf8329274b9de5 |
+| coverage-red-main.json | 4a149e75bd7ff82f59216f1aa932a2980ee53e20b048c3f7a47cdada17c2a634 |
+| coverage-green.json | 1972da89637d971cdb844601d19a2e66f4c153f28cefce974b5a836104f14f46 |
+| replay-green.tap | a324d96379ffcd2c43596cf807549da13ad1c5dff58e552615478af8c076e80f |
 
-## Remaining obligations and review
+Additional retained local outputs, not asserted to be uploaded here: fresh baseline TAP SHA256 `0bafd007b4c550e53d137462df24a47f0e738582af7a12324e602afbf7195631`; fresh main TAP `39082634c46a283cb46dda6d95124a386ea6dd93dc24ea376b66fc4306c87f2d`; identical before/after contrast JSON `d50d1537f7493df9764bfa22a4bcc5c3867379d77dfe00fcdeaf8329274b9de5`.
 
-The change verifies contrast-report coverage and internal consistency, not arbitrary measurement authenticity or overall accessibility. UI token values, Finance packets, package exports, host authority and runtime settings are unchanged. Required lint, typecheck, application tests, build, browser and fixture-host checks were not run locally on the mandated toolchain. Real-host `test:host` remains unresolved; no skipped required case becomes a pass.
+## Remaining review and integration requirements
 
-Accountable reviewer roles: repository maintainer / Product and frontend, with the TD-11 integration-evaluation reviewer. Independent approval is not supplied by this author record. Merge requires review and current-candidate checks; issue #16 also retains its full producer, host, privacy, export and global procedure obligations. Review, candidate CI, postmerge checks and any later accepted evidence must be recorded separately without deleting this limited local receipt.
+Hosted lint/typecheck/application tests/build/browser/packed-host checks on the current candidate remain separate prerequisites. The initial d545 candidate run 38277644981 is retained separately and cannot validate this integration revision. Independent repository/Product-frontend and TD-11 reviewer approval is required; this author receipt is not approval. Actual-host validation remains unresolved. No Finance packet, schema, grant mapping, source pin, package version, export authority or global acceptance status changes in this slice.

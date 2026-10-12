@@ -113,32 +113,47 @@ export function validatePlaywrightReport(report, label = 'Playwright') {
 }
 
 export function validateContrastReport(report) {
-  if (!isRecord(report) || report.source !== CONTRAST_SOURCE || report.method !== CONTRAST_METHOD) {
+  if (!isRecord(report) || typeof report.source !== 'string' || typeof report.method !== 'string' || !Array.isArray(report.pairs) || report.pairs.length === 0) {
+    fail('Contrast report must contain a source, method, and checked pairs.');
+  }
+  for (const pair of report.pairs) {
+    if (!isRecord(pair) || typeof pair.name !== 'string' || typeof pair.passes !== 'boolean' || typeof pair.expected !== 'boolean' || !Number.isFinite(pair.ratio) || !Number.isFinite(pair.threshold) || pair.passes !== pair.expected) {
+      fail('Contrast report contains an empty, malformed, or unexpected result.');
+    }
+    // Matching flags alone are not evidence; use the producer's unrounded comparison.
+    if (pair.passes !== (pair.ratio >= pair.threshold)) {
+      fail('Contrast report contains a result inconsistent with its ratio and threshold.');
+    }
+  }
+  return { pairs: report.pairs.length };
+}
+
+// Dashboard-specific completeness policy is separate from generic arithmetic
+// validation so PR #36's general comparison and all its tests remain intact.
+export function validateDashboardContrastReport(report) {
+  const summary = validateContrastReport(report);
+  if (report.source !== CONTRAST_SOURCE || report.method !== CONTRAST_METHOD) {
     fail('Contrast report must identify the pinned source and calculation method.');
   }
-  if (!Array.isArray(report.pairs) || report.pairs.length !== REQUIRED_CONTRAST_PAIRS.length) {
+  if (report.pairs.length !== REQUIRED_CONTRAST_PAIRS.length) {
     fail('Contrast report must contain every required checked pair exactly once.');
   }
   const policy = new Map(REQUIRED_CONTRAST_PAIRS.map(pair => [pair.name, pair]));
   const seen = new Set();
   for (const pair of report.pairs) {
-    if (!isRecord(pair) || typeof pair.name !== 'string' || !policy.has(pair.name) || seen.has(pair.name)) {
-      fail('Contrast report contains a malformed, unknown, or duplicate pair.');
+    if (!policy.has(pair.name) || seen.has(pair.name)) {
+      fail('Contrast report contains an unknown or duplicate pair.');
     }
     seen.add(pair.name);
     const required = policy.get(pair.name);
     if (pair.threshold !== required.threshold || pair.expected !== required.expected) {
       fail('Contrast report changes a pinned threshold or expected outcome.');
     }
-    if (!Number.isFinite(pair.ratio) || pair.ratio < 1 || pair.ratio > 21 || typeof pair.passes !== 'boolean') {
-      fail('Contrast report contains an invalid ratio or pass flag.');
-    }
-    // Compare the unrounded measurement, not two self-reported boolean flags.
-    if (pair.passes !== (pair.ratio >= required.threshold) || pair.passes !== required.expected) {
-      fail('Contrast report contains an inconsistent or unexpected result.');
+    if (pair.ratio < 1 || pair.ratio > 21) {
+      fail('Contrast report contains a ratio outside the physical range [1, 21].');
     }
   }
-  return { pairs: report.pairs.length };
+  return summary;
 }
 
 async function readReport(label, path) {
@@ -169,7 +184,7 @@ async function main(args) {
   const summary = {
     commands: validateCommandLog(commandText),
     vitest: validateVitestReport(vitest),
-    contrast: validateContrastReport(contrast),
+    contrast: validateDashboardContrastReport(contrast),
     e2e: validatePlaywrightReport(e2e, 'E2E'),
     integration: validatePlaywrightReport(integration, 'Integration'),
   };

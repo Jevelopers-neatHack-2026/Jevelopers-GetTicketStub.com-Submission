@@ -1,5 +1,5 @@
-// Shared report policy; changing coverage or expectations requires review.
-// These negative controls are intentional failures, not waived UI checks.
+// Dashboard report coverage. Keep independent of the measurement producer so
+// accidentally dropping a producer check cannot silently weaken this gate.
 export const CONTRAST_SOURCE = 'brand-kit@3822635aff507cd5918a08a0c636bb0e41705261';
 export const CONTRAST_METHOD = 'WCAG sRGB relative luminance; source-over alpha in sRGB; unrounded comparisons';
 export const REQUIRED_CONTRAST_PAIRS = Object.freeze([
