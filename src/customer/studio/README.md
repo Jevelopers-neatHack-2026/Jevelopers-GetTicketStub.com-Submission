@@ -47,7 +47,8 @@ or to simulated output:
 
 | Route | What it does |
 |---|---|
-| `/`, `/make` | Event intake, search and demo shortcuts in the current application; landing-page integration is tracked separately |
+| `/` | Landing experience with studio event intake beneath the hero ([PR #104](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/104)) |
+| `/make` | Dedicated event intake, search and demo shortcuts |
 | `/search` | Search fallback (demo events) |
 | `/new?url=` · `?q=` · `?demo=neathack\|pale\|harbour` | Printing reveal while the agent researches; tap facts to keep them |
 | `/studio/[id]` | Editor: swipe styles, select and edit, fix unsure facts, remix, agent chat, flip, material, tear |
