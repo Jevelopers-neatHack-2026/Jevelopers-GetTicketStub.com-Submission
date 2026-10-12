@@ -25,7 +25,7 @@ def test_pidfd_rejects_unsupported_platform(monkeypatch: pytest.MonkeyPatch) -> 
     assert raised.value.errno == errno.ENOSYS
 
 
-@pytest.mark.parametrize("descriptor,number", [(-1, 0), (2**31, 0), (0, -1), (0, 2**31)])
+@pytest.mark.parametrize(("descriptor", "number"), [(-1, 0), (2**31, 0), (0, -1), (0, 2**31)])
 def test_pidfd_signal_refuses_integer_narrowing(descriptor: int, number: int) -> None:
     with pytest.raises(OSError, check=lambda error: error.errno == errno.EINVAL):
         send_pidfd_signal(descriptor, number)
