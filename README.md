@@ -26,13 +26,22 @@ This is a hackathon prototype. Implemented in this repository:
 - Demo mode by default: fixture research (neatHack, The Pale Hours, Harbour FC), simulated art and agent replies, sandbox checkout, and a visible demo banner. Provider keys alone never enable external calls.
 - An opt-in `TICKETSTUB_RUNTIME_MODE=live` development mode with direct Anthropic/OpenAI paths or per-capability OpenRouter routing ([`src/server/ai/providers.ts`](src/server/ai/providers.ts)).
 - Offline provider tests and a production smoke script, run by the [runtime workflow](.github/workflows/runtime.yml).
+- Magic-link sign-in, server-side SQLite storage and file-backed artwork ([PR #20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20)) are merged, and [PR #33](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/33) fixed the emailed sign-in confirmation (`bad_origin` when the browser sent no referrer).
+
+Verified on the published host (getticketstub.com, GoDaddy Plus Launch) on 2026-10-11 and 2026-10-12:
+
+- `/api/health` reports `mode=live`, `storage=ok` and `persistence=configured`, with `TICKETSTUB_DB=/private/ticketstub.sqlite` and `TICKETSTUB_FILES=/private/files`.
+- Resend delivered a real sign-in email. `TICKETSTUB_SANDBOX_MAIL` is unset there, so sign-in returns no on-screen link (the `mail-off` check in the [evidence](docs/operations/evidence/auth-storage-2026-10-12) covers this).
+- A synthetic stub and its artwork saved through `/api/wall/sync` survived a Live redeploy (saved 2026-10-11T20:05Z, read again 2026-10-12T03:27Z).
+- A fixture-mode backup and restore drill passes ([PR #63](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/63), [evidence](docs/operations/evidence/auth-storage-2026-10-12)). Restoring a real host backup has not been demonstrated; see the [owner runbook](docs/operations/deployed-auth-storage-runbook.md).
 
 Pending or outside this repository's current state:
 
-- Publishing to Live needs separate authorization; the preview deployment is not a production release.
-- Production identity, budget and URL access controls ([#7](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/7)–[#13](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/13)) and the WP02 customer application epic ([#1](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1)) are not done. Live mode is not a production deployment.
-- PR [#20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20) adds magic-link sign-in, server-side SQLite storage and file-backed artwork. Real email delivery, target-host storage durability and integrated release acceptance remain unverified. Wallet passes, QR codes and checkout remain simulated.
-- All [acceptance criteria](docs/architecture/ACCEPTANCE.md) remain planned in the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
+- Real payment: Dodo ([#66](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/66)) and Stripe ([#71](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/71)) are open, so checkout is still sandbox.
+- The order authorization issuer and verifier ([#41](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/41)) and the artwork approval record and verifier ([#37](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/37)) are merged. An approval does not authorize a purchase. Still open: paid download ([#61](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/61)), versioned order-authorization signing keys ([#76](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/76)) and versioned approval signing keys ([#75](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/75)).
+- Wallet passes and QR codes remain simulated.
+- Publishing to Live needs separate authorization, and production identity, budget and URL access controls ([#7](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/7)–[#13](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/13)) and the WP02 customer application epic ([#1](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1)) are not done.
+- Integrated v1 acceptance ([#6](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/6)) is not met. All [acceptance criteria](docs/architecture/ACCEPTANCE.md) remain planned in the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
 
 ## Quickstart
 
