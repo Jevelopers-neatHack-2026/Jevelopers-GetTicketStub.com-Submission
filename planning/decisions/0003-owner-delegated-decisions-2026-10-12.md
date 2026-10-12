@@ -1,6 +1,6 @@
 # Decision 0003: Owner-delegated decisions (2026-10-12)
 
-- Status: **accepted (owner-delegated 2026-10-12).** Dated source: the [delegation comment on getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27#issuecomment-6116953222) (2026-10-12T02:59Z). On 2026-10-12 the owner (@CompleteDotTech) delegated these decisions: "Make the owner decisions listed before: payment and finance providers, the team-dashboard verifier and permissions, the signing-key retention period and secret manager, and the Prodigi SKU and callback registration."
+- Status: **accepted (owner-delegated 2026-10-12).** Dated source: the owner's session instruction, recorded on [getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27#issuecomment-6116953222) (2026-10-12T02:59Z; that comment was posted by Claude Code from the owner's account and paraphrases the instruction). The instruction to Claude Code on 2026-10-12 read: "Make the owner decisions listed before: payment and finance providers, the team-dashboard verifier and permissions, the signing-key retention period and secret manager, and the Prodigi SKU and callback registration."
 - Scope: each decision picks among the reviewed recommendations and repository constraints. None sets a new direction. Where no reviewed source existed, the row says so and justifies the value.
 - **Nothing here was executed.** No account was created. No terms or DPA were accepted. No key was issued. No dashboard was changed. No callback was registered. No provider API was called, live or sandbox. Those steps stay owner actions and are listed under each area and in the [checklist](#owner-only-actions-checklist).
 - Updates: [0001](0001-finance-persistence.md) and [0002](0002-payment-provider.md) are now accepted with the sub-choices below. Repository docs that listed these as open owner decisions link here.
@@ -72,6 +72,12 @@ Unchanged: live keys come only after LIVE-01 passes and the owner approves launc
 7. A bot-filter exemption for non-browser POSTs to this route. This is the same open question as the Stripe webhook.
 
 Only after these exist can the owner approve a sandbox order that carries a `callbackUrl`.
+
+## Follow-ups (non-owner)
+
+- [ ] **Finance (cost-intelligence):** acknowledge the permission matrix (D4) and the scope mapping and revision derivation (D7) in review.
+- [ ] **getticketstub.com PR #37:** sign approval tokens with the separate `kid`-tagged `APPROVAL_SIGNING_KEYS` instead of `CONTEXT_SECRET` before it merges (K4).
+- [ ] **getticketstub.com PR #41:** sign order-authorization tokens with `ORDER_AUTH_SIGNING_KEYS` instead of `CONTEXT_SECRET` before it merges (K4).
 
 ## Owner-only actions checklist
 
