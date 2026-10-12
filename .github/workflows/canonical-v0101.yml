@@ -1,0 +1,67 @@
+name: Canonical 0.10.1 development opt-in
+on:
+  pull_request:
+    paths:
+      - .github/workflows/canonical-v0101.yml
+      - candidate_tests/v0101/**
+      - contracts/producer-pin-v0101.json
+      - src/integration_evals/contract*
+      - tests/test_contract*
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.10.4
+          enable-cache: false
+      - run: uv sync --frozen
+      - name: Preserve strict tooling and unit baseline
+        run: |
+          uv run basedpyright
+          uv run basedpyright candidate_tests/v0101/tests
+          uv run ruff check
+          uv run ruff format --check
+          uv run pytest tests/test_contract_v0101_metadata.py tests/test_contract_sources.py tests/test_contract_pins.py --junitxml=reports/unit-junit.xml
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/shared-contracts
+          ref: becd640a801fe7829fe643bd96711d7a69bf58d0
+          path: .contract-producer/new
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/shared-contracts
+          ref: d432ad5c895a67155affeaa05cd8423c758d95c3
+          path: .contract-producer/old
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - name: Prepare pinned development tooling and Linux containment
+        run: |
+          npm install --prefix "$RUNNER_TEMP/contract-packager" --ignore-scripts --no-audit --no-fund npm@10.9.8
+          npm install --prefix "$RUNNER_TEMP/contract-types" --ignore-scripts --no-audit --no-fund typescript@5.9.3
+          sudo apt-get update && sudo apt-get install --yes bubblewrap
+      - name: Compare complete old and candidate SDK boundaries
+        shell: bash
+        run: |
+          export PATH="$RUNNER_TEMP/contract-packager/node_modules/.bin:$PATH"
+          sudo -n env PATH="$PATH" bash candidate_tests/v0101/run.sh \
+            "$PWD/.contract-producer/new" "$PWD/.contract-producer/old" \
+            "$RUNNER_TEMP/contract-opt-in" "$PWD/reports/opt-in" \
+            "$RUNNER_TEMP/contract-types/node_modules/typescript/bin/tsc"
+      - name: Preserve sanitized development receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-v0101-development-${{ github.sha }}
+          path: reports/
+          retention-days: 30
