@@ -249,10 +249,18 @@ const FIELD_MAX: Record<AskField, number> = { date: LIMITS.value, venue: LIMITS.
  * A message that is a clear instruction: it parses to an action AND is phrased as one (opens with an instruction verb,
  * or says "the <field> is/to ..."). A bare field word is not enough: "The Venue" or "Title Bar" is a literal answer.
  */
-const INSTRUCTION = /^(?:(?:please|pls|ok(?:ay)?|and|then|also|can you|could you|would you|i (?:want|need|would like) to|i'd like to|let's|lets)[\s,]+)*(?:fix|set|change|correct|update|switch|make|remix|regenerate|redo|show|flip|view|turn|keep|include|add|print|unkeep|drop|remove|hide|use|try|go|simulate|force)\b/i;
+const LEAD = String.raw`(?:(?:hi|hey|hello|ok(?:ay)?|so|well|actually|oh|u+m+|uh+|sorry|also|and|then|but|please|pls|kindly|(?:can|could|would|will) you(?: please)?|i'd like you to|i want you to|i (?:want|need|would like) to|i'd like to|let's|lets)\b[\s,.:;!-]*)*`;
+const VERB = String.raw`(?:fix|set|change|correct|update|switch|make|remix|regenerate|redo|show|flip|view|turn|keep|include|add|print|unkeep|drop|remove|hide|use|try|go|simulate|force)\b`;
+// an instruction verb opens the message, or any clause after a comma, colon, semicolon, "and" or "then"
+const INSTRUCTION = new RegExp(`(?:^|[,:;]|\b(?:and|then)\b)[\s,.:;!-]*${LEAD}${VERB}`, "i");
 const FIELD_STATEMENT = /\b(?:date|venue|title|subtitle)\b[^.?!]*?\b(?:is|was|to|should be)\b/i;
-function isInstruction(raw: string, state: StateSummary): boolean {
-  return (INSTRUCTION.test(raw) || FIELD_STATEMENT.test(raw)) && fromMessage(raw, state).actions.length > 0;
+const FIELDS = ["date", "venue", "title", "subtitle"];
+/** An explicit instruction naming a field other than the one being asked about, wherever it sits in the message. */
+function namesOtherField(raw: string, field?: string): boolean {
+  return FIELDS.filter((f) => f !== field).some((f) => new RegExp(`\b(?:fix|set|change|update|correct)\s+(?:the\s+)?${f}\b|\bthe\s+${f}\s+(?:is|was|should be)\b`, "i").test(raw));
+}
+function isInstruction(raw: string, state: StateSummary, field?: string): boolean {
+  return (INSTRUCTION.test(raw) || FIELD_STATEMENT.test(raw) || namesOtherField(raw, field)) && fromMessage(raw, state).actions.length > 0;
 }
 
 /**
@@ -270,7 +278,7 @@ export function resolvePending(message: string, pending: PendingQuestion, state:
     // a day that is plainly meant as the date but is ambiguous ("the 12th or 13th") stays an attempt at the answer
     const attempt = pending.field === "date" && /\b\d{1,2}(?:st|nd|rd|th)\b/i.test(raw);
     // (including one that only asks, like "fix the date to the 12th or 13th": it is never the literal answer to another field)
-    if (isInstruction(raw, state) && !(pending.field === "date" && (attempt || findDate(raw, stateYear(state), stubMonth(state))))) return undefined;
+    if (isInstruction(raw, state, pending.field) && !(pending.field === "date" && (attempt || findDate(raw, stateYear(state), stubMonth(state))))) return undefined;
   }
   const answer = isOption ? pending.options!.find((o) => o.toLowerCase() === raw.toLowerCase())! : tidy(raw);
   if (pending.field === "date") {

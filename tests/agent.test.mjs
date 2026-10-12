@@ -715,3 +715,22 @@ test("a year qualifier next to a named month is honoured, and never dropped sile
     assert.equal(findDate(vague, 2024, 10), null, vague);
   }
 });
+
+test("leading politeness or discourse words never hide an instruction while a field question is pending", () => {
+  const reply = (field, message) => planDemo(request({ message, pending: { field, question: "q?" }, state: on1011 }));
+  for (const field of ["venue", "title", "subtitle", "note"]) {
+    for (const [msg, want] of [
+      ["Actually, fix the date: 2024-10-12", "2024-10-12"],
+      ["Hi, can you fix the date 2024-10-12", "2024-10-12"],
+      ["Hey, please set the date to 2024-10-12", "2024-10-12"],
+      ["OK so change the date to 12 Oct 2024", "2024-10-12"],
+      ["Sorry, the date was 2024-10-12", "2024-10-12"],
+      ["um could you update the date: 2024-10-12", "2024-10-12"],
+      ["well, and then fix the date to 2024-10-12", "2024-10-12"],
+    ]) assert.deepEqual(reply(field, msg).actions, setDate(want), `${field} / ${msg}`);
+  }
+  assert.deepEqual(reply("venue", "The Venue").actions, [{ type: "set_fact", field: "venue", value: "The Venue" }]);
+  assert.deepEqual(reply("venue", "Venue77").actions, [{ type: "set_fact", field: "venue", value: "Venue77" }]);
+  assert.deepEqual(reply("subtitle", "Date Night").actions, [{ type: "set_text", field: "subtitle", value: "Date Night" }]);
+  assert.deepEqual(reply("title", "The Title Bar").actions, [{ type: "set_text", field: "title", value: "The Title Bar" }]);
+});
