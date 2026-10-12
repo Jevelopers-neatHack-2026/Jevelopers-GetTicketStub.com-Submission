@@ -1,0 +1,24 @@
+{
+  "sourceCommit": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
+  "sourcePageSHA": "72b2d9171203664dd513b899d0a0761d7e8ce4422cfa0ec06d5211847f573b65",
+  "observedAt": "2026-10-12T14:55:32.960Z",
+  "action": "Actual keyboard Enter on skip link; reduced-motion320x568 viewport",
+  "observation": {
+    "active": "ev",
+    "h": 568,
+    "innerScroll": 0,
+    "input": {
+      "bottom": 657.609375,
+      "height": 56,
+      "left": 34,
+      "right": 256,
+      "top": 601.609375,
+      "width": 222,
+      "x": 34,
+      "y": 601.609375
+    },
+    "opacity": "1",
+    "w": 320,
+    "y": 19855
+  }
+}

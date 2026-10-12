@@ -1,0 +1,14 @@
+✔ actual illustrated source builds reproducibly with every asset and no repository documents (145.227708ms)
+✔ validator detects missing referenced assets, tampering, stale manifests and unexpected files (16.902208ms)
+✔ build refuses symlinks, unreviewed asset types and unsafe output destinations (4.432208ms)
+✔ preview serves homepage and every actual asset; unknown and app routes cannot fall back to landing (86.126625ms)
+✔ dispatcher rejects invalid arguments and no-argument validation fails for unavailable required suites (757.2495ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1147.452792
+PASS_LOCAL foundation

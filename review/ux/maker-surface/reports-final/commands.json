@@ -1,0 +1,157 @@
+[
+  {
+    "id": "all-tests",
+    "executable": "/opt/homebrew/Cellar/node@24/24.15.0/bin/node",
+    "arguments": [
+      "--test",
+      "tests/content-proof.test.mjs",
+      "tests/cta.test.mjs",
+      "tests/foundation.test.mjs",
+      "tests/metadata.test.mjs",
+      "tests/privacy.test.mjs",
+      "tests/scroll.test.mjs",
+      "tests/ux.test.mjs"
+    ],
+    "startedAt": "2026-10-12T14:45:54.126Z",
+    "endedAt": "2026-10-12T14:45:55.182Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-final/all-tests.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-final/all-tests.stderr.log"
+  },
+  {
+    "id": "foundation-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "foundation",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:45:55.185Z",
+    "endedAt": "2026-10-12T14:45:56.579Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-final/foundation-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-final/foundation-draft.stderr.log"
+  },
+  {
+    "id": "content-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "content",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:45:56.580Z",
+    "endedAt": "2026-10-12T14:45:56.713Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-final/content-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-final/content-draft.stderr.log"
+  },
+  {
+    "id": "proof-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "proof",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:45:56.714Z",
+    "endedAt": "2026-10-12T14:45:57.035Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-final/proof-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-final/proof-draft.stderr.log"
+  },
+  {
+    "id": "cta-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "cta",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:45:57.036Z",
+    "endedAt": "2026-10-12T14:45:57.470Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-final/cta-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-final/cta-draft.stderr.log"
+  },
+  {
+    "id": "privacy-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "privacy",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:45:57.471Z",
+    "endedAt": "2026-10-12T14:45:57.613Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-final/privacy-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-final/privacy-draft.stderr.log"
+  },
+  {
+    "id": "metadata-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "metadata",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:45:57.614Z",
+    "endedAt": "2026-10-12T14:45:57.991Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-final/metadata-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-final/metadata-draft.stderr.log"
+  },
+  {
+    "id": "ux-draft",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "ux",
+      "--mode",
+      "draft"
+    ],
+    "startedAt": "2026-10-12T14:45:57.992Z",
+    "endedAt": "2026-10-12T14:45:58.247Z",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-final/ux-draft.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-final/ux-draft.stderr.log"
+  },
+  {
+    "id": "ux-release",
+    "executable": "./scripts/validate-landing",
+    "arguments": [
+      "--suite",
+      "ux"
+    ],
+    "startedAt": "2026-10-12T14:45:58.247Z",
+    "endedAt": "2026-10-12T14:45:58.496Z",
+    "exitCode": 1,
+    "signal": null,
+    "error": null,
+    "stdout": "review/ux/maker-surface/reports-final/ux-release.stdout.log",
+    "stderr": "review/ux/maker-surface/reports-final/ux-release.stderr.log"
+  }
+]

@@ -1,0 +1,566 @@
+{
+  "sourceCommit": "329fc4f27e7b9792e60eabcf4f2401f4541254a5",
+  "sourcePageSHA": "a078774df18e59b884bdff968f2bec3e4a5b2a009458d30c8320242f595858f6",
+  "url": "http://127.0.0.1:4179/",
+  "observedAt": "2026-10-12T14:26:05.488Z",
+  "observations": [
+    {
+      "step": "375x812 loaded hero",
+      "observed": {
+        "client": 360,
+        "cta": {
+          "bottom": 85.375,
+          "height": 33.375,
+          "left": 165.75,
+          "right": 344,
+          "top": 52,
+          "width": 178.25,
+          "x": 165.75,
+          "y": 52
+        },
+        "fontStatus": "loaded",
+        "h": 812,
+        "h1": {
+          "bottom": 607.234375,
+          "height": 172.734375,
+          "left": 16,
+          "right": 344,
+          "top": 434.5,
+          "width": 328,
+          "x": 16,
+          "y": 434.5
+        },
+        "nav": {
+          "bottom": 99.375,
+          "height": 99.375,
+          "left": 0,
+          "right": 360,
+          "top": 0,
+          "width": 360,
+          "x": 0,
+          "y": 0
+        },
+        "overflow": [
+          {
+            "cls": "glow",
+            "id": "",
+            "left": -36,
+            "right": 396,
+            "tag": "DIV",
+            "text": ""
+          },
+          {
+            "cls": "glow",
+            "id": "",
+            "left": -36,
+            "right": 396,
+            "tag": "DIV",
+            "text": ""
+          },
+          {
+            "cls": "athlete",
+            "id": "",
+            "left": 65.375,
+            "right": 386.109375,
+            "tag": "IMG",
+            "text": ""
+          },
+          {
+            "cls": "glow",
+            "id": "",
+            "left": -36,
+            "right": 396,
+            "tag": "DIV",
+            "text": ""
+          },
+          {
+            "cls": "glow",
+            "id": "",
+            "left": -36,
+            "right": 396,
+            "tag": "DIV",
+            "text": ""
+          },
+          {
+            "cls": "glow",
+            "id": "",
+            "left": -36,
+            "right": 396,
+            "tag": "DIV",
+            "text": ""
+          },
+          {
+            "cls": "glow",
+            "id": "",
+            "left": -36,
+            "right": 396,
+            "tag": "DIV",
+            "text": ""
+          },
+          {
+            "cls": "athlete",
+            "id": "",
+            "left": 38.09375,
+            "right": 383.09375,
+            "tag": "IMG",
+            "text": ""
+          },
+          {
+            "cls": "glow",
+            "id": "",
+            "left": -36,
+            "right": 396,
+            "tag": "DIV",
+            "text": ""
+          },
+          {
+            "cls": "glow",
+            "id": "",
+            "left": -36,
+            "right": 396,
+            "tag": "DIV",
+            "text": ""
+          },
+          {
+            "cls": "athlete",
+            "id": "",
+            "left": 49.640625,
+            "right": 394.640625,
+            "tag": "IMG",
+            "text": ""
+          },
+          {
+            "cls": "ribbon",
+            "id": "ribbon",
+            "left": -7.209083557128906,
+            "right": 11433.345603942871,
+            "tag": "DIV",
+            "text": "\n      \n        StageNo. 407919OPENINGNIGHT\n      "
+          },
+          {
+            "cls": "ts-stub",
+            "id": "",
+            "left": 289.179443359375,
+            "right": 464.6130065917969,
+            "tag": "FIGURE",
+            "text": "\n      \n        StageNo. 407919OPENINGNIGHT\n      "
+          },
+          {
+            "cls": "ts-tilt",
+            "id": "",
+            "left": 289.179443359375,
+            "right": 464.6130065917969,
+            "tag": "DIV",
+            "text": "\n      \n        StageNo. 407919OPENINGNIGHT\n      "
+          },
+          {
+            "cls": "ts-flip",
+            "id": "",
+            "left": 289.179443359375,
+            "right": 464.6130065917969,
+            "tag": "DIV",
+            "text": "\n      \n        StageNo. 407919OPENINGNIGHT\n      "
+          },
+          {
+            "cls": "ts-face ts-front",
+            "id": "",
+            "left": 289.179443359375,
+            "right": 464.6130065917969,
+            "tag": "DIV",
+            "text": "\n        StageNo. 407919OPENINGNIGHT\n        The B"
+          },
+          {
+            "cls": "tc-art",
+            "id": "",
+            "left": 293.2890625,
+            "right": 463.1358337402344,
+            "tag": "DIV",
+            "text": "StageNo. 407919OPENINGNIGHT"
+          },
+          {
+            "cls": "tc-no",
+            "id": "",
+            "left": 420.38665771484375,
+            "right": 452.1126098632813,
+            "tag": "SPAN",
+            "text": "No. 407919"
+          },
+          {
+            "cls": "tc-word",
+            "id": "",
+            "left": 302.068359375,
+            "right": 456.2333679199219,
+            "tag": "SPAN",
+            "text": "OPENINGNIGHT"
+          },
+          {
+            "cls": "ol",
+            "id": "",
+            "left": 302.6141052246094,
+            "right": 456.0549011230469,
+            "tag": "SPAN",
+            "text": "OPENING"
+          },
+          {
+            "cls": "fl",
+            "id": "",
+            "left": 302.068359375,
+            "right": 456.2333679199219,
+            "tag": "SPAN",
+            "text": "NIGHT"
+          },
+          {
+            "cls": "tc-band",
+            "id": "",
+            "left": 293.2890625,
+            "right": 463.1358337402344,
+            "tag": "SPAN",
+            "text": ""
+          },
+          {
+            "cls": "tc-main",
+            "id": "",
+            "left": 301.8396911621094,
+            "right": 453.425048828125,
+            "tag": "DIV",
+            "text": "The Basement · Jan 10 · 2026Midnight Comedy HourLa"
+          },
+          {
+            "cls": "tc-meta",
+            "id": "",
+            "left": 303.1250915527344,
+            "right": 453.03662109375,
+            "tag": "SPAN",
+            "text": "The Basement · Jan 10 · 2026"
+          }
+        ],
+        "scroll": 368,
+        "w": 375,
+        "y": 0
+      }
+    },
+    {
+      "step": "375 actual horizontal scroll attempt",
+      "observed": {
+        "bodyScroll": 368,
+        "bodyWidth": 360,
+        "client": 360,
+        "scroll": 368,
+        "x": 0
+      }
+    },
+    {
+      "step": "768x1024 loaded hero header",
+      "observed": {
+        "client": 753,
+        "cta": {
+          "bottom": 50.625,
+          "height": 36.625,
+          "left": 533.71875,
+          "right": 728.4375,
+          "top": 14,
+          "width": 194.71875,
+          "x": 533.71875,
+          "y": 14
+        },
+        "fontStatus": "loaded",
+        "h": 1024,
+        "h1": {
+          "bottom": 561.015625,
+          "height": 236.34375,
+          "left": 24.5625,
+          "right": 454.640625,
+          "top": 324.671875,
+          "width": 430.078125,
+          "x": 24.5625,
+          "y": 324.671875
+        },
+        "logo": {
+          "bottom": 47.3125,
+          "height": 30,
+          "left": 24.5625,
+          "right": 257.640625,
+          "top": 17.3125,
+          "width": 233.078125,
+          "x": 24.5625,
+          "y": 17.3125
+        },
+        "menu": {
+          "bottom": 50.3125,
+          "height": 36,
+          "left": 257.640625,
+          "right": 533.71875,
+          "top": 14.3125,
+          "width": 276.078125,
+          "x": 257.640625,
+          "y": 14.3125
+        },
+        "nav": {
+          "bottom": 64.625,
+          "height": 64.625,
+          "left": 0,
+          "right": 753,
+          "top": 0,
+          "width": 753,
+          "x": 0,
+          "y": 0
+        },
+        "scroll": 769,
+        "w": 768,
+        "y": 0
+      }
+    },
+    {
+      "step": "1440x900 loaded hero header",
+      "observed": {
+        "client": 1425,
+        "cta": {
+          "bottom": 50.625,
+          "height": 36.625,
+          "left": 1184.203125,
+          "right": 1378.921875,
+          "top": 14,
+          "width": 194.71875,
+          "x": 1184.203125,
+          "y": 14
+        },
+        "fontStatus": "loaded",
+        "h": 900,
+        "h1": {
+          "bottom": 642.890625,
+          "height": 443.203125,
+          "left": 46.078125,
+          "right": 852.46875,
+          "top": 199.6875,
+          "width": 806.390625,
+          "x": 46.078125,
+          "y": 199.6875
+        },
+        "logo": {
+          "bottom": 47.3125,
+          "height": 30,
+          "left": 46.078125,
+          "right": 279.15625,
+          "top": 17.3125,
+          "width": 233.078125,
+          "x": 46.078125,
+          "y": 17.3125
+        },
+        "menu": {
+          "bottom": 41.3125,
+          "height": 18,
+          "left": 549.875,
+          "right": 913.5,
+          "top": 23.3125,
+          "width": 363.625,
+          "x": 549.875,
+          "y": 23.3125
+        },
+        "nav": {
+          "bottom": 64.625,
+          "height": 64.625,
+          "left": 0,
+          "right": 1425,
+          "top": 0,
+          "width": 1425,
+          "x": 0,
+          "y": 0
+        },
+        "scroll": 1455,
+        "w": 1440,
+        "y": 0
+      }
+    },
+    {
+      "step": "keyboard first Tab desktop",
+      "observed": {
+        "href": "#make",
+        "outline": "solid",
+        "rect": {
+          "bottom": 54,
+          "height": 38,
+          "left": 16,
+          "right": 194.78125,
+          "top": 16,
+          "width": 178.78125,
+          "x": 16,
+          "y": 16
+        },
+        "tag": "A",
+        "text": "Skip to make your stub"
+      }
+    },
+    {
+      "step": "keyboard skip Enter settled",
+      "observed": {
+        "focus": "ev",
+        "input": {
+          "bottom": 533.953125,
+          "height": 57,
+          "left": 194.09375,
+          "right": 607.453125,
+          "top": 476.953125,
+          "width": 413.359375,
+          "x": 194.09375,
+          "y": 476.953125
+        },
+        "tag": "INPUT",
+        "url": "http://127.0.0.1:4179/#make",
+        "y": 26709
+      }
+    },
+    {
+      "step": "keyboard Tab from maker",
+      "observed": {
+        "outline": "solid",
+        "rect": {
+          "bottom": 533.953125,
+          "height": 57,
+          "left": 617.453125,
+          "right": 834.09375,
+          "top": 476.953125,
+          "width": 216.640625,
+          "x": 617.453125,
+          "y": 476.953125
+        },
+        "tag": "BUTTON",
+        "text": "Update preview →"
+      }
+    },
+    {
+      "step": "keyboard next Tab studio",
+      "observed": {
+        "href": null,
+        "outline": "solid",
+        "rect": {
+          "bottom": 623.890625,
+          "height": 44,
+          "left": 279.09375,
+          "right": 414.90625,
+          "top": 579.890625,
+          "width": 135.8125,
+          "x": 279.09375,
+          "y": 579.890625
+        },
+        "tag": "BUTTON",
+        "text": "Gulls v Miners"
+      }
+    },
+    {
+      "step": "keyboard remaining maker Tab 1",
+      "observed": {
+        "href": null,
+        "outline": "solid",
+        "rect": {
+          "bottom": 623.890625,
+          "height": 44,
+          "left": 422.90625,
+          "right": 520.21875,
+          "top": 579.890625,
+          "width": 97.3125,
+          "x": 422.90625,
+          "y": 579.890625
+        },
+        "tag": "BUTTON",
+        "text": "Nova Riot"
+      }
+    },
+    {
+      "step": "keyboard remaining maker Tab 2",
+      "observed": {
+        "href": null,
+        "outline": "solid",
+        "rect": {
+          "bottom": 623.890625,
+          "height": 44,
+          "left": 528.21875,
+          "right": 664.03125,
+          "top": 579.890625,
+          "width": 135.8125,
+          "x": 528.21875,
+          "y": 579.890625
+        },
+        "tag": "BUTTON",
+        "text": "Wolves v Storm"
+      }
+    },
+    {
+      "step": "keyboard remaining maker Tab 3",
+      "observed": {
+        "href": "https://getticketstub.com/make",
+        "outline": "solid",
+        "rect": {
+          "bottom": 817.5625,
+          "height": 16.890625,
+          "left": 194.09375,
+          "right": 265.15625,
+          "top": 800.671875,
+          "width": 71.0625,
+          "x": 194.09375,
+          "y": 800.671875
+        },
+        "tag": "A",
+        "text": "Open studio"
+      }
+    },
+    {
+      "step": "before browser zoom shortcut",
+      "observed": {
+        "dpr": 1,
+        "h": 900,
+        "visualScale": 1,
+        "w": 1440
+      }
+    },
+    {
+      "step": "one zoom shortcut result",
+      "observed": {
+        "dpr": 1,
+        "h": 900,
+        "visualScale": 1,
+        "w": 1440
+      }
+    },
+    {
+      "step": "reduced motion computed styles after reload",
+      "observed": {
+        "discAnimation": "none",
+        "marqueeAnimation": "none",
+        "rootClass": "no3d ready",
+        "stubTransition": "0.9s, 0.5s",
+        "url": "http://127.0.0.1:4179/#make",
+        "y": 26709
+      }
+    },
+    {
+      "step": "right-edge content wheel under reduced motion",
+      "observed": {
+        "client": 1425,
+        "x": 0,
+        "y": 25809
+      }
+    },
+    {
+      "step": "native Page Down under reduced motion",
+      "observed": {
+        "x": 0,
+        "y": 26669
+      }
+    }
+  ],
+  "status": "PARTIAL_LOCAL_QA_WITH_READABILITY_AND_REDUCED_MOTION_FAILURES",
+  "limitations": [
+    "No physical touch, screen reader, measured contrast, three-run performance, native scrollbar drag or deployed acceptance",
+    "WebGL unavailable; existing-profile Chrome static fallback",
+    "Native200percentbrowserzoom NOT_VERIFIED: page shortcut had no effect; native active window changed and testing stopped",
+    "Overflow width alone not declared clipping failure; native horizontal attempt remainedx0"
+  ],
+  "viewportReset": true,
+  "mediaReset": true,
+  "screenshots": [
+    "/tmp/landing-329-375-hero.jpg",
+    "/tmp/landing-329-768-hero.jpg",
+    "/tmp/landing-329-1440-hero.jpg",
+    "/tmp/landing-329-desktop-maker.jpg"
+  ]
+}
