@@ -98,7 +98,10 @@ export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
     switch (state.phase) {
     case 'unavailable': return notice('Finance v2 unavailable', UNAVAILABLE_COPY[state.reason], 'status');
     case 'gated': return notice('Finance v2 not available to you', GATED_COPY[state.reason], state.reason === 'unauthorized' ? 'alert' : 'status');
-    case 'loading': return shell(<p role="status" aria-busy="true">Loading the report. No amounts are shown until it is verified.</p>);
+    case 'loading':
+      // The transaction filters stay mounted while a re-read is in flight, so a keyboard user changing one keeps focus; no earlier page data is shown.
+      if (props.view === 'transactions') return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view="transactions" input={{ status: 'loading' }} expectedScope={props.scope} filters={filters} onFiltersChange={onFiltersChange} />;
+      return shell(<p role="status" aria-busy="true">Loading the report. No amounts are shown until it is verified.</p>);
     case 'error': return notice('Report could not be loaded', FINANCE_V2_FAULT_COPY[state.kind], 'alert', state.retryable ? <button type="button" onClick={onRetry}>Retry</button> : null);
     case 'refused': return shell(<section className="td-example-section" role="alert"><h3>Report refused</h3>
       <p>This report failed the presentation check, so it is not displayed. No amounts are shown.</p>

@@ -196,6 +196,38 @@ describe('scope, filter and authorization changes cancel old paging and reset th
     expect(previous()).toBeDisabled();
   });
 
+  it('the filter selects stay the same mounted, focused elements while a filter change is re-read, and show no earlier currency or amount', async () => {
+    const m = manualPort();
+    function Host() {
+      const [filters, setFilters] = useState({ valuation: 'all', currency: 'all' });
+      return <FinanceV2ConnectedView {...connected(m.port, { filters, onFiltersChange: setFilters })} />;
+    }
+    render(<Host />);
+    await settle(); await answer(m.pending, 0, 0);
+    const valuation = screen.getByLabelText('Valuation') as HTMLSelectElement;
+    valuation.focus();
+    expect(valuation).toHaveFocus();
+    fireEvent.change(valuation, { target: { value: 'estimated' } });
+    await settle();
+    // Re-read in flight: the very same element is still mounted, focused, and holds the new value; the read is not answered yet.
+    expect(screen.getByLabelText('Valuation')).toBe(valuation);
+    expect(valuation).toHaveFocus();
+    expect(valuation).toHaveValue('estimated');
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the report');
+    expect(amountsShown()).toBe(false);
+    expect(within(screen.getByLabelText('Currency')).getAllByRole('option').map((option) => option.textContent)).toEqual(['All currencies']);
+    // A second keyboard-style change while still loading is accepted by the same element.
+    fireEvent.change(valuation, { target: { value: 'unknown' } });
+    await settle();
+    expect(screen.getByLabelText('Valuation')).toBe(valuation);
+    expect(valuation).toHaveFocus();
+    expect(valuation).toHaveValue('unknown');
+    await answer(m.pending, m.pending.length - 1, 0);
+    expect(screen.getByLabelText('Valuation')).toBe(valuation);
+    expect(valuation).toHaveFocus();
+    expect(valuation).toHaveValue('unknown');
+  });
+
   const changes: readonly (readonly [string, Partial<FinanceV2ConnectedViewProps>])[] = [
     ['actor', { scope: { ...syntheticOpaqueScope, actorId: 'account:another-actor' } }],
     ['tenant', { scope: { ...syntheticOpaqueScope, tenantId: 'account:another-tenant' } }],
