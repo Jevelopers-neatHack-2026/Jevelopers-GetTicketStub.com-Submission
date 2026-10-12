@@ -11,6 +11,16 @@ function mount(name: SummaryFixtureName, pathname = '/admin/finance') {
 }
 
 describe('FinancialSummaryView through the real Dashboard overview route (synthetic fixture mode)', () => {
+  it('withholds the summary, amounts and metadata when the read projection revision differs', async () => {
+    const renderRoute = vi.fn(() => <FinancialSummaryView {...summaryFixture('ready', evaluateFinancePacket)} projectLabel={syntheticProjectLabel} />);
+    render(<Dashboard basePath="/admin/finance" pathname="/admin/finance" navigate={() => undefined} access={{ ...authorizedFixture, revision: 'different-revision' }} provider={fixtureProvider('ready')} renderRoute={renderRoute} />);
+    expect(await screen.findByRole('heading', { name: 'Access restricted' })).toBeVisible();
+    expect(renderRoute).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Financial summary' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Finance response metadata' })).toBeNull();
+    expect(screen.queryByText('0.000007')).toBeNull();
+  });
+
   it('renders the ready fixture after the provider resolves, with source metric labels and the synthetic project label', async () => {
     mount('ready');
     expect(await screen.findByRole('region', { name: 'Financial summary' })).toBeVisible();

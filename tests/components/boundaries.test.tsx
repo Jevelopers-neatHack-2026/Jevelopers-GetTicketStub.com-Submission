@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Dashboard, type DashboardProps, type RouteProvider, type RouteState } from '../../src';
+import type { RouteReadResult } from '../../integration';
 import { fixtureAccess } from '../fixtures/td01';
 const base: DashboardProps<string> = { basePath: '/admin/finance', pathname: '/admin/finance', navigate: vi.fn(), access: fixtureAccess };
-const provider = (state: RouteState<string>): RouteProvider<string> => ({ mode: 'fixture', readRoute: vi.fn().mockResolvedValue(state) });
+const result = (state: RouteState<string>, access = fixtureAccess): RouteReadResult<string> => ({ state, access });
+const provider = (state: RouteState<string>): RouteProvider<string> => ({ mode: 'fixture', readRoute: vi.fn().mockResolvedValue(result(state)) });
 describe('TD-01 route boundaries', () => {
   it.each([['empty', 'No records'], ['error', 'Could not load this route'], ['restricted', 'Access restricted'], ['unavailable', 'Upstream unavailable']] as const)('renders %s without amounts', async (status, label) => {
     render(<Dashboard {...base} provider={provider(status === 'error' ? { status, retryable: true } : { status })} />);
@@ -22,7 +24,7 @@ describe('TD-01 route boundaries', () => {
     expect(screen.getByText('Loading')).toBeVisible(); expect(p.readRoute).not.toHaveBeenCalled();
   });
   it('uses safe errors, retries reads and rejects malformed states', async () => {
-    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockRejectedValueOnce(new Error('secret-canary')).mockResolvedValueOnce({ status: 'empty' }) };
+    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockRejectedValueOnce(new Error('secret-canary')).mockResolvedValueOnce(result({ status: 'empty' })) };
     const { rerender } = render(<Dashboard {...base} provider={p} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Retry read' }));
     expect(await screen.findByText('No records')).toBeVisible(); expect(screen.queryByText('secret-canary')).toBeNull();
@@ -32,7 +34,7 @@ describe('TD-01 route boundaries', () => {
   it('aborts stale scope reads and never renders old values after revocation', async () => {
     let resolveOld!: (state: RouteState<string>) => void;
     let oldSignal: AbortSignal | undefined;
-    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn(({ signal }) => { oldSignal ??= signal; return new Promise<RouteState<string>>((resolve) => { resolveOld = resolve; }); }) };
+    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn(({ signal }) => { oldSignal ??= signal; return new Promise<RouteReadResult<string>>((resolve) => { resolveOld = (state) => resolve(result(state)); }); }) };
     const { rerender } = render(<Dashboard {...base} provider={p} renderRoute={({ data }) => <p>{data}</p>} />);
     await waitFor(() => expect(p.readRoute).toHaveBeenCalledOnce());
     rerender(<Dashboard {...base} provider={p} access={{ status: 'restricted' }} renderRoute={({ data }) => <p>{data}</p>} />);
@@ -49,12 +51,34 @@ describe('TD-01 route boundaries', () => {
 });
 
 describe('TD-01 read lifecycle regressions', () => {
+  it('clears a settled result immediately on revision change and refuses a response bound to the old revision', async () => {
+    const p = provider({ status: 'ready', data: 'old-revision-canary' });
+    const { rerender } = render(<Dashboard {...base} provider={p} renderRoute={({ data }) => <p>{data}</p>} />);
+    expect(await screen.findByText('old-revision-canary')).toBeVisible();
+    const nextAccess = { ...fixtureAccess, revision: 'fixture-grant-v2' };
+    rerender(<Dashboard {...base} access={nextAccess} provider={p} renderRoute={({ data }) => <p>{data}</p>} />);
+    expect(screen.queryByText('old-revision-canary')).toBeNull();
+    expect(await screen.findByText('Access restricted')).toBeVisible();
+    rerender(<Dashboard {...base} access={nextAccess} provider={{ mode: 'fixture', readRoute: async () => result({ status: 'ready', data: 'current-revision' }, nextAccess) }} renderRoute={({ data }) => <p>{data}</p>} />);
+    expect(await screen.findByText('current-revision')).toBeVisible();
+  });
+
+  it('rejects an accessor page projection without invoking it or starting a read', () => {
+    const getter = vi.fn(() => { throw new Error('synthetic-secret-error'); });
+    const p = provider({ status: 'ready', data: 'synthetic-canary' });
+    render(<Dashboard {...base} access={Object.defineProperty({}, 'status', { get: getter }) as typeof fixtureAccess} provider={p} />);
+    expect(screen.getByText('Access restricted')).toBeVisible();
+    expect(getter).not.toHaveBeenCalled();
+    expect(p.readRoute).not.toHaveBeenCalled();
+  });
+
   it('does not reveal old scope when a new authorized scope resolves first', async () => {
     const pending = new Map<string, (state: RouteState<string>) => void>();
-    const p: RouteProvider<string> = { mode: 'integrated', readRoute: ({ scope }) => new Promise((resolve) => pending.set(scope.projectId, resolve)) };
+    const nextAccess = { status: 'authorized' as const, scope: { tenantId: 'fixture-tenant-b', projectId: 'fixture-project-b' }, revision: 'grant-b' };
+    const p: RouteProvider<string> = { mode: 'integrated', readRoute: ({ scope }) => new Promise((resolve) => pending.set(scope.projectId, (state) => resolve(result(state, scope.projectId === nextAccess.scope.projectId ? nextAccess : fixtureAccess)))) };
     const { rerender } = render(<Dashboard {...base} provider={p} renderRoute={({ data }) => <p>{data}</p>} />);
     await waitFor(() => expect(pending.has('fixture-project-a')).toBe(true));
-    rerender(<Dashboard {...base} access={{ status: 'authorized', scope: { tenantId: 'fixture-tenant-b', projectId: 'fixture-project-b' }, revision: 'grant-b' }} provider={p} renderRoute={({ data }) => <p>{data}</p>} />);
+    rerender(<Dashboard {...base} access={nextAccess} provider={p} renderRoute={({ data }) => <p>{data}</p>} />);
     await waitFor(() => expect(pending.has('fixture-project-b')).toBe(true));
     await act(async () => pending.get('fixture-project-b')!({ status: 'ready', data: 'current-scope' }));
     expect(screen.getByText('current-scope')).toBeVisible();
@@ -105,7 +129,7 @@ describe('TD-09.D recovery actions and focus', () => {
   });
   it('keeps keyboard focus inside the boundary when retry replaces the button', async () => {
     let finish!: (state: RouteState<string>) => void;
-    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockResolvedValueOnce({ status: 'error', retryable: true }).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })) };
+    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockResolvedValueOnce(result({ status: 'error', retryable: true })).mockImplementationOnce(() => new Promise<RouteReadResult<string>>((resolve) => { finish = (state) => resolve(result(state)); })) };
     render(<Dashboard {...ai} provider={p} />);
     const retry = await screen.findByRole('button', { name: 'Retry read' }); retry.focus(); fireEvent.click(retry);
     expect(await screen.findByText('Loading')).toBeVisible();
@@ -116,7 +140,7 @@ describe('TD-09.D recovery actions and focus', () => {
   });
   it('announces errors assertively and other states politely in regions that stay mounted', async () => {
     let finish!: (state: RouteState<string>) => void;
-    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockResolvedValueOnce({ status: 'error', retryable: true }).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })) };
+    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockResolvedValueOnce(result({ status: 'error', retryable: true })).mockImplementationOnce(() => new Promise<RouteReadResult<string>>((resolve) => { finish = (state) => resolve(result(state)); })) };
     render(<Dashboard {...ai} provider={p} />);
     const status = screen.getByRole('status'); const alert = screen.getByRole('alert');
     expect(status).toHaveAttribute('aria-live', 'polite'); expect(alert).toHaveAttribute('aria-live', 'assertive');
@@ -131,7 +155,7 @@ describe('TD-09.D recovery actions and focus', () => {
   });
   it('keeps one polite region from loading to empty', async () => {
     let finish!: (state: RouteState<string>) => void;
-    const p: RouteProvider<string> = { mode: 'fixture', readRoute: () => new Promise<RouteState<string>>((resolve) => { finish = resolve; }) };
+    const p: RouteProvider<string> = { mode: 'fixture', readRoute: () => new Promise<RouteReadResult<string>>((resolve) => { finish = (state) => resolve(result(state)); }) };
     render(<Dashboard {...ai} provider={p} />);
     const status = screen.getByRole('status');
     await act(async () => { await Promise.resolve(); });
@@ -140,7 +164,7 @@ describe('TD-09.D recovery actions and focus', () => {
   });
   const retried = async () => {
     let finish!: (state: RouteState<string>) => void;
-    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockResolvedValueOnce({ status: 'error', retryable: true }).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; })) };
+    const p: RouteProvider<string> = { mode: 'fixture', readRoute: vi.fn().mockResolvedValueOnce(result({ status: 'error', retryable: true })).mockImplementationOnce(() => new Promise<RouteReadResult<string>>((resolve) => { finish = (state) => resolve(result(state)); })) };
     render(<Dashboard {...ai} provider={p} renderRoute={({ data }) => <section><h2>Read succeeded</h2><button type="button">{data}</button></section>} />);
     const retry = await screen.findByRole('button', { name: 'Retry read' }); retry.focus(); fireEvent.click(retry);
     expect(screen.getByRole('region', { name: 'Loading' })).toHaveFocus();

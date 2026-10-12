@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { normalizeBasePath, resolveRoute, routeHref, routes, type ResolvedRoute } from '../integration/routes';
 import { isAuthorized, type HostAccess } from './access/host';
-import { isRouteState, type RouteProvider, type RouteState } from './data/boundary';
+import { bindRouteRead, snapshotHostAccess, type BoundRouteResult, type RouteProvider, type RouteState } from './data/boundary';
 import { RouteView, type RouteRenderer } from './views/RouteView';
 import { BoundaryState, type BoundaryExit } from './components/BoundaryState';
 
@@ -13,7 +13,7 @@ export interface DashboardProps<T = unknown> {
   provider?: RouteProvider<T> | undefined;
   renderRoute?: RouteRenderer<T> | undefined;
 }
-type ReadResult<T> = { key: string; provider: RouteProvider<T>; attempt: number; state: RouteState<T> };
+type ReadResult<T> = BoundRouteResult<T> & { key: string; provider: RouteProvider<T>; attempt: number };
 function routeKey(route: ResolvedRoute, access: Extract<HostAccess, { status: 'authorized' }>): string {
   return JSON.stringify([route.id, route.params, access.scope.tenantId, access.scope.projectId, access.revision]);
 }
@@ -26,6 +26,7 @@ function DataRoute<T>({ route, access, provider, renderRoute, exit }: {
   const focusHandoff = useRef<HTMLElement | null>(null);
   const tenantId = access.scope.tenantId;
   const projectId = access.scope.projectId;
+  const expectedAccess = useMemo(() => ({ status: 'authorized' as const, scope: { tenantId, projectId }, revision: access.revision }), [tenantId, projectId, access.revision]);
   useEffect(() => {
     if (!provider) return;
     const controller = new AbortController();
@@ -34,23 +35,25 @@ function DataRoute<T>({ route, access, provider, renderRoute, exit }: {
       if (current) setResult({ key, provider, attempt, state: { status: 'error', retryable: true } });
       current = false; controller.abort();
     }, 15000);
-    Promise.resolve().then(() => current ? provider.readRoute({ route, scope: { tenantId, projectId }, signal: controller.signal }) : { status: 'unavailable' } as RouteState<T>)
-      .then((state) => {
+    Promise.resolve().then(() => current ? provider.readRoute({ route, scope: { tenantId, projectId }, signal: controller.signal }) : undefined)
+      .then((value) => {
         clearTimeout(timeout);
-        if (current) setResult({ key, provider, attempt, state: isRouteState(state) && state.status !== 'loading' ? state : { status: 'error', retryable: false } });
+        if (current) setResult({ key, provider, attempt, ...bindRouteRead<T>(value, expectedAccess) });
       }).catch(() => { clearTimeout(timeout); if (current) setResult({ key, provider, attempt, state: { status: 'error', retryable: true } }); });
     return () => { current = false; clearTimeout(timeout); controller.abort(); };
-  }, [key, provider, tenantId, projectId, route, attempt]);
-  const state: RouteState<T> = !provider ? { status: 'unavailable' } : result?.key === key && result.provider === provider && result.attempt === attempt ? result.state : { status: 'loading' };
+  }, [key, provider, tenantId, projectId, route, attempt, expectedAccess]);
+  const current = result?.key === key && result.provider === provider && result.attempt === attempt ? result : undefined;
+  const state: RouteState<T> = !provider ? { status: 'unavailable' } : current?.state ?? { status: 'loading' };
   // Recovery: if the boundary still held focus when the read succeeded, move it to the route content; if the user moved focus elsewhere, leave it.
   useLayoutEffect(() => {
     const target = focusHandoff.current;
     focusHandoff.current = null;
     if (state.status === 'ready' && target?.isConnected && (!document.activeElement || document.activeElement === document.body)) target.focus();
   }, [state.status]);
-  return <RouteView state={state} route={route} scope={access.scope} renderRoute={renderRoute} onRetry={() => setAttempt((value) => value + 1)} exit={exit} focusHandoff={focusHandoff} />;
+  return <RouteView state={state} route={route} scope={current?.scope} renderRoute={renderRoute} onRetry={() => setAttempt((value) => value + 1)} exit={exit} focusHandoff={focusHandoff} />;
 }
-export function Dashboard<T>({ basePath, pathname, navigate, access, provider, renderRoute }: DashboardProps<T>) {
+export function Dashboard<T>({ basePath, pathname, navigate, access: rawAccess, provider, renderRoute }: DashboardProps<T>) {
+  const access = snapshotHostAccess(rawAccess);
   const base = normalizeBasePath(basePath);
   const resolved = useMemo(() => resolveRoute(base, pathname), [base, pathname]);
   const heading = useRef<HTMLHeadingElement>(null);
