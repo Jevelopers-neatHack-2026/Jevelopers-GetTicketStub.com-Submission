@@ -56,9 +56,12 @@ The local socket fixtures measure their own requests only; they do not assert pr
 | `eval-policy-unit` | `unit` | Python suites listed in [`tools/run_python_tests.py`](../tools/run_python_tests.py) |
 | `pdf-derived-evidence` | `linux-integration` | `tests/evidence`, `tests/extraction/pdf`, `tests/integration/pdf-evidence`; Linux only |
 | `asset-source-discovery-linux` | `linux-integration` | `tests/integration/asset-source/linux`; Linux only |
-| `evals`, `research-api` | `mock` | Reserved. No Node test files exist yet, so these fail closed |
+| `research-api` | `mock` | `tests/api/research-contract-v1`; [offline pinned candidate compatibility](contracts/research-contract-candidate-v1.md), not public API acceptance |
+| `evals` | `mock` | Reserved. No Node test files exist yet, so this fails closed |
 
 The two `linux-integration` routes fail on other platforms instead of counting as passed. `MODE=live` is accepted by the argument parser but always fails: live mode is disabled until an adapter and accepted EI-01/EI-09 integration exist, and no request is attempted.
+
+The `research-api` route uses the older copied shared-contracts candidate and synthetic fixtures. The separate opt-in [installed 0.9.7 consumer diagnostic](contracts/installed-research-consumer-0.9.7.md) verifies an owner-pinned archive before exercising actual local correction-store outputs and independent synthetic canonical controls. It is invoked through its documented launcher, not this `make verify` route. Its expected incompatibility result remains `INCOMPATIBLE_HOLD`; neither check establishes an accepted public research API or canonical mapping.
 
 The `eval-policy-unit` Python route emits the actual Python runtime and expected, executed, passed, failed, skipped-case, and total skip-event counts; it separately identifies subtest and setup/teardown hook skips and errors. It fails when no tests execute or any case fails, any skip event occurs, or any test unexpectedly succeeds. It covers local policy and runner unit tests only; it is not the held-out benchmark or evidence that the policy is promotion-ready.
 
