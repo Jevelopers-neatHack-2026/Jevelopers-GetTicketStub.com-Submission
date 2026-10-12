@@ -132,6 +132,7 @@ function harness({
   sandboxCallsEnabled = true,
   reader,
   queue = recordingScheduler(),
+  abandoned = [],
   extra = {}
 } = {}) {
   const sandboxReader = reader ?? new ProdigiSandboxClient({
@@ -154,10 +155,11 @@ function harness({
     clock,
     random: () => 0.5,
     scheduler: queue.scheduler,
+    onReconcileAbandoned: (event) => { abandoned.push(event); },
     sleep: async (ms) => { sleeps.push(ms); },
     ...extra
   });
-  return { http, reconciler, secrets, store, sleeps, clock, jobs: queue.jobs };
+  return { http, reconciler, secrets, store, sleeps, clock, jobs: queue.jobs, abandoned };
 }
 
 async function rejectsWith(promise, code) {
@@ -221,13 +223,19 @@ add("poll, deadline, interval and retention settings are bounded", () => {
   for (const pollPolicy of [{ maxAttempts: 0 }, { maxAttempts: 11 }, { initialDelayMs: 0 }, { initialDelayMs: 60_001 }, { initialDelayMs: 500, maxDelayMs: 100 }, { maxDelayMs: 300_001 }]) {
     assert.throws(() => new ProdigiCallbackReconciler({ ...base, pollPolicy }), (e) => e.code === "invalid_config");
   }
-  for (const extra of [{ requestDeadlineMs: 49 }, { requestDeadlineMs: 10_001 }, { readTimeoutMs: 99 }, { minReadIntervalMs: -1 }, { coverageSkewMs: 300_001 }, { replayTtlMs: 59_999 }, { maxPendingJobs: 0 }, { scheduler: { schedule() {} } }, { readLimiter: {} }]) {
+  for (const extra of [
+    { requestDeadlineMs: 49 }, { requestDeadlineMs: 10_001 }, { readTimeoutMs: 99 }, { minReadIntervalMs: -1 }, { replayTtlMs: 59_999 },
+    { maxPendingJobs: 0 }, { scheduler: { schedule() {} } }, { readLimiter: {} }, { pendingJobGraceMs: 999 }, { untrackedAckAfterMs: 59_999 },
+    { jobRetryPolicy: { maxAttempts: 0 } }, { jobRetryPolicy: { horizonMs: 999 } }, { jobRetryPolicy: { initialDelayMs: 5000, maxDelayMs: 100 } },
+    { onReconcileAbandoned: "not a function" }
+  ]) {
     assert.throws(() => new ProdigiCallbackReconciler({ ...base, ...extra }), (e) => e.code === "invalid_config");
   }
   const capped = new ProdigiCallbackReconciler({ ...base, pollPolicy: { initialDelayMs: 1000, maxDelayMs: 1500, maxAttempts: 4 } });
   assert.deepEqual(capped.backoffSchedule(), [1000, 1500, 1500]);
   const defaults = new ProdigiCallbackReconciler(base);
   assert.deepEqual(defaults.backoffSchedule(), [1000, 2000, 4000, 8000]);
+  assert.deepEqual({ ...defaults.jobRetryBudget() }, { initialDelayMs: 1000, maxDelayMs: 60_000, maxAttempts: 5, horizonMs: 600_000 });
 });
 
 // ---------------------------------------------------------------------------
@@ -243,6 +251,10 @@ add("a CloudEvent parses to a bounded hint and the embedded order is discarded",
     eventTime: "2026-10-10T10:31:06Z"
   });
   assert.equal(JSON.stringify(hint).includes("Fixture Recipient"), false);
+  const httpsSource = parseProdigiCallbackEvent(cloudEvent({ extra: { source: "https://api.sandbox.prodigi.com/v4.0/Orders/" } }));
+  assert.equal(httpsSource.orderId, FIXTURE_ORDER_ID);
+  const wrapped = parseProdigiCallbackEvent(encoder.encode(JSON.stringify({ specversion: "1.0", type: STAGE("InProgress"), source: "https://api.sandbox.prodigi.com/v4.0/Orders/", id: "evt_1", time: "2026-10-10T10:31:06Z", subject: FIXTURE_ORDER_ID, data: { order: { id: FIXTURE_ORDER_ID } } })));
+  assert.equal(wrapped.eventId, "evt_1");
   const shipment = parseProdigiCallbackEvent(cloudEvent({ type: "com.prodigi.order.shipments.created" }));
   assert.equal(shipment.claimedStage, null);
   assert.deepEqual([...PRODIGI_CALLBACK_EVENT_TYPES], [STAGE("InProgress"), STAGE("Complete"), STAGE("Cancelled")]);
@@ -258,7 +270,14 @@ add("malformed CloudEvents are rejected", () => {
     cloudEvent({ type: STAGE("Shipped") }),
     cloudEvent({ subject: "ord_../../admin", data: null }),
     cloudEvent({ time: "yesterday" }),
-    encoder.encode(JSON.stringify({ specversion: "1.0", type: STAGE("InProgress"), id: "evt_1", time: "2026-10-10T10:31:06Z", subject: FIXTURE_ORDER_ID, data: { id: "ord_999" } })),
+    encoder.encode(JSON.stringify({ specversion: "1.0", type: STAGE("InProgress"), source: "https://api.sandbox.prodigi.com/v4.0/Orders/", id: "evt_1", time: "2026-10-10T10:31:06Z", subject: FIXTURE_ORDER_ID, data: { id: "ord_999" } })),
+    encoder.encode(JSON.stringify({ specversion: "1.0", type: STAGE("InProgress"), source: "https://api.sandbox.prodigi.com/v4.0/Orders/", id: "evt_1", time: "2026-10-10T10:31:06Z", subject: FIXTURE_ORDER_ID, data: { order: { id: "ord_999" } } })),
+    // Source must be the documented sandbox origin: live, other hosts and a missing source are invalid.
+    cloudEvent({ extra: { source: "https://api.prodigi.com/v4.0/Orders/" } }),
+    cloudEvent({ extra: { source: "http://api.prodigi.com/v4.0/Orders/" } }),
+    cloudEvent({ extra: { source: "https://api.sandbox.prodigi.com.evil.example/v4.0/Orders/" } }),
+    cloudEvent({ extra: { source: "https://evil.example/v4.0/Orders/" } }),
+    cloudEvent({ extra: { source: undefined } }),
     new Uint8Array([0xff, 0xfe])
   ];
   for (const body of bad) {
@@ -269,7 +288,7 @@ add("malformed CloudEvents are rejected", () => {
 add("M1: 20 invented com.prodigi types cause zero reads and zero store access", async () => {
   const calls = [];
   const inner = createInMemoryProdigiReconciliationStore();
-  const store = Object.fromEntries(["hasEvent", "recordEvent", "getOrder", "compareAndSetOrder"].map((name) => [name, async (input) => { calls.push(name); return inner[name](input); }]));
+  const store = Object.fromEntries(["hasEvent", "recordEvent", "getOrder", "compareAndSetOrder", "getPendingReconciliation", "compareAndSetPendingReconciliation", "countPendingReconciliations"].map((name) => [name, async (input) => { calls.push(name); return inner[name](input); }]));
   const { reconciler, http } = harness({ store, responses: Array.from({ length: 50 }, () => ({ status: 503, body: "x" })) });
   await reconciler.trackOrder(FIXTURE_ORDER_ID);
   calls.length = 0;
@@ -293,7 +312,7 @@ add("forged callbacks (missing, wrong or malformed token) are rejected before an
   }
   assert.equal(http.calls.length, 0);
   assert.ok(secrets.loads.every((reference) => reference === TOKEN_REFERENCE));
-  assert.deepEqual(store.stats(), { orders: 1, replayRecords: 0 });
+  assert.deepEqual(store.stats(), { orders: 1, replayRecords: 0, pendingReconciliations: 0 });
   // Nothing was recorded, so the genuine delivery is read and applied.
   const genuine = await deliver(reconciler, cloudEvent());
   assert.equal(genuine.outcome, "reconciled");
@@ -333,10 +352,10 @@ add("L4: a previous token is accepted during rotation and reported as such", asy
 // Callback content is never applied
 
 add("callback body content is never applied; only the authenticated read changes state", async () => {
-  // The body claims Complete (and carries a Complete order); the authenticated read says InProgress.
+  // The body carries a Complete order; the authenticated read says InProgress.
   const { reconciler, http } = harness({ responses: [readResponse({ stage: "InProgress", details: { downloadAssets: "Complete" } })] });
   await reconciler.trackOrder(FIXTURE_ORDER_ID);
-  const result = await deliver(reconciler, cloudEvent({ type: STAGE("Complete") }));
+  const result = await deliver(reconciler, cloudEvent({ type: STAGE("InProgress") }));
   assert.equal(result.outcome, "reconciled");
   assert.equal(result.recommendedHttpStatus, 200);
   assert.equal(result.trust, "unverified");
@@ -372,7 +391,7 @@ add("H1: a callback before trackOrder is not_tracked (503), stores nothing, and 
   assert.equal(early.outcome, "not_tracked");
   assert.equal(early.recommendedHttpStatus, 503);
   assert.equal(early.retryAfterSeconds, 30);
-  assert.deepEqual(store.stats(), { orders: 0, replayRecords: 0 });
+  assert.deepEqual(store.stats(), { orders: 0, replayRecords: 0, pendingReconciliations: 0 });
   assert.equal(http.calls.length, 0);
   await reconciler.trackOrder(FIXTURE_ORDER_ID);
   const redelivered = await deliver(reconciler, cloudEvent());
@@ -401,8 +420,9 @@ add("H1: failed reads return a retryable 503, record nothing, schedule backoff, 
   assert.equal(redelivered.outcome, "reconciled");
   assert.equal(redelivered.reconciliation.status, "applied");
   assert.equal(http.calls.length, 2);
-  // The scheduled job is now covered and reads nothing.
-  assert.equal((await reconciler.runScheduledReconciliation(jobs[0])).status, "covered");
+  // The redelivery's read covered the pending record and cleared it, so the job reads nothing.
+  assert.equal(store.stats().pendingReconciliations, 0);
+  assert.equal((await reconciler.runScheduledReconciliation(jobs[0])).status, "obsolete");
   assert.equal(http.calls.length, 2);
 });
 
@@ -416,7 +436,8 @@ add("H1: when the request read fails, the scheduled job retries with jittered ba
   assert.equal(second.errorCode, "rate_limited");
   assert.equal(jobs.length, 2);
   assert.equal(jobs[1].attempt, 3);
-  assert.ok(jobs[1].delayMs > 0 && jobs[1].delayMs <= 400, "jittered delay stays within the cap");
+  // The jittered delay (cap 400 ms) is floored at the per-order read interval (5 s since the last read).
+  assert.equal(jobs[1].delayMs, 5000);
   clock.advance(6000);
   assert.equal((await reconciler.runScheduledReconciliation(jobs[1])).status, "applied");
   assert.equal(http.calls.length, 3);
@@ -438,7 +459,7 @@ add("H1: a scheduler that refuses the job turns a deferral into a retryable fail
   const failed = await deliver(refused.reconciler, cloudEvent());
   assert.equal(failed.outcome, "reconcile_failed");
   assert.equal(failed.scheduled, false);
-  assert.equal(refused.reconciler.diagnostics().pendingJobs, 0);
+  assert.equal(refused.store.stats().pendingReconciliations, 0, "the pending record is rolled back");
 
   const durable = harness({ responses: [readResponse()], queue: recordingScheduler({ durable: true }) });
   await durable.reconciler.trackOrder(FIXTURE_ORDER_ID);
@@ -458,7 +479,8 @@ add("H2: a forged Complete cannot suppress the genuine Complete", async () => {
   ] });
   await reconciler.trackOrder(FIXTURE_ORDER_ID);
   const forged = await deliver(reconciler, cloudEvent({ id: "evt_fake", type: STAGE("Complete"), time: "2026-10-10T11:59:00Z" }));
-  assert.equal(forged.outcome, "reconciled");
+  // The claim is not confirmed by the read, so it is not acknowledged as reconciled; it only earns a bounded follow-up.
+  assert.equal(forged.outcome, "deferred");
   assert.equal(forged.reconciliation.state.stage, "InProgress");
   clock.advance(6 * 60_000);
   const genuine = await deliver(reconciler, cloudEvent({ id: "evt_genuine", type: STAGE("Complete"), time: "2026-10-10T12:05:00Z" }));
@@ -468,20 +490,25 @@ add("H2: a forged Complete cannot suppress the genuine Complete", async () => {
   assert.equal(http.calls.length, 2);
 });
 
-add("H2: a repeated status is suppressed only when an authoritative read already covers its time", async () => {
+add("H2/N2: a repeated status received after the last read started is never suppressed; it joins one follow-up read", async () => {
   const { reconciler, http, clock, jobs } = harness({ responses: [readResponse(), readResponse({ details: { downloadAssets: "Complete" }, lastUpdated: "2026-10-10T12:00:30.000Z" })] });
   await reconciler.trackOrder(FIXTURE_ORDER_ID);
   assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_000001" }))).outcome, "reconciled");
-  // Same type, new ID, event time before the confirming read: covered, no read.
-  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_000002" }))).outcome, "already_reconciled");
-  // Same type again (e.g. InProgress after an Error step), newer than the read: within the interval it is deferred, not dropped.
+  // Same type, new ID, even with an old event time: received after the read started, so it is deferred, not dropped.
+  const again = await deliver(reconciler, cloudEvent({ id: "evt_000002" }));
+  assert.equal(again.outcome, "deferred");
+  assert.equal(again.recommendedHttpStatus, 503, "the in-process scheduler is not durable");
   clock.advance(1000);
   const newer = await deliver(reconciler, cloudEvent({ id: "evt_000003", time: "2026-10-10T12:00:01Z" }));
   assert.equal(newer.outcome, "deferred");
-  assert.equal(newer.recommendedHttpStatus, 503, "the in-process scheduler is not durable");
   assert.equal(http.calls.length, 1);
+  assert.equal(jobs.length, 1, "the burst is coalesced into one follow-up job");
   clock.advance(6000);
   assert.equal((await reconciler.runScheduledReconciliation(jobs[0])).status, "applied");
+  assert.equal(http.calls.length, 2);
+  // Both event IDs were merged into the pending record, so the covering read recorded them: redeliveries are replays.
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_000002" }))).outcome, "replayed");
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_000003", time: "2026-10-10T12:00:01Z" }))).outcome, "replayed");
   assert.equal(http.calls.length, 2);
 });
 
@@ -543,8 +570,8 @@ add("M2: 1,000 callbacks for unknown orders store zero entries and keep no in-pr
     const result = await deliver(reconciler, cloudEvent({ id: `evt_u${i}`, subject: `ord_u${i}` }));
     assert.equal(result.outcome, "not_tracked");
   }
-  assert.deepEqual(store.stats(), { orders: 0, replayRecords: 0 });
-  assert.deepEqual(reconciler.diagnostics(), { inFlightReads: 0, pendingJobs: 0, orderEntries: 0 });
+  assert.deepEqual(store.stats(), { orders: 0, replayRecords: 0, pendingReconciliations: 0 });
+  assert.deepEqual(reconciler.diagnostics(), { inFlightReads: 0, localTimers: 0, orderEntries: 0 });
   assert.equal(http.calls.length, 0);
 });
 
@@ -634,7 +661,7 @@ add("a reordered earlier-stage callback after Complete triggers no read and cann
   const late = await deliver(reconciler, cloudEvent({ id: "evt_000001", type: STAGE("InProgress"), time: "2026-10-10T12:00:30Z" }));
   assert.equal(late.outcome, "already_terminal");
   const lateShipment = await deliver(reconciler, cloudEvent({ id: "evt_000004", type: "com.prodigi.order.shipments.created" }));
-  assert.equal(lateShipment.outcome, "ignored_type");
+  assert.equal(lateShipment.outcome, "already_terminal");
   assert.equal(http.calls.length, 1);
   const state = complete.reconciliation.state;
   assert.equal(state.stage, "Complete");
@@ -818,11 +845,359 @@ add("store failures surface as store_unavailable", async () => {
     async hasEvent() { throw new Error("db down"); },
     async recordEvent() { throw new Error("db down"); },
     async getOrder() { throw new Error("db down"); },
-    async compareAndSetOrder() { throw new Error("db down"); }
+    async compareAndSetOrder() { throw new Error("db down"); },
+    async getPendingReconciliation() { throw new Error("db down"); },
+    async compareAndSetPendingReconciliation() { throw new Error("db down"); },
+    async countPendingReconciliations() { throw new Error("db down"); }
   };
   const { reconciler } = harness({ store: broken });
   await rejectsWith(reconciler.trackOrder(FIXTURE_ORDER_ID), "store_unavailable");
   await rejectsWith(deliver(reconciler, cloudEvent()), "store_unavailable");
+});
+
+// ---------------------------------------------------------------------------
+// Re-review N1-N7: coverage on our own clock, durable deferral, fairness
+
+const iso = (ms) => new Date(ms).toISOString();
+
+add("N3: prompt delivery (event time == now) is covered by the in-request read and answered 200", async () => {
+  const { reconciler, http, jobs, store, clock } = harness({ responses: [readResponse({ lastUpdated: iso(START) })] });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  const result = await deliver(reconciler, cloudEvent({ time: iso(clock.now()) }));
+  assert.equal(result.outcome, "reconciled");
+  assert.equal(result.recommendedHttpStatus, 200);
+  assert.equal(http.calls.length, 1);
+  assert.equal(jobs.length, 0);
+  assert.equal(store.stats().pendingReconciliations, 0);
+});
+
+add("N2: Prodigi clock skew of +/-10 s does not matter; prompt deliveries are read and reconciled", async () => {
+  for (const skew of [10_000, -10_000]) {
+    const { reconciler, http, jobs, clock } = harness({ responses: [readResponse(), readResponse({ details: { downloadAssets: "Complete" }, lastUpdated: "2026-10-10T12:00:10.000Z" })] });
+    await reconciler.trackOrder(FIXTURE_ORDER_ID);
+    const first = await deliver(reconciler, cloudEvent({ id: "evt_skew1", time: iso(clock.now() + skew) }));
+    assert.equal(first.outcome, "reconciled", `skew ${skew}`);
+    clock.advance(6000);
+    // A genuine change stamped by a clock 10 s off, received after the interval: read, never suppressed.
+    const second = await deliver(reconciler, cloudEvent({ id: "evt_skew2", type: STAGE("InProgress"), time: iso(clock.now() + skew) }));
+    assert.equal(second.outcome, "reconciled", `skew ${skew}`);
+    assert.equal(second.reconciliation.state.details.downloadAssets, "Complete");
+    assert.equal(http.calls.length, 2);
+    assert.equal(jobs.length, 0);
+  }
+});
+
+add("N2 (P3c): a provider clock 10 s behind ours cannot suppress a genuine Complete", async () => {
+  const { reconciler, http, clock } = harness({ responses: [readResponse(), readResponse({ stage: "Complete", details: DONE, lastUpdated: "2026-10-10T12:00:06.000Z" })] });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_pre", time: iso(START - 60_000) }))).outcome, "reconciled");
+  clock.advance(6000);
+  const genuine = await deliver(reconciler, cloudEvent({ id: "evt_gen3", type: STAGE("Complete"), time: iso(START - 4000) }));
+  assert.equal(genuine.outcome, "reconciled");
+  assert.equal(genuine.reconciliation.state.stage, "Complete");
+  assert.equal(http.calls.length, 2);
+});
+
+add("N2: Prodigi read lag - the first read returns the old stage, the follow-up gets the new one", async () => {
+  const { reconciler, http, clock, jobs, store } = harness({ responses: [
+    readResponse({ lastUpdated: "2026-10-10T11:59:00.000Z" }),
+    readResponse({ stage: "Complete", details: DONE, lastUpdated: "2026-10-10T12:00:00.000Z" })
+  ] });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  const lagged = await deliver(reconciler, cloudEvent({ id: "evt_lag", type: STAGE("Complete"), time: iso(START) }));
+  assert.equal(lagged.outcome, "deferred", "the read has not reached the claimed stage yet");
+  assert.equal(lagged.reconciliation.state.stage, "InProgress");
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].requiredStage, "Complete");
+  clock.advance(6000);
+  assert.equal((await reconciler.runScheduledReconciliation(jobs[0])).status, "applied");
+  assert.equal((await store.getOrder({ scope: SCOPE, orderId: FIXTURE_ORDER_ID })).stage, "Complete");
+  assert.equal(store.stats().pendingReconciliations, 0);
+  assert.equal(http.calls.length, 2);
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_lag", type: STAGE("Complete"), time: iso(START) }))).outcome, "replayed");
+});
+
+add("N2 (P3b): a lagging read triggered earlier (forged or poller) cannot suppress the genuine Complete delivered later", async () => {
+  const { reconciler, http, clock } = harness({ responses: [readResponse(), readResponse({ stage: "Complete", details: DONE, lastUpdated: "2026-10-10T12:00:00.000Z" })] });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  const genuineTime = iso(clock.now());
+  clock.advance(3000);
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_fake2", time: iso(clock.now()) }))).outcome, "reconciled");
+  clock.advance(10_000);
+  const genuine = await deliver(reconciler, cloudEvent({ id: "evt_gen2", type: STAGE("Complete"), time: genuineTime }));
+  assert.equal(genuine.outcome, "reconciled");
+  assert.equal(genuine.reconciliation.state.stage, "Complete");
+  assert.equal(http.calls.length, 2);
+});
+
+add("N2/N3: callbacks arriving while a read is in flight join the next read (one follow-up for the burst)", async () => {
+  const opened = gate();
+  const http = recordingHttp([
+    async () => { await opened.promise; return { status: 200, bodyText: JSON.stringify(readResponse().body) }; },
+    readResponse({ details: { downloadAssets: "Complete" }, lastUpdated: "2026-10-10T12:00:20.000Z" })
+  ]);
+  const { reconciler, clock, jobs } = harness({ http });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  const first = deliver(reconciler, cloudEvent({ id: "evt_first" }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(http.calls.length, 1, "the first read is in flight");
+  const during = [];
+  for (let i = 0; i < 4; i += 1) during.push(await deliver(reconciler, cloudEvent({ id: `evt_during${i}` })));
+  assert.deepEqual(during.map((r) => r.outcome), Array(4).fill("deferred"));
+  opened.open();
+  assert.equal((await first).outcome, "reconciled", "received before the read started");
+  assert.equal(jobs.length, 1, "the burst is coalesced into one follow-up job");
+  assert.equal(http.calls.length, 1);
+  clock.advance(6000);
+  assert.equal((await reconciler.runScheduledReconciliation(jobs[0])).status, "applied");
+  assert.equal(http.calls.length, 2);
+  for (let i = 0; i < 4; i += 1) assert.equal((await deliver(reconciler, cloudEvent({ id: `evt_during${i}` }))).outcome, "replayed");
+});
+
+function sharedDurableQueue() {
+  const jobs = [];
+  return { jobs, scheduler: { durable: true, schedule(job) { jobs.push(job); } } };
+}
+
+add("N1: two reconcilers share one store and durable queue; the job runs on the other worker and a later callback is still covered", async () => {
+  const clock = mutableClock();
+  const store = createInMemoryProdigiReconciliationStore({ clock });
+  const queue = sharedDurableQueue();
+  const abandoned = [];
+  const responses = [readResponse(), readResponse({ details: { downloadAssets: "Complete" }, lastUpdated: "2026-10-10T12:00:10.000Z" }), readResponse({ details: { downloadAssets: "Complete", printReadyAssetsPrepared: "Complete" }, lastUpdated: "2026-10-10T13:00:00.000Z" })];
+  const http = recordingHttp(responses);
+  const a = harness({ store, clock, http, queue, abandoned });
+  const b = harness({ store, clock, http, queue, abandoned });
+  await a.reconciler.trackOrder(FIXTURE_ORDER_ID);
+  assert.equal((await deliver(a.reconciler, cloudEvent({ id: "evt_w1" }))).outcome, "reconciled");
+  clock.advance(1000);
+  const deferred = await deliver(a.reconciler, cloudEvent({ id: "evt_w2" }));
+  assert.equal(deferred.outcome, "deferred");
+  assert.equal(deferred.recommendedHttpStatus, 202);
+  assert.equal(store.stats().pendingReconciliations, 1, "the pending record is in the store");
+  // A second callback while the job is pending merges into the stored record; the 202 is backed by that job.
+  clock.advance(500);
+  const merged = await deliver(a.reconciler, cloudEvent({ id: "evt_w3" }));
+  assert.equal(merged.outcome, "deferred");
+  assert.equal(merged.recommendedHttpStatus, 202);
+  assert.equal(queue.jobs.length, 1);
+  const stored = await store.getPendingReconciliation({ scope: SCOPE, orderId: FIXTURE_ORDER_ID });
+  assert.equal(stored.coverAfter, iso(START + 1500), "the newest receipt time is stored, not the job's");
+  assert.equal(queue.jobs[0].coverAfter, iso(START + 1000));
+  // The job runs on worker B and clears the stored record.
+  clock.advance(6000);
+  assert.equal((await b.reconciler.runScheduledReconciliation(queue.jobs.shift())).status, "applied");
+  assert.equal(store.stats().pendingReconciliations, 0);
+  assert.equal((await deliver(a.reconciler, cloudEvent({ id: "evt_w3" }))).outcome, "replayed");
+  // An hour later, a new callback on worker A is not swallowed by a phantom pending entry.
+  clock.advance(3_600_000);
+  const later = await deliver(a.reconciler, cloudEvent({ id: "evt_w4" }));
+  assert.equal(later.outcome, "reconciled");
+  assert.equal(http.calls.length, 3);
+  assert.deepEqual(abandoned, []);
+});
+
+add("N1: a callback merged while the other worker's read is in flight keeps the record and forces another read", async () => {
+  const clock = mutableClock();
+  const store = createInMemoryProdigiReconciliationStore({ clock });
+  const queue = sharedDurableQueue();
+  const opened = gate();
+  const http = recordingHttp([
+    readResponse(),
+    async () => { await opened.promise; return { status: 200, bodyText: JSON.stringify(readResponse({ details: { downloadAssets: "Complete" }, lastUpdated: "2026-10-10T12:00:10.000Z" }).body) }; },
+    readResponse({ details: { downloadAssets: "Complete", inProduction: "InProgress" }, lastUpdated: "2026-10-10T12:00:20.000Z" })
+  ]);
+  // A long per-worker interval keeps worker A from reading itself, so its callbacks must merge into the stored record.
+  const a = harness({ store, clock, http, queue, extra: { minReadIntervalMs: 60_000 } });
+  const b = harness({ store, clock, http, queue, extra: { minReadIntervalMs: 60_000 } });
+  await a.reconciler.trackOrder(FIXTURE_ORDER_ID);
+  await deliver(a.reconciler, cloudEvent({ id: "evt_m1" }));
+  clock.advance(1000);
+  assert.equal((await deliver(a.reconciler, cloudEvent({ id: "evt_m2" }))).outcome, "deferred");
+  clock.advance(6000);
+  const running = b.reconciler.runScheduledReconciliation(queue.jobs.shift());
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  // Received on worker A after B's read started: merged into the stored record.
+  clock.advance(100);
+  assert.equal((await deliver(a.reconciler, cloudEvent({ id: "evt_m3" }))).recommendedHttpStatus, 202);
+  opened.open();
+  assert.equal((await running).status, "rescheduled");
+  assert.equal(store.stats().pendingReconciliations, 1);
+  assert.equal(queue.jobs.length, 1);
+  assert.ok(queue.jobs[0].delayMs >= 59_000, "the follow-up waits for worker B's read interval");
+  clock.advance(61_000);
+  assert.equal((await b.reconciler.runScheduledReconciliation(queue.jobs.shift())).status, "applied");
+  assert.equal(store.stats().pendingReconciliations, 0);
+  assert.equal(http.calls.length, 3);
+  for (const id of ["evt_m2", "evt_m3"]) assert.equal((await deliver(a.reconciler, cloudEvent({ id }))).outcome, "replayed");
+});
+
+add("N1: maxPendingJobs counts live records in the store, so orphaned records cannot fill it", async () => {
+  const clock = mutableClock();
+  const store = createInMemoryProdigiReconciliationStore({ clock });
+  const queue = sharedDurableQueue();
+  const http = recordingHttp(Array.from({ length: 20 }, () => (request) => ({ status: 200, bodyText: JSON.stringify(readResponse({ orderId: request.url.split("/").pop() }).body) })));
+  const a = harness({ store, clock, http, queue, extra: { maxPendingJobs: 3 } });
+  const noReads = { tryAcquire: () => null };
+  const b = harness({ store, clock, http, queue, extra: { maxPendingJobs: 3, readLimiter: noReads } });
+  const ids = Array.from({ length: 5 }, (_, i) => `ord_${String(2000 + i)}`);
+  for (const id of ids) await a.reconciler.trackOrder(id);
+  for (const [i, id] of ids.entries()) await deliver(a.reconciler, cloudEvent({ id: `evt_p${i}a`, subject: id }));
+  clock.advance(1000);
+  const wave = [];
+  for (const [i, id] of ids.entries()) wave.push((await deliver(a.reconciler, cloudEvent({ id: `evt_p${i}b`, subject: id }))).outcome);
+  assert.deepEqual(wave, ["deferred", "deferred", "deferred", "reconcile_failed", "reconcile_failed"]);
+  // Another worker shares the cap through the store.
+  assert.equal((await deliver(b.reconciler, cloudEvent({ id: "evt_p4c", subject: ids[4] }))).outcome, "reconcile_failed");
+  // The queued jobs are lost (never run). Once the records are orphaned they no longer count.
+  queue.jobs.length = 0;
+  clock.advance(10 * 60_000);
+  assert.equal(await store.countPendingReconciliations({ scope: SCOPE, now: iso(clock.now()) }), 0);
+  // The next callback replaces the orphaned record and schedules a fresh job, carrying the old event IDs.
+  const fresh = await deliver(b.reconciler, cloudEvent({ id: "evt_p0y", subject: ids[0] }));
+  assert.equal(fresh.outcome, "deferred");
+  assert.equal(fresh.recommendedHttpStatus, 202);
+  assert.equal(queue.jobs.length, 1, "a fresh job was scheduled for the orphaned record");
+  const record = await store.getPendingReconciliation({ scope: SCOPE, orderId: ids[0] });
+  assert.deepEqual([...record.eventIds], ["evt_p0b", "evt_p0y"]);
+  assert.equal(record.coverAfter, iso(clock.now()));
+});
+
+add("N4: com.prodigi.order.* types (stage changes and shipments) trigger a bounded read; other objects do not", async () => {
+  const { reconciler, http, clock } = harness({ responses: [readResponse(), readResponse({ details: { downloadAssets: "Complete" }, lastUpdated: "2026-10-10T12:00:10.000Z" })] });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  const shipment = await deliver(reconciler, cloudEvent({ id: "evt_ship1", type: "com.prodigi.order.shipments#Shipped" }));
+  assert.equal(shipment.outcome, "reconciled");
+  assert.equal(http.calls.length, 1);
+  clock.advance(6000);
+  const nested = await deliver(reconciler, cloudEvent({ id: "evt_ship2", type: "com.prodigi.order.shipments.created" }));
+  assert.equal(nested.outcome, "reconciled");
+  assert.equal(http.calls.length, 2);
+  for (const type of ["com.prodigi.invoice.created", "com.prodigi.quote.changed#X", "com.prodigi.orders.created", "com.prodigi.order"]) {
+    assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_other", type }))).outcome, "ignored_type", type);
+  }
+  assert.equal(http.calls.length, 2);
+});
+
+add("N5: durable jobs default to a ~1 h jittered budget, and exhaustion emits reconcile_abandoned to the hook", async () => {
+  const durable = harness({ queue: recordingScheduler({ durable: true }) });
+  assert.deepEqual({ ...durable.reconciler.jobRetryBudget() }, { initialDelayMs: 2000, maxDelayMs: 300_000, maxAttempts: 40, horizonMs: 3_600_000 });
+
+  const { reconciler, http, clock, jobs, abandoned, store } = harness({
+    responses: Array.from({ length: 50 }, () => ({ status: 503, body: "x" })),
+    queue: recordingScheduler({ durable: true })
+  });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  const failed = await deliver(reconciler, cloudEvent({ id: "evt_down" }));
+  assert.equal(failed.outcome, "reconcile_failed");
+  assert.equal(failed.scheduled, true);
+  const delays = [];
+  let last;
+  for (let i = 0; i < 100 && jobs.length > 0; i += 1) {
+    const job = jobs.shift();
+    delays.push(job.delayMs);
+    clock.advance(job.delayMs);
+    last = await reconciler.runScheduledReconciliation(job);
+  }
+  assert.equal(last.status, "reconcile_abandoned");
+  assert.equal(last.reason, "horizon_exceeded");
+  assert.equal(abandoned.length, 1);
+  assert.equal(abandoned[0].outcome, "reconcile_abandoned");
+  assert.equal(abandoned[0].orderId, FIXTURE_ORDER_ID);
+  assert.equal(abandoned[0].errorCode, "provider_unavailable");
+  assert.ok(clock.now() - START >= 3_600_000, "retried for about an hour");
+  assert.ok(Math.max(...delays) <= 300_000);
+  assert.ok(http.calls.length < 40, `reads: ${http.calls.length}`);
+  assert.equal(store.stats().pendingReconciliations, 0);
+
+  // A non-retryable failure in a job also surfaces, never silently.
+  const auth = harness({ responses: [{ status: 503, body: "x" }, { status: 401, body: "denied" }], queue: recordingScheduler({ durable: true }) });
+  await auth.reconciler.trackOrder(FIXTURE_ORDER_ID);
+  await deliver(auth.reconciler, cloudEvent());
+  auth.clock.advance(6000);
+  const stop = await auth.reconciler.runScheduledReconciliation(auth.jobs[0]);
+  assert.equal(stop.status, "reconcile_abandoned");
+  assert.equal(stop.reason, "read_failed");
+  assert.equal(auth.abandoned[0].errorCode, "authentication_failed");
+});
+
+add("N5: an unconfirmed claim (e.g. a forged #Complete) is abandoned with claim_unconfirmed after a bounded number of reads", async () => {
+  const { reconciler, http, clock, jobs, abandoned } = harness({
+    responses: Array.from({ length: 20 }, () => readResponse()),
+    extra: { jobRetryPolicy: { maxAttempts: 3 } }
+  });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  assert.equal((await deliver(reconciler, cloudEvent({ id: "evt_forged", type: STAGE("Complete") }))).outcome, "deferred");
+  let last;
+  while (jobs.length > 0) {
+    clock.advance(6000);
+    last = await reconciler.runScheduledReconciliation(jobs.shift());
+  }
+  assert.equal(last.status, "reconcile_abandoned");
+  assert.equal(abandoned[0].reason, "claim_unconfirmed");
+  assert.equal(abandoned[0].requiredStage, "Complete");
+  assert.ok(http.calls.length <= 4);
+});
+
+add("N6: a shared limiter is fair per tenant; tenant A's burst cannot starve tenant B", async () => {
+  const clock = mutableClock();
+  const limiter = createProdigiReadLimiter({ clock });
+  const store = createInMemoryProdigiReconciliationStore({ clock });
+  const http = recordingHttp(Array.from({ length: 40 }, () => (request) => ({ status: 200, bodyText: JSON.stringify(readResponse({ orderId: request.url.split("/").pop() }).body) })));
+  const a = harness({ store, clock, http, scope: { tenantId: "tenant-a", projectId: "p" }, extra: { readLimiter: limiter } });
+  const b = harness({ store, clock, http, scope: { tenantId: "tenant-b", projectId: "p" }, extra: { readLimiter: limiter } });
+  const aIds = Array.from({ length: 12 }, (_, i) => `ord_${String(3000 + i)}`);
+  for (const id of aIds) await a.reconciler.trackOrder(id);
+  await b.reconciler.trackOrder("ord_4000");
+  const aOut = [];
+  for (const [i, id] of aIds.entries()) aOut.push((await deliver(a.reconciler, cloudEvent({ id: `evt_ta${i}`, subject: id }))).outcome);
+  assert.equal(aOut.filter((o) => o === "reconciled").length, 5, "tenant A is held to its sub-budget");
+  const bOut = await deliver(b.reconciler, cloudEvent({ id: "evt_tb", subject: "ord_4000" }));
+  assert.equal(bOut.outcome, "reconciled");
+  // Unit level: per-tenant concurrency and refill.
+  const unit = createProdigiReadLimiter({ clock, burst: 4, maxConcurrent: 4 });
+  const r1 = unit.tryAcquire("x"); const r2 = unit.tryAcquire("x");
+  assert.ok(r1 && r2);
+  assert.equal(unit.tryAcquire("x"), null);
+  assert.ok(unit.tryAcquire("y"));
+  r1(); clock.advance(1000);
+  assert.ok(unit.tryAcquire("x"), "refilled after a second");
+});
+
+add("N7: a transient store failure while applying a read is retryable and schedules a job", async () => {
+  const clock = mutableClock();
+  const inner = createInMemoryProdigiReconciliationStore({ clock });
+  let failCas = 0;
+  const store = { ...inner, async compareAndSetOrder(input) { if (input.expectedRevision !== null && failCas > 0) { failCas -= 1; throw new Error("blip"); } return inner.compareAndSetOrder(input); } };
+  const { reconciler, jobs } = harness({ store, clock, responses: [readResponse(), readResponse()] });
+  await reconciler.trackOrder(FIXTURE_ORDER_ID);
+  failCas = 1;
+  const result = await deliver(reconciler, cloudEvent());
+  assert.equal(result.outcome, "reconcile_failed");
+  assert.equal(result.errorCode, "store_unavailable");
+  assert.equal(result.scheduled, true);
+  assert.equal(jobs.length, 1);
+  clock.advance(6000);
+  assert.equal((await reconciler.runScheduledReconciliation(jobs[0])).status, "applied");
+  const polled = harness({ store, clock, responses: Array.from({ length: 4 }, () => readResponse({ lastUpdated: "2026-10-10T12:30:00.000Z", details: { downloadAssets: "Complete" } })) });
+  failCas = 10;
+  const poll = await polled.reconciler.reconcileOrder(FIXTURE_ORDER_ID);
+  assert.equal(poll.errorCode, "store_unavailable");
+  assert.equal(poll.status, "retries_exhausted", "retried, not treated as a programming error");
+});
+
+add("nit: untracked callbacks are 503 while fresh and 200 (untracked_expired) after untrackedAckAfterMs; nothing is stored", async () => {
+  const { reconciler, store, http, clock } = harness();
+  const fresh = await deliver(reconciler, cloudEvent({ id: "evt_fresh", time: iso(clock.now() - 1000) }));
+  assert.equal(fresh.outcome, "not_tracked");
+  assert.equal(fresh.recommendedHttpStatus, 503);
+  const old = await deliver(reconciler, cloudEvent({ id: "evt_old", time: iso(clock.now() - 25 * 3600 * 1000) }));
+  assert.equal(old.outcome, "untracked_expired");
+  assert.equal(old.recommendedHttpStatus, 200);
+  assert.deepEqual(store.stats(), { orders: 0, replayRecords: 0, pendingReconciliations: 0 });
+  assert.equal(http.calls.length, 0);
+  const off = harness({ extra: { untrackedAckAfterMs: 0 } });
+  assert.equal((await deliver(off.reconciler, cloudEvent({ id: "evt_old", time: iso(START - 25 * 3600 * 1000) }))).outcome, "not_tracked");
 });
 
 add("the suite made no network request", () => {
