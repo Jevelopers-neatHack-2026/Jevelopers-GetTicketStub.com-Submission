@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp,cp,writeFile,rm } from 'node:fs/promises';
+import { mkdtemp,cp,writeFile,rm,readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { loadExportFixtures } from './export-candidate.mjs';
@@ -40,4 +41,17 @@ for(const [name,change]of [
 test('supplement admission rejects modified bytes before interpreting cases',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'export-denial-admission-'));
   try {await cp(denialFixtureRoot,directory,{recursive:true});await writeFile(join(directory,'postgres-composition.json'),'{}');await assert.rejects(loadDenialSupplement(directory),/Pinned supplement mismatch/u);}finally{await rm(directory,{recursive:true,force:true});}
+});
+test('actual CLI failed supplement admission emits failed receipt without any consumer ACK',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'export-denial-cli-failure-'));
+  try {
+    const hook=join(directory,'deny-supplement-read.mjs'),output=join(directory,'output');
+    await writeFile(hook,`import fs from 'node:fs/promises';import {syncBuiltinESMExports} from 'node:module';const original=fs.readFile;fs.readFile=async function(path,...args){if(String(path).endsWith('/contracts/finance-export3e8-supplement-pin.json'))throw new Error('TEST_INJECTED_SUPPLEMENT_ADMISSION_FAILURE');return original.call(this,path,...args);};syncBuiltinESMExports();`);
+    // Only intercept the additive pin read, after actual clean custody and original packet evaluation.
+    const result=spawnSync(process.execPath,['--import',hook,new URL('./run.mjs',import.meta.url).pathname,'--candidate-export0c4-fixtures',output],{env:{PATH:process.env.PATH,TMPDIR:tmpdir()},encoding:'utf8',timeout:30000});
+    assert.equal(result.status,1,result.stderr);const receipt=JSON.parse(await readFile(join(output,'receipt.json')));
+    assert.equal(receipt.status,'failed');assert.equal(receipt.failure,'TEST_INJECTED_SUPPLEMENT_ADMISSION_FAILURE');
+    assert.equal(receipt.observation.capturedResponses,17);assert.equal(Object.hasOwn(receipt,'denialSupplement'),false);
+    assert.equal(Object.hasOwn(receipt,'consumerAcknowledgement'),false);assert.equal(receipt.ownerAcknowledgement,null);assert.equal(receipt.adoptionAccepted,false);
+  }finally{await rm(directory,{recursive:true,force:true});}
 });
