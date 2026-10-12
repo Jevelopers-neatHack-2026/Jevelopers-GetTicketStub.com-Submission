@@ -40,7 +40,7 @@ const record = (over = {}) => ({
 });
 const expect = { tenant: "t1", project: { kind: "stub", id: "s1" }, purpose: "artifact.download", content: { artHash: sha256Hex("a") } };
 const verifyWith = (keyring, token, now = NOW) => {
-  const r = verifyApproval(token, (kid) => keyring.lookup(kid, now), expect, now);
+  const r = verifyApproval(token, (kid, issuedAt) => keyring.lookup(kid, now, issuedAt), expect, now); // as the server calls it
   return r.ok ? "ok" : r.reason;
 };
 const kidOf = (token) => JSON.parse(Buffer.from(token.split(".")[0], "base64url").toString()).kid;
@@ -173,4 +173,69 @@ test("the published approval fixtures carry kid fixture, which no server key set
   assert.equal(kidOf(fx.token), "fixture");
   assert.equal(load({ v: 1, keys: [{ ...g1, kid: kf.kid, key: Buffer.from(kf.key).toString("base64url") }] }).problem, "reserved_kid");
   assert.equal(load({ v: 1, keys: [{ ...g1, key: Buffer.from(kf.key).toString("base64url") }] }).problem, "fixture_key");
+});
+
+// ---- Review fixes (#75 review M1, L3, N2)
+import { withSigningEnv } from "./lib/load-server.mjs";
+
+const oneKey = (key, kid = "approval-g1") => JSON.stringify({ v: 1, keys: [{ kid, state: "active", activatedAt: iso(Date.now() - DAY), key }] });
+
+test("M1: the same string pasted into CONTEXT_SECRET and a key entry is refused, in both readings", () => {
+  const s = k(); // the documented generator's output: base64url of 32 random bytes
+  // The same string in both places (the copy-paste case), and each variable holding the other's encoding.
+  for (const [forbidden, key] of [
+    [s, s],
+    [s, Buffer.from(s).toString("base64url")],
+
+  ]) {
+    for (const live of [true, false]) assert.deepEqual(load({ v: 1, keys: [{ ...g1, key }] }, { live, forbidden: [forbidden] }), { ok: false, problem: "key_reused" });
+  }
+  // A secret whose text is the base64url decoding of nothing in particular, but whose bytes equal the key's bytes.
+  const bytes = randomBytes(32);
+  assert.equal(load({ v: 1, keys: [{ ...g1, key: bytes.toString("base64url") }] }, { forbidden: [bytes.toString("base64url")] }).problem, "key_reused");
+  // A different secret is fine.
+  assert.ok(load({ v: 1, keys: [g1] }, { forbidden: [k(), "a-context-secret-that-is-plain-text-000000"] }).ok);
+});
+
+test("M1: through the env binding, every pair that could share a string is refused for APPROVAL_SIGNING_KEYS", async () => {
+  const s = k();
+  const other = (key) => oneKey(key, "order-auth-g1");
+  for (const [label, env] of [
+    ["CONTEXT_SECRET", { CONTEXT_SECRET: s }],
+    ["ORDER_AUTH_CONSUMER_KEY", { ORDER_AUTH_CONSUMER_KEY: s }],
+    ["ORDER_AUTH_SIGNING_KEYS", { ORDER_AUTH_SIGNING_KEYS: other(s) }],
+  ]) {
+    await withSigningEnv({ TICKETSTUB_RUNTIME_MODE: "live", APPROVAL_SIGNING_KEYS: oneKey(s), ...env }, async ({ approvalKeyring }, lines) => {
+      assert.equal(approvalKeyring(), null, `${label} reused as an approval key must be refused`);
+      assert.ok(lines.every((l) => !l.includes(s)), "the log never carries the value");
+    });
+  }
+  await withSigningEnv({ TICKETSTUB_RUNTIME_MODE: "live", APPROVAL_SIGNING_KEYS: oneKey(s), CONTEXT_SECRET: k(), ORDER_AUTH_CONSUMER_KEY: k(), ORDER_AUTH_SIGNING_KEYS: other(k()) }, async ({ approvalKeyring }) => {
+    assert.equal(approvalKeyring()?.mode, "live", "distinct secrets load");
+  });
+});
+
+test("L3: a production build outside live runtime warns once when it falls back to a per-process approval key", async () => {
+  await withSigningEnv({ NODE_ENV: "production" }, async ({ approvalKeyring }, lines) => {
+    assert.equal(approvalKeyring().signer().kid, "sandbox");
+    approvalKeyring();
+    const warned = lines.filter((l) => l.includes("APPROVAL_SIGNING_KEYS") && /not "live" in a production build/.test(l));
+    assert.equal(warned.length, 1, lines.join("\n"));
+  });
+  await withSigningEnv({ NODE_ENV: "production", TICKETSTUB_RUNTIME_MODE: "live", APPROVAL_SIGNING_KEYS: oneKey(k()) }, async ({ approvalKeyring }, lines) => {
+    assert.equal(approvalKeyring().mode, "live");
+    assert.equal(lines.length, 0, "a configured live set says nothing");
+  });
+});
+
+test("N2: a retired key refuses a token issued after its retirement (plus skew), and one with no readable issue time", () => {
+  const kr = ring(rotated());
+  const retiredAt = NOW - DAY;
+  const g1Signer = { kid: "approval-g1", key: Buffer.from(K1, "base64url") };
+  const at = (issued) => signApproval(record({ issuedAt: iso(issued), expiresAt: iso(issued + APPROVAL_TTL_MS) }), g1Signer);
+  assert.equal(verifyWith(kr, at(retiredAt - 3600_000)), "ok", "issued before retirement: verifies through retention");
+  assert.equal(verifyWith(kr, at(retiredAt + 5 * 60_000)), "ok", "inside the skew: still accepted");
+  assert.equal(verifyWith(kr, at(retiredAt + 5 * 60_000 + 1)), "forged", "a leaked retired key can't mint fresh tokens");
+  assert.equal(kr.lookup("approval-g1", NOW, Number.NaN), null, "an unreadable issue time is refused for a retired key");
+  assert.ok(kr.lookup("approval-g2", NOW, Number.NaN), "the active key is not affected");
 });

@@ -140,7 +140,7 @@ async function viewOf(row: ApprovalRow, keys: Keyring, now: number): Promise<App
   const state = await stateOf(row, record);
   // The issuer's own view of its record: the content it holds is the binding itself, so only expiry, revocation and staleness can fail.
   const { designHash, artHash, factsHash, compositionHash } = record.binding;
-  const r = verifyApproval(token, (kid) => keys.lookup(kid, now), { tenant: record.tenant.id, project: record.project, purpose: record.purpose, content: { designHash, artHash, factsHash, compositionHash } }, now, state);
+  const r = verifyApproval(token, (kid, issuedAt) => keys.lookup(kid, now, issuedAt), { tenant: record.tenant.id, project: record.project, purpose: record.purpose, content: { designHash, artHash, factsHash, compositionHash } }, now, state);
   const status: ApprovalStatus = r.ok ? "active" : (STATUS_OF[r.reason] ?? "stale");
   const b = record.binding;
   const c = state.current;
@@ -169,7 +169,7 @@ export async function revokeApproval(tenant: string, stubId: string, approvalId:
 export async function verifyApprovalLive(token: string, expect: ApprovalExpectation, now = Date.now()): Promise<ApprovalVerifyResult> {
   const keyring = approvalKeyring();
   if (!keyring) return { ok: false, reason: "forged" }; // no usable key set, nothing can be valid
-  const keys = (kid: string) => keyring.lookup(kid, now);
+  const keys = (kid: string, issuedAt: number) => keyring.lookup(kid, now, issuedAt);
   const first = verifyApproval(token, keys, expect, now);
   if (!first.ok && (first.reason === "invalid_clock" || first.reason === "unknown" || first.reason === "forged" || first.reason === "unsupported_version")) return first;
   // Past here the signature and shape are good, so the id is the issuer's own.

@@ -75,8 +75,12 @@ export interface Keyring {
   readonly mode: "sandbox" | "live";
   /** The active key. */
   signer(): SigningKey;
-  /** The key for `kid` if it may verify at `now`, else null. Never throws. */
-  lookup(kid: unknown, now?: number): Buffer | null;
+  /**
+   * The key for `kid` if it may verify at `now`, else null. Never throws. With `issuedAt` (ms, from the token being verified),
+   * a retired key also refuses a token issued after it was retired (plus skew), or with an unreadable issue time: a leaked
+   * retired key can't mint fresh tokens during its retention window.
+   */
+  lookup(kid: unknown, now?: number, issuedAt?: number): Buffer | null;
   /** Versions and rotation state only, never key bytes. */
   status(now?: number): KeyringStatus;
 }
@@ -91,8 +95,13 @@ export interface KeyringOptions {
   /** How long a retired key keeps verifying after retiredAt: the token class's longest lifetime. */
   retentionMs: number;
   maxClockSkewMs?: number;
-  /** Bytes no key in this set may equal (CONTEXT_SECRET, another class's keys), so one secret never signs two classes. */
-  forbidden?: readonly Buffer[];
+  /**
+   * Secrets no key in this set may reuse (CONTEXT_SECRET, ORDER_AUTH_CONSUMER_KEY, the other class's key strings), so one
+   * secret never signs two classes. Give the raw environment strings: each is compared in both readings (its UTF-8 text,
+   * and its base64url decoding) against both readings of every entry (the decoded key bytes, and the key string's text).
+   * So the same string pasted into two variables is caught, and so is one variable holding the other's encoding.
+   */
+  forbidden?: readonly (string | Buffer)[];
   /** The per-process fallback key outside live mode. The caller keeps it for the process lifetime. */
   fallback: () => Buffer;
   now?: number;
@@ -116,12 +125,21 @@ function decodeKey(name: string, v: unknown): Buffer {
   if (bytes.toString("base64url") !== v) throw new KeyringError(name, "bad_key"); // canonical base64url only
   if (v.includes("FIXTURE-ONLY") || bytes.includes("FIXTURE-ONLY")) throw new KeyringError(name, "fixture_key");
   if (bytes.length < KEYRING_LIMITS.minKeyBytes || bytes.length > KEYRING_LIMITS.maxKeyBytes) throw new KeyringError(name, "weak_key");
-  if (new Set(bytes).size < KEYRING_LIMITS.minDistinctBytes) throw new KeyringError(name, "weak_key"); // hex or ASCII text passed as if it were bytes, a repeated byte
+  // Degenerate keys only: a repeated byte or a tiny alphabet (fewer than 17 distinct byte values). This is NOT an entropy
+  // test: a passphrase or hex text read as base64url passes it. The control is the documented generator (32 random bytes).
+  if (new Set(bytes).size < KEYRING_LIMITS.minDistinctBytes) throw new KeyringError(name, "weak_key");
   return bytes;
 }
 
 /** Parses and checks the versioned JSON. Throws KeyringError; never returns a partial set. */
-export function parseKeyset(name: string, raw: string, opts: { now: number; maxClockSkewMs: number; forbidden?: readonly Buffer[] }): Entry[] {
+/** Both readings of a secret: its text as UTF-8, and its base64url decoding. Readings under 16 bytes are dropped (never a key). */
+function readings(secret: string | Buffer): Buffer[] {
+  if (Buffer.isBuffer(secret)) return secret.length >= 16 ? [secret] : [];
+  const t = secret.trim();
+  return [Buffer.from(t), Buffer.from(t, "base64url")].filter((b) => b.length >= 16);
+}
+
+export function parseKeyset(name: string, raw: string, opts: { now: number; maxClockSkewMs: number; forbidden?: readonly (string | Buffer)[] }): Entry[] {
   let doc: unknown;
   try {
     doc = JSON.parse(raw);
@@ -133,6 +151,7 @@ export function parseKeyset(name: string, raw: string, opts: { now: number; maxC
   if (!Array.isArray(doc.keys) || doc.keys.length === 0) throw new KeyringError(name, "bad_shape");
   if (doc.keys.length > KEYRING_LIMITS.maxKeys) throw new KeyringError(name, "too_many_keys");
   const latest = opts.now + opts.maxClockSkewMs;
+  const forbidden = (opts.forbidden ?? []).flatMap(readings);
   const entries: Entry[] = doc.keys.map((e: unknown) => {
     if (!isObj(e) || Object.keys(e).some((k) => !ENTRY_FIELDS.has(k))) throw new KeyringError(name, "bad_shape");
     if (typeof e.kid !== "string" || !KID_RE.test(e.kid)) throw new KeyringError(name, "bad_kid");
@@ -144,12 +163,15 @@ export function parseKeyset(name: string, raw: string, opts: { now: number; maxC
     if ((e.state === "retired") !== (retiredAt !== null)) throw new KeyringError(name, "bad_time"); // retiredAt iff retired
     if (retiredAt !== null && retiredAt < activatedAt) throw new KeyringError(name, "bad_time");
     if (activatedAt > latest || (retiredAt !== null && retiredAt > latest)) throw new KeyringError(name, "future_time");
-    return { kid: e.kid, state: e.state, activatedAt, retiredAt, key: decodeKey(name, e.key) };
+    const key = decodeKey(name, e.key);
+    // The entry in both readings (decoded bytes, and the key string as typed) against every reading of every forbidden secret.
+    const mine = [key, Buffer.from(e.key as string)];
+    if (forbidden.some((f) => mine.some((m) => m.equals(f)))) throw new KeyringError(name, "key_reused");
+    return { kid: e.kid, state: e.state, activatedAt, retiredAt, key };
   });
   if (new Set(entries.map((e) => e.kid)).size !== entries.length) throw new KeyringError(name, "duplicate_kid");
   for (let i = 0; i < entries.length; i++) {
     for (let j = i + 1; j < entries.length; j++) if (entries[i].key.equals(entries[j].key)) throw new KeyringError(name, "duplicate_key");
-    if ((opts.forbidden ?? []).some((f) => f.length > 0 && f.equals(entries[i].key))) throw new KeyringError(name, "key_reused");
   }
   const active = entries.filter((e) => e.state === "active");
   if (active.length !== 1) throw new KeyringError(name, "active_count");
@@ -164,10 +186,12 @@ function makeKeyring(name: string, mode: "sandbox" | "live", entries: Entry[], r
     name,
     mode,
     signer: () => ({ kid: active.kid, key: active.key }),
-    lookup(kid, now = Date.now()) {
+    lookup(kid, now = Date.now(), issuedAt) {
       if (typeof kid !== "string" || !KID_RE.test(kid)) return null;
       const e = entries.find((x) => x.kid === kid);
-      return e && verifies(e, now) ? e.key : null;
+      if (!e || !verifies(e, now)) return null;
+      if (issuedAt !== undefined && e.retiredAt !== null && !(Number.isFinite(issuedAt) && issuedAt <= e.retiredAt + skew)) return null;
+      return e.key;
     },
     status(now = Date.now()) {
       const retired = entries.filter((e) => e.state === "retired");
