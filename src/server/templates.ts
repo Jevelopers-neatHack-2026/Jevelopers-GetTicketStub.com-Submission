@@ -121,7 +121,9 @@ export function receiptMail(order: Order, wallUrl: string, imageUrl: string): Ma
     price: formatMoney(l.totalMinor, currency),
   }));
   const total = formatMoney(order.totalMinor, currency);
-  const sandbox = "Sandbox, nothing was charged.";
+  // Only a webhook-confirmed payment changes this line. A test-mode payment charges nothing real.
+  const paid = order.payment?.status === "paid";
+  const sandbox = !paid ? "Sandbox, nothing was charged." : order.payment?.environment === "test_mode" ? "Paid in test mode, no real charge." : "Paid.";
   const copy = ["Your order is in. Here's what you ordered.", sandbox];
   const rows = lines
     .map((l) => `<tr><td style="padding:6px 0;font-family:${SANS};font-size:14px;line-height:20px;color:${INK};border-bottom:1px solid ${COPPER}">${esc(l.label)}</td><td align="right" style="padding:6px 0 6px 12px;font-family:${SANS};font-size:14px;color:${INK};white-space:nowrap;border-bottom:1px solid ${COPPER}">${esc(l.price)}</td></tr>`)

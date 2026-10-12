@@ -13,6 +13,11 @@ export function useOrderFlow() {
 
   function settle(p: Placed | undefined) {
     if (!p) return;
+    // The server started a provider checkout: payment happens on the provider's page, which returns to /payment/return.
+    if (p.checkoutUrl && /^https:\/\//.test(p.checkoutUrl)) {
+      window.location.assign(p.checkoutUrl);
+      return;
+    }
     setHeld(p);
     setPlaced(p);
   }

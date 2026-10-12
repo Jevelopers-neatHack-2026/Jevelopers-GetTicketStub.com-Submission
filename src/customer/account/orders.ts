@@ -13,6 +13,8 @@ export interface Placed {
   receipt: boolean;
   /** Set when the server refused or couldn't be reached: the order is only on this device. Catalog code, never shown raw. */
   code?: string;
+  /** The provider's hosted checkout, when the server is taking payment for this order. The browser goes there next. */
+  checkoutUrl?: string;
 }
 
 type Draft = Omit<Order, "id" | "mode" | "createdAt">;
@@ -56,9 +58,10 @@ export async function placeOrder(draft: Draft): Promise<Placed> {
     return { order: local, receipt: false };
   }
   try {
-    const { order } = await api.order(draft);
+    const { order, checkoutUrl } = await api.order(draft);
     reportOrder(draft, "server", made.stored);
-    return { order, receipt: !!draft.email };
+    // A paid order's receipt is sent once the provider confirms the payment, so it isn't promised here.
+    return checkoutUrl ? { order, receipt: false, checkoutUrl } : { order, receipt: !!draft.email };
   } catch (e) {
     reportOrder(draft, "local", made.stored, e);
     return { order: local, receipt: false, code: codeOf(e) };

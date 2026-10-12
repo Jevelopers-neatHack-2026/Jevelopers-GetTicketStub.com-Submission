@@ -2,7 +2,7 @@
 // Sandbox commerce for the hackathon build. Nothing here calls a payment, print or shipping API.
 // A quote is not a purchase: quotes expire, and an "order" is a local sandbox record only.
 import { EDITION_META } from "@/customer/studio/stub/editions";
-import { MATERIALS, currentVersion, formatMoney, type Finish, type Material, type Stub } from "@/customer/studio/types";
+import { currentVersion, formatMoney, type Finish, type Material, type Stub } from "@/customer/studio/types";
 import {
   CAPABILITY_VERSION,
   TIER_SIZES,
@@ -48,18 +48,8 @@ export function defaultSize(stub: Stub, material: Material = stub.material): Pri
 }
 
 /** Sandbox retail fixtures, not supplier quotes. */
-export const FINISHES: { id: Finish; label: string; upchargeMinor: number }[] = [
-  { id: "matte", label: "Matte", upchargeMinor: 0 },
-  { id: "foil", label: "Foil", upchargeMinor: 600 },
-  { id: "holo", label: "Holo", upchargeMinor: 900 },
-];
-
-/** Estimated shipping, flat. A sandbox fixture, marked as an estimate until a real print partner quote exists. */
-export const SHIPPING_ESTIMATE_MINOR = 600;
-
-export function materialPrice(material: Material): number {
-  return MATERIALS.find((m) => m.id === material)?.priceMinor ?? 0;
-}
+import { FINISHES, SHIPPING_ESTIMATE_MINOR, materialPrice } from "./prices";
+export { FINISHES, SHIPPING_ESTIMATE_MINOR, materialPrice };
 
 /** What each finish costs on this material, as the swatches say it. Holo is never printed, so it has no print price. */
 export function finishPrices(material: Material): Record<Finish, string> {
@@ -146,6 +136,22 @@ export interface Order {
   quoteId?: string; // the quote the order was priced from, when there is one
   method: "apple-pay" | "google-pay" | "card" | "gift-print" | "organizer-print";
   email?: string;
+  /** Set by the server when the order is paid through a provider. Absent on sandbox orders, which charge nothing. */
+  payment?: OrderPayment;
+}
+
+/** A provider payment for an order. Only a verified provider webhook moves it to paid; the browser never does. */
+export interface OrderPayment {
+  provider: "dodo";
+  /** test_mode charges nothing real. */
+  environment: "test_mode" | "live_mode";
+  status: "pending" | "paid" | "failed" | "cancelled";
+  /** The amount the server derived and asked the provider to charge, before any provider-added tax. */
+  amountMinor: number;
+  currency: "USD";
+  checkoutSessionId: string;
+  paymentId?: string;
+  updatedAt: string;
 }
 
 export interface CartItem {
