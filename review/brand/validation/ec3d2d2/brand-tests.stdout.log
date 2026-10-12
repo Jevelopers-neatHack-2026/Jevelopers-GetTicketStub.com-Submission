@@ -1,0 +1,37 @@
+✔ current source inventory is draft only, with zero imported brand files (134.521065ms)
+✔ release stays blocked by the empty upstream subset and actual missing acceptance (114.779589ms)
+✔ brand audit rejects invented owner approval (1.493385ms)
+✔ brand audit rejects invented distribution (20.645687ms)
+✔ brand audit rejects invented consumer agreement (14.29968ms)
+✔ brand audit rejects unapproved imported file (0.755926ms)
+✔ brand audit rejects moving upstream pin (16.180056ms)
+✔ brand audit rejects wrong upstream URL (18.041743ms)
+✔ brand audit rejects moving landing pin (0.637938ms)
+✔ brand audit rejects stale audit (1.249558ms)
+✔ brand audit rejects future audit (0.460202ms)
+✔ brand audit rejects missing freshness trigger (0.630577ms)
+✔ brand audit rejects missing token mapping (19.814318ms)
+✔ brand audit rejects false matching-token claim (15.814367ms)
+✔ brand audit rejects invented inline logo permission (12.833537ms)
+✔ brand audit rejects invented logo provenance (13.473349ms)
+✔ unreviewed palette override changes source-bound brand inventory (52.259387ms)
+✔ unreviewed removed type fallback changes source-bound brand inventory (49.084907ms)
+✔ unreviewed inline mark replacement changes source-bound brand inventory (50.148435ms)
+✔ unreviewed CDN version change changes source-bound brand inventory (85.140151ms)
+✔ unreviewed new stylesheet changes source-bound brand inventory (70.616336ms)
+✔ duplicate URL attributes and inline font/import loaders require review (2.100286ms)
+✔ unrelated focus code changes do not relabel or invalidate unchanged brand bytes (192.899637ms)
+✔ new files and self-hosted fonts cannot enter the reviewed public subset (81.920774ms)
+✔ a rehashed changed asset must still match immutable source bytes (132.703241ms)
+✔ captured empty policy bytes retain the observed Git blob and SHA-256 (38.672849ms)
+✔ withdrawal requires removal from source, not just a new inventory status (230.459223ms)
+✔ built artifact drift cannot be hidden behind a passing source inventory (374.679022ms)
+✔ synthetic font withdrawal and rollback rebuild exact source-bound artifacts (1116.83248ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2990.345483
