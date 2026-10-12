@@ -3011,12 +3011,30 @@
     },
     {
       "path": "repositories/getticketstub.com/tests/prodigi-callbacks.test.mjs",
+      "sha256": "3f69991180138000e9276fb92fb0c80b229a13c82fc5d97d338df70495d29dc1",
+      "reason": "Historical version of the reviewed explicit offline callback test fixture or alphabetic redaction canary; exact finding line matches the reviewed current test. Network guard and zero-network assertion present.",
+      "reviewed_source_commit": "044101b2f8f1058e14c34eb391bfa2b464a2e69e",
+      "findings": [
+        "generic-api-key:65:8:65:60"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/tests/prodigi-callbacks.test.mjs",
       "sha256": "6ac6ee205010052cbfdf1bf2fd6e2da5866a2f142619a8ffb4bd5bddc3acb238",
       "reason": "Explicit test-only callback fixture and alphabetic redaction canary in offline tests. Test imports the network guard, clears real credential environment variables, and asserts zero network attempts.",
       "reviewed_source_commit": "6345f23f41d221502ce792aa4666098eea224ab8",
       "findings": [
         "generic-api-key:69:8:69:60",
         "generic-api-key:760:10:760:63"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/tests/prodigi-callbacks.test.mjs",
+      "sha256": "87535835856c3051e0734057e4fc00a8bcfe160674ee8cc3a3ac2689e42e3e65",
+      "reason": "Historical version of the reviewed explicit offline callback test fixture or alphabetic redaction canary; exact finding line matches the reviewed current test. Network guard and zero-network assertion present.",
+      "reviewed_source_commit": "30194736d733a09c500cd42305b5ca4b0845340d",
+      "findings": [
+        "generic-api-key:759:10:759:63"
       ]
     },
     {
