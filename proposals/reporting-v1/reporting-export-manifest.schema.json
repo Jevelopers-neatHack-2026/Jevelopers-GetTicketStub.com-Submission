@@ -1,0 +1,826 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sc13-proposal:reporting-v1:ReportingExportManifest:0.1.0-proposed",
+  "title": "ReportingExportManifest (PROPOSED, unreviewed, non-canonical)",
+  "description": "SC-13 proposal packet. Not a canonical shared-contracts $id, not exported, not adopted. Structural only; see README.md for host verification obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "export_id",
+    "query_ref",
+    "snapshot",
+    "scope",
+    "period",
+    "currency",
+    "environments",
+    "billing_modes",
+    "policy_refs",
+    "source_watermarks",
+    "precision",
+    "presentation_rounding",
+    "totals",
+    "ratios",
+    "observed_facts",
+    "assumptions",
+    "provenance",
+    "drilldown_refs",
+    "serialization_policy",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ReportingExportManifest/0.1.0-proposed"
+    },
+    "export_id": {
+      "$ref": "#/$defs/id"
+    },
+    "query_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_id",
+        "query_schema_version",
+        "query_hash"
+      ],
+      "properties": {
+        "query_id": {
+          "$ref": "#/$defs/id"
+        },
+        "query_schema_version": {
+          "const": "ReportingQuery/0.1.0-proposed"
+        },
+        "query_hash": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "as_of_utc",
+        "snapshot_fingerprint"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "$ref": "#/$defs/id"
+        },
+        "as_of_utc": {
+          "$ref": "#/$defs/utc_instant"
+        },
+        "snapshot_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tenant_id",
+        "project_id"
+      ],
+      "properties": {
+        "tenant_id": {
+          "$ref": "#/$defs/id"
+        },
+        "project_id": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_utc",
+        "end_utc",
+        "interval",
+        "basis",
+        "timezone",
+        "timezone_policy_ref"
+      ],
+      "properties": {
+        "start_utc": {
+          "$ref": "#/$defs/utc_instant"
+        },
+        "end_utc": {
+          "$ref": "#/$defs/utc_instant"
+        },
+        "interval": {
+          "const": "start_inclusive_end_exclusive"
+        },
+        "basis": {
+          "const": "recognized_at_utc"
+        },
+        "timezone": {
+          "$ref": "#/$defs/iana_timezone"
+        },
+        "timezone_policy_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        }
+      }
+    },
+    "currency": {
+      "$ref": "#/$defs/currency_code"
+    },
+    "environments": {
+      "$ref": "#/$defs/environment_list"
+    },
+    "billing_modes": {
+      "$ref": "#/$defs/billing_mode_list"
+    },
+    "policy_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accounting_policy_ref",
+        "allocation_policy_ref",
+        "metric_definition_set_ref",
+        "schema_policy_ref"
+      ],
+      "properties": {
+        "accounting_policy_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        },
+        "allocation_policy_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        },
+        "metric_definition_set_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        },
+        "schema_policy_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        }
+      }
+    },
+    "source_watermarks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/source_watermark"
+      }
+    },
+    "precision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "representation",
+        "json_number_amounts",
+        "max_fraction_digits",
+        "rounding_applied"
+      ],
+      "properties": {
+        "representation": {
+          "const": "decimal_string"
+        },
+        "json_number_amounts": {
+          "const": false
+        },
+        "max_fraction_digits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "rounding_applied": {
+          "const": false
+        }
+      }
+    },
+    "presentation_rounding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applies_to_exact_values",
+        "owner"
+      ],
+      "properties": {
+        "applies_to_exact_values": {
+          "const": false
+        },
+        "owner": {
+          "const": "consumer_display_only"
+        }
+      }
+    },
+    "totals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "metric_key",
+          "definition_ref",
+          "amount",
+          "unallocated_amount",
+          "valuation_basis",
+          "reconciliation_state",
+          "coverage"
+        ],
+        "properties": {
+          "metric_key": {
+            "$ref": "#/$defs/metric_key"
+          },
+          "definition_ref": {
+            "$ref": "#/$defs/immutable_ref"
+          },
+          "amount": {
+            "$ref": "#/$defs/known_decimal"
+          },
+          "unallocated_amount": {
+            "$ref": "#/$defs/known_decimal"
+          },
+          "valuation_basis": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "actual",
+              "estimated",
+              "provider_confirmed"
+            ],
+            "properties": {
+              "actual": {
+                "$ref": "#/$defs/known_decimal"
+              },
+              "estimated": {
+                "$ref": "#/$defs/known_decimal"
+              },
+              "provider_confirmed": {
+                "$ref": "#/$defs/known_decimal"
+              }
+            }
+          },
+          "reconciliation_state": {
+            "enum": [
+              "reconciled",
+              "partially_reconciled",
+              "unreconciled",
+              "unknown"
+            ],
+            "description": "Placeholder vocabulary; mapped to Finance values at adoption (README Q-VOCAB)."
+          },
+          "coverage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "completeness",
+              "known_count",
+              "partial_count",
+              "unknown_count",
+              "missing_source_ids"
+            ],
+            "properties": {
+              "completeness": {
+                "enum": [
+                  "complete",
+                  "partial",
+                  "unknown"
+                ]
+              },
+              "known_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "partial_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "unknown_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "missing_source_ids": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 64,
+                "items": {
+                  "$ref": "#/$defs/id"
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "ratios": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ratio_id",
+          "numerator_metric_key",
+          "denominator",
+          "value"
+        ],
+        "properties": {
+          "ratio_id": {
+            "$ref": "#/$defs/id"
+          },
+          "numerator_metric_key": {
+            "$ref": "#/$defs/metric_key"
+          },
+          "denominator": {
+            "$ref": "#/$defs/denominator_ref"
+          },
+          "value": {
+            "$ref": "#/$defs/known_decimal"
+          }
+        }
+      }
+    },
+    "observed_facts": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fact_id",
+          "kind",
+          "provenance_ids"
+        ],
+        "properties": {
+          "fact_id": {
+            "$ref": "#/$defs/id"
+          },
+          "kind": {
+            "$ref": "#/$defs/token"
+          },
+          "provenance_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/$defs/id"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assumption_id",
+          "code",
+          "policy_ref"
+        ],
+        "properties": {
+          "assumption_id": {
+            "$ref": "#/$defs/id"
+          },
+          "code": {
+            "$ref": "#/$defs/token"
+          },
+          "policy_ref": {
+            "$ref": "#/$defs/immutable_ref"
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provenance_id",
+          "source_id",
+          "object_ref",
+          "content_hash"
+        ],
+        "properties": {
+          "provenance_id": {
+            "$ref": "#/$defs/id"
+          },
+          "source_id": {
+            "$ref": "#/$defs/id"
+          },
+          "object_ref": {
+            "$ref": "#/$defs/object_ref"
+          },
+          "content_hash": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      }
+    },
+    "drilldown_refs": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ref_id",
+          "snapshot_id",
+          "object_ref"
+        ],
+        "properties": {
+          "ref_id": {
+            "$ref": "#/$defs/id"
+          },
+          "snapshot_id": {
+            "$ref": "#/$defs/id"
+          },
+          "object_ref": {
+            "$ref": "#/$defs/object_ref"
+          }
+        }
+      }
+    },
+    "serialization_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "json_canonicalization",
+        "row_order",
+        "csv_formula_safety",
+        "csv_encoding"
+      ],
+      "properties": {
+        "json_canonicalization": {
+          "enum": [
+            "rfc8785_jcs"
+          ]
+        },
+        "row_order": {
+          "const": "group_key_asc"
+        },
+        "csv_formula_safety": {
+          "enum": [
+            "neutralize_leading_formula_characters"
+          ],
+          "description": "Required for any text field in CSV output. Exact neutralization algorithm is an owner decision (README Q-CSV)."
+        },
+        "csv_encoding": {
+          "const": "utf-8"
+        }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "object_ref",
+            "byte_size",
+            "content_hash",
+            "row_count",
+            "media_type"
+          ],
+          "properties": {
+            "object_ref": {
+              "$ref": "#/$defs/object_ref"
+            },
+            "byte_size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "content_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "row_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        },
+        "csv": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "object_ref",
+            "byte_size",
+            "content_hash",
+            "row_count",
+            "media_type"
+          ],
+          "properties": {
+            "object_ref": {
+              "$ref": "#/$defs/object_ref"
+            },
+            "byte_size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "content_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "row_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "media_type": {
+              "const": "text/csv"
+            }
+          }
+        }
+      },
+      "minProperties": 1
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "description": "Opaque bounded identifier. Carries no authority; existence and ownership are host-verified."
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Lowercase snake_case vocabulary token. Closed vocabularies are owner-supplied at adoption; this proposal does not define them."
+    },
+    "utc_instant": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 30,
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,9})?Z$",
+      "description": "UTC instant ending in Z. Calendar validity (for example February 30) is a host obligation."
+    },
+    "iana_timezone": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$",
+      "description": "IANA timezone name shape only. Membership in the pinned tz database is a host obligation."
+    },
+    "currency_code": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "description": "Three-letter currency code shape only. Registry membership is a host obligation."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "not": {
+        "pattern": "^sha256:0{64}$"
+      },
+      "description": "Lowercase sha256 digest. The zero-filled placeholder is rejected structurally; digest correctness is a host obligation."
+    },
+    "immutable_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "content_hash"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+        },
+        "content_hash": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "environment_list": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/token"
+      },
+      "uniqueItems": true,
+      "description": "Included environments, selected independently of billing modes. Values come from the owner vocabulary."
+    },
+    "billing_mode_list": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/token"
+      },
+      "uniqueItems": true,
+      "description": "Included billing modes. Values come from the owner vocabulary."
+    },
+    "metric_key": {
+      "enum": [
+        "gross_sales",
+        "net_sales",
+        "direct_costs",
+        "contribution",
+        "operating_result",
+        "cash",
+        "budget_remaining"
+      ],
+      "description": "Metric names preserved from cost-intelligence#14 comment 6103884301 (ci-operational-accounting-1.0.0). Names only; definitions stay with Finance."
+    },
+    "denominator_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "definition_ref"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "approved_design",
+            "workflow",
+            "order"
+          ]
+        },
+        "definition_ref": {
+          "$ref": "#/$defs/immutable_ref"
+        }
+      }
+    },
+    "watermark": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "watermark_utc",
+            "cursor"
+          ],
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "watermark_utc": {
+              "$ref": "#/$defs/utc_instant"
+            },
+            "cursor": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9._:=-]+$",
+              "description": "Opaque source cursor or null when the source exposes none."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "reason"
+          ],
+          "properties": {
+            "state": {
+              "const": "unknown"
+            },
+            "reason": {
+              "enum": [
+                "missing_source",
+                "partial_source",
+                "unreconciled",
+                "missing_fx_rate",
+                "missing_attribution",
+                "definition_unavailable",
+                "not_yet_resolved",
+                "denominator_zero",
+                "denominator_missing"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "source_watermark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "watermark"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "watermark": {
+          "$ref": "#/$defs/watermark"
+        }
+      }
+    },
+    "decimal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^(-([1-9][0-9]*(\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)|(0|[1-9][0-9]*)(\\.[0-9]+)?)$",
+      "description": "Exact signed decimal string. No exponent, no plus sign, no negative zero. Scale agreement with precision.max_fraction_digits is a host obligation."
+    },
+    "known_decimal": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "value"
+          ],
+          "properties": {
+            "state": {
+              "const": "known"
+            },
+            "value": {
+              "$ref": "#/$defs/decimal"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "value",
+            "reason"
+          ],
+          "properties": {
+            "state": {
+              "const": "unknown"
+            },
+            "value": {
+              "type": "null"
+            },
+            "reason": {
+              "enum": [
+                "missing_source",
+                "partial_source",
+                "unreconciled",
+                "missing_fx_rate",
+                "missing_attribution",
+                "definition_unavailable",
+                "not_yet_resolved",
+                "denominator_zero",
+                "denominator_missing"
+              ]
+            }
+          }
+        }
+      ],
+      "description": "Known exact value (explicit zero is \"0\") or explicitly unknown (null). Unknown is never zero."
+    },
+    "object_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_store_id",
+        "object_key"
+      ],
+      "properties": {
+        "object_store_id": {
+          "$ref": "#/$defs/id"
+        },
+        "object_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$",
+          "not": {
+            "pattern": "(\\.\\.|//)"
+          },
+          "description": "Store-relative key. No scheme, query or fragment, so signed or expiring URLs cannot be expressed. Resolution and access are host obligations."
+        }
+      }
+    }
+  }
+}
