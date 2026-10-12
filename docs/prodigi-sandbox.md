@@ -80,9 +80,20 @@ The fetch port allows only the sandbox origin and sets `redirect: "error"`. It r
 
 `tests/prodigi-sandbox-network-guard.mjs` is preloaded with `node --import`, before any `dist/` module loads. It makes `fetch`, `http`/`https` `request`/`get`, `net.connect`/`createConnection`, `net.Socket.prototype.connect` and `tls.connect` throw and counts each attempt. The runner pins the case IDs and fails if a case is missing, renamed or reordered. It reports the measured `externalProviderCalls` and fails unless that value is 0. This is an in-process guard, not OS-level network denial. The cases include 403, a pre-aborted signal, a throwing response getter, an oversized streamed body, and the smoke script refusing to run without `--owner-approved`. The fixtures in `tests/prodigi-sandbox-fixtures.mjs` are synthetic and shaped from the public reference (checked 2026-10-11). They are **not recordings** of sandbox traffic.
 
+## Owner decision (2026-10-12)
+
+The owner delegated this decision on 2026-10-12. Rows R1-R3 of integration-evals decision 0003 ([PR #39](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/39); `planning/decisions/0003-owner-delegated-decisions-2026-10-12.md` once merged; delegation recorded on [getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27#issuecomment-6116953222)) record it.
+
+- **Sandbox validation SKU:** `GLOBAL-PHO-4X6`. A C-type silver-halide photo print, 102 x 152 mm (4 x 6 in), lustre. Prodigi's public [C-types page](https://www.prodigi.com/products/prints-and-posters/photo-prints/c-types/), checked 2026-10-12 with no API call, lists it as fulfilled in the US. That page lists lustre, gloss and metallic for the product family, not per SKU, so only the product-details read confirms lustre for this SKU. `GLOBAL-PHO-4X6-PRO` (UK and US) is a fitting alternative. 4X6 was chosen for its wider fulfilment.
+- **Validation print spec:** one `default` print area, landscape 6 x 4 in, full bleed at 300 dpi (1800 x 1200 px), sRGB JPG, finish lustre, sizing `fillPrintArea`. Bleed, safe area and the stub layout are print-production's template (PP-03, print-production #6).
+- **Not decided: the customer-facing mapping.** getticketstub.com sells the `print` tier as matte, foil or holo, in Classic stub (2 x 5.5 in) or Stamp (2 x 3 in). Lustre is not matte, this SKU has no foil or holo, and the customer would receive a 6 x 4 sheet rather than a trimmed stub. That mapping remains an open product decision.
+- **Destination and shipping:** `US`, `Standard`.
+
+This names the SKU, destination and shipping that items 1 and 3 below ask for. It is **not** an approval to run the smoke command, and it is not account evidence. The authenticated read, print-production's roster and template acceptance, and the real `SandboxDecisionVerifier` remain open. The read confirms the attribute key and value for the finish and the US `shipsTo`.
+
 ## Not done (needs owner approval)
 
-1. **One authenticated sandbox quote or read.** This needs explicit owner approval and an owner-named SKU, destination and shipping method. The command makes exactly one request and never creates an order:
+1. **One authenticated sandbox quote or read.** This needs explicit owner approval. The SKU, destination and shipping method are named in the [owner decision](#owner-decision-2026-10-12): `GLOBAL-PHO-4X6`, `US`, `Standard`. The command makes exactly one request and never creates an order:
 
    ```sh
    npm run build
