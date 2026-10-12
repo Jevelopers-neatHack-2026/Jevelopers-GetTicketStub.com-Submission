@@ -128,6 +128,24 @@ test("target response omissions, over-cap inventories and protocol failure remai
   });
 });
 
+test("browser UI is a bounded diagnostic class and never an accepted startup target", async () => {
+  await withProfile(async (path, start) => {
+    for (const url of ["about:blank", "chrome://PRIVATE_CANARY/?SECRET_CANARY"]) {
+      const result = await observeBrowserIdentity(connection(path, { "Target.getTargets": {
+        targetInfos: [{ type: "page", url: "about:blank" }, { type: "browser_ui", url, title: "TITLE_CANARY" }],
+      } }), start);
+      assert.equal(result.evidence.status, "unavailable");
+      assert.equal(result.evidence.code, "identity_initial_targets_not_blank");
+      assert.equal(result.profilePath, path);
+      assert.deepEqual(result.evidence.initialTargets.reasons, url === "about:blank"
+        ? ["target_type_unaccepted"] : ["target_type_unaccepted", "target_url_unaccepted"]);
+      assert.deepEqual(result.evidence.initialTargets.targets[1], { typeClass: "browser_ui",
+        urlClass: url === "about:blank" ? "about_blank" : "chrome_internal", subtypeClass: "absent" });
+      assert.doesNotMatch(JSON.stringify(result.evidence), /CANARY|chrome:\/\//);
+    }
+  });
+});
+
 test("a stale, absent, non-task or symlinked profile cannot masquerade as a newly launched directory", async () => {
   await withProfile(async (path, start) => {
     assert.equal((await observeBrowserIdentity(connection(path), start + 60_000)).evidence.code, "identity_profile_creation_unconfirmed");
@@ -145,9 +163,10 @@ test("a stale, absent, non-task or symlinked profile cannot masquerade as a newl
 
 // Synthetic lifecycle controls call the actual session manager. No native browser or network is started.
 function harness(options = {}) {
-  const directory = mkdtempSync(join(tmpdir(), "ticketstub-cold-control-")), trace = [], collectors = [], browsers = [];
+  const directory = mkdtempSync(join(tmpdir(), "ticketstub-cold-control-")), trace = [], collectors = [], browsers = [], launchOptions = [];
   const manager = new DownloadBrowserSessions(directory, plan, {
-    async launch() {
+    async launch(optionsForLaunch) {
+      launchOptions.push(structuredClone(optionsForLaunch));
       const ordinal = browsers.length + 1;
       trace.push([ordinal, "launch"]);
       const browser = { ordinal, async newPage() { trace.push([ordinal, "newPage"]); }, async close() {
@@ -179,7 +198,7 @@ function harness(options = {}) {
     removed(path) { return options.removalFails || !path ? "unavailable" : "confirmed_absent"; },
     collectorSetupTimeoutMs: options.startHeld ? 5 : 2000,
   });
-  return { manager, trace, collectors, browsers, cleanup() { rmSync(directory, { recursive: true, force: true }); } };
+  return { manager, trace, collectors, browsers, launchOptions, cleanup() { rmSync(directory, { recursive: true, force: true }); } };
 }
 
 async function runAll(h) {
@@ -207,6 +226,17 @@ test("baseline launches once and each extra pair gets its own collector before n
     assert.equal(new Set(record.sessions.map((item) => item.identity.profile.pathSha256)).size, 5);
     for (let ordinal = 1; ordinal <= 5; ordinal++) assert.deepEqual(h.trace.filter(([id]) => id === ordinal).map(([, action]) => action),
       ["launch", "start", "identify", "newPage", "close", "snapshot", "stop"]);
+  } finally { h.cleanup(); }
+});
+
+test("the actual manager requests download isolation for baseline and every additional pair", async () => {
+  const h = harness();
+  try {
+    const result = await runAll(h);
+    assert.equal(result.passed, true);
+    assert.deepEqual(result.expectedSessions, ["baseline", "cold-390-1", "cold-390-2", "cold-1440-1", "cold-1440-2"]);
+    assert.deepEqual(h.launchOptions, expected.map(() => ({ downloadIsolation: true })));
+    assert.ok(result.sessions.every((session) => session.launchPolicy === "download_extension_isolation_requested"));
   } finally { h.cleanup(); }
 });
 
@@ -318,10 +348,11 @@ test("a never-attempted fixed session remains explicit and cannot be claimed com
 
 // Actual identity parsing, filesystem/profile removal and manager/preflight code; only
 // the browser protocol/collector are synthetic. No app navigation or native process occurs.
-function identityPreflightDependencies(nonblank) {
+function identityPreflightDependencies(nonblank, launchOptions = []) {
   let profile;
   return {
-    async launch() {
+    async launch(optionsForLaunch) {
+      launchOptions.push(structuredClone(optionsForLaunch));
       profile = mkdtempSync(join(tmpdir(), "ticketstub-chrome-"));
       return { ...connection(profile, nonblank ? { "Target.getTargets": { targetInfos: [{ type: "page", url: "chrome://SECRET_CANARY" }] } } : {}),
         newPage() { throw new Error("preflight must not create an application page"); },
@@ -351,7 +382,9 @@ test("identity-only preflight retains both the rejected target evidence and succ
   for (const nonblank of [false, true]) {
     const directory = mkdtempSync(join(tmpdir(), "ticketstub-identity-control-"));
     try {
-      const result = await runBrowserIdentityPreflight(directory, identityPreflightDependencies(nonblank));
+      const launchOptions = [];
+      const result = await runBrowserIdentityPreflight(directory, identityPreflightDependencies(nonblank, launchOptions));
+      assert.deepEqual(launchOptions, [{ downloadIsolation: true }]);
       const saved = JSON.parse(readFileSync(join(directory, "browser-identity-preflight.json"), "utf8"));
       assert.deepEqual(saved, result);
       assert.equal(result.passed, !nonblank);

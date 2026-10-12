@@ -14,6 +14,7 @@ const MAX_COMMAND_CHARS = 16_384;
 const CLOCK_RESOLUTION_MS = 1000; // filesystem birth-time precision, not a browser delay
 const MAX_INITIAL_TARGETS = 32;
 const MAX_TARGET_URL_CHARS = 4096;
+const DOWNLOAD_LAUNCH_OPTIONS = Object.freeze({ downloadIsolation: true });
 
 async function bounded(promise, ms) {
   let timer;
@@ -41,7 +42,7 @@ function initialTargetsEvidence(targets) {
     observedCount: null, recordedCount: 0, omittedCount: null, limit: MAX_INITIAL_TARGETS, targets: [] };
   const infos = targets.targetInfos, reasons = new Set();
   if (infos.length > MAX_INITIAL_TARGETS) reasons.add("target_count_over_cap");
-  const knownTypes = ["page", "tab", "browser", "background_page", "service_worker", "worker", "shared_worker", "iframe", "webview", "other"];
+  const knownTypes = ["page", "tab", "browser", "browser_ui", "background_page", "service_worker", "worker", "shared_worker", "iframe", "webview", "other"];
   const rows = infos.slice(0, MAX_INITIAL_TARGETS).map((target) => {
     const type = target?.type, url = target?.url;
     if (!["page", "tab", "browser"].includes(type)) reasons.add("target_type_unaccepted");
@@ -136,14 +137,16 @@ export class DownloadBrowserSessions {
       throw new Error("unexpected_or_duplicate_browser_session");
     }
     const record = { sessionId, mode: sessionId === "baseline" ? "baseline_shared" : "cold_browser", launchOrdinal: this.entries.size + 1,
-      setup: "starting", collectorSetupTimeoutMs: this.dependencies.collectorSetupTimeoutMs,
+      setup: "starting", launchPolicy: "download_extension_isolation_requested", collectorSetupTimeoutMs: this.dependencies.collectorSetupTimeoutMs,
       shutdown: "not_attempted", collectorSnapshot: "not_recorded", collectorStopped: false, faults: [] };
     const entry = { record, browser: null, receipts: null, profilePath: null, snapshot: null, closed: false };
     this.entries.set(sessionId, entry);
     let stage = "browser_launch_failed";
     try {
       const startedAt = Date.now();
-      entry.browser = await this.dependencies.launch();
+      // Applies to baseline, all additional pairs and the identity-only preflight. The
+      // requested policy alone never qualifies a session: actual target checks still apply.
+      entry.browser = await this.dependencies.launch(DOWNLOAD_LAUNCH_OPTIONS);
       stage = "collector_setup_failed";
       record.directory = mkdtempSync(join(this.directory, `native-downloads-${sessionId}-`));
       entry.receipts = this.dependencies.makeReceipts(entry.browser, record.directory);

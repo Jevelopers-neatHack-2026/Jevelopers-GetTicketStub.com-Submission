@@ -66,7 +66,7 @@ The `captureQualification` record states the selected scope and exact expected, 
 
 Before application navigation, `browserSessions` records the actual browser PID from `SystemInfo.getProcessInfo`,
 the throwaway profile argument from `SystemInfo.getInfo`, filesystem creation metadata, blank initial targets,
-and the unchanged launcher's source hash. Only the profile path hash is retained; raw command lines, GPU/model
+and the launcher's source hash. Only the profile path hash is retained; raw command lines, GPU/model
 data and target URLs are omitted. Protocol, size, path, creation-time or uniqueness failures leave isolation
 unconfirmed and fail the pair. These startup metadata queries can affect timing; they do not establish pixel
 readiness. A generated session label alone is not isolation evidence.
@@ -78,8 +78,20 @@ existing always-run artifact step even on failure. Startup target evidence recor
 classes, explicit omissions and precise rejection reasons; no target title, ID or URL is retained. Internal pages
 and workers are still rejected by the unchanged blank-target rule. A valid task profile can be retained privately
 for removal verification even when target validation fails; confirmed removal never converts that identity failure
-into a pass. The launcher already requests `about:blank`; these diagnostics do not infer which startup target caused
-a failure that omitted its inventory, and do not introduce a guessed allowlist or a new browser flag.
+into a pass. The launcher requests `about:blank`; diagnostics do not infer which startup target caused a failure
+that omitted its inventory. `browser_ui` is classified explicitly but remains rejected, including at a blank URL.
+
+Download qualification requests the launcher's explicit `downloadIsolation` option for its baseline session,
+all four additional sessions and the identity preflight. Only this option adds `--disable-extensions` and
+`--disable-component-extensions-with-background-pages`; other browser suites keep their existing arguments.
+The `launchPolicy` field records a request, not proof that Chrome honored the flags. Actual startup target,
+process/profile and cleanup checks still decide qualification, and remain unchanged. This changes the download
+verifier's browser environment; it is neither a compositor repair nor evidence of image readiness. The flags and
+diagnostic type are defined in Chromium revision `b510e9d7cd3a2fbd78d0ddc42234103206c5f78d`, the measured browser
+revision of the retained failed preflight: [extension switch](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/extensions/common/switches.h),
+[component switch](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/common/chrome_switches.h),
+[component loading](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/browser/extensions/component_loader.cc)
+and [browser UI type](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/content/browser/devtools/devtools_agent_host_impl.cc).
 
 Each session's collector starts before application navigation and remains attached through bounded browser
 shutdown. Its final snapshot is then retained and the listener detached. Process exit, profile removal and

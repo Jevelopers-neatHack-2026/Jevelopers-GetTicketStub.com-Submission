@@ -30,27 +30,34 @@ async function within(promise, ms) {
   }
 }
 
-export async function launchBrowser() {
+// Download qualification opts into extension isolation. Other consumers retain exactly
+// the existing arguments; this option is not a compositor or screenshot readiness flag.
+export function browserLaunchArguments(profile, { downloadIsolation = false } = {}) {
+  return [
+    "--headless=new",
+    // Background audits must not play sound or take over the user's media keys.
+    "--mute-audio",
+    "--disable-features=HardwareMediaKeyHandling",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--hide-scrollbars",
+    "--remote-debugging-port=0",
+    `--user-data-dir=${profile}`,
+    // loopback only: any other host does not resolve, so a fixture run cannot touch the network
+    "--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1 , EXCLUDE localhost",
+    ...(downloadIsolation === true ? ["--disable-extensions", "--disable-component-extensions-with-background-pages"] : []),
+    "about:blank",
+  ];
+}
+
+export async function launchBrowser(options) {
   const exe = chromePath();
   if (!exe) throw new Error("no Chrome or Edge found (set CHROME_PATH)");
   const profile = mkdtempSync(join(tmpdir(), "ticketstub-chrome-"));
   const child = spawn(
     exe,
-    [
-      "--headless=new",
-      // Background audits must not play sound or take over the user's media keys.
-      "--mute-audio",
-      "--disable-features=HardwareMediaKeyHandling",
-      "--disable-gpu",
-      "--no-first-run",
-      "--no-default-browser-check",
-      "--hide-scrollbars",
-      "--remote-debugging-port=0",
-      `--user-data-dir=${profile}`,
-      // loopback only: any other host does not resolve, so a fixture run cannot touch the network
-      "--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1 , EXCLUDE localhost",
-      "about:blank",
-    ],
+    browserLaunchArguments(profile, options),
     { stdio: ["ignore", "ignore", "pipe"] },
   );
   let log = "";
