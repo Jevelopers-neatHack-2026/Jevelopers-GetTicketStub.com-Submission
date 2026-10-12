@@ -60,12 +60,20 @@ test("inspection owned preparation preserves target and plan provenance when act
   const routeTarget = decisionExecutionTargetHash(partialRoute, { trustedScope: scope });
   const route = bindInspectionDecisionReservation(plan, partialRoute, "actual-route-reservation");
   assert.equal(decisionExecutionTargetHash(route), routeTarget);
-  assert.equal(evaluateInspectionDecision(plan, first, firstResult, route, routeResult(route), scope).status, "complete");
+  const originalDecision = evaluateInspectionDecision(plan, first, firstResult, route, routeResult(route), scope);
+  assert.equal(originalDecision.status, "complete");
   const restored = prepareInspectionDecisionPlan({ deterministic: inspected, observation,
     decision_context: { ...context, budget_ref: first.budget_ref } });
   assert.equal(restored.plan_ref, plan.plan_ref);
   const restoredFirst = bindInspectionDecisionReservation(restored, prepareInspectionEvidenceBatch(restored, observation), first.budget_ref.reservation_ref);
   assert.deepEqual(restoredFirst, first);
+  const restoredPartialRoute = prepareInspectionRouteBatch(restored, restoredFirst, firstResult, scope,
+    { ...routeContext, budget_ref: route.budget_ref, plan_ref: restored.plan_ref });
+  const restoredRoute = bindInspectionDecisionReservation(restored, restoredPartialRoute, route.budget_ref.reservation_ref);
+  assert.deepEqual(restoredRoute, route);
+  assert.deepEqual(evaluateInspectionDecision(restored, restoredFirst, firstResult, restoredRoute,
+    routeResult(restoredRoute), scope), originalDecision,
+  "completed replay preserves both request hashes and the reservation-free decision context provenance");
 });
 
 function crc32(bytes) {

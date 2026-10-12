@@ -406,7 +406,11 @@ function inspectionRouteBatch(plan, firstRequest, firstResult, trustedScope, rou
   if (validated.status !== "complete") {
     return Object.freeze({ status: "review_required", reason: validated.status });
   }
-  const routeContext = snapshotDecisionContext(routeDecisionContext, "route_decision_context", { route: true });
+  let routeContext = snapshotDecisionContext(routeDecisionContext, "route_decision_context", { route: true });
+  if (preparation) {
+    const { reservation_ref: _reservation, ...budget } = routeContext.budget_ref;
+    routeContext = deepFreeze({ ...routeContext, budget_ref: budget });
+  }
   if (routeContext.linked_request_id !== firstRequest.request_id ||
     routeContext.linked_billable_attempt_id !== firstRequest.billable_attempt_id ||
     routeContext.plan_ref !== metadata.planRef || routeContext.inspection_subject_hash !== metadata.subjectHash ||
@@ -424,10 +428,6 @@ function inspectionRouteBatch(plan, firstRequest, firstResult, trustedScope, rou
   const { depends_on: _dependsOn, ...routeQuestion } = plan.questions.next_step;
   const { linked_request_id: _linkedRequest, linked_billable_attempt_id: _linkedAttempt,
     plan_ref: _planRef, inspection_subject_hash: _subjectHash, ...context } = routeContext;
-  if (preparation) {
-    const { reservation_ref: _reservation, ...budget } = context.budget_ref;
-    context.budget_ref = Object.freeze(budget);
-  }
   const request = requestFromContext(context, metadata.deterministic, {
     state: Object.freeze({ text: stateText }),
     questions: Object.freeze({ next_step: Object.freeze(routeQuestion) }),

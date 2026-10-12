@@ -3682,9 +3682,16 @@ export function createCreativeApi(options = {}) {
       "request_id", "logical_operation_id", "billable_attempt_id", "attempt_number", "attempt_limit", "budget_ref", "deadline_at",
       "cancellation_ref", "model_policy", "workflow_id", "run_id", "order_id", "job_id", "transport_attempt_id", "provider_request_id"];
     const firstContext = Object.fromEntries(Object.entries(firstRequest).filter(([key]) => contextKeys.includes(key)));
-    const plan = createInspectionDecisionPlan({ deterministic, observation, decision_context: firstContext });
+    const preparedFirstStage = firstStage.intent.target_binding_sha256 !== undefined;
+    const plan = (preparedFirstStage ? prepareInspectionDecisionPlan : createInspectionDecisionPlan)({ deterministic,
+      observation, decision_context: firstContext });
+    const expectedFirst = plan.status === "ready" ? preparedFirstStage
+      ? bindInspectionDecisionReservation(plan, prepareInspectionEvidenceBatch(plan, observation),
+        firstRequest.budget_ref.reservation_ref)
+      : createInspectionEvidenceBatch(plan, observation) : null;
     if (plan.status !== "ready" || plan.plan_ref !== firstStage.intent.plan_ref ||
-      canonicalHash(createInspectionEvidenceBatch(plan, observation)) !== canonicalHash(firstRequest)) {
+      canonicalHash(expectedFirst) !== canonicalHash(firstRequest) || preparedFirstStage &&
+      decisionExecutionTargetHash(firstRequest) !== firstStage.intent.target_binding_sha256) {
       throw new CreativeApiError("unavailable", "edit", "inspection_repair.decision_plan");
     }
     const trustedInspectionScope = Object.freeze({ ...started.scope, brief_id: brief.brief_id,
@@ -3703,8 +3710,13 @@ export function createCreativeApi(options = {}) {
     const routeContext = { ...Object.fromEntries(Object.entries(routeRequest).filter(([key]) => contextKeys.includes(key))),
       linked_request_id: firstRequest.request_id, linked_billable_attempt_id: firstRequest.billable_attempt_id,
       plan_ref: plan.plan_ref, inspection_subject_hash: subjectHash };
-    const expectedRoute = createInspectionRouteBatch(plan, firstRequest, checkedFirst, trustedInspectionScope, routeContext);
-    if (!isRecord(expectedRoute) || canonicalHash(expectedRoute) !== canonicalHash(routeRequest)) {
+    const preparedRouteStage = routeStage.intent.target_binding_sha256 !== undefined;
+    const unboundRoute = (preparedRouteStage ? prepareInspectionRouteBatch : createInspectionRouteBatch)(plan,
+      firstRequest, checkedFirst, trustedInspectionScope, routeContext);
+    const expectedRoute = preparedRouteStage ? bindInspectionDecisionReservation(plan, unboundRoute,
+      routeRequest.budget_ref.reservation_ref) : unboundRoute;
+    if (!isRecord(expectedRoute) || canonicalHash(expectedRoute) !== canonicalHash(routeRequest) ||
+      preparedRouteStage && decisionExecutionTargetHash(routeRequest) !== routeStage.intent.target_binding_sha256) {
       throw new CreativeApiError("unavailable", "edit", "inspection_repair.decision_provenance");
     }
     const checkedRoute = validateDecisionResult(routeRequest, routeResult, { trustedScope: trustedInspectionScope });
@@ -4746,7 +4758,8 @@ export function createCreativeApi(options = {}) {
             plan = planned;
             const expected = preparedStage ? bindInspectionDecisionReservation(plan, prepareInspectionEvidenceBatch(plan, observation),
               firstRequest.budget_ref.reservation_ref) : createInspectionEvidenceBatch(plan, observation);
-            if (canonicalHash(expected) !== canonicalHash(firstRequest) || plan.plan_ref !== firstStage.intent.plan_ref) {
+            if (canonicalHash(expected) !== canonicalHash(firstRequest) || plan.plan_ref !== firstStage.intent.plan_ref ||
+              preparedStage && decisionExecutionTargetHash(firstRequest) !== firstStage.intent.target_binding_sha256) {
               throw new CreativeApiError("unavailable", operation, "inspection.decision_provenance");
             }
             firstResult = validateDecisionResult(firstRequest, firstResult, { trustedScope: { ...trustedInspectionScope,
@@ -4852,7 +4865,8 @@ export function createCreativeApi(options = {}) {
                   linked_billable_attempt_id: firstRequest.billable_attempt_id, plan_ref: plan.plan_ref,
                   inspection_subject_hash: subjectHash });
               if (preparedRouteStage) routeRequest = bindInspectionDecisionReservation(plan, routeRequest, reservationRef);
-              if (canonicalHash(routeRequest) !== routeStage.intent.request_hash) {
+              if (canonicalHash(routeRequest) !== routeStage.intent.request_hash || preparedRouteStage &&
+                decisionExecutionTargetHash(routeRequest) !== routeStage.intent.target_binding_sha256) {
                 throw new CreativeApiError("unavailable", operation, "inspection.decision_provenance");
               }
               routeResult = validateDecisionResult(routeRequest, routeResult, { trustedScope: { ...trustedInspectionScope,
@@ -5631,9 +5645,16 @@ export function createCreativeApi(options = {}) {
             "budget_ref", "deadline_at", "cancellation_ref", "model_policy", "workflow_id", "run_id", "order_id",
             "job_id", "transport_attempt_id", "provider_request_id"];
           const decisionContext = Object.fromEntries(Object.entries(firstRequest).filter(([key]) => decisionContextKeys.includes(key)));
-          const plan = createInspectionDecisionPlan({ deterministic, observation, decision_context: decisionContext });
+          const preparedFirstStage = firstStage.intent.target_binding_sha256 !== undefined;
+          const plan = (preparedFirstStage ? prepareInspectionDecisionPlan : createInspectionDecisionPlan)({ deterministic,
+            observation, decision_context: decisionContext });
+          const expectedFirst = plan.status === "ready" ? preparedFirstStage
+            ? bindInspectionDecisionReservation(plan, prepareInspectionEvidenceBatch(plan, observation),
+              firstRequest.budget_ref.reservation_ref)
+            : createInspectionEvidenceBatch(plan, observation) : null;
           if (plan.status !== "ready" || plan.plan_ref !== firstStage.intent.plan_ref ||
-            canonicalHash(createInspectionEvidenceBatch(plan, observation)) !== canonicalHash(firstRequest)) {
+            canonicalHash(expectedFirst) !== canonicalHash(firstRequest) || preparedFirstStage &&
+            decisionExecutionTargetHash(firstRequest) !== firstStage.intent.target_binding_sha256) {
             throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_plan");
           }
           const trustedInspectionScope = Object.freeze({ ...started.scope, brief_id: brief.brief_id,
@@ -5664,9 +5685,13 @@ export function createCreativeApi(options = {}) {
               .filter(([key]) => decisionContextKeys.includes(key))), linked_request_id: firstRequest.request_id,
               linked_billable_attempt_id: firstRequest.billable_attempt_id, plan_ref: plan.plan_ref,
               inspection_subject_hash: subjectHash };
-            const expectedRouteRequest = createInspectionRouteBatch(plan, firstRequest, checkedFirstResult,
-              trustedInspectionScope, routeContext);
-            if (!isRecord(expectedRouteRequest) || canonicalHash(expectedRouteRequest) !== canonicalHash(routeRequest)) {
+            const preparedRouteStage = routeStage.intent.target_binding_sha256 !== undefined;
+            const unboundRoute = (preparedRouteStage ? prepareInspectionRouteBatch : createInspectionRouteBatch)(plan,
+              firstRequest, checkedFirstResult, trustedInspectionScope, routeContext);
+            const expectedRouteRequest = preparedRouteStage ? bindInspectionDecisionReservation(plan, unboundRoute,
+              routeRequest.budget_ref.reservation_ref) : unboundRoute;
+            if (!isRecord(expectedRouteRequest) || canonicalHash(expectedRouteRequest) !== canonicalHash(routeRequest) ||
+              preparedRouteStage && decisionExecutionTargetHash(routeRequest) !== routeStage.intent.target_binding_sha256) {
               throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_provenance");
             }
             const checkedRouteResult = validateDecisionResult(routeRequest, routeResult, { trustedScope: trustedInspectionScope });
