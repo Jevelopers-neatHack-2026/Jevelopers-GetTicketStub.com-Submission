@@ -80,6 +80,7 @@ jobs:
             artifacts/evidence/stored-lineage-postgres.json
             artifacts/reporting/producer-*-page.json
             artifacts/reporting/ie-ci06-pg-page.json
+            artifacts/reporting/partition-binding-evidence.json
             artifacts/reporting/failures-*.json
             artifacts/exports/postgres-composition.json
             artifacts/exports/synthetic-sql-composition.json

@@ -4,9 +4,9 @@ Each folder contains actual tracked source files at the linked commit. Original 
 
 ## Collection at a glance
 
-**14 public repositories · 4,556 tracked files · 860,752 source-file lines · 1,944 source commits**
+**14 public repositories · 4,556 tracked files · 860,752 source-file lines · 1,952 source commits**
 
-There are 1,807,498 lines across all text files. Source-file lines include comments, blank lines, tests, and generated code. They are not a count of unique, hand-written code.
+There are 1,807,499 lines across all text files. Source-file lines include comments, blank lines, tests, and generated code. They are not a count of unique, hand-written code.
 
 Commits count all history leading to each linked version, including merges. They are summed per repo, not deduplicated across repos or limited to the event dates. These are project-scale measures, not a score for quality, effort, or event eligibility. The submission repo’s own commits are excluded.
 
@@ -15,9 +15,9 @@ Commits count all history leading to each linked version, including merges. They
 | Repository | Files | Source-file lines | Source commits |
 | --- | ---: | ---: | ---: |
 | [.github](repositories/.github/) | 76 | 2,701 | [51](https://github.com/Jevelopers-neatHack-2026/.github/commits/c9b08a1c2a7e3e1e0f49051fce0be0603d3e138c) |
-| [agent-harness](repositories/agent-harness/) | 233 | 74,333 | [183](https://github.com/Jevelopers-neatHack-2026/agent-harness/commits/0cddf81923ef80f4231023f9b0a973bcf540e2b3) |
+| [agent-harness](repositories/agent-harness/) | 233 | 74,333 | [189](https://github.com/Jevelopers-neatHack-2026/agent-harness/commits/884b0ded7d7d8c310417ac8c114f21ded27474cb) |
 | [brand-kit](repositories/brand-kit/) | 117 | 9,051 | [32](https://github.com/Jevelopers-neatHack-2026/brand-kit/commits/f34c71a0961dc0c67f1ecb293a5bbb633addb663) |
-| [cost-intelligence](repositories/cost-intelligence/) | 277 | 35,778 | [110](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/commits/a75faec02ebf30b896a6003d431e0279a9f93bed) |
+| [cost-intelligence](repositories/cost-intelligence/) | 277 | 35,778 | [112](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/commits/45248c766128216c0d7542737d30c0167f5b4f9b) |
 | [creative-engine](repositories/creative-engine/) | 375 | 84,794 | [183](https://github.com/Jevelopers-neatHack-2026/creative-engine/commits/0041653dadaf97cd436d33325b35cb0e2a802fbc) |
 | [event-intelligence](repositories/event-intelligence/) | 339 | 89,448 | [250](https://github.com/Jevelopers-neatHack-2026/event-intelligence/commits/6549f9ea7422c7df7b1c6209f4fb4651ef068d9b) |
 | [fulfillment-connectors](repositories/fulfillment-connectors/) | 148 | 45,889 | [130](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/commits/5f7e952f1632d0c07005bc64603ad1c28558814e) |
@@ -34,9 +34,9 @@ Commits count all history leading to each linked version, including merges. They
 | Repository | Purpose | Branch | Source commit |
 | --- | --- | --- | --- |
 | [.github](repositories/.github/) | Org profile plus shared contribution, governance and evidence standards for the Jevelopers neatHack 2026 program | `main` | [c9b08a1c2a7e](https://github.com/Jevelopers-neatHack-2026/.github/commit/c9b08a1c2a7e3e1e0f49051fce0be0603d3e138c) |
-| [agent-harness](repositories/agent-harness/) | Durable workflow execution, fencing and recovery runtime for the Agent & Creative v1 subsystem (Node 22, SQLite) | `main` | [0cddf81923ef](https://github.com/Jevelopers-neatHack-2026/agent-harness/commit/0cddf81923ef80f4231023f9b0a973bcf540e2b3) |
+| [agent-harness](repositories/agent-harness/) | Durable workflow execution, fencing and recovery runtime for the Agent & Creative v1 subsystem (Node 22, SQLite) | `main` | [884b0ded7d7d](https://github.com/Jevelopers-neatHack-2026/agent-harness/commit/884b0ded7d7d8c310417ac8c114f21ded27474cb) |
 | [brand-kit](repositories/brand-kit/) | TicketStub master brand kit: logo system, DTCG design tokens, fonts, brand board and usage guidelines. | `main` | [f34c71a0961d](https://github.com/Jevelopers-neatHack-2026/brand-kit/commit/f34c71a0961dc0c67f1ecb293a5bbb633addb663) |
-| [cost-intelligence](repositories/cost-intelligence/) | TypeScript package for usage-cost metering, pricing, budget reservations, ledger, reconciliation and summaries. | `main` | [a75faec02ebf](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/commit/a75faec02ebf30b896a6003d431e0279a9f93bed) |
+| [cost-intelligence](repositories/cost-intelligence/) | TypeScript package for usage-cost metering, pricing, budget reservations, ledger, reconciliation and summaries. | `main` | [45248c766128](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/commit/45248c766128216c0d7542737d30c0167f5b4f9b) |
 | [creative-engine](repositories/creative-engine/) | Typed creative API runtime for image generation, edits, versioned designs, inspection, metering and contract checks | `main` | [0041653dadaf](https://github.com/Jevelopers-neatHack-2026/creative-engine/commit/0041653dadaf97cd436d33325b35cb0e2a802fbc) |
 | [event-intelligence](repositories/event-intelligence/) | Sourced event facts and research cache: bounded retrieval, evidence provenance and privacy boundaries | `main` | [6549f9ea7422](https://github.com/Jevelopers-neatHack-2026/event-intelligence/commit/6549f9ea7422c7df7b1c6209f4fb4651ef068d9b) |
 | [fulfillment-connectors](repositories/fulfillment-connectors/) | Provider-neutral fulfillment connector runtime: supplier quote normalization, order submission and shipment status. | `main` | [5f7e952f1632](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/commit/5f7e952f1632d0c07005bc64603ad1c28558814e) |

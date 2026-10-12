@@ -71,20 +71,20 @@
       "path": "repositories/agent-harness",
       "url": "https://github.com/Jevelopers-neatHack-2026/agent-harness",
       "branch": "main",
-      "commit": "0cddf81923ef80f4231023f9b0a973bcf540e2b3",
-      "tree": "08d28550552e3c854d2900685d9627cb095b247e",
-      "committed_at": "2026-10-12T16:22:01-04:00",
+      "commit": "884b0ded7d7d8c310417ac8c114f21ded27474cb",
+      "tree": "573dacc20ef326a0cc097f7d5b20cbd528476d7b",
+      "committed_at": "2026-10-12T17:15:08-04:00",
       "description": "Durable workflow execution, fencing and recovery runtime for the Agent & Creative v1 subsystem (Node 22, SQLite)",
       "tracked_files": 233,
       "statistics": {
-        "commits": 183,
+        "commits": 189,
         "text_files": 223,
         "text_lines": 80791,
         "source_files": 155,
         "source_file_lines": 74333,
         "binary_or_non_utf8_files": 10,
         "symlinks": 0,
-        "file_bytes": 6134528
+        "file_bytes": 6134600
       }
     },
     {
@@ -113,20 +113,20 @@
       "path": "repositories/cost-intelligence",
       "url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence",
       "branch": "main",
-      "commit": "a75faec02ebf30b896a6003d431e0279a9f93bed",
-      "tree": "202712784876fb7af1d5dced33fcb6766e1d4af5",
-      "committed_at": "2026-10-12T16:51:46-04:00",
+      "commit": "45248c766128216c0d7542737d30c0167f5b4f9b",
+      "tree": "fcdec99128a9ac50e21c054da583baa0de0b1d9c",
+      "committed_at": "2026-10-12T17:11:19-04:00",
       "description": "TypeScript package for usage-cost metering, pricing, budget reservations, ledger, reconciliation and summaries.",
       "tracked_files": 277,
       "statistics": {
-        "commits": 110,
+        "commits": 112,
         "text_files": 276,
-        "text_lines": 91387,
+        "text_lines": 91388,
         "source_files": 129,
         "source_file_lines": 35778,
         "binary_or_non_utf8_files": 1,
         "symlinks": 0,
-        "file_bytes": 5105897
+        "file_bytes": 5105961
       }
     },
     {
