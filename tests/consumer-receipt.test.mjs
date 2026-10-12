@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkReceipt, MAX_BYTES } from '../scripts/check-consumer-receipt.mjs';
@@ -189,6 +189,56 @@ test('hostile values never appear in results', () => {
   assert.ok(!JSON.stringify(r).includes('SECRET'));
 });
 
+test('blank required human metadata is rejected, non-blank accepted', () => {
+  const blanks = ['   ', '\u00a0', '\u2003\u2003', '\ufeff'];
+  for (const b of blanks) {
+    for (const [fn, path] of [
+      [(x) => { x.consumer_run.type_check.command = b; }, 'consumer_run.type_check'],
+      [(x) => { x.consumer_run.scenarios[0].command = b; }, 'consumer_run.scenarios[0]'],
+      [(x) => { x.consumer_run.environment.os = b; }, 'consumer_run.environment'],
+      [(x) => { x.consumer_run.limitations = [b]; }, 'consumer_run.limitations'],
+      [(x) => { x.stages.merge_release = { scope_and_limitations: b }; }, 'stages.merge_release'],
+    ]) {
+      const r = mutate(fn);
+      assert.equal(r.status, 'INVALID', path);
+      assert.ok(r.errors.some((e) => e.code === 'BAD_FORMAT' && e.path.startsWith(path)), path);
+    }
+  }
+  assert.equal(mutate((x) => { x.consumer_run.type_check.command = ' npm test '; }).status, 'METADATA_COMPLETE');
+});
+
+test('semver: invalid prerelease rejected, valid build metadata accepted', () => {
+  for (const v of ['1.0.0-01', '1.0.0-', '1.0.0-alpha.01', '1.0.0-alpha..1', '1.0.0+', '1.0.0+a..b', '1.0.0+a_b', '1.0.0-+b', '01.0.0']) {
+    const r = mutate((x) => { x.receipt.candidate = v; x.producer.package_version = v; });
+    assert.equal(r.status, 'INVALID', v);
+    assert.ok(codes(r).includes('BAD_FORMAT@receipt.candidate'), v);
+    assert.ok(codes(r).includes('BAD_FORMAT@producer.package_version'), v);
+  }
+  for (const v of ['1.0.0+build.5', '1.0.0+001', '1.0.0-0', '1.0.0-alpha.1', '1.0.0-0a', '1.0.0-x-y.7+sha-1.001', '1.0.0-rc.1+exp.sha.5114f85']) {
+    const r = mutate((x) => { x.receipt.candidate = v; x.producer.package_version = v; });
+    assert.equal(r.status, 'METADATA_COMPLETE', v);
+  }
+  const c = (v) => mutate((x) => { x.consumer_run.contracts_exercised = [`ProjectRequest/${v}`]; }).status;
+  assert.equal(c('1.0.0+build.5'), 'METADATA_COMPLETE');
+  assert.equal(c('1.0.0-01'), 'INVALID');
+  assert.equal(c('1.0.0-'), 'INVALID');
+});
+
+test('invalid severity survives the diagnostic cap', () => {
+  const r = mutate((x) => {
+    x.consumer_run.scenarios = Array.from({ length: 40 }, () => ({}));
+    x.stages.merge_release = true;
+  });
+  assert.equal(r.errors.length, 100);
+  assert.ok(r.errors.every((e) => e.code === 'MISSING_FIELD'));
+  assert.ok(!codes(r).includes('BAD_FORMAT@stages.merge_release'));
+  assert.equal(r.status, 'INVALID');
+  // Control: the same flood without a later invalid finding stays INCOMPLETE.
+  const inc = mutate((x) => { x.consumer_run.scenarios = Array.from({ length: 40 }, () => ({})); });
+  assert.equal(inc.errors.length, 100);
+  assert.equal(inc.status, 'INCOMPLETE');
+});
+
 // ---- CLI ----
 const dir = mkdtempSync(join(tmpdir(), 'receipt-test-'));
 const put = (name, content) => { const p = join(dir, name); writeFileSync(p, content); return p; };
@@ -254,4 +304,31 @@ test('command strings are metadata and are never executed', () => {
   assert.equal(res.status, 0);
   assert.equal(existsSync(marker), false);
   assertClean(res);
+});
+
+test('CLI does not block on a FIFO and rejects it safely', { skip: process.platform === 'win32' }, () => {
+  const fifo = join(dir, 'pipe.json');
+  const made = spawnSync('mkfifo', [fifo]);
+  if (made.status !== 0) return; // mkfifo unavailable: nothing to test
+  try {
+    const res = spawnSync(process.execPath, [CLI, fifo], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+    assert.equal(res.error, undefined, 'CLI hung or failed to run');
+    assert.equal(res.status, 2);
+    assert.equal(JSON.parse(res.stdout).errors[0].code, 'FILE_UNREADABLE');
+    assertClean(res);
+  } finally {
+    rmSync(fifo, { force: true });
+  }
+});
+
+test('CLI still reads a regular file via a symlink and rejects a char device', { skip: process.platform === 'win32' }, () => {
+  const target = put('target.json', JSON.stringify(complete()));
+  const link = join(dir, 'link.json');
+  symlinkSync(target, link);
+  const ok = run(link);
+  assert.equal(ok.status, 0);
+  assertClean(ok);
+  const dev = run('/dev/null');
+  assert.equal(dev.status, 2);
+  assert.equal(JSON.parse(dev.stdout).errors[0].code, 'FILE_UNREADABLE');
 });

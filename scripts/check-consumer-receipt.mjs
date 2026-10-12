@@ -7,7 +7,7 @@
 // never echoes receipt values, key names, or file paths. Errors are a fixed
 // code plus a path built only from this file's schema constants.
 
-import { openSync, fstatSync, readSync, closeSync } from 'node:fs';
+import { openSync, fstatSync, readSync, closeSync, constants } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export const MAX_BYTES = 1024 * 1024;
@@ -33,20 +33,25 @@ const ABSENT = Symbol('absent');
 // ---- value predicates (all bounded) ----
 const isObj = (v) => typeof v === 'object' && v !== null && !Array.isArray(v) &&
   [Object.prototype, null].includes(Object.getPrototypeOf(v));
-const isStr = (v, max = 500) => typeof v === 'string' && v.length > 0 && v.length <= max &&
-  !/[\u0000-\u001f\u007f]/.test(v);
+const isStr = (v, max = 500) => typeof v === 'string' && v.length <= max &&
+  v.trim().length > 0 && !/[\u0000-\u001f\u007f]/.test(v);
 const hex = (n) => (v) => typeof v === 'string' && new RegExp(`^[0-9a-f]{${n}}$`).test(v);
 const isSha1 = hex(40);
 const isSha256Hex = hex(64);
 const isPrefixed256 = (v) => typeof v === 'string' && /^sha256:[0-9a-f]{64}$/.test(v);
 const isCount = (v) => Number.isSafeInteger(v) && v >= 0;
 const isPositive = (v) => Number.isSafeInteger(v) && v > 0;
-const isSemver = (v) => typeof v === 'string' && v.length <= 64 &&
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/.test(v);
+// SemVer 2.0.0: numeric prerelease identifiers have no leading zeros; build
+// metadata (+...) is dot-separated non-empty alphanumeric/hyphen identifiers.
+const SEMVER = '(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)' +
+  '(?:-(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*)?' +
+  '(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?';
+const SEMVER_RE = new RegExp(`^${SEMVER}$`);
+const isSemver = (v) => typeof v === 'string' && v.length <= 64 && SEMVER_RE.test(v);
 const isToken = (v) => typeof v === 'string' && /^[A-Za-z0-9._:/@#-]{1,200}$/.test(v);
 const isName = (v) => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9 ._@-]{0,99}$/.test(v);
-const isContract = (v) => typeof v === 'string' && v.length <= 150 &&
-  /^[A-Z][A-Za-z0-9]*\/(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/.test(v);
+const CONTRACT_RE = new RegExp(`^[A-Z][A-Za-z0-9]*/${SEMVER}$`);
+const isContract = (v) => typeof v === 'string' && v.length <= 150 && CONTRACT_RE.test(v);
 
 function isTimestamp(v) {
   if (typeof v !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,3})?Z$/.test(v)) return false;
@@ -90,7 +95,13 @@ function nodeSupported(v) {
 // ---- checker ----
 export function checkReceipt(receipt) {
   const errors = [];
+  // Severity is tracked apart from the capped diagnostic list so an invalid
+  // finding past MAX_ERRORS still yields INVALID.
+  let sawInvalid = false;
+  let sawAny = false;
   const add = (code, path) => {
+    sawAny = true;
+    if (!INCOMPLETE_CODES.has(code)) sawInvalid = true;
     if (errors.length < MAX_ERRORS) errors.push({ code, path });
   };
 
@@ -279,8 +290,7 @@ export function checkReceipt(receipt) {
     optional(obj, 'scope_and_limitations', (v) => isStr(v, 1000));
   }
 
-  const invalid = errors.some((e) => !INCOMPLETE_CODES.has(e.code));
-  const status = invalid ? 'INVALID' : errors.length ? 'INCOMPLETE' : 'METADATA_COMPLETE';
+  const status = sawInvalid ? 'INVALID' : sawAny ? 'INCOMPLETE' : 'METADATA_COMPLETE';
   return { status, errors, notice: NOTICE };
 }
 
@@ -311,7 +321,8 @@ function failure(code) {
 export function checkReceiptFile(file) {
   let fd;
   try {
-    fd = openSync(file, 'r');
+    // Non-blocking open so a FIFO or device cannot hang before the fstat check.
+    fd = openSync(file, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0));
     const st = fstatSync(fd);
     if (!st.isFile()) return failure('FILE_UNREADABLE');
     if (st.size > MAX_BYTES) return failure('FILE_TOO_LARGE');
