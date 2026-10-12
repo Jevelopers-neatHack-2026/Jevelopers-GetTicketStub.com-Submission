@@ -37,6 +37,7 @@ export default function CheckoutClient({ id }: { id: string }) {
   // The stub being priced: material and finish live on it, exactly as in the editor.
   const [draft, setDraft] = useState<Stub | null>(null);
   const deskRef = useRef<HTMLDivElement>(null);
+  const guestPlacement = useRef<(() => void) | null>(null);
 
   if (mounted && stub === undefined) {
     const st = getStub(id) ?? null;
@@ -90,21 +91,10 @@ export default function CheckoutClient({ id }: { id: string }) {
     setError("");
   }
 
-  if (!mounted || stub === undefined) return <PageShell back={{ href: "/wall", label: "Wall" }}>{null}</PageShell>;
-  if (stub === null || !draft) {
-    return (
-      <PageShell back={{ href: "/wall", label: "Wall" }}>
-        <EmptyState kind="stub" title="This stub isn't on this device." body="Stubs live on the device that made them. Open your wall and pick the one you want to print.">
-          <StampLink href="/wall">Open your wall</StampLink>
-        </EmptyState>
-      </PageShell>
-    );
-  }
-
   // Signed out, Pay opens the sign-in sheet first; "Continue as guest" (or being signed in) goes straight on.
   function pay() {
     if (!stub || !draft || paid) return;
-    if (gate.ok && !expired && !receipt.problem && askToSignIn(receipt, placeAsGuest)) return;
+    if (gate.ok && Date.now() < expiresAt && !receipt.problem && askToSignIn(receipt, () => guestPlacement.current?.())) return;
     placeAsGuest();
   }
   function placeAsGuest() {
@@ -114,7 +104,9 @@ export default function CheckoutClient({ id }: { id: string }) {
       setError(gate.message);
       return;
     }
-    if (expired) {
+    const invokedAt = Date.now();
+    if (invokedAt >= expiresAt) {
+      setNow(invokedAt);
       flow("checkout_invalid", { reason: "quote_expired" });
       setError("This quote has run out. Refresh it to see the current price.");
       return;
@@ -139,6 +131,23 @@ export default function CheckoutClient({ id }: { id: string }) {
       email: email || undefined,
     }, () => upsertStub({ ...stub, material, finish, torn: true }));
     haptic([18, 40, 28]);
+  }
+
+  // The sheet keeps its original request while this page's quote, choices and receipt can change.
+  useEffect(() => {
+    guestPlacement.current = placeAsGuest;
+    return () => { guestPlacement.current = null; };
+  });
+
+  if (!mounted || stub === undefined) return <PageShell back={{ href: "/wall", label: "Wall" }}>{null}</PageShell>;
+  if (stub === null || !draft) {
+    return (
+      <PageShell back={{ href: "/wall", label: "Wall" }}>
+        <EmptyState kind="stub" title="This stub isn't on this device." body="Stubs live on the device that made them. Open your wall and pick the one you want to print.">
+          <StampLink href="/wall">Open your wall</StampLink>
+        </EmptyState>
+      </PageShell>
+    );
   }
 
   // Stays on the page: the stub flies to the cart button in the corner and the count stamps up.

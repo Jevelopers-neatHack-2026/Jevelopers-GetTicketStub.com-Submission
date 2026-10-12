@@ -51,6 +51,7 @@ export default function CartClient() {
     flow("view_cart", { currency: "USD", value: major(cartTotals(cart).totalMinor), item_count: cart.length, context: "cart" });
   }, [loaded]);
   const checkoutBegun = useRef(false);
+  const guestPlacement = useRef<(() => void) | null>(null);
 
   // The mini cart edits the same cart: follow it, until the order is placed (then this page keeps its receipt).
   useEffect(() => {
@@ -88,11 +89,11 @@ export default function CartClient() {
   // Signed out, Pay opens the sign-in sheet first; "Continue as guest" (or being signed in) goes straight on.
   function pay() {
     if (paid) return;
-    if (!hold && !receipt.problem && askToSignIn(receipt, placeAsGuest)) return;
+    if (!hold && !receipt.problem && askToSignIn(receipt, () => guestPlacement.current?.())) return;
     placeAsGuest();
   }
   function placeAsGuest() {
-    if (paid) return;
+    if (paidRef.current || paid || items.length === 0) return;
     if (!checkoutBegun.current) {
       checkoutBegun.current = true;
       const t = cartTotals(items);
@@ -133,6 +134,12 @@ export default function CartClient() {
     });
     haptic([18, 40, 28]);
   }
+
+  // The open sheet must use this tab's current cart, including changes made in another tab.
+  useEffect(() => {
+    guestPlacement.current = placeAsGuest;
+    return () => { guestPlacement.current = null; };
+  });
 
   const totals = cartTotals(items);
 

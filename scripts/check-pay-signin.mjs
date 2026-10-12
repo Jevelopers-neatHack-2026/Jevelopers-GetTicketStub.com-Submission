@@ -8,6 +8,7 @@
 //  3. the link opened in another tab of the same browser: the first tab notices and closes the sheet
 //  4. signed in, Pay places the order directly, no sheet
 //  5. returnTo is a relative path only: absolute, protocol-relative and backslash forms never leave the site
+//  6. a pending guest choice uses the current quote clock, checkout gate and cross-tab cart contents; invalid choices place nothing
 // Set PAY_SIGNIN_SHOTS to a folder to also write screenshots at 390 and 1440 px.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -47,6 +48,7 @@ try {
   const sheetOpen = (p = page) => p.eval(`!!document.querySelector('[role="dialog"][aria-modal="true"]')`);
   const sheetText = (p = page) => p.eval(`document.querySelector('[role="dialog"]')?.innerText ?? ""`);
   const cartCount = (p = page) => p.eval(`(JSON.parse(localStorage.getItem("ticketstub.cart.v1") || "[]")).length`);
+  const localOrders = () => page.eval(`JSON.parse(localStorage.getItem("ticketstub.orders.v1") || "[]").length`);
   const me = (p = page) => p.eval(`fetch("/api/auth/me").then((r) => r.json()).then((j) => j.account?.email ?? null)`);
   const shot = async (name, width, height) => {
     if (!shots) return;
@@ -191,6 +193,68 @@ try {
     await pay();
     check(T("Pay in the first tab places the order as the account"), (await ordered(before)) && (await me()) === EMAIL);
     await signOut();
+  }
+
+  // ---- 6. the guest callback held by an open sheet must validate the current page, not its opening render ----
+  const openPendingGuest = async (name, url, emailId) => {
+    await page.goto(base + url, { settle: 300 });
+    if (!(await page.waitFor(`document.getElementById(${JSON.stringify(emailId)})`, 10000))) throw new Error(`${name}: receipt field did not load`);
+    await typeEmail(emailId, EMAIL);
+    const before = { posts: orderPosts, localOrders: await localOrders() };
+    await clickText("button", "Pay");
+    check(`${name}: a valid quote opens the sheet without ordering`, (await page.waitFor(`document.querySelector('[role="dialog"]')`)) && orderPosts === before.posts && (await localOrders()) === before.localOrders);
+    return before;
+  };
+  const noGuestOrder = async (name, before) => {
+    await sleep(600);
+    const after = { posts: orderPosts, localOrders: await localOrders(), sheetOpen: await sheetOpen() };
+    const rec = { name, before, after };
+    (evidence.pendingGuest ??= []).push(rec);
+    check(`${name}: guest continuation places no POST or local order`, after.posts === before.posts && after.localOrders === before.localOrders && !after.sheetOpen, JSON.stringify(rec));
+  };
+  for (const visible of [false, true]) {
+    const name = `checkout: ${visible ? "visibly expired" : "expired before the display clock ticks"} sheet`;
+    const before = await openPendingGuest(name, `/checkout/${DEMO}`, "co-email");
+    // Date.now changes inside the page; the Node runner's wait clock and real timer scheduling remain unchanged.
+    const displayWasCurrent = await page.eval(`(() => {
+      const realNow = Date.now.bind(Date);
+      Date.now = () => realNow() + 16 * 60_000;
+      const current = !document.body.innerText.includes("This quote has run out.");
+      ${visible ? "" : `const b = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent.trim() === "Continue as guest"); b.click();`}
+      return current;
+    })()`);
+    check(`${name}: the deadline advances after a valid opening quote`, displayWasCurrent);
+    if (visible) {
+      check(`${name}: the page re-renders expired while the sheet remains open`, (await page.waitFor(`document.body.innerText.includes("This quote has run out.")`, 20000)) && (await sheetOpen()));
+      await clickText('[role="dialog"] button', "Continue as guest");
+    }
+    await noGuestOrder(name, before);
+    check(`${name}: refresh is required before paying`, await has("This quote has run out. Refresh it to see the current price."));
+  }
+
+  const changedCheckout = await openPendingGuest("checkout: changed finish", `/checkout/${DEMO}`, "co-email");
+  await page.eval(`document.querySelector('[role="radio"][data-finish="holo"]').click()`);
+  check("checkout: the current finish gate blocks Pay while the sheet stays open", (await page.waitFor(`[...document.querySelectorAll("button")].some((b) => b.textContent.trim().startsWith("Pay") && b.disabled)`)) && (await sheetOpen()));
+  await clickText('[role="dialog"] button', "Continue as guest");
+  await noGuestOrder("checkout: changed finish", changedCheckout);
+
+  for (const clear of [false, true]) {
+    const name = `cart: ${clear ? "cleared" : "blocked finish"} in another tab`;
+    await page.eval(`localStorage.removeItem("ticketstub.cart.v1")`);
+    await stock();
+    const before = await openPendingGuest(name, "/cart", "cart-email");
+    const other = await browser.newPage({ width: 390, height: 844 });
+    try {
+      await other.goto(base + "/wall", { settle: 100 });
+      await other.eval(`localStorage.setItem("ticketstub.cart.v1", JSON.stringify(${clear ? "[]" : `JSON.parse(localStorage.getItem("ticketstub.cart.v1")).map((item) => ({ ...item, finish: "holo" }))`}))`);
+      await page.send("Page.bringToFront");
+      const changed = clear ? `document.body.innerText.includes("Nothing in your cart yet.")` : `[...document.querySelectorAll("button")].some((b) => b.textContent.trim().startsWith("Pay") && b.disabled)`;
+      check(`${name}: this tab sees the current cart while the sheet stays open`, (await page.waitFor(changed, 10000)) && (await sheetOpen()));
+      await clickText('[role="dialog"] button', "Continue as guest");
+      await noGuestOrder(name, before);
+    } finally {
+      await other.close();
+    }
   }
 
   // ---- 5. returnTo is a path on this site, nothing else ----
