@@ -1371,7 +1371,7 @@ export interface FingerprintKeyringStatus {
   /** Active first, then retired keys still inside their retention window. */
   readonly verifiableKeyVersions: readonly string[];
   /** Retired keys past retention, oldest first. Remove them from the secret manager in this order, only
-   * after their tombstones are deleted. `candidates` fails closed while this list is non-empty. */
+   * after their tombstones are deleted. `candidates` still covers them until they are removed. */
   readonly purgeableKeyVersions: readonly string[];
 }
 
@@ -1379,9 +1379,9 @@ export interface TombstoneFingerprintKeyring extends TombstoneFingerprinter {
   /** HMAC-SHA256 with the active key; the key version is part of the HMAC input and the result.
    * `maxRetainUntil` is the latest `retainUntil` a tombstone storing this fingerprint may use. */
   fingerprint(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string): Promise<IssuedTombstoneFingerprint>;
-  /** One fingerprint per verifiable key version, for a store lookup across every retained version.
-   * Throws while the key set still holds a version past its retention window: the lookup could not
-   * see a tombstone under that version, so it never reports "no tombstone". */
+  /** One fingerprint per key version in the set, for a store lookup: the active key, the retired keys
+   * inside retention, then (oldest first) retired keys past retention that are still in the set. A
+   * store must confirm every hit with `matches`, which throws for a version past retention. */
   candidates(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string): Promise<readonly TombstoneFingerprint[]>;
   /** Constant-time check of a stored fingerprint. Throws (never returns false) for a key version that
    * is unknown or past its retention window. */
@@ -1410,6 +1410,8 @@ interface LoadedFingerprintKeySet {
   readonly now: number;
   readonly active: LoadedFingerprintKey;
   readonly verifiable: readonly LoadedFingerprintKey[];
+  /** Past retention but still in the set, oldest first. Used only by `candidates`, never by `matches`. */
+  readonly purgeableKeys: readonly LoadedFingerprintKey[];
   readonly purgeable: readonly string[];
 }
 
@@ -1668,14 +1670,17 @@ export function createTombstoneFingerprintKeyring(input: {
       const newestFirst = [...ordered].reverse();
       const active = await importKey(newestFirst[0] as (typeof parsed)[number]);
       const verifiable: LoadedFingerprintKey[] = [active];
-      const purgeable: string[] = [];
+      const purgeableKeys: LoadedFingerprintKey[] = [];
       for (const entry of newestFirst.slice(1)) {
-        if (retiredKeyPurgeable(entry.metadata, now, policy)) purgeable.push(entry.metadata.keyVersion);
+        if (retiredKeyPurgeable(entry.metadata, now, policy)) purgeableKeys.push(await importKey(entry));
         else verifiable.push(await importKey(entry));
       }
       // Oldest first, matching the planner's removableKeyVersions and the safe removal order.
-      purgeable.reverse();
-      return Object.freeze({ now, active, verifiable: Object.freeze(verifiable), purgeable: Object.freeze(purgeable) });
+      purgeableKeys.reverse();
+      return Object.freeze({
+        now, active, verifiable: Object.freeze(verifiable), purgeableKeys: Object.freeze(purgeableKeys),
+        purgeable: Object.freeze(purgeableKeys.map((key) => key.keyVersion))
+      });
     } finally {
       for (const entry of parsed) entry.bytes.fill(0);
     }
@@ -1706,13 +1711,13 @@ export function createTombstoneFingerprintKeyring(input: {
     async candidates(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string): Promise<readonly TombstoneFingerprint[]> {
       validFingerprintInput(purpose, canonicalIdentity, diagnosticReference);
       const set = await loadKeySet();
-      // A version past retention is still in the set, so tombstones under it may still exist (a
-      // wrapper that inflated maxRetainUntil, a direct fingerprint() caller, a stale key source).
-      // Omitting it would turn such a tombstone into "never deleted", so the lookup fails closed
-      // until the host has purged its tombstones and removed the version.
-      if (set.purgeable.length > 0) throw failure("retention_unavailable", diagnosticReference);
       const results: TombstoneFingerprint[] = [];
       for (const key of set.verifiable) results.push(await sign(key, purpose, canonicalIdentity));
+      // A version past retention but still in the set may still have tombstones under it (a wrapper
+      // that inflated maxRetainUntil, a direct fingerprint() caller, a stale key source). Omitting it
+      // would turn such a tombstone into "never deleted", so its candidate stays in the lookup. A hit
+      // under it reaches `matches`, which throws: it fails closed only on an actual hit.
+      for (const key of set.purgeableKeys) results.push(await sign(key, purpose, canonicalIdentity));
       return Object.freeze(results);
     },
     async matches(purpose: TombstoneFingerprintPurpose, canonicalIdentity: string, stored: TombstoneFingerprint): Promise<boolean> {

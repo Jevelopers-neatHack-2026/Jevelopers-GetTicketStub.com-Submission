@@ -1077,8 +1077,8 @@ test("fingerprint keyring fails closed, never false, for a version past retentio
   assert.deepEqual((await fixture.keyring.candidates("authorization_action", ACTION_IDENTITY)).map((entry) => entry.keyVersion), ["tombstone-g2", "tombstone-g1"]);
   fixture.state.now = purgeableAt;
   await expectSecurityFailure(fixture.keyring.matches("authorization_action", ACTION_IDENTITY, old), "retention_unavailable");
-  // N1: a store lookup cannot see tombstones under the purgeable version, so it fails closed too.
-  await expectSecurityFailure(fixture.keyring.candidates("authorization_action", ACTION_IDENTITY), "retention_unavailable");
+  // N1: the purgeable version stays in the lookup (after the verifiable ones) until it is removed.
+  assert.deepEqual((await fixture.keyring.candidates("authorization_action", ACTION_IDENTITY)).map((entry) => entry.keyVersion), ["tombstone-g2", "tombstone-g1"]);
   const status = await fixture.keyring.status();
   assert.deepEqual(status.purgeableKeyVersions, ["tombstone-g1"]);
   assert.equal(status.rotationDue, true);
@@ -1385,7 +1385,7 @@ test("fingerprint keyring tolerates bounded clock skew after a rotation (M3)", a
   await expectSecurityFailure(strict.keyring.status(), "retention_unavailable");
 });
 
-test("candidates fails closed for a tombstone that outlived its key through an inflating wrapper (N1)", async () => {
+test("a lookup never misses a tombstone that outlived its key through an inflating wrapper (N1)", async () => {
   const { state, keyring } = keyringFixture([activeKey("tombstone-g1", FIXTURE_KEY_A)]);
   const retained = [];
   const retentionPort = { async purgePersonalDataAndRetainTombstone(input) { retained.push(input); } };
@@ -1405,21 +1405,35 @@ test("candidates fails closed for a tombstone that outlived its key through an i
   const retiredAt = KEYRING_T0 + 90 * DAY;
   state.keys = [activeKey("tombstone-g2", FIXTURE_KEY_B, retiredAt), retiredKey("tombstone-g1", FIXTURE_KEY_A, KEYRING_T0, retiredAt)];
   const purgeableAt = retiredAt + KEYRING_POLICY.retiredKeyRetentionMs + SKEW;
-  // A store lookup by digest over the candidates.
-  const lookup = async () => {
-    const digests = (await keyring.candidates("authorization_action", ACTION_IDENTITY)).map((entry) => `${entry.keyVersion}:${entry.digest}`);
-    return digests.includes(`${tombstone.actionFingerprint.keyVersion}:${tombstone.actionFingerprint.digest}`);
+  // A store keyed by `${keyVersion}:${digest}` holding the 100-year tombstone. A lookup finds a row
+  // through candidates and confirms every hit with matches, as the docs require.
+  const store = new Map([[`${tombstone.actionFingerprint.keyVersion}:${tombstone.actionFingerprint.digest}`, tombstone]]);
+  const lookup = async (identity) => {
+    for (const candidate of await keyring.candidates("authorization_action", identity)) {
+      const row = store.get(`${candidate.keyVersion}:${candidate.digest}`);
+      if (row !== undefined && await keyring.matches("authorization_action", identity, row.actionFingerprint)) return "tombstone";
+    }
+    return "none";
   };
   state.now = purgeableAt - 1;
-  assert.equal(await lookup(), true);
-  // The key passes retention while the 100-year tombstone is still live: never "no tombstone".
+  assert.equal(await lookup(ACTION_IDENTITY), "tombstone");
+  // The key passes retention while the 100-year tombstone is still live. The lookup still finds the
+  // row (never "no tombstone"), and confirming it throws.
   state.now = purgeableAt;
+  const candidates = await keyring.candidates("authorization_action", ACTION_IDENTITY);
+  assert.deepEqual(candidates.map((entry) => entry.keyVersion), ["tombstone-g2", "tombstone-g1"]);
+  assert.ok(candidates.some((entry) => store.has(`${entry.keyVersion}:${entry.digest}`)), "the tombstone must not be missed");
   await expectSecurityFailure(keyring.matches("authorization_action", ACTION_IDENTITY, tombstone.actionFingerprint), "retention_unavailable");
-  await expectSecurityFailure(lookup(), "retention_unavailable");
-  await expectSecurityFailure(keyring.candidates("idempotency_key", ACTION_IDENTITY), "retention_unavailable");
-  // Status keeps working, so the host can see and act on the purgeable version.
+  await expectSecurityFailure(lookup(ACTION_IDENTITY), "retention_unavailable");
   assert.deepEqual((await keyring.status()).purgeableKeyVersions, ["tombstone-g1"]);
-  // Once the host has dealt with the tombstones and removed the version, lookups resume.
+
+  // Availability: identities without a tombstone keep resolving while the past-retention version is
+  // still present, for both purposes, so routine operation is not blocked.
+  for (const identity of [`${ACTION_IDENTITY}-other`, JSON.stringify(["tenant-security-fixture", "project-security-fixture", "provider-fixture", "authorization-fixture", "action-other"])]) {
+    assert.equal(await lookup(identity), "none");
+    assert.equal((await keyring.candidates("idempotency_key", identity)).length, 2);
+  }
+  // Once the version is removed, the set holds only the active key.
   state.keys = [activeKey("tombstone-g2", FIXTURE_KEY_B, retiredAt)];
   assert.equal((await keyring.candidates("authorization_action", ACTION_IDENTITY)).length, 1);
 });
@@ -1444,9 +1458,10 @@ test("removable versions are listed oldest first and can be removed one at a tim
     assert.equal((await fixture.keyring.fingerprint("authorization_action", ACTION_IDENTITY)).keyVersion, "tombstone-g6");
     assert.equal(await fixture.keyring.matches("authorization_action", ACTION_IDENTITY, issued), true);
     security.planTombstoneFingerprintKeyRotation({ keys: remaining, reason: "incident", now: now + DAY, policy: KEYRING_POLICY });
+    // Lookups keep working throughout; remaining past-retention versions follow, oldest first.
+    assert.deepEqual((await fixture.keyring.candidates("authorization_action", ACTION_IDENTITY)).map((entry) => entry.keyVersion),
+      ["tombstone-g6", "tombstone-g5", "tombstone-g4", ...plan.removableKeyVersions.slice(index + 1)]);
   }
-  assert.deepEqual((await fixture.keyring.candidates("authorization_action", ACTION_IDENTITY)).map((entry) => entry.keyVersion),
-    ["tombstone-g6", "tombstone-g5", "tombstone-g4"]);
   // Removing a newer removable version first leaves a gap and fails closed.
   fixture.state.keys = withMaterial(plan.keys.filter((entry) => entry.keyVersion !== "tombstone-g3"));
   await expectSecurityFailure(fixture.keyring.status(), "retention_unavailable");
