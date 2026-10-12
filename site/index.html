@@ -1504,7 +1504,7 @@ let staticLoop = null, dead3d = false;
 function useStatic(){
   root.classList.add('no3d');
   // A failed 3D frame may have hidden entering scene copy; restore its CSS defaults.
-  sceneEls.forEach(el => el.querySelector('.info').style.removeProperty('--ia'));
+  document.querySelectorAll('.scene .info').forEach(info => info.style.removeProperty('--ia'));
   if (!staticLoop) staticLoop = startStaticLoop();
 }
 function leaveStatic(){ if (staticLoop){ staticLoop.stop(); staticLoop = null; } root.classList.remove('no3d'); }
