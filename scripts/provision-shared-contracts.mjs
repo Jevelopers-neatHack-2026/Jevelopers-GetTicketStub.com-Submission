@@ -19,9 +19,14 @@ const dropInstalled = () => rmSync(installedPackage, { recursive: true, force: t
 dropInstalled();
 const fail = (message) => { dropInstalled(); console.error('PROVISION_FAILED: ' + message); process.exit(1); };
 process.on('uncaughtException', (error) => fail('unexpected error: ' + (error && error.code ? error.code : error?.message ?? 'unknown')));
-// Minimal environment for the clone, the producer's `npm ci`/build and the install: no inherited tokens or secrets.
-const env = { PATH: nodeBin ? nodeBin + ':' + process.env.PATH : process.env.PATH, HOME: process.env.HOME ?? '', ...(process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}),
-  GIT_TERMINAL_PROMPT: '0', npm_config_fund: 'false', npm_config_audit: 'false', npm_config_update_notifier: 'false' };
+// Minimal, isolated environment for the clone, the producer's `npm ci`/build and the install: no inherited tokens or
+// secrets, and neither the user's ~/.gitconfig nor ~/.npmrc applies. HOME and the npm cache live under the gitignored work dir.
+const isolatedHome = join(work, 'home');
+const emptyUserrc = join(isolatedHome, 'empty-user.npmrc'), emptyGlobalrc = join(isolatedHome, 'empty-global.npmrc');
+const env = { PATH: nodeBin ? nodeBin + ':' + process.env.PATH : process.env.PATH, HOME: isolatedHome, ...(process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}),
+  GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
+  npm_config_userconfig: emptyUserrc, npm_config_globalconfig: emptyGlobalrc, npm_config_cache: join(isolatedHome, 'npm-cache'),
+  npm_config_fund: 'false', npm_config_audit: 'false', npm_config_update_notifier: 'false' };
 const run = (cwd, cmd, args, extra = {}) => execFileSync(cmd, args, { cwd, env: { ...env, ...extra }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 
 const nodeCmd = nodeBin ? join(nodeBin, 'node') : 'node';
@@ -31,6 +36,9 @@ if (nodeVersion !== 'v' + pin.producer_toolchain_node) fail('producer toolchain 
 
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work, { recursive: true });
+mkdirSync(isolatedHome, { recursive: true });
+writeFileSync(emptyUserrc, '');
+writeFileSync(emptyGlobalrc, '');
 const src = join(work, 'src');
 run(work, 'git', ['clone', '--quiet', pin.repository, src]);
 run(src, 'git', ['checkout', '--quiet', '--detach', pin.head]);

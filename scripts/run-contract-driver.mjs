@@ -3,7 +3,7 @@
 // (fail closed), writes a binding config shaped like the producer's, runs the driver in a child with a minimal
 // environment, and checks the single JSON receipt it prints. This runner is not the driver: it may spawn processes.
 import { randomUUID } from 'node:crypto';
-import { verifyInstalledPackage } from './package-verify.mjs';
+import { checkPackageResolution } from './verified-package.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,7 +15,7 @@ const snapshot = join(root, 'node_modules/@jevelopers/shared-contracts');
 const fail = (message) => { console.error('CONTRACT_DRIVER_BLOCKED: ' + message); process.exit(1); };
 if (!existsSync(snapshot)) fail('shared-contracts is not provisioned; run `npm run contracts:provision` (needs network for the public git clone only)');
 // Verify with code that is NOT imported from the unverified package, before trusting any manifest entry or running package code.
-const problem = verifyInstalledPackage(snapshot, pin, root);
+const problem = checkPackageResolution(root);
 if (problem) fail(problem);
 const read = (path) => JSON.parse(readFileSync(join(snapshot, path), 'utf8'));
 const content = read('generated/package-content-manifest.json'), fixtureManifest = read('generated/fixture-manifest.json');

@@ -4,9 +4,16 @@
 // Imports only: node:fs/promises, node:path, the pinned package, and repository files. No network, child process or fetch.
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import * as kit from '@jevelopers/shared-contracts';
-import { runCanonicalFixtures } from '@jevelopers/shared-contracts/fixture-harness';
+import { fileURLToPath } from 'node:url';
+import { importVerified } from '../scripts/verified-package.mjs';
 import { runDomainCases } from './domain-cases.mjs';
+
+// Resolve here (so a shadowing node_modules would be what resolves), then import only a path proven inside the verified root.
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+// Under the producer's runner the bound snapshot (SHARED_CONTRACTS_ROOT) is the verified root; standalone, the repo copy is.
+const options = { boundRoot: process.env.SHARED_CONTRACTS_ROOT };
+const kit = await importVerified(import.meta.resolve('@jevelopers/shared-contracts'), repoRoot, options);
+const { runCanonicalFixtures } = await importVerified(import.meta.resolve('@jevelopers/shared-contracts/fixture-harness'), repoRoot, options);
 
 const config = JSON.parse(await readFile(process.env.SHARED_CONTRACTS_BINDING_CONFIG, 'utf8'));
 const { binding } = config;

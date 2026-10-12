@@ -1,12 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import * as sc from '@jevelopers/shared-contracts';
-import { fixturePayload } from '@jevelopers/shared-contracts/fixture-harness';
+import { fileURLToPath } from 'node:url';
+import { importVerified } from '../../scripts/verified-package.mjs';
 import type { ContractKit, ContractScope } from '../../src/data/shared-contracts-adapter';
 
 /** The real, installed package helpers behind the adapter's injected port. */
-export const kit: ContractKit = sc;
-const packageRoot = join(process.cwd(), 'node_modules/@jevelopers/shared-contracts');
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
+const sc = await importVerified(import.meta.resolve('@jevelopers/shared-contracts'), repoRoot);
+const { fixturePayload } = await importVerified(import.meta.resolve('@jevelopers/shared-contracts/fixture-harness'), repoRoot);
+export const kit = sc as unknown as ContractKit;
+const packageRoot = join(repoRoot, 'node_modules/@jevelopers/shared-contracts');
 export type FixtureCase = { id: string; category: string; mode?: string; set?: Record<string, unknown>; remove?: string[]; context?: any; expected: { ok: boolean; code?: string; path?: string; canonical_sha256?: string }; json?: string }; // eslint-disable-line @typescript-eslint/no-explicit-any
 export type FixtureManifest = { contract: string; schema_version: string; policy_version: string; valid: Record<string, any>; cases: FixtureCase[] }; // eslint-disable-line @typescript-eslint/no-explicit-any
 export const manifest = (name: string): FixtureManifest => JSON.parse(readFileSync(join(packageRoot, 'fixtures', name + '.json'), 'utf8'));

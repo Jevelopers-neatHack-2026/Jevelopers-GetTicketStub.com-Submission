@@ -3,6 +3,7 @@ import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSyn
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { canonicalJson, hashManifest } from '../../scripts/package-verify.mjs';
 import { kit } from './support';
@@ -15,17 +16,18 @@ const pkg = () => join(isolated, 'node_modules/@jevelopers/shared-contracts');
 const restore = () => { rmSync(pkg(), { recursive: true, force: true }); cpSync(installed, pkg(), { recursive: true }); };
 const manifestPath = () => join(isolated, 'node_modules/@jevelopers/shared-contracts/generated/package-content-manifest.json');
 
-describe('TD-01B runner refuses a package whose manifest was edited to match tampered bytes', () => {
-  beforeAll(() => {
-    isolated = mkdtempSync(join(tmpdir(), 'td01b-tamper-'));
-    for (const dir of ['scripts', 'contracts', 'src/data']) mkdirSync(join(isolated, dir), { recursive: true });
-    for (const file of ['scripts/run-contract-driver.mjs', 'scripts/package-verify.mjs', 'contracts/contract-driver.mjs', 'contracts/domain-cases.mjs', 'contracts/shared-contracts.pin.json', 'src/data/shared-contracts-adapter.ts']) cpSync(join(repo, file), join(isolated, file));
-    mkdirSync(join(isolated, 'node_modules/@jevelopers'), { recursive: true });
-    restore();
-    writeFileSync(join(isolated, 'package.json'), '{"type":"module"}');
-  }, 60_000);
-  afterAll(() => { if (isolated.startsWith(tmpdir()) && existsSync(isolated)) rmSync(isolated, { recursive: true, force: true }); });
+beforeAll(() => {
+  isolated = mkdtempSync(join(tmpdir(), 'td01b-tamper-'));
+  for (const dir of ['scripts', 'contracts', 'src/data']) mkdirSync(join(isolated, dir), { recursive: true });
+  for (const file of ['scripts/run-contract-driver.mjs', 'scripts/package-verify.mjs', 'scripts/verified-package.mjs', 'contracts/contract-driver.mjs', 'contracts/domain-cases.mjs', 'contracts/shared-contracts.pin.json', 'src/data/shared-contracts-adapter.ts']) cpSync(join(repo, file), join(isolated, file));
+  mkdirSync(join(isolated, 'node_modules/@jevelopers'), { recursive: true });
+  restore();
+  writeFileSync(join(isolated, 'package.json'), '{"type":"module"}');
+}, 60_000);
+afterAll(() => { if (isolated.startsWith(tmpdir()) && existsSync(isolated)) rmSync(isolated, { recursive: true, force: true }); });
 
+
+describe('TD-01B runner refuses a package whose manifest was edited to match tampered bytes', () => {
   beforeEach(() => restore());
   it('control: the pristine isolated copy passes', () => {
     const result = run();
@@ -87,6 +89,57 @@ describe('TD-01B runner refuses a package whose manifest was edited to match tam
       expect(result.stderr).toContain('symlink in package: tooling');
     } finally { rmSync(external, { recursive: true, force: true }); }
   }, 60_000);
+});
+
+describe('TD-01B shadow package resolution is refused', () => {
+  const shadowCopy = (where: string, marker: string) => {
+    const target = join(isolated, where, 'node_modules/@jevelopers');
+    mkdirSync(target, { recursive: true });
+    cpSync(installed, join(target, 'shared-contracts'), { recursive: true });
+    appendFileSync(join(target, 'shared-contracts/tooling/runtime.mjs'), `\nimport { writeFileSync as mark } from 'node:fs';\nmark(${JSON.stringify(marker)}, 'shadow executed');\n`);
+  };
+  beforeEach(() => { restore(); rmSync(join(isolated, 'contracts/node_modules'), { recursive: true, force: true }); rmSync(join(isolated, 'contracts/tests'), { recursive: true, force: true }); });
+  it.each(['contracts', 'contracts/tests'])('exits non-zero and writes no marker when %s/node_modules holds a shadow copy', (where) => {
+    const marker = join(isolated, 'shadow-marker-' + where.replace('/', '-'));
+    shadowCopy(where, marker);
+    const result = run();
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('could shadow the verified package');
+    expect(existsSync(marker)).toBe(false);
+  }, 60_000);
+  it.each(['contracts', 'contracts/tests'])('the support-style import from %s refuses a shadow and executes nothing', (where) => {
+    const marker = join(isolated, 'probe-marker-' + where.replace('/', '-'));
+    shadowCopy(where, marker);
+    mkdirSync(join(isolated, 'contracts/tests'), { recursive: true });
+    const probe = join(isolated, where, 'probe.mjs');
+    const depth = where.split('/').length;
+    writeFileSync(probe, `import { importVerified } from '${'../'.repeat(depth)}scripts/verified-package.mjs';\nimport { fileURLToPath } from 'node:url';\nawait importVerified(import.meta.resolve('@jevelopers/shared-contracts'), fileURLToPath(new URL('${'../'.repeat(depth)}', import.meta.url)));\n`);
+    const result = spawnSync(process.execPath, [probe], { cwd: isolated, encoding: 'utf8', timeout: 60_000 });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('PACKAGE_REFUSED');
+    expect(existsSync(marker)).toBe(false);
+  }, 60_000);
+  it('a bound root is honoured only for that exact root and still refuses shadows', async () => {
+    const { importVerified } = await import('../../scripts/verified-package.mjs');
+    const other = mkdtempSync(join(tmpdir(), 'td01b-bound-'));
+    try {
+      writeFileSync(join(other, 'index.mjs'), 'export {};\n');
+      const outside = mkdtempSync(join(tmpdir(), 'td01b-bound2-'));
+      writeFileSync(join(outside, 'index.mjs'), 'export {};\n');
+      await expect(importVerified(pathToFileURL(join(other, 'index.mjs')).href, repo, { boundRoot: other })).resolves.toBeDefined();
+      await expect(importVerified(pathToFileURL(join(outside, 'index.mjs')).href, repo, { boundRoot: other })).rejects.toThrow('PACKAGE_REFUSED');
+      rmSync(outside, { recursive: true, force: true });
+    } finally { rmSync(other, { recursive: true, force: true }); }
+  });
+  it('importVerified refuses a resolution outside the verified root even without any node_modules shadow', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'td01b-outside-'));
+    try {
+      writeFileSync(join(outside, 'index.mjs'), 'export {};\n');
+      const { importVerified } = await import('../../scripts/verified-package.mjs');
+      await expect(importVerified(pathToFileURL(join(outside, 'index.mjs')).href, repo)).rejects.toThrow('PACKAGE_REFUSED');
+      await expect(importVerified('https://example.invalid/x.mjs', repo)).rejects.toThrow('PACKAGE_REFUSED');
+    } finally { rmSync(outside, { recursive: true, force: true }); }
+  });
 });
 
 describe('TD-01B independent canonical hash helper', () => {
