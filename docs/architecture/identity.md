@@ -42,7 +42,7 @@ The server decides who is asking and what they own. It does this from two httpOn
 | Replay | Magic links are single use. Claim links are one claimer. Context tokens live five minutes and are checked against the session and revision. |
 | Bounds | JSON bodies are size-checked before parsing (1 KB to 32 MB by route). Stubs are re-validated and capped at 2 MB after art moves to files. |
 | Rate limits | In memory, per IP and per account or email, before any work: links, email change, orders, shares, revoke, context verify. Art has daily caps in SQLite. |
-| Secrets | `CONTEXT_SECRET`, `RESEND_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` are read on the server only. The smoke test scans every response body and the built client chunks for them. |
+| Secrets | `CONTEXT_SECRET`, `APPROVAL_SIGNING_KEYS`, `RESEND_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` are read on the server only. The smoke test scans every response body and the built client chunks for them. |
 
 ## The signed context (GT-08.2, GT-08.5)
 
@@ -52,7 +52,7 @@ The server decides who is asking and what they own. It does this from two httpOn
 - **`membershipRevision`** is stored per account and only goes up. It moves when the email changes, when the account signs out everywhere, and when its `ADMIN_EMAILS` status changes (noticed on the next request). Deleting the account removes the row, so its sessions are gone and its tokens read as revoked.
 - **`revoked`** is true when a session cookie was presented that no longer resolves. The caller is then handled as anonymous and no token is issued.
 - **Token.** `header.payload.signature`, each part base64url. Header `{"alg":"HS256","typ":"ticketstub.context"}`. Payload `{"ctx": <RequestContext>, "sid": <session reference or null>}`. Signature is HMAC-SHA256 over `header.payload`, keyed by `CONTEXT_SECRET`. `sid` is the first 24 hex characters of the stored session hash: a reference, not a credential. Lifetime is **5 minutes**.
-- **Keying.** With `CONTEXT_SECRET` (32 or more characters) the token says `mode: "live"` in live mode. Without it, outside live mode, a random per-process key is used and the token says `mode: "sandbox"` (it dies on restart). **In live mode without it, issuing throws 503.** Fixture tokens say `mode: "fixture"` and use a published key that no deployment holds.
+- **Keying.** With `CONTEXT_SECRET` (32 or more characters) the token says `mode: "live"` in live mode. Without it, outside live mode, a random per-process key is used and the token says `mode: "sandbox"` (it dies on restart). **In live mode without it, issuing throws 503.** Fixture tokens say `mode: "fixture"` and use a published key that no deployment holds. `CONTEXT_SECRET` signs context tokens **only**; other token classes have their own key sets (see [Signing keys](#signing-keys-decision-0003-k4)).
 - **Verification order:** shape (`unknown`), constant-time HMAC (`forged`), schema version (`unsupported_version`), expiry (`expired`), session (`revoked`), membership revision (`stale`). `verifyContextToken(token, now?, state?)` is synchronous and so checks the last two only when handed `state`; `verifyContextTokenLive(token)` loads that state from storage.
 - **`GET /api/context?project=<kind>:<id>`** returns `{ context, token }` for the session. **`POST /api/context/verify {token}`** is the port for a consumer that cannot hold the key: 200 with the context, or 401 with `{ok:false, reason}`.
 
@@ -123,6 +123,49 @@ Before the server stored shares, `/s/<payload>` carried the whole stub, base64ur
 
 **Not retired yet:** `/claim/<set>?from=<payload>` in the browser still decodes a payload to *preview and build a local stub* (`ClaimClient`). It creates only a local draft and calls no server API, so it grants no server-side ownership or claim. It does read the payload's guest list, which new snapshots no longer contain.
 
+## Signing keys (decision 0003 K4)
+
+Each token class has its own key, so one leaked secret can mint only one class ([integration-evals decision 0003](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/decisions/0003-owner-delegated-decisions-2026-10-12.md), row K4).
+
+| Token | Lifetime | Key | `kid` |
+| --- | --- | --- | --- |
+| `ticketstub.context` | 5 minutes | `CONTEXT_SECRET`: one key, 32+ characters | none |
+| `ticketstub.approval` | 7 days | `APPROVAL_SIGNING_KEYS`: versioned key set | in the header |
+
+**Format.** A key set is one environment variable holding versioned JSON, the same shape as fulfillment-connectors' `FULFILLMENT_TOMBSTONE_KEYSET` with `kid` as the version name:
+
+```json
+{"v":1,"keys":[
+  {"kid":"approval-g2","state":"active","activatedAt":"2027-01-10T00:00:00Z","key":"<base64url, 32+ random bytes>"},
+  {"kid":"approval-g1","state":"retired","activatedAt":"2026-10-12T00:00:00Z","retiredAt":"2027-01-10T00:00:00Z","key":"<base64url>"}
+]}
+```
+
+- `kid`: 1-64 of `[A-Za-z0-9._-]`. Suggested `approval-g<generation>`. Kids starting with `fixture` or `sandbox` are reserved and refused.
+- `state`: exactly one `active` key, and it is the newest. `retiredAt` is required on a `retired` key and absent on the active one.
+- `key`: canonical base64url of 32-1024 random bytes (generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`). Fewer than 17 distinct byte values, text containing `FIXTURE-ONLY`, a key repeated in the set, or a key equal to `CONTEXT_SECRET` is refused.
+- At most 16 keys. Timestamps may be at most 5 minutes in the future (clock skew).
+
+**Signing and verifying** (`src/server/keyring.ts`, bound to the environment in `src/server/signing-keys.ts`). The server signs with the active key and writes its `kid` into the token header, `{"alg":"HS256","typ":"ticketstub.approval","kid":"approval-g2"}`. A verifier looks the `kid` up: the active key, or a retired key until `retiredAt` + the class's token lifetime (7 days for approvals) + 5 minutes. A missing or malformed `kid` is `unknown`; an unknown `kid`, or a retired key past that window, is `forged`. The `typ` check and the separate keys mean a context token never verifies as an approval, and an approval-shaped token signed with `CONTEXT_SECRET` is `forged`.
+
+**Failure modes.**
+
+| `APPROVAL_SIGNING_KEYS` | Live runtime | Other runtimes |
+| --- | --- | --- |
+| unset or blank | **fail closed**: issuing and listing answer 503 `signing_unavailable`, the verify port answers `forged` | a random per-process key, kid `sandbox`; records say `mode: "sandbox"` (tokens die on restart), like `CONTEXT_SECRET` |
+| set but invalid | fail closed, as above | fail closed, as above (a misconfigured secret is never silently replaced) |
+| set and valid | records say `mode: "live"` | records say `mode: "sandbox"` |
+
+A refused set logs one line per process, `[signing-keys] APPROVAL_SIGNING_KEYS unavailable: <code>`, where the code is a fixed word such as `weak_key` or `active_count`. Errors and logs never carry a key, a kid or the raw value.
+
+**Rotation** (scheduled every 90 days, as K1, or at once on suspected exposure):
+
+1. Generate a new key. Write the set with the new entry `active` (next generation, `activatedAt` = now) and the previous one `retired` with `retiredAt` = the same time. Keep every other retired entry that is still inside its window.
+2. Replace the secret in GoDaddy (Preview and Publish separately; a secret can't be edited in place, so delete, re-add, save, restart).
+3. After `retiredAt` + 7 days + 5 minutes the retired key verifies nothing. Remove it at the next rotation.
+
+Approval tokens are derived from the stored record on demand, so after a rotation the owner's approval list hands out tokens under the new `kid`, and tokens already handed out keep verifying under the old one until they expire. On an incident, retiring the exposed key still lets it verify for 7 days; to cut it off at once, delete its entry instead: every outstanding approval token under it then reads `forged`, and owners re-fetch theirs from the list (the approvals themselves are records and survive).
+
 ## Downstream verification port
 
 Dashboard and cost-intelligence consume a context; neither is an identity authority.
@@ -141,7 +184,7 @@ Dashboard and cost-intelligence consume a context; neither is an identity author
 - **SQLite only**, one writer, one process. The `Storage` interface is the seam for Postgres. Migrations are forward-only.
 - **`verifyContextToken` is synchronous**, so alone it cannot see stale or revoked. Use `verifyContextTokenLive` or pass `state`.
 - **Token revocation is a lookup**, not a push: a consumer that never asks the issuer will honour a token for up to five minutes after a sign-out.
-- **One signing key, no rotation.** Rotating `CONTEXT_SECRET` invalidates outstanding tokens. There is no `kid` handling beyond the fixture key.
+- **Context tokens: one key, no rotation overlap.** Rotating `CONTEXT_SECRET` invalidates outstanding context tokens (at most five minutes' worth; a consumer re-fetches). Approval tokens rotate with overlap through `APPROVAL_SIGNING_KEYS` (see [Signing keys](#signing-keys-decision-0003-k4)).
 - **Art files stay readable by hash** after sharing stops, and may sit in caches.
 - **Old anonymous share rows** (owner `anon`, before device binding) have no owner: nobody can revoke them.
 - **Gift messages** are readable by anyone holding the gift link (that is the design) and are kept until the sender revokes, stops the share or deletes the account; there is no expiry. `ClaimClient` still decodes legacy payloads locally.
