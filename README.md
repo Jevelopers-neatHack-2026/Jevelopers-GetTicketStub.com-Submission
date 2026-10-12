@@ -68,7 +68,7 @@ Browser tests block external HTTP requests and need no provider secrets. CI runs
 | [Local development](docs/development.md) | Toolchain, install, scripts, fixture host, environment variables |
 | [Mount and rollback contract](docs/integration/mount-contract.md) | Exports, injected host boundary, routes, styles, rollback |
 | [TD-01 coverage](docs/integration/TD-01-coverage.md) | TD-01.A–E local scope vs external obligations, producer blockers |
-| [TD-07 trusted host](docs/integration/TD-07-trusted-host.md) | Server authorization seam, fail-closed rules, permission matrix, owner decisions |
+| [TD-07 trusted host](docs/integration/TD-07-trusted-host.md) | Server authorization seam, fail-closed rules, permission matrix, owner decisions (decided 2026-10-12) |
 | [TD-10 components](docs/integration/TD-10-components.md) | Shared presentation components and their limits |
 | [TD-11 CI validation](docs/integration/TD-11-ci.md) | Workflow, reports, retention |
 | [Runtime and provenance decision](docs/decisions/TD-01-runtime-mount.md) | Dependency pins, host evidence, brand token source |
