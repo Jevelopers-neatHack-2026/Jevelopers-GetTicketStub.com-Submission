@@ -1,43 +1,34 @@
-# `team-dashboard`
+# team-dashboard responsibility and current boundary
 
-**Repository status:** Verified existing on GitHub, private, October 10, 2026.
-**Proposed owner:** Finance and reliability.
-**Delivery state:** Architecture plan; implementation criteria remain planned until evidence is recorded.
+**Repository role:** Isolated React/Vite library for an administrative finance dashboard. **Accountable role:** Finance and reliability. **Observed source:** main at `97e35e7f669f368b26c9884c48e7c181a26438b8`, audited 2026-10-12.
 
 ## Responsibility
 
-Show authorized team members project spending, sales, operating result, and remaining budget. Own financial presentation, filtering, transaction drilldowns, and report navigation. Cash requires an identified balance source or reconciled calculation.
+Own the dashboard presentation and typed consumer boundary for financial summaries, filters, reports and detail views. The package does not own the host's identity, session, membership or application routing. It does not own the authoritative ledger, pricing, reconciliation or finance command writes; those remain with their service owners. Browser projections are display data, never credentials or authority.
 
-Maintain a separate source repository and mount its module in the authenticated administration area of `getticketstub.com`. The initial architecture requires one running web application. Financial calculations and ledger writes remain with `cost-intelligence`; the application enforces identity and access.
+The current library entry points are src/index.ts and src/server.ts. UI routes and views are in src/Dashboard.tsx, src/views/ and src/reports/; data and trust boundaries are in src/data/ and src/access/; reusable controls are in src/components/; local styles and the scoped brand-token subset are in src/styles.css and src/styles/brand-tokens.css. Finance v2 ports, synthetic fixtures and validation are under src/views/finance-v2/. Package, contract, integration and test configuration are maintained in the root manifests and contracts/, integration/, and tests/.
 
-## Planned internal modules
+## Current host and data boundary
 
-- `src/views/`: Overview, AI usage, sales, fulfillment, and budgets.
-- `src/components/`: Metric cards, charts, filters, and transaction tables.
-- `src/data/`: Typed financial API queries and refresh behavior.
-- `src/reports/`: Export navigation and forecast references.
-- `src/access/`: Application role integration and presentation permissions.
-- `integration/`: Mounting contract and route expectations.
+The host-side /admin route currently renders its own staff-gated fixture. The main application does not import or run this package, and this package's host integration check remains blocked pending real host wiring and acceptance. Team Dashboard's local host verifier and offline HMAC test double prove package-side validation behavior only; they do not prove the host's production session verifier, runtime mount, finance backend or cross-repository conformance.
 
-## Dependencies and handoff
+The integration notes describe a proposed seam and retain source-specific decisions. Read each note's source pin and status before applying it. Host /2 context grants and a provider-agnostic verifier do not amount to an approved end-to-end finance contract. Financial data fixtures are synthetic and should remain visibly distinct from live or reconciled data.
 
-Consume versioned summaries from `cost-intelligence`, interface definitions from `shared-contracts`, and tokens from `brand-kit`. Show CFO.ai outputs as scenarios with their assumptions and dates. Any authorized budget action should call the owning financial API and produce an audit record.
+## Scope and ownership
 
-## P0 demo slice
+- Dashboard components, route presentation, query/filter behavior, evidence labels, empty/error states and export presentation belong here.
+- Identity, authentication, role membership, session revocation and trusted scope must be supplied and verified by the host server; a client-side HostAccess object is not authority.
+- Financial totals, billing mode, ledger rows and command effects come from their owning services through a reviewed host adapter; the dashboard must not silently recalculate an authoritative figure from incomplete fixture data.
+- Brand tokens in this repository are a local scoped subset; do not claim full brand-kit publication, rights or version conformance from their presence.
+- Master integration acceptance and issue state remain owned by integration-evals and the relevant live issues.
 
-Show earned, spent, operating result, and remaining budget for the agreed period, with source-status labels. Provide expense breakdowns and a transaction drilldown for one journey. Label demonstration data and unavailable values clearly.
+## Validation and contributor handoff
 
-## Acceptance boundary
+Use the repository's pinned Node/npm toolchain and commands defined in package.json and docs/development.md. Unit, contract, browser and build checks cover different local properties; none by itself accepts the host mount, production verifier, finance source or external command path. Keep trust-boundary and fixture distinctions intact when editing examples. Preserve AGENTS.md, CLAUDE.md, security policy and local contributor obligations.
 
-- [ ] Displayed amounts reconcile to the authoritative financial API.
-- [ ] Estimates, sandbox activity, and confirmed amounts are distinguishable.
-- [ ] Filters apply consistently across metrics and detail views.
-- [ ] Authorized viewers can follow totals to supporting records.
-- [ ] Roles protect financial commands and sensitive transaction details.
-- [ ] Data freshness and unresolved reconciliation gaps remain visible.
+## Architecture and acceptance sources
 
-[Architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) · [Acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
-
-## Acceptance and contributor handoff
-
-Use the [repository acceptance view](ACCEPTANCE.md) and [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md). Interfaces are specified in the [maintained contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md). Preserve local contributor and agent instructions; follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Named owner and reviewer assignments remain kickoff decisions.
+- [Current host architecture and integration state](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture/CURRENT-STATE.md) (available after the companion documentation PR merges).
+- [Architecture kit v1.0](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md): dated design intent, not current implementation.
+- [Local acceptance view](ACCEPTANCE.md) and the [master integration-evals checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/56018576a9450a2bb46aa55ed3b2f9d9ae97e50d/planning/acceptance-checklist.md).
+- [Team Dashboard development guide](../development.md) and [organization contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md).
