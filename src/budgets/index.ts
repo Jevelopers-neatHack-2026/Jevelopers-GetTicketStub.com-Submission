@@ -60,6 +60,7 @@ export const AuthorizationDecisionSchema = Type.Object({
   }, { additionalProperties: false })]),
   retryAfterMs: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
   finance: Type.Optional(FinanceReservationAuthoritySchema),
+  historicalReplay: Type.Optional(Type.Literal(true)),
 }, { additionalProperties: false });
 export type AuthorizationDecision = Static<typeof AuthorizationDecisionSchema>;
 

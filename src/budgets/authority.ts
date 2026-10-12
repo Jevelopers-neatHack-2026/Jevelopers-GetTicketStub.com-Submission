@@ -1,6 +1,6 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
-import { NonNegativeDecimalAmountSchema, TrustedScopeSchema, type TrustedScope } from '../shared/contracts.js';
+import { NonNegativeDecimalAmountSchema, TrustedScopeSchema, type TrustedScope, type Clock } from '../shared/contracts.js';
 
 /** Finance-local mapping. This is not a canonical shared-contract or a host grant issuer. */
 export const RESERVATION_AUTHORITY_MAPPING_VERSION = 'ci-reservation-authority-1.0.0' as const;
@@ -68,17 +68,24 @@ function currentTimes(value: { verifiedAt: string; expiresAt: string }, now: Dat
   const verified = Date.parse(value.verifiedAt), expires = Date.parse(value.expiresAt);
   return Number.isFinite(verified) && Number.isFinite(expires) && verified <= now.getTime() && expires > now.getTime();
 }
-export async function verifyBudgetSource(port: BudgetEvidencePort | undefined, query: BudgetEvidenceQuery, now: Date): Promise<BudgetEvidenceDecision | null> {
+export async function verifyBudgetSource(port: BudgetEvidencePort | undefined, query: BudgetEvidenceQuery, clock: Clock): Promise<BudgetEvidenceDecision | null> {
   if (!port) return null;
-  const decision = await port.verifyCurrent(structuredClone(query));
-  if (!decision || decision.status !== 'verified' || decision.queryDigest !== await budgetDigest(query) || !currentTimes(decision, now)) return null;
+  const queryDigest=await budgetDigest(query);
+  const decision = structuredClone(await port.verifyCurrent(structuredClone(query)));
+  const now=clock.now();
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) return null;
+  if (!decision || decision.status !== 'verified' || decision.queryDigest !== queryDigest || !currentTimes(decision, now)) return null;
   if (decision.maximum && (!Value.Check(BudgetReferenceSchema, decision.maximum.policyRef) || !Value.Check(NonNegativeDecimalAmountSchema, decision.maximum.authorizedCap) || !/^[A-Z]{3}$/.test(decision.maximum.currency))) return null;
   return structuredClone(decision);
 }
-export async function verifyReservationHost(port: BudgetReservationAuthorityPort | undefined, query: ReservationAuthorityQuery, now: Date): Promise<ReservationAuthorityDecision | null> {
-  if (!port || !Value.Check(ReservationAuthorityBindingSchema, query.binding) || Date.parse(query.binding.leaseExpiresAt) <= now.getTime()) return null;
-  const decision = await port.verifyCurrent(structuredClone(query));
-  if (!decision || decision.status !== 'allowed' || decision.revoked !== false || decision.queryDigest !== await budgetDigest(query) || !currentTimes(decision, now)
+export async function verifyReservationHost(port: BudgetReservationAuthorityPort | undefined, query: ReservationAuthorityQuery, clock: Clock): Promise<ReservationAuthorityDecision | null> {
+  if (!port || !Value.Check(ReservationAuthorityBindingSchema, query.binding)) return null;
+  const queryDigest=await budgetDigest(query);
+  const decision = structuredClone(await port.verifyCurrent(structuredClone(query)));
+  const now=clock.now();
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) return null;
+  if (Date.parse(query.binding.leaseExpiresAt)<=now.getTime())return null;
+  if (!decision || decision.status !== 'allowed' || decision.revoked !== false || decision.queryDigest !== queryDigest || !currentTimes(decision, now)
     || !Value.Check(Ref, decision.evidenceRef) || !Value.Check(Hash, decision.evidenceSha256)) return null;
   return structuredClone(decision);
 }

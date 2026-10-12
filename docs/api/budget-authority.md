@@ -178,3 +178,29 @@ integration and post-merge verification remain required. CI05B settlement,
 unknown-outcome queues, crash/lease recovery and null-provider-ID reconciliation
 remain separate. No full issue closure, paid provider call or host deployment is
 claimed by these offline tests.
+
+## Current authority proof lifetime
+
+Every successful Finance permission, host grant, estimate/maximum source and
+acknowledged-plan decision is cloned and retained through the operation. Verifier
+helpers read the trusted clock after their awaited issuer response. A later
+permission refresh cannot silently extend an earlier proof that expired while
+other work was awaited. Finance permission is refreshed after blocked database
+and host/source work, immediately before COMMIT, and after its acknowledgement.
+The whole retained proof chain, immutable financial expiry and worker lease must
+still be current at the authority boundary. Returned `finance.expires_at` is the
+minimum of those lifetimes, including the current revised-plan proof.
+
+Admission hashes and stores the final supporting Finance, host and source
+verification decisions, with the first-pass proofs retained for provenance.
+Expiry before COMMIT rolls back. If COMMIT acknowledgement arrives after a proof
+expires, the API returns unavailable without a dispatch envelope; the committed
+or uncertain hold remains conserved. Identical-key retry recovers the historical
+reservation. Such authorization replay carries `historicalReplay:true` and omits
+`finance`; callers must use fresh current revalidation to obtain dispatch
+eligibility. Policy, acknowledgement and dispatch mutations use the same retained
+proof/fresh permission rules. No expiry or permission loss releases exposure.
+
+These bounded sequential checks preserve distinct authorities. They do not
+claim a shared atomic revocation instant across remote issuers; the genuine host
+still owns its final synchronous transport/dispatch fence.

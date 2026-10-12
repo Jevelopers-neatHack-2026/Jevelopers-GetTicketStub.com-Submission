@@ -148,7 +148,7 @@
       "export_name": "AuthorizationDecisionSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/AuthorizationDecisionSchema.json",
       "completeness": "complete",
-      "sha256": "839f0e99b4f303ca32aa2887da16a492824d7a62d4bafb0126d9a23d270c11fb"
+      "sha256": "fb8d506dc773d9710f10310084c322dc618061dccec7128238fdea8a89b96169"
     },
     {
       "module": "budgets",

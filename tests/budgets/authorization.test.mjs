@@ -787,3 +787,89 @@ test('current host/source refusal or never-resolving verification after the lock
     }
   }finally{await pool.end();}
 });
+
+// R1 review regressions use synthetic independent proofs and deterministic trusted time on actual PostgreSQL.
+function assertNoCurrentAuthority(result,message){assert.ok(!result.ok||result.value.status==='denied'||result.value.status==='unavailable',message);assert.equal(result.value?.finance,undefined,message);}
+async function partialFixture(pool,scope,fixture,clock){
+  await setBudgetLimit(pool,scope,'0.6');const req=reservationRequest(scope,fixture,{amount:'1',allowPartialAuthorization:true,workPlan:{requestedUnits:10,unit:'unit',unitMaximumAmount:'0.1'}});
+  const ports=publicPorts(pool,scope,{clock});const grant=await api.authorize(req,ports);assert.equal(grant.value.status,'partial');
+  const revisedPlan={requestedUnits:6,unit:'unit',unitMaximumAmount:'0.1'};
+  const ack={schemaVersion:'1.0.0',requestId:randomUUID(),idempotencyKey:randomUUID(),scope,reservationId:grant.value.reservationId,expectedRevision:1,actorReference:scope.actorId,attemptBinding:req.attemptBinding,sourceAuthorityRef:authorityRefForTest(),allowedAmount:'0.6',allowedWorkUnits:6,unit:'unit',revisedPlan,revisedPlanHash:await api.budgetDigest(revisedPlan)};
+  return {req,ports,grant,ack};
+}
+test('R1-001 partial proof expiry refuses ack, both current phases and dispatch, retains exposure and bounds a fresh envelope',async()=>{
+  const pool=reservationPool();const fixture=await fixturePromise;const scope=makeScope('r1-plan');let now=Date.parse('2026-10-12T04:00:00Z');const clock={now:()=>new Date(now)};
+  try{
+    const {req,ports,grant,ack}=await partialFixture(pool,scope,fixture,clock);const ordinary=makePorts(pool,scope,{clock});
+    const expired=publicPorts(pool,scope,{clock,budgetEvidence:{verifyCurrent:async q=>{const d=await ordinary.budgetEvidence.verifyCurrent(q);if(q.operation==='acknowledgePartial'){d.expiresAt=new Date(now+1).toISOString();now+=10;}return d;}}});
+    assertNoCurrentAuthority(await api.acknowledgePartial(ack,expired),'expired plan cannot create acknowledgement');assert.equal(await countEvents(pool,scope),1);
+    assert.equal((await api.acknowledgePartial(ack,ports)).value.status,'applied');
+    const pre=currentQuery(scope,req,grant.value.reservationId,'preparation',{expectedRevision:2});assertNoCurrentAuthority(await api.revalidateAuthorization(pre,expired),'expired preparation plan');
+    const command=(await import('./reservation-harness.mjs')).markDispatchedCommand(scope,grant.value.reservationId,2,{attemptBinding:req.attemptBinding});
+    assertNoCurrentAuthority(await api.markDispatched(command,expired),'expired dispatch plan');assert.equal(await countEvents(pool,scope),1);
+    let expiry;const fresh=publicPorts(pool,scope,{clock,budgetEvidence:{verifyCurrent:async q=>{const d=await ordinary.budgetEvidence.verifyCurrent(q);if(q.operation==='acknowledgePartial'){expiry=new Date(now+50).toISOString();d.expiresAt=expiry;}return d;}}});
+    const current=await api.revalidateAuthorization(pre,fresh);assert.equal(current.value.status,'authorized');assert.equal(current.value.finance.expires_at,expiry,'Finance envelope includes the revised-plan TTL');
+    assert.equal((await api.markDispatched(command,ports)).value.state,'dispatched');
+    const post=currentQuery(scope,req,grant.value.reservationId,'post_transport_ack',{expectedRevision:3,dispatchIntentRef:command.dispatchIntentRef,transportAttemptId:req.attemptBinding.transportAttemptId});
+    assertNoCurrentAuthority(await api.revalidateAuthorization(post,expired),'expired post-ack plan');
+    assert.equal((await readCapacity(scope,'USD','retained-plan',makePorts(pool,scope,{clock}))).value.usedCapacity,'0.6');
+    assert.equal((await api.revalidateAuthorization(post,ports)).value.status,'authorized','independently fresh evidence recovers the same hold');
+  }finally{await pool.end();}
+});
+test('R1-002 expired final host or maximum-source proof rejects admission before any hold',async()=>{
+  const pool=reservationPool();const fixture=await fixturePromise;
+  try{for(const mode of ['host','maximum']){
+    const scope=makeScope(`r1-admission-${mode}`);await setBudgetLimit(pool,scope,'2');let now=Date.parse('2026-10-12T04:00:00Z');const clock={now:()=>new Date(now)};const maximumRef=authorityRefForTest();
+    const estimate={completeness:'unknown',knownSubtotal:'0',currency:'USD',rateCardRef:null,missingDimensions:['output_image_tokens'],boundedConservativeMaximum:'0.75',maximumPolicyRef:maximumRef};
+    const req=reservationRequest(scope,fixture,mode==='maximum'?{amount:'0.75',estimate}:{amount:'0.75'});const ordinary=makePorts(pool,scope,{clock,maximum:{policyRef:maximumRef,authorizedCap:'0.75',currency:'USD'}});let sourceCalls=0,financeCalls=0;
+    const ports=publicPorts(pool,scope,{clock,financeAuthority:{authorizeCurrent:async q=>{financeCalls++;const d=await ordinary.financeAuthority.authorizeCurrent(q);if(mode==='maximum'&&financeCalls===3)now+=10;return d;}},reservationAuthority:{verifyCurrent:async q=>{const d=await ordinary.reservationAuthority.verifyCurrent(q);if(mode==='host')d.expiresAt=new Date(now+1).toISOString();return d;}},budgetEvidence:{verifyCurrent:async q=>{sourceCalls++;const d=await ordinary.budgetEvidence.verifyCurrent(q);if(sourceCalls===2){if(mode==='host')now+=10;else d.expiresAt=new Date(now+1).toISOString();}return d;}}});
+    assertNoCurrentAuthority(await api.authorize(req,ports),mode);assert.equal(await countEvents(pool,scope),0,'rejected pre-commit proof cannot create a hold');
+  }}finally{await pool.end();}
+});
+test('R1-002 final supporting evidence is persisted and emitted expiry includes source and Finance proof lifetimes',async()=>{
+  const pool=reservationPool();const fixture=await fixturePromise;const scope=makeScope('r1-provenance');const clock={now:()=>new Date('2026-10-12T04:00:00Z')};
+  try{
+    await setBudgetLimit(pool,scope,'2');const ordinary=makePorts(pool,scope,{clock});let hostCalls=0,sourceCalls=0;const req=reservationRequest(scope,fixture);
+    const ports=publicPorts(pool,scope,{clock,financeAuthority:{authorizeCurrent:async q=>{const d=await ordinary.financeAuthority.authorizeCurrent(q);d.expiresAt='2026-10-12T04:00:03Z';return d;}},reservationAuthority:{verifyCurrent:async q=>{const d=await ordinary.reservationAuthority.verifyCurrent(q);hostCalls++;d.evidenceRef=hostCalls===1?'first-pass':'final-support';d.expiresAt='2026-10-12T04:00:05Z';return d;}},budgetEvidence:{verifyCurrent:async q=>{const d=await ordinary.budgetEvidence.verifyCurrent(q);sourceCalls++;d.expiresAt=sourceCalls===1?'2026-10-12T04:00:30Z':'2026-10-12T04:00:02Z';return d;}}});
+    const granted=await api.authorize(req,ports);assert.equal(granted.value.status,'authorized');assert.equal(granted.value.finance.expires_at,'2026-10-12T04:00:02.000Z');
+    const row=(await pool.query('SELECT authority_evidence FROM cost_intelligence.budget_reservation_events WHERE reservation_id=$1',[granted.value.reservationId])).rows[0];
+    assert.equal(row.authority_evidence.host.evidenceRef,'final-support');assert.equal(row.authority_evidence.source.expiresAt,'2026-10-12T04:00:02Z');assert.equal(row.authority_evidence.finance.operation,'budgets.authorize');
+  }finally{await pool.end();}
+});
+test('R1-002 proof expiry at COMMIT acknowledgement returns unavailable, retains one hold and requires fresh current revalidation',async()=>{
+  const pool=reservationPool();const fixture=await fixturePromise;const scope=makeScope('r1-commit-expiry');let now=Date.parse('2026-10-12T04:00:00Z');const clock={now:()=>new Date(now)};
+  try{
+    await setBudgetLimit(pool,scope,'2');const ordinary=makePorts(pool,scope,{clock});const req=reservationRequest(scope,fixture);
+    const commitPool={connect:async()=>{const c=await pool.connect();return {query:async(text,values)=>{const r=await c.query(text,values);if(text==='COMMIT')now+=10;return r;},release:()=>c.release()};}};
+    const ports=publicPorts(commitPool,scope,{clock,reservationAuthority:{verifyCurrent:async q=>{const d=await ordinary.reservationAuthority.verifyCurrent(q);d.expiresAt=new Date(now+1).toISOString();return d;}}});
+    const result=await api.authorize(req,ports);assertNoCurrentAuthority(result,'post-commit expiry');assert.equal(result.value.status,'unavailable');assert.equal(await countEvents(pool,scope),1,'acknowledged hold is retained, never erased on proof TTL');
+    const recovery=publicPorts(pool,scope,{clock});const replay=await api.authorize(req,recovery);assert.equal(replay.value.reservationId,(await pool.query('SELECT reservation_id FROM cost_intelligence.budget_reservation_events WHERE tenant_id=$1',[scope.tenantId])).rows[0].reservation_id);assert.equal(replay.value.historicalReplay,true);assert.equal(replay.value.finance,undefined);assert.equal(await countEvents(pool,scope),1);
+    assert.equal((await api.revalidateAuthorization(currentQuery(scope,req,replay.value.reservationId),recovery)).value.status,'authorized');
+  }finally{await pool.end();}
+});
+test('R1-003 Finance permission expiry or revocation across host verification refuses both phases without releasing exposure',async()=>{
+  const pool=reservationPool();const fixture=await fixturePromise;
+  try{for(const mode of ['expired','revoked']){
+    const scope=makeScope(`r1-finance-${mode}`);await setBudgetLimit(pool,scope,'2');let now=Date.parse('2026-10-12T04:00:00Z');const clock={now:()=>new Date(now)};const req=reservationRequest(scope,fixture);const normal=publicPorts(pool,scope,{clock});const grant=await api.authorize(req,normal);
+    const command=(await import('./reservation-harness.mjs')).markDispatchedCommand(scope,grant.value.reservationId,1,{attemptBinding:req.attemptBinding});assert.equal((await api.markDispatched(command,normal)).value.state,'dispatched');
+    for(const phase of ['preparation','post_transport_ack']){
+      let revoked=false,calls=0;const ordinary=makePorts(pool,scope,{clock});const ports=publicPorts(pool,scope,{clock,financeAuthority:{authorizeCurrent:async q=>{calls++;if(revoked)return {status:'denied',operation:q.operation,permission:q.permission};const d=await ordinary.financeAuthority.authorizeCurrent(q);if(mode==='expired')d.expiresAt=new Date(now+1).toISOString();return d;}},reservationAuthority:{verifyCurrent:async q=>{const d=await ordinary.reservationAuthority.verifyCurrent(q);if(mode==='revoked')revoked=true;else now+=10;return d;}}});
+      const query=currentQuery(scope,req,grant.value.reservationId,phase,{expectedRevision:2,...(phase==='post_transport_ack'?{dispatchIntentRef:command.dispatchIntentRef,transportAttemptId:req.attemptBinding.transportAttemptId}:{})});
+      assertNoCurrentAuthority(await api.revalidateAuthorization(query,ports),`${mode}/${phase}`);assert.ok(calls>=2,'distinct Finance permission is rechecked after the host wait');
+    }
+    assert.equal((await readCapacity(scope,'USD','finance-retained',makePorts(pool,scope,{clock}))).value.usedCapacity,'0.75');
+  }}finally{await pool.end();}
+});
+test('R1 mutation proof chain refuses expired source authority in budget policy, acknowledgement and dispatch',async()=>{
+  const pool=reservationPool();const fixture=await fixturePromise;
+  try{for(const operation of ['policy','ack','dispatch']){
+    const scope=makeScope(`r1-mutation-${operation}`);let now=Date.parse('2026-10-12T04:00:00Z');const clock={now:()=>new Date(now)};let prepared;
+    if(operation==='policy')await setBudgetLimit(pool,scope,'2');else prepared=await partialFixture(pool,scope,fixture,clock);
+    if(operation==='dispatch')assert.equal((await api.acknowledgePartial(prepared.ack,prepared.ports)).value.status,'applied');
+    const ordinary=makePorts(pool,scope,{clock});let calls=0;const ports=publicPorts(pool,scope,{clock,financeAuthority:{authorizeCurrent:async q=>{calls++;const d=await ordinary.financeAuthority.authorizeCurrent(q);if(calls===2)now+=10;return d;}},budgetEvidence:{verifyCurrent:async q=>{const d=await ordinary.budgetEvidence.verifyCurrent(q);d.expiresAt=new Date(now+1).toISOString();return d;}}});
+    let result;if(operation==='policy')result=await api.changeBudget({schemaVersion:'1.0.0',requestId:randomUUID(),idempotencyKey:randomUUID(),scope,newLimit:'3',currency:'USD',expectedPolicyRevision:1,expectedLedgerRevision:0,actorReference:scope.actorId,reasonReference:'r1-lifetime',sourceAuthorityRef:authorityRefForTest()},ports);
+    else if(operation==='ack')result=await api.acknowledgePartial(prepared.ack,ports);
+    else result=await api.markDispatched((await import('./reservation-harness.mjs')).markDispatchedCommand(scope,prepared.grant.value.reservationId,2,{attemptBinding:prepared.req.attemptBinding}),ports);
+    assertNoCurrentAuthority(result,operation);const capacity=await readCapacity(scope,'USD','mutation-retained',makePorts(pool,scope,{clock}));assert.equal(capacity.value.limitAmount,operation==='policy'?'2':'0.6');assert.equal(capacity.value.usedCapacity,operation==='policy'?'0':'0.6');assert.equal(await countEvents(pool,scope),operation==='policy'?0:1);
+  }}finally{await pool.end();}
+});
