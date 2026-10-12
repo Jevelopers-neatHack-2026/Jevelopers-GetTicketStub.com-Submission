@@ -2877,8 +2877,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "e524127c783e3cc7877898079ecf1846417fde86",
-      "sha256": "e732eb872ae8c62ca6e13a5ce54c218e86b44f8eb15a526b107ec28eb02b418b",
+      "trackedAtRevision": "5032278ff12ce23b3980c6c812dbe2ffc497680a",
+      "sha256": "57c4450541a318b6e9e49409973fe23e1c54fafc4e418d0a150526727bb90e17",
       "provenanceRecordId": "TEST-COLLATERAL-POLICY-001"
     },
     {
@@ -2925,8 +2925,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "6239f2e5789afb2904d47a687c076b6135d5d684b18799fe56597366d5dd6cf7",
+      "trackedAtRevision": "5032278ff12ce23b3980c6c812dbe2ffc497680a",
+      "sha256": "4fddb0beb10e8bca4766c7e93251331f8ec2116a5d620a511c250e9d151e1c5f",
       "provenanceRecordId": "VALIDATOR-COLLATERAL-001"
     },
     {
@@ -6840,6 +6840,18 @@
       "trackedAtRevision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
       "sha256": "90ba5a954549b324215ca2b8c7d9bdffdff503b61df1d73d66a3734eb751371d",
       "provenanceRecordId": "PROV-FILE-E721068D008B"
+    },
+    {
+      "fileId": "FILE-713ADC9BEA87",
+      "path": "release/v0.1.0-rehearsal/history/manifest-b279a99be5905c70.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "5032278ff12ce23b3980c6c812dbe2ffc497680a",
+      "sha256": "b279a99be5905c70e232a2161fe4a0e2dd777efbc7214e683aa3491e0ab6f854",
+      "provenanceRecordId": "PROV-FILE-713ADC9BEA87"
     }
   ],
   "submissionScope": {

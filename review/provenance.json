@@ -6736,14 +6736,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-inventory.json",
-        "revision": "sha256:6618a458f533724319274f5b20c1f4c483575fc5e9cc9392a46222460e4ed470",
+        "revision": "sha256:40ada81dc113c5f1ef008346b0734c4797fa71e81295e35e7cd270eb0b271e2c",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current inventory-digest join refresh (issue 11 r08 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r08 final-copy packaging continuation writer session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r07 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r06 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r05 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r04 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r04 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (Entire SPN-02 source status) by the Anthropic Claude Sonnet 5.5 session a2a839e5-19e1-4617-8767-91c4348070fb; earlier revisions: Current inventory-digest join refresh (CFO.ai owner status) by the Anthropic Claude Sonnet 5.5 session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c; earlier revisions: Current inventory-digest join refresh (CFO.ai revision 2 source status) by the Anthropic Claude Sonnet 5.5 session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r08 final-copy packaging continuation writer session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session a2a839e5-19e1-4617-8767-91c4348070fb, firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current security path-boundary metadata refresh by Codex task /root/orch_marketing_material/worker_paths (DBR-MM-001-PATH-PORT), assigned by the user-authorized marketing-material security orchestrator; actual served model, effort and worker session UUID not exposed. Earlier revisions: Current inventory-digest join refresh (issue 11 r08 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r08 final-copy packaging continuation writer session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r07 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r06 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r05 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r04 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (issue 11 r04 package joins) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed); earlier revisions: Current inventory-digest join refresh (Entire SPN-02 source status) by the Anthropic Claude Sonnet 5.5 session a2a839e5-19e1-4617-8767-91c4348070fb; earlier revisions: Current inventory-digest join refresh (CFO.ai owner status) by the Anthropic Claude Sonnet 5.5 session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c; earlier revisions: Current inventory-digest join refresh (CFO.ai revision 2 source status) by the Anthropic Claude Sonnet 5.5 session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current security path-boundary metadata refresh: Requested routing gpt-6.1-sol/high; actual served model, effort and worker session UUID unknown. Local Python 3.9.6 metadata/archive operations and package_collateral.py only; no paid or live provider. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r08 final-copy packaging continuation writer session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r07 final followup package writer session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 r06 final followup package writer session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE final packaging session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) issue 11 L-PACKAGE integration session (session ID not exposed), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session a2a839e5-19e1-4617-8767-91c4348070fb, firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 16795719-0acc-40dd-a2fb-41ed6bc9fe0c, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -6794,7 +6794,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "6618a458f533724319274f5b20c1f4c483575fc5e9cc9392a46222460e4ed470",
+        "value": "40ada81dc113c5f1ef008346b0734c4797fa71e81295e35e7cd270eb0b271e2c",
         "status": "Exact SHA-256 content digest of current inventory bytes; the register is external to this source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -8856,8 +8856,8 @@
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current security path-boundary metadata refresh by Codex task /root/orch_marketing_material/worker_paths (DBR-MM-001-PATH-PORT), assigned by the user-authorized marketing-material security orchestrator; actual served model, effort and worker session UUID not exposed. Earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current security path-boundary metadata refresh: Requested routing gpt-6.1-sol/high; actual served model, effort and worker session UUID unknown. Local Python 3.9.6 metadata/archive operations and package_collateral.py only; no paid or live provider. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -15230,14 +15230,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tests/test_collateral_validation.py",
-        "revision": "sha256:e732eb872ae8c62ca6e13a5ce54c218e86b44f8eb15a526b107ec28eb02b418b",
+        "revision": "sha256:57c4450541a318b6e9e49409973fe23e1c54fafc4e418d0a150526727bb90e17",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Current revision (Neatlogs source-availability scope regression (source lease), commit e524127) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer); earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current path-boundary repair revision by Codex task /root/orch_marketing_material/worker_paths (DBR-MM-001-PATH-PORT), assigned by the user-authorized marketing-material security orchestrator; actual served model, effort and worker session UUID not exposed. Earlier revisions: Current revision (Neatlogs source-availability scope regression (source lease), commit e524127) by the Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) source lease writer session (session ID not exposed to the integration writer); earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current path-boundary repair revision: Requested routing gpt-6.1-sol/high; actual served model, effort and worker session UUID unknown. Local Python 3.9.6 metadata/archive operations and package_collateral.py only; no paid or live provider. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), firstParty provider; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -15288,7 +15288,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "e732eb872ae8c62ca6e13a5ce54c218e86b44f8eb15a526b107ec28eb02b418b",
+        "value": "57c4450541a318b6e9e49409973fe23e1c54fafc4e418d0a150526727bb90e17",
         "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -15838,14 +15838,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tools/validate_collateral.py",
-        "revision": "sha256:6239f2e5789afb2904d47a687c076b6135d5d684b18799fe56597366d5dd6cf7",
+        "revision": "sha256:4fddb0beb10e8bca4766c7e93251331f8ec2116a5d620a511c250e9d151e1c5f",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current path-boundary repair revision by Codex task /root/orch_marketing_material/worker_paths (DBR-MM-001-PATH-PORT), assigned by the user-authorized marketing-material security orchestrator; actual served model, effort and worker session UUID not exposed. Earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current path-boundary repair revision: Requested routing gpt-6.1-sol/high; actual served model, effort and worker session UUID unknown. Local Python 3.9.6 metadata/archive operations and package_collateral.py only; no paid or live provider. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -15896,7 +15896,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "6239f2e5789afb2904d47a687c076b6135d5d684b18799fe56597366d5dd6cf7",
+        "value": "4fddb0beb10e8bca4766c7e93251331f8ec2116a5d620a511c250e9d151e1c5f",
         "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -30038,6 +30038,82 @@
         "This record grants internal candidate-review scope only, not external destination permission.",
         "Independent exact-byte and applicable source-owner, brand and destination review remain pending.",
         "Planned runbook: not cleared for publication or recording."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-713ADC9BEA87",
+      "kind": "internal_package_control",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/history/manifest-b279a99be5905c70.json",
+        "revision": "sha256:b279a99be5905c70e232a2161fe4a0e2dd777efbc7214e683aa3491e0ab6f854",
+        "revisionKind": "sha256_content_digest",
+        "url": null,
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-12",
+      "creator": "Byte-exact prior draft manifest retention by Codex task /root/orch_marketing_material/worker_paths (DBR-MM-001-PATH-PORT), assigned by the user-authorized marketing-material security orchestrator; actual served model, effort and worker session UUID not exposed.",
+      "toolModel": "Requested routing gpt-6.1-sol/high; actual served model, effort and worker session UUID unknown. Local Python 3.9.6 metadata/archive operations and package_collateral.py only; no paid or live provider. Prior current manifest SHA-256: b279a99be5905c70e232a2161fe4a0e2dd777efbc7214e683aa3491e0ab6f854.",
+      "evidenceClassification": "internal_historical_draft_manifest",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": false,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Exact prior draft manifest bytes archived before regeneration; no release decision or approval is inferred."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "b279a99be5905c70e232a2161fe4a0e2dd777efbc7214e683aa3491e0ab6f854",
+        "status": "Exact SHA-256 content digest of the immutable archived prior draft manifest bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session); independent receiver review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record preserves prior draft manifest bytes and grants no external destination permission.",
+        "The archived draft is not an approved release or submission artifact."
       ]
     }
   ],
