@@ -58,7 +58,7 @@ host. A capture failure returns failure and retains the original directory for
 a later capture attempt; unique capture directories preserve earlier evidence.
 The test client checks reset and capture responses. The locked-logo case chooses
 its lock before the first navigation, and context teardown stops new browser
-requests before final capture. Temporary databases are removed after successful
+requests and releases any explicit MOCK latch before final capture. Temporary databases are removed after successful
 reset or orderly shutdown. Separate-process tests preserve their explicit
 database/object paths across exit.
 

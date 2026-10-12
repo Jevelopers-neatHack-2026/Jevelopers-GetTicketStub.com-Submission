@@ -14,6 +14,11 @@ export const test = base.extend({
     await use();
     await context.close();
     if (process.env.CONTROLS_BROWSER_EVIDENCE_DIR && baseURL === 'http://127.0.0.1:4317') {
+      // A failed assertion can leave an explicit MOCK test latch held. Stop
+      // browser producers first, then let admitted work finish before custody.
+      const release = await request.post('/__fixture/state', { data: { release: true } });
+      expect(release.status(), 'Fixture latch release before capture must succeed').toBe(200);
+      expect((await release.json()).ok).toBe(true);
       const response = await request.post('/__fixture/capture', { data: {} });
       expect(response.ok(), 'Browser store capture must succeed').toBe(true);
       expect((await response.json()).ok).toBe(true);
