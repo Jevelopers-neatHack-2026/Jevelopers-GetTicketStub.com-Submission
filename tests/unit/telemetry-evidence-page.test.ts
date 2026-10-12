@@ -48,10 +48,12 @@ test("envelope states staged, unmapped, non-authoritative provenance with a veri
 			local: true,
 			mapped: false,
 			authoritative: false,
-			delivered: false,
+			deliveryStatus: "not_included",
 			note: undefined,
 		},
 	);
+	assert.equal("delivered" in page.provenance, false);
+	assert.match(page.provenance.note, /no delivery claim/);
 	assert.equal(page.scopeDigest, scopeKey(scope));
 	assert.equal(page.integrity.algorithm, "sha256");
 	const { integrity, ...payload } = page;

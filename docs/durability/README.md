@@ -180,8 +180,9 @@ mapping, real finance intake, Neatlogs and EvaluationEvidence remain blocked.
 
 `src/telemetry/evidence-page.ts` provides the allowlisted, read-only export of
 staged observations as digest-committed pages (see the telemetry README). It
-adds no provider/billable IDs, delivery claims or valuation, and does not
-mutate outbox state. Its SHA-256 commitment is local tamper evidence only.
+adds no provider/billable IDs or valuation, states delivery status as
+`not_included` (no delivery claim), and does not mutate
+outbox state. Its SHA-256 commitment is local tamper evidence only.
 
 ## Acceptance and handoffs
 

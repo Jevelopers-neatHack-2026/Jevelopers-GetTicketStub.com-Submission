@@ -13,6 +13,8 @@ job/row/publication references; measured or unknown metrics as recorded;
 environment=local, billingMode=unclassified, producerBuildDigest=null). The
 SHA-256 `integrity.payloadDigest` commits to the canonical (sorted-key) JSON of
 everything except `integrity`; `verifyEvidencePage` rechecks it. Pagination uses
-a scope-bound `nextCursor`. It is a local integrity check, not a signature or
-approved receipt, never mutates the outbox, and does not derive tenant, project
+a scope-bound `nextCursor`. Delivery status is not included
+(`deliveryStatus: "not_included"`); the adapter reads observations only and
+makes no delivery claim. The digest is a local integrity check, not a signature
+or approved receipt; the adapter never mutates the outbox, and does not derive tenant, project
 or build from the opaque scope digest.

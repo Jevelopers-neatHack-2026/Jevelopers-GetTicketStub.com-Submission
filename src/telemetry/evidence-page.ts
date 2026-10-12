@@ -45,7 +45,7 @@ export type EvidencePagePayload = {
 		readonly local: true;
 		readonly mapped: false;
 		readonly authoritative: false;
-		readonly delivered: false;
+		readonly deliveryStatus: "not_included";
 		readonly note: string;
 	};
 	/** Opaque caller-scope digest; tenant/project are not derivable from it. */
@@ -65,7 +65,7 @@ export type EvidencePage = EvidencePagePayload & {
 };
 
 const note =
-	"Local staged, unmapped, non-authoritative observations. Not a UsageEvent, ledger, approved receipt or consumer acknowledgement.";
+	"Local staged, unmapped, non-authoritative observations. Delivery status is not included and no delivery claim is made. Not a UsageEvent, ledger, approved receipt or consumer acknowledgement.";
 const cursorPattern = /^v1:([a-f0-9]{64}):(0|[1-9][0-9]{0,15})$/;
 
 /** Deterministic JSON: object keys sorted, arrays ordered, no undefined. */
@@ -159,7 +159,7 @@ export function readEvidencePage(
 			local: true,
 			mapped: false,
 			authoritative: false,
-			delivered: false,
+			deliveryStatus: "not_included",
 			note,
 		},
 		scopeDigest,
