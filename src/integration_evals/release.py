@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Literal
 
 from integration_evals.artifacts import digest, read_bytes
+from integration_evals.errors import fail
+from integration_evals.evidence_index import EvidenceIndex
 from integration_evals.history import History, runs_of, validate_record
 from integration_evals.models import Outcome, Record, Run, Status, Suite
 from integration_evals.report_validation import validate_run
@@ -37,10 +39,33 @@ class ReleaseAudit(Record):
 
 
 def audit(
-    run: Run | History, tracker: Tracker, requirements: Requirements, suite: Suite
+    run: Run | History,
+    tracker: Tracker,
+    requirements: Requirements,
+    suite: Suite,
+    *,
+    evidence_index: EvidenceIndex | None = None,
 ) -> ReleaseAudit:
     """List every launch leaf and original acceptance row without premature closure."""
     history = runs_of(run)
+    if evidence_index is not None and (
+        evidence_index.runs != history
+        or evidence_index.history_digest
+        != digest(
+            (run if isinstance(run, History) else History(runs=history)).model_dump_json().encode()
+        )
+        or evidence_index.suite_digest != digest(suite.model_dump_json().encode())
+        or evidence_index.tracker_digest != digest(tracker.model_dump_json().encode())
+        or evidence_index.requirements_digest != digest(requirements.model_dump_json().encode())
+        or {row.requirement for row in evidence_index.requirements}
+        != {*(str(c.id) for c in tracker.criteria), *(str(c.id) for c in requirements.leaves)}
+    ):
+        fail("release_evidence_index_mismatch", "index")
+    evidence_blockers = (
+        {row.requirement: row.blockers for row in evidence_index.requirements}
+        if evidence_index
+        else {}
+    )
     if isinstance(run, History):
         validate_record(run, suite)
     else:
@@ -66,13 +91,17 @@ def audit(
             Obligation(
                 id=leaf.id,
                 issue=leaf.issue,
-                state=Status.BLOCKED if blockers or not results else Status.IN_PROGRESS,
+                state=Status.BLOCKED
+                if blockers or not results or evidence_blockers.get(leaf.id)
+                else Status.IN_PROGRESS,
                 cases=tuple(result.case_id for result in results),
                 owner=blockers[0].blocker_owner or "repository reviewer"
                 if blockers
                 else "repository reviewer",
                 next_action=(blockers[0].reason or "resolve failed owner boundary")
                 if blockers
+                else "; ".join(evidence_blockers[leaf.id])
+                if evidence_blockers.get(leaf.id)
                 else "Provide reviewed criterion artifacts; tooling tests alone are insufficient",
             )
         )
@@ -84,10 +113,12 @@ def audit(
                 Obligation(
                     id=criterion.id,
                     issue=criterion.implementation_issue_refs[0],
-                    state=row.status,
+                    state=Status.BLOCKED if evidence_blockers.get(criterion.id) else row.status,
                     cases=row.case_ids,
                     owner=criterion.owner_role,
-                    next_action="Owner review of authentic boundary evidence and composed pins",
+                    next_action="; ".join(evidence_blockers[criterion.id])
+                    if evidence_blockers.get(criterion.id)
+                    else "Owner review of authentic boundary evidence and composed pins",
                 )
             )
     return ReleaseAudit(

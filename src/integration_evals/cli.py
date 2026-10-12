@@ -10,7 +10,7 @@ from typing import Annotated
 import typer
 from pydantic import TypeAdapter, ValidationError
 
-from integration_evals import history_cli, schema_exports
+from integration_evals import evidence_cli, history_cli, schema_exports
 from integration_evals.artifacts import load_record, read_bytes
 from integration_evals.benchmarks import (
     Corpus,
@@ -30,6 +30,7 @@ from integration_evals.contracts import (
 )
 from integration_evals.diagnostics import replay_comparisons
 from integration_evals.errors import InvalidArtifactError
+from integration_evals.evidence_index import EvidenceIndex
 from integration_evals.execution import Settings
 from integration_evals.history import History
 from integration_evals.history_archive import save_history
@@ -153,16 +154,38 @@ def run(  # noqa: PLR0913 - Typer maps each explicit option to a CLI parameter.
     )
     receipt, captures = execute_captured(suite, catalog, settings)
     history = History(runs=(receipt,))
-    directory = save_history(history, Path(output), tracker, suite, settings.artifacts)
+    requirements = load_record(repository / "planning/requirements.json", Requirements)
+    directory = save_history(
+        history, Path(output), tracker, suite, settings.artifacts, requirements=requirements
+    )
     if captures:
         save_comparisons(captures, receipt, directory)
-    requirements = load_record(repository / "planning/requirements.json", Requirements)
-    export_audit(audit(history, tracker, requirements, suite), directory / "release-audit.json")
+    export_audit(
+        audit(
+            history,
+            tracker,
+            requirements,
+            suite,
+            evidence_index=load_record(directory / "evidence-index.json", EvidenceIndex),
+        ),
+        directory / "release-audit.json",
+    )
     for _ in range(evaluation_diagnostics):
         diagnostic = replay_comparisons(history, captures, suite)
         history = History(runs=(*history.runs, diagnostic))
-        directory = save_history(history, Path(output), tracker, suite, settings.artifacts)
-        export_audit(audit(history, tracker, requirements, suite), directory / "release-audit.json")
+        directory = save_history(
+            history, Path(output), tracker, suite, settings.artifacts, requirements=requirements
+        )
+        export_audit(
+            audit(
+                history,
+                tracker,
+                requirements,
+                suite,
+                evidence_index=load_record(directory / "evidence-index.json", EvidenceIndex),
+            ),
+            directory / "release-audit.json",
+        )
     typer.echo(str(directory))
     if not receipt.selected_case_ids or any(
         result.outcome.value != "passed"
@@ -257,3 +280,4 @@ _ = app.command()(safe_command(history_cli.replay_evaluation))
 _ = app.command()(safe_command(history_cli.history_report))
 _ = app.command()(safe_command(history_cli.benchmark_history))
 _ = app.command()(safe_command(schema_exports.schemas))
+_ = app.command()(safe_command(evidence_cli.evidence_index))

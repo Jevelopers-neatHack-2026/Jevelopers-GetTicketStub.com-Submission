@@ -9,6 +9,7 @@ on:
       - "planning/acceptance-checklist.*"
       - "evidence/**"
       - ".github/workflows/evidence-audit.yml"
+      - ".github/workflows/entire-graph.yml"
   push:
     branches: [main]
     paths:
@@ -18,6 +19,7 @@ on:
       - "planning/acceptance-checklist.*"
       - "evidence/**"
       - ".github/workflows/evidence-audit.yml"
+      - ".github/workflows/entire-graph.yml"
 
 permissions:
   contents: read
@@ -34,6 +36,6 @@ jobs:
         with:
           python-version: "3.11"
       - name: Unit tests
-        run: python -m unittest -v tests.test_audit_evidence
+        run: python -m unittest -v tests.test_audit_evidence tests.test_entire_graph_workflow_security
       - name: Audit evidence integrity
         run: python tools/audit_evidence.py

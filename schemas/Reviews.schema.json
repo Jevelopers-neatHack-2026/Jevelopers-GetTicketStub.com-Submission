@@ -1,0 +1,371 @@
+{
+  "$defs": {
+    "EvidenceReview": {
+      "additionalProperties": false,
+      "description": "Owner-supplied review claims bound to the exact original evidence identity.",
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "evidence_id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "artifact_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Artifact Digest",
+          "type": "string"
+        },
+        "source_mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "source_origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "producing_revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Producing Revision",
+          "type": "string"
+        },
+        "original_created_at": {
+          "format": "date-time",
+          "title": "Original Created At",
+          "type": "string"
+        },
+        "original_cutoff": {
+          "format": "date-time",
+          "title": "Original Cutoff",
+          "type": "string"
+        },
+        "review_scope": {
+          "const": "local-attestation",
+          "default": "local-attestation",
+          "title": "Review Scope",
+          "type": "string"
+        },
+        "reviewer": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Reviewer",
+          "type": "string"
+        },
+        "intended_reviewers": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Intended Reviewers",
+          "type": "array"
+        },
+        "checked_at": {
+          "format": "date-time",
+          "title": "Checked At",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "permission": {
+          "$ref": "#/$defs/ReviewReference"
+        },
+        "redaction": {
+          "$ref": "#/$defs/ReviewReference"
+        },
+        "access": {
+          "$ref": "#/$defs/ReviewReference"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "evidence_id",
+        "artifact_digest",
+        "source_mode",
+        "source_origin",
+        "producing_revision",
+        "original_created_at",
+        "original_cutoff",
+        "reviewer",
+        "intended_reviewers",
+        "checked_at",
+        "expires_at",
+        "permission",
+        "redaction",
+        "access"
+      ],
+      "title": "EvidenceReview",
+      "type": "object"
+    },
+    "ImageQualification": {
+      "additionalProperties": false,
+      "description": "Creative-owned GPT Image metadata; no invented provider receipt or usage IDs.",
+      "properties": {
+        "run_id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "evidence_id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "artifact_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Artifact Digest",
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "generate",
+            "edit"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "provider_id": {
+          "const": "gpt-image",
+          "default": "gpt-image",
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "endpoint": {
+          "minLength": 1,
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "configuration_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Configuration Digest",
+          "type": "string"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "title": "Requested At",
+          "type": "string"
+        },
+        "design_version": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Design Version",
+          "type": "string"
+        },
+        "parent_design_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Design Version"
+        },
+        "input_digests": {
+          "items": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Input Digests",
+          "type": "array"
+        },
+        "input_permission": {
+          "$ref": "#/$defs/ReviewReference"
+        },
+        "usage_status": {
+          "enum": [
+            "unknown",
+            "reported"
+          ],
+          "title": "Usage Status",
+          "type": "string"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "provider_receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "receipt_unavailable_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receipt Unavailable Reason"
+        },
+        "media_type": {
+          "const": "image/png",
+          "default": "image/png",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "integer"
+        },
+        "provider_has_sandbox": {
+          "default": false,
+          "title": "Provider Has Sandbox",
+          "type": "boolean"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "evidence_id",
+        "artifact_digest",
+        "operation",
+        "model",
+        "endpoint",
+        "configuration_digest",
+        "requested_at",
+        "design_version",
+        "input_digests",
+        "input_permission",
+        "usage_status",
+        "width",
+        "height"
+      ],
+      "title": "ImageQualification",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "Origin": {
+      "description": "Where the actual artifact originated.",
+      "enum": [
+        "synthetic",
+        "recorded",
+        "sandbox-derived",
+        "live"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "ReviewReference": {
+      "additionalProperties": false,
+      "description": "An accessible sanitized review derivative, never an unchecked remote URL.",
+      "properties": {
+        "reference": {
+          "minLength": 1,
+          "title": "Reference",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference",
+        "path",
+        "sha256"
+      ],
+      "title": "ReviewReference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Optional evaluator sidecar leaves the existing Run/Evidence contract unchanged.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EvidenceReview"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "images": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ImageQualification"
+      },
+      "title": "Images",
+      "type": "array"
+    }
+  },
+  "title": "Reviews",
+  "type": "object"
+}
