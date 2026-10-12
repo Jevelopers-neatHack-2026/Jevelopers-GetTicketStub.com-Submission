@@ -24,10 +24,11 @@ This is an executable review brief for MM-02. A checked item needs a source link
 
 ## X submission destination review (pending)
 
-Rows: `CLAIM-X-DEST-TEAM-001`, `CLAIM-X-DEST-PROJECT-001`, `CLAIM-X-DEST-REPO-001`. All three are `planned`/`pending`, sourced to the entry-contents list in marketing-material issue 22 (created 2026-10-11T19:31:01Z), a mutable issue record rather than an immutable revision.
+Rows: `CLAIM-X-DEST-TEAM-001`, `CLAIM-X-DEST-PROJECT-001`, `CLAIM-X-DEST-REPO-001`, `CLAIM-X-DEST-PLAN-001`. All four are `planned`/`pending`, sourced to the entry-contents list in marketing-material issue 22 (created 2026-10-11T19:31:01Z; body updated_at 2026-10-11T20:21:44Z), a mutable issue record rather than an immutable revision.
 
 - [ ] Confirm each field matches the exact allowed wording in the ledger and that the project name keeps the qualifier “Project name only; product availability is unverified.”
 - [ ] The getticketstub.com route owner confirms the repository locator and that it is used as a locator only, not a product route or transaction CTA. `CLAIM-PRODUCT-NAME-001` stays scoped to concept artwork and is not extended.
+- [ ] The plan locator in `CLAIM-X-DEST-PLAN-001` stays a locator only: not Finance approval, `CFO-R2-001` unresolved, owner acceptance preserved and not a waiver, no figures or sponsor state.
 - [ ] Count the assembled quote-post against the 280-character limit using realistic maximum-length placeholders; the final composer check is a human step.
 - [ ] Submitter name and authorization, demo URL, the official neatlogs post URL and the Discord-governed cutoff stay bracketed/pending. Agents do not post.
 
