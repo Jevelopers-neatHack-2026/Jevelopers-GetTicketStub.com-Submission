@@ -1,4 +1,6 @@
+import { types as utilTypes } from 'node:util';
 import { randomUUID } from 'node:crypto';
+import { addAbortListener } from 'node:events';
 import {
   executeMeteredAttempt,
   validateMeteredAttempt,
@@ -27,6 +29,9 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}$/;
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
 const MAX_CAPABILITY_AGE_MS = 5 * 60_000;
+// Accept native AbortSignals with own data state and proxy-free prototypes, including normal subclasses.
+// Public `aborted` shadows are bypassed; inherited-state facades and accessor-backed state are invalid.
+const nativeAbortSignalAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
 const SENSITIVE_KEY = /(?:(?:^|[_-])(?:credential|secret|password|authorization|bearer|cookie|api[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|token)(?:$|[_-])|(?<!s)token$|(?:credentials?|secrets?|password|authorization|bearer|cookie|apiKey|privateKey))$/i;
 const RAW_CONTENT_KEY = /^(?:prompt|prompt_text|raw_text|image_bytes|authorization_header|headers?)$/i;
 const SENSITIVE_VALUE = /(?:\bbearer\s+[A-Za-z0-9._~+\/-]{1,}={0,2}(?![A-Za-z0-9._~+\/-])|\bsk-(?:proj-)?[A-Za-z0-9_-]{8,}|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\b(?:rk|pk)-[A-Za-z0-9_-]{12,}\b|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|https?:\/\/[^\s"'<>]+)/i;
@@ -130,6 +135,38 @@ export class AccessPreflightError extends Error {
 
 function fail(code, message, field) {
   throw new AccessPreflightError(code, message, field);
+}
+
+function nativeAbortSignalState(value) {
+  if (value === null || typeof value !== 'object') return undefined;
+  try {
+    // isProxy itself invokes no traps. Check every node before reflecting on it: Object.create(proxy)
+    // is not a Proxy, but Node's getter otherwise follows that hostile prototype for its state reads.
+    const prototypes = [];
+    for (let current = value; current !== null; current = Object.getPrototypeOf(current)) {
+      if (utilTypes.isProxy(current)) return undefined;
+      if (current !== value) prototypes.push(current);
+    }
+    // Node's getter reads JS storage rather than an unspoofable private slot. Give it our own receiver,
+    // forwarding only the candidate's own data descriptors, never inherited values or caller accessors.
+    // The getter selects its opaque keys; no Node-private symbol name is part of this adapter's contract.
+    const readKeys = new Set();
+    const receiver = new Proxy(value, { get(target, key) {
+      readKeys.add(key);
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
+      return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
+    } });
+    const aborted = nativeAbortSignalAborted?.call(receiver);
+    if (typeof aborted !== 'boolean') return undefined;
+    // A facade may shadow copied state while still inheriting a real signal. Native state must belong
+    // to this receiver alone; ordinary subclass prototypes carry methods, not another signal's storage.
+    for (const prototype of prototypes) {
+      for (const key of readKeys) if (Object.hasOwn(prototype, key)) return undefined;
+    }
+    return aborted;
+  } catch {
+    return undefined;
+  }
 }
 
 function isRecord(value) {
@@ -779,6 +816,18 @@ function resultRow(cell, mode, status, reasonCode, ownerAction, fields = {}) {
   return frozen;
 }
 
+function callerSignalStopResult(cell, mode, signal, readFailed, fields = {}) {
+  const state = readFailed ? undefined : signal === undefined ? false : nativeAbortSignalState(signal);
+  const resultFields = { ...fields, metering_status: 'not_started', financial_hold: 'none' };
+  if (state === undefined) {
+    return resultRow(cell, mode, 'blocked', 'invalid_abort_signal', 'Provide a genuine native AbortSignal for this operation.', resultFields);
+  }
+  if (state) {
+    return resultRow(cell, mode, 'failed', 'preflight_deadline_passed', 'Cancellation stopped the operation before reservation; retry only as a new authorized attempt.', resultFields);
+  }
+  return null;
+}
+
 function safeFailureCode(error, fallback) {
   return error instanceof AccessPreflightError && SAFE_ERROR_CODES.has(error.code) ? error.code : fallback;
 }
@@ -821,6 +870,14 @@ async function releaseRejectedReservation(port, reservation, request) {
  */
 export async function executeAuthorizedAccessCell(args) {
   record(args, 'args');
+  let runnerSignal;
+  let runnerSignalReadFailed = false;
+  try {
+    // Snapshot once before any asynchronous work; caller accessors may change values between reads.
+    runnerSignal = args.signal;
+  } catch {
+    runnerSignalReadFailed = true;
+  }
   const mode = args.mode;
   if (!REPORT_MODES.has(mode)) fail('invalid_mode', 'Mode must be mock or live.', 'args.mode');
   const runId = opaqueRef(args.runId, 'args.runId');
@@ -855,6 +912,8 @@ export async function executeAuthorizedAccessCell(args) {
     || cell.scope.account_ref !== trustedScope.account_ref || cell.scope.project_ref !== trustedScope.project_ref) {
     return resultRow(cell, mode, 'denied', 'trusted_account_scope_missing', 'Use the account and project references supplied by authenticated server context.');
   }
+  let signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed);
+  if (signalStop) return signalStop;
   if (cell.input_status === 'invalid') return resultRow(cell, mode, 'blocked', cell.input_error_code ?? 'invalid_cell', 'Correct the invalid preflight cell.');
   if (cell.selection.state !== 'owner_selected' || !cell.target) {
     return resultRow(cell, mode, 'blocked', 'pin_unresolved', 'Owner must select and pin the exact dependency and configuration.');
@@ -893,6 +952,8 @@ export async function executeAuthorizedAccessCell(args) {
   } catch (error) {
     return resultRow(cell, mode, 'blocked', safeFailureCode(error, 'pin_verification_unavailable'), 'Obtain independently verified owner acceptance for the exact pinned configuration.');
   }
+  signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, { pin_evidence: pinEvidence.evidence });
+  if (signalStop) return signalStop;
   let accessObservation;
   try {
     const observation = await adapter.inspect({ run_id: args.runId, cell_id: cell.cell_id, target: cell.target, scope: cell.scope });
@@ -900,6 +961,11 @@ export async function executeAuthorizedAccessCell(args) {
   } catch (error) {
     return resultRow(cell, mode, 'unknown', safeFailureCode(error, 'access_probe_unavailable'), 'Resolve the non-secret access or quota observation with the provider owner.', { pin_evidence: pinEvidence.evidence });
   }
+  signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, {
+    pin_evidence: pinEvidence.evidence,
+    capability_observation: accessObservation,
+  });
+  if (signalStop) return signalStop;
   let capabilityProof;
   try {
     const checkedAt = mode === 'live' ? new Date().toISOString() : nowIso;
@@ -920,6 +986,11 @@ export async function executeAuthorizedAccessCell(args) {
   } catch (error) {
     return resultRow(cell, mode, 'unknown', safeFailureCode(error, 'capability_verification_unavailable'), 'The accountable provider owner must supply independently verified permission and quota evidence for this exact target.', { pin_evidence: pinEvidence.evidence, capability_observation: accessObservation });
   }
+  signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, {
+    pin_evidence: pinEvidence.evidence,
+    capability_observation: accessObservation,
+  });
+  if (signalStop) return signalStop;
   if (accessObservation.authentication !== 'confirmed') {
     const status = accessObservation.authentication === 'denied' ? 'denied' : 'unknown';
     return resultRow(cell, mode, status, `authentication_${accessObservation.authentication}`, 'Provider owner must resolve account authentication; do not retry automatically.', { pin_evidence: pinEvidence.evidence, capability_observation: accessObservation });
@@ -976,6 +1047,12 @@ export async function executeAuthorizedAccessCell(args) {
   } catch (error) {
     return resultRow(cell, mode, 'denied', safeFailureCode(error, 'authorization_verification_failed'), 'Obtain a trusted, current grant for this exact account, project, operation, model, cap, deadline, and stop policy.', { pin_evidence: pinEvidence.evidence, capability_observation: accessObservation });
   }
+  signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, {
+    pin_evidence: pinEvidence.evidence,
+    capability_observation: accessObservation,
+    authorization_evidence: grantEvidence.evidence,
+  });
+  if (signalStop) return signalStop;
   const grantAcceptedAt = mode === 'live' ? new Date().toISOString() : nowIso;
   if (Date.parse(grantAcceptedAt) >= Date.parse(cell.spend.deadline_at)
     || Date.parse(grant.expires_at) <= Date.parse(grantAcceptedAt)) {
@@ -997,11 +1074,18 @@ export async function executeAuthorizedAccessCell(args) {
         grant_ref: args.grantRef,
         deadline_at: cell.spend.deadline_at,
         authorization_evidence: grantEvidence.evidence,
+        ...(runnerSignal === undefined ? {} : { signal: runnerSignal }),
       });
     } catch (error) {
       return resultRow(cell, mode, 'failed', safeFailureCode(error, 'adapter_unavailable'), 'Resolve the local prompt, asset, and exact scoped credential before requesting a reservation.', { pin_evidence: pinEvidence.evidence, capability_observation: accessObservation, authorization_evidence: grantEvidence.evidence });
     }
   }
+  signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, {
+    pin_evidence: pinEvidence.evidence,
+    capability_observation: accessObservation,
+    authorization_evidence: grantEvidence.evidence,
+  });
+  if (signalStop) return signalStop;
 
   let reservationVerification;
   let reservationForDispatch;
@@ -1010,9 +1094,25 @@ export async function executeAuthorizedAccessCell(args) {
   let dispatchRejectCode = null;
   let dispatchEvidence = null;
   let providerOutcome = null;
+  let preReservationStop = null;
   const checkedMeteringPort = {
     reserveAttempt: async (attempt) => {
-      const reservation = await meteringPort.reserveAttempt(attempt);
+      const reserveAttempt = meteringPort.reserveAttempt;
+      const fields = { capability_observation: accessObservation, pin_evidence: pinEvidence.evidence,
+        authorization_evidence: grantEvidence.evidence, financial_hold: 'none', metering_status: 'not_started' };
+      let currentTime;
+      try { currentTime = Date.now(); } catch { currentTime = undefined; }
+      preReservationStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, fields);
+      if (!preReservationStop && !Number.isFinite(currentTime)) {
+        preReservationStop = resultRow(cell, mode, 'failed', 'adapter_unavailable', 'Restore a finite clock before reservation.', fields);
+      }
+      if (!preReservationStop && Date.parse(cell.spend.deadline_at) <= currentTime) {
+        preReservationStop = resultRow(cell, mode, 'failed', 'preflight_deadline_passed', 'The deadline stopped the operation before reservation.', fields);
+      }
+      // Metering validation and port access can run caller code after composition. A local refusal
+      // never called Finance, so return its no-hold result instead of an uncertain authority outcome.
+      if (preReservationStop) return { status: 'denied' };
+      const reservation = await Reflect.apply(reserveAttempt, meteringPort, [attempt]);
       if (!isRecord(reservation) || reservation.status !== 'reserved') return reservation;
       try {
         const verificationAt = new Date().toISOString();
@@ -1044,16 +1144,84 @@ export async function executeAuthorizedAccessCell(args) {
 
   let meterOutcome;
   try {
+    const preDispatchFields = {
+      capability_observation: accessObservation,
+      pin_evidence: pinEvidence.evidence,
+      authorization_evidence: grantEvidence.evidence,
+      reservation_evidence: null,
+    };
+    signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, preDispatchFields);
+    if (signalStop) return signalStop;
     const deadlineAt = Date.parse(cell.spend.deadline_at);
-    const remaining = deadlineAt - Date.now();
-    if (args.signal !== undefined && !(args.signal instanceof AbortSignal)) {
-      fail('invalid_abort_signal', 'An operation signal must be a native AbortSignal.', 'args.signal');
+    let nowMs;
+    try {
+      nowMs = Date.now();
+    } catch {
+      return resultRow(cell, mode, 'failed', 'adapter_unavailable', 'Restore a finite system clock before starting another access check.', {
+        ...preDispatchFields,
+        financial_hold: 'none',
+      });
     }
-    const deadlineSignal = remaining <= 0
-      ? AbortSignal.abort()
-      : AbortSignal.timeout(Math.min(Math.ceil(remaining), 2_147_483_647));
-    const operationSignal = args.signal ? AbortSignal.any([args.signal, deadlineSignal]) : deadlineSignal;
-    meterOutcome = await executeMeteredAttempt({
+    signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, preDispatchFields);
+    if (signalStop) return signalStop;
+    if (!Number.isFinite(deadlineAt) || !Number.isFinite(nowMs)) {
+      return resultRow(cell, mode, 'failed', 'adapter_unavailable', 'Restore a finite system clock before starting another access check.', {
+        ...preDispatchFields,
+        financial_hold: 'none',
+      });
+    }
+    const remaining = deadlineAt - nowMs;
+    let cancelledBeforeReservation = !Number.isFinite(remaining) || remaining <= 0;
+    let operationSignal;
+    if (!cancelledBeforeReservation) {
+      let deadlineSignal;
+      try {
+        deadlineSignal = AbortSignal.timeout(Math.min(Math.ceil(remaining), 2_147_483_647));
+      } catch {
+        return resultRow(cell, mode, 'failed', 'adapter_unavailable', 'The operation deadline could not be enforced before reservation.', {
+          ...preDispatchFields,
+          financial_hold: 'none',
+        });
+      }
+      try {
+        operationSignal = runnerSignal === undefined ? deadlineSignal : AbortSignal.any([runnerSignal, deadlineSignal]);
+        // Activate native following on this owned composite before reservation. Lazy
+        // composition must not make cancellation depend on a caller's public shadow
+        // or on whether a downstream host installs a listener. The deadline bounds it.
+        if (runnerSignal !== undefined) addAbortListener(operationSignal, () => {});
+      } catch {
+        return resultRow(cell, mode, 'blocked', 'invalid_abort_signal', 'Provide a genuine native AbortSignal for this operation.', {
+          ...preDispatchFields,
+          financial_hold: 'none',
+        });
+      }
+      // Composition can invoke a supported public aborted getter and consume the deadline while
+      // its timer remains pending. Read the clock again, then preserve cancellation from that read.
+      try { nowMs = Date.now(); } catch { nowMs = undefined; }
+      signalStop = callerSignalStopResult(cell, mode, runnerSignal, runnerSignalReadFailed, preDispatchFields);
+      if (signalStop) return signalStop;
+      if (!Number.isFinite(nowMs)) {
+        return resultRow(cell, mode, 'failed', 'adapter_unavailable', 'Restore a finite clock before reservation.', {
+          ...preDispatchFields, financial_hold: 'none',
+        });
+      }
+      if (deadlineAt <= nowMs) {
+        return resultRow(cell, mode, 'failed', 'preflight_deadline_passed', 'The deadline stopped the operation before reservation.', {
+          ...preDispatchFields, metering_status: 'not_started', financial_hold: 'none',
+        });
+      }
+      const operationSignalState = nativeAbortSignalState(operationSignal);
+      if (operationSignalState === undefined) {
+        return resultRow(cell, mode, 'blocked', 'invalid_abort_signal', 'Provide a genuine native AbortSignal for this operation.', {
+          ...preDispatchFields,
+          financial_hold: 'none',
+        });
+      }
+      cancelledBeforeReservation = operationSignalState;
+    }
+    meterOutcome = cancelledBeforeReservation
+      ? { status: 'cancelled_before_reservation', published: false }
+      : await executeMeteredAttempt({
       port: checkedMeteringPort,
       request: validatedMeterRequest,
       trustedScope,
@@ -1415,6 +1583,7 @@ export async function executeAuthorizedAccessCell(args) {
     });
   }
 
+  if (preReservationStop) return preReservationStop;
   const meteringStatus = meterOutcome.status;
   if (meterOutcome.status === 'reservation_denied') {
     const reasonCode = reservationRejectCode ?? 'budget_reservation_denied';
@@ -1548,6 +1717,18 @@ export function createAccessPreflightReport({ run_id, generated_at, mode, result
 /** Execute the fixed required matrix. Missing cells remain explicit blocked rows. */
 export async function runAccessPreflight(args) {
   record(args, 'args');
+  let runnerSignal;
+  try {
+    runnerSignal = args.signal;
+  } catch {
+    // Preserve a failed read as an invalid value; each billable cell fails closed.
+    runnerSignal = null;
+  }
+  const executionArgs = {};
+  for (const key of Object.keys(args)) {
+    if (key !== 'signal') executionArgs[key] = args[key];
+  }
+  executionArgs.signal = runnerSignal;
   const mode = args.mode;
   if (!REPORT_MODES.has(mode)) fail('invalid_mode', 'Mode must be mock or live.', 'args.mode');
   const rawPlan = record(args.plan, 'args.plan');
@@ -1584,7 +1765,7 @@ export async function runAccessPreflight(args) {
     }
     try {
       results.push(await executeAuthorizedAccessCell({
-        ...args,
+        ...executionArgs,
         runId,
         cell: rawCell,
       }));
