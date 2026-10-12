@@ -1,5 +1,5 @@
 import { resolveRoute, type ResolvedRoute, type RouteId } from '../../integration/routes';
-import { isRouteState, type RouteState } from '../data/boundary';
+import { snapshotRouteState, type RouteReadResult, type RouteState } from '../data/boundary';
 import type { HostAccess, HostScope } from './host';
 import { requiredCapabilities } from './permissions';
 
@@ -73,14 +73,8 @@ export const TIMEOUT_LIMITS = Object.freeze({ min: 1, max: 60_000 });
 export const CONTEXT_TTL_LIMITS = Object.freeze({ min: 1_000, max: 86_400_000 });
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_READ_TIMEOUT_MS = 9_000;
-// Rejects C0/C1 controls so a verifier-supplied revision cannot forge audit log lines.
-const hasControlCharacter = (value: string): boolean => {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true;
-  }
-  return false;
-};
+// Visible ASCII excludes Unicode line separators and bidi controls from audit records.
+const SAFE_REVISION = /^[\x21-\x7e]{1,256}$/u;
 const DEFAULT_MAX_CONTEXT_TTL_MS = 900_000;
 const MAX_CREDENTIAL_LENGTH = 8192;
 const MAX_CAPABILITIES = 256;
@@ -169,7 +163,7 @@ function parseVerifyResult(value: unknown, audience: string, now: number, maxTtl
   const role = ownValue(context, 'role');
   if (!validIdentifier(actorId) || !validIdentifier(tenantId) || !validIdentifier(projectId)) return undefined;
   if (typeof environment !== 'string' || !ENVIRONMENTS.has(environment) || typeof billingMode !== 'string' || !BILLING_MODES.has(billingMode)) return undefined;
-  if (typeof revision !== 'string' || revision.trim().length === 0 || revision.length > 256 || hasControlCharacter(revision)) return undefined;
+  if (typeof revision !== 'string' || !SAFE_REVISION.test(revision)) return undefined;
   if (!capabilities || !capabilities.every((item) => typeof item === 'string' && CAPABILITY.test(item))) return undefined;
   if (role !== ABSENT && role !== undefined && typeof role !== 'string') return undefined;
   if (contextAudience !== audience) return { failure: 'wrong_audience' };
@@ -258,12 +252,8 @@ export type TrustedReadRequest = Readonly<{
   signal: AbortSignal;
 }>;
 export type GuardedReadInput = Readonly<{ credential: unknown; pathname: string; projectId?: string | undefined; signal: AbortSignal }>;
-export type GuardedReadResult<T> = Readonly<{
-  /** Safe to send to the browser. */
-  state: RouteState<T>;
-  /** Projection of the decision that served this read; send it with `state` so the client never labels data with another scope. */
-  access: HostAccess;
-}>;
+/** Send both fields to the browser; the Dashboard binds ready data to this read's projection. */
+export type GuardedReadResult<T> = RouteReadResult<T>;
 /** Server-only outcome for logging and audit. Never forward it to the browser. */
 export type GuardedReadOutcome = Readonly<
   | { status: 'allowed'; route: RouteId; actorId: string; revision: string; read: 'ok' | 'error' | 'malformed' | 'timeout' | 'aborted' }
@@ -317,7 +307,8 @@ export function createGuardedRouteReader<T>({ authorizer, basePath, read, readTi
         capabilities: decision.capabilities, revision: decision.revision, expiresAt: decision.expiresAt, signal: derived,
       }));
       if (signal.aborted) { allowed('aborted'); return result({ status: 'unavailable' }, access); }
-      if (isRouteState(state) && state.status !== 'loading') { allowed('ok'); return result(state as RouteState<T>, access); }
+      const snapshot = snapshotRouteState<T>(state);
+      if (snapshot && snapshot.status !== 'loading') { allowed('ok'); return result(snapshot, access); }
       allowed('malformed'); return result({ status: 'error', retryable: false }, access);
     } catch (error) {
       if (error instanceof DeadlineError) { allowed('timeout'); return result({ status: 'unavailable' }, access); }

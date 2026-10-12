@@ -323,6 +323,38 @@ describe('TD-07 forged HostAccess projections grant nothing', () => {
 });
 
 describe('TD-07 guarded server reads', () => {
+  it.each(['\u2028', '\u2029', '\u202e', '\u202a', '\u2066'])('rejects Unicode audit revision control %j before reads or allowed audit output', async (control) => {
+    const revision = `before${control}after`;
+    const authorizer = createDashboardAuthorizer({ verifier: { verify: async () => ({ ok: true, context: { ...captainClaims(), revision } }) }, audience: FIXTURE_AUDIENCE, now });
+    const read = vi.fn(async (): Promise<RouteState<string>> => ({ status: 'ready', data: 'synthetic-canary' }));
+    const onOutcome = vi.fn();
+    const guarded = createGuardedRouteReader({ authorizer, basePath: base, read, onOutcome });
+    expect(await authorizer.authorize({ credential: captain, route: 'overview' })).toEqual({ status: 'unavailable', cause: 'malformed_answer' });
+    expect(await guarded({ credential: captain, pathname: base, signal: signal() })).toEqual({ state: { status: 'unavailable' }, access: { status: 'unavailable' } });
+    expect(read).not.toHaveBeenCalled();
+    expect(onOutcome).toHaveBeenCalledWith({ status: 'unavailable', route: 'overview', cause: 'malformed_answer' });
+    expect(JSON.stringify(onOutcome.mock.calls)).not.toContain('before');
+  });
+
+  it('accepts a bounded visible ASCII revision unchanged in the verified projection and audit outcome', async () => {
+    const revision = `account:synthetic@2!~${'x'.repeat(235)}`;
+    expect(revision).toHaveLength(256);
+    const authorizer = createDashboardAuthorizer({ verifier: { verify: async () => ({ ok: true, context: { ...captainClaims(), revision } }) }, audience: FIXTURE_AUDIENCE, now });
+    const onOutcome = vi.fn();
+    const guarded = createGuardedRouteReader({ authorizer, basePath: base, read: async () => ({ status: 'empty' }), onOutcome });
+    const result = await guarded({ credential: captain, pathname: base, signal: signal() });
+    expect(result.access).toMatchObject({ status: 'authorized', revision });
+    expect(onOutcome).toHaveBeenCalledWith(expect.objectContaining({ status: 'allowed', revision, read: 'ok' }));
+  });
+
+  it('rejects a ready data accessor without invoking it or classifying it as a retryable read error', async () => {
+    const getter = vi.fn(() => { throw new Error('synthetic-secret-error'); });
+    const { authorizer } = setup();
+    const guarded = createGuardedRouteReader({ authorizer, basePath: base, read: async () => Object.defineProperty({ status: 'ready' }, 'data', { get: getter }) as RouteState<string> });
+    expect((await guarded({ credential: captain, pathname: base, signal: signal() })).state).toEqual({ status: 'error', retryable: false });
+    expect(getter).not.toHaveBeenCalled();
+  });
+
   it('passes the verified revision, expiry and finance trusted scope to the read and labels the result with its scope', async () => {
     const { guarded, read } = setup();
     const result = await guarded({ credential: captain, pathname: base, signal: signal() });

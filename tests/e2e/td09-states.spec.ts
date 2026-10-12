@@ -46,7 +46,7 @@ let reads = 0; let release; const released = new Promise((resolve) => { release 
 window.__tdRelease = () => release();
 export function fixtureProvider(state) {
   const base = baseFixtureProvider(state);
-  return { ...base, readRoute: (request) => (reads++ === 0 ? base.readRoute(request) : released.then(() => ({ status: 'ready', data: { text: 'Read-only extension fixture. This contains no financial records.' } }))) };
+  return { ...base, readRoute: (request) => (reads++ === 0 ? base.readRoute(request) : released.then(() => ({ state: { status: 'ready', data: { text: 'Read-only extension fixture. This contains no financial records.' } }, access: authorizedFixture }))) };
 }`;
     await route.fulfill({ response: original, body: patched, headers: { ...original.headers(), 'content-length': String(Buffer.byteLength(patched)) } });
   });
