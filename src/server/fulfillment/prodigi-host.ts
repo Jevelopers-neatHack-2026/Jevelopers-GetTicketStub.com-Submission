@@ -18,8 +18,10 @@ import {
   CALLBACK_TOKEN_BINDING,
   CALLBACK_TOKEN_PREVIOUS_BINDING,
   PRODIGI_SANDBOX_DECISION,
-  PRODIGI_SCOPE,
   prodigiCallbackMode,
+  prodigiEnvironment,
+  prodigiScope,
+  type ProdigiEnvironment,
 } from "./prodigi-config";
 import { migrateProdigi } from "./prodigi-migrations";
 import { abandonAlertHook, ProdigiJobWorker, SqliteProdigiJobQueue } from "./prodigi-jobs";
@@ -41,6 +43,8 @@ export const UNVERIFIED_DECISION: SandboxDecisionVerifier = Object.freeze({ veri
 
 export interface ProdigiHostOptions {
   readonly db: DatabaseSync;
+  /** Partitions the shared database: the scope, job rows and alert rows all carry it. */
+  readonly environment: ProdigiEnvironment;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly http?: ProdigiHttpPort;
   readonly decisionVerifier?: SandboxDecisionVerifier;
@@ -56,6 +60,8 @@ export interface ProdigiHostOptions {
 
 export interface ProdigiHost {
   readonly db: DatabaseSync;
+  readonly environment: ProdigiEnvironment;
+  readonly scope: { readonly tenantId: string; readonly projectId: string };
   readonly store: SqliteProdigiStore;
   readonly queue: SqliteProdigiJobQueue;
   readonly reconciler: ProdigiCallbackReconciler;
@@ -79,7 +85,8 @@ export function createProdigiHost(options: ProdigiHostOptions): ProdigiHost {
   const clock = options.clock ?? { now: () => Date.now() };
   const log = options.log;
   const store = new SqliteProdigiStore(db, { clock });
-  const queue = new SqliteProdigiJobQueue(db, { clock, ...(options.leaseMs ? { leaseMs: options.leaseMs } : {}) });
+  const scope = prodigiScope(options.environment);
+  const queue = new SqliteProdigiJobQueue(db, { environment: options.environment, clock, ...(options.leaseMs ? { leaseMs: options.leaseMs } : {}) });
   const secrets = prodigiSecretSource(options.env);
   // The reader for authenticated reads. Sandbox calls are permitted at this layer, but every call still needs the
   // verified owner decision (UNVERIFIED_DECISION refuses) and the sandbox API key.
@@ -92,7 +99,7 @@ export function createProdigiHost(options: ProdigiHostOptions): ProdigiHost {
   });
   const reconciler = new ProdigiCallbackReconciler({
     mode: "sandbox",
-    trustedScope: PRODIGI_SCOPE,
+    trustedScope: scope,
     reader,
     store,
     callbacksEnabled: true,
@@ -109,7 +116,7 @@ export function createProdigiHost(options: ProdigiHostOptions): ProdigiHost {
   });
   const worker = new ProdigiJobWorker({ db, queue, reconciler, clock, ...(options.workerId ? { workerId: options.workerId } : {}), ...(log ? { log } : {}) });
   return {
-    db, store, queue, reconciler, worker, secrets,
+    db, environment: options.environment, scope, store, queue, reconciler, worker, secrets,
     maxBodyBytes: PRODIGI_CALLBACK_MAX_BODY_BYTES,
     close() {
       worker.stop();
@@ -122,25 +129,46 @@ export function createProdigiHost(options: ProdigiHostOptions): ProdigiHost {
 
 const g = globalThis as unknown as { __ticketstubProdigiHost?: ProdigiHost | null; __ticketstubProdigiRefusalLogged?: boolean };
 
+const refuseOnce = (line: string) => {
+  if (g.__ticketstubProdigiRefusalLogged) return;
+  g.__ticketstubProdigiRefusalLogged = true;
+  console.warn(line);
+};
+
 /**
  * The process's host, or null when callbacks are off. Opens its own connection to TICKETSTUB_DB (WAL, so it
- * shares the file safely with the storage connection) and starts the worker loop. Throws if the database cannot
- * be opened; the route answers 503.
+ * shares the file safely with the storage connection) and starts the worker loop. Callbacks stay off unless
+ * TICKETSTUB_OPS_ENVIRONMENT names the environment, because Preview and Publish share the database. Throws if the
+ * database cannot be opened or migrated, after closing the connection it opened; the route answers 503 (404 for a
+ * wrong token).
  */
-export function prodigiCallbackHost(): ProdigiHost | null {
+export function prodigiCallbackHost(open: () => DatabaseSync = () => openDatabase(dbPath())): ProdigiHost | null {
   const mode = prodigiCallbackMode();
   if (mode.state !== "sandbox") {
-    if (mode.state === "refused" && !g.__ticketstubProdigiRefusalLogged) {
-      g.__ticketstubProdigiRefusalLogged = true;
-      console.warn(`[prodigi] TICKETSTUB_PRODIGI_CALLBACKS=${mode.value === "live" ? "live is refused (sandbox only)" : "<unrecognized> is treated as off"}; callbacks stay off`);
-    }
+    if (mode.state === "refused") refuseOnce(`[prodigi] TICKETSTUB_PRODIGI_CALLBACKS=${mode.value === "live" ? "live is refused (sandbox only)" : "<unrecognized> is treated as off"}; callbacks stay off`);
+    return null;
+  }
+  const environment = prodigiEnvironment();
+  if (!environment) {
+    refuseOnce("[prodigi] TICKETSTUB_OPS_ENVIRONMENT must be production, preview, development or test; callbacks stay off");
     return null;
   }
   if (g.__ticketstubProdigiHost) return g.__ticketstubProdigiHost;
-  const host = createProdigiHost({ db: openDatabase(dbPath()) });
-  host.worker.start();
+  const db = open();
+  let host: ProdigiHost;
+  try {
+    host = createProdigiHost({ db, environment });
+    host.worker.start();
+  } catch (e) {
+    try {
+      db.close();
+    } catch {
+      /* already unusable */
+    }
+    throw e;
+  }
   g.__ticketstubProdigiHost = host;
-  console.log("[prodigi] sandbox callbacks on; job worker started");
+  console.log(`[prodigi] sandbox callbacks on (${environment}); job worker started`);
   return host;
 }
 

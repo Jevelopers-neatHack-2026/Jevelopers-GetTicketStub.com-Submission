@@ -41,7 +41,7 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const scratch = mkdtempSync(join(tmpdir(), "ticketstub-prodigi-"));
 process.env.TICKETSTUB_DB = join(scratch, "app.sqlite");
 process.env.TICKETSTUB_FILES = join(scratch, "files");
-for (const name of ["TICKETSTUB_PRODIGI_CALLBACKS", "PRODIGI_SANDBOX_CALLBACK_TOKEN", "PRODIGI_SANDBOX_CALLBACK_TOKEN_PREVIOUS", "PRODIGI_SANDBOX_API_KEY", "APP_URL"]) {
+for (const name of ["TICKETSTUB_PRODIGI_CALLBACKS", "TICKETSTUB_OPS_ENVIRONMENT", "PRODIGI_SANDBOX_CALLBACK_TOKEN", "PRODIGI_SANDBOX_CALLBACK_TOKEN_PREVIOUS", "PRODIGI_SANDBOX_API_KEY", "APP_URL"]) {
   delete process.env[name];
 }
 
@@ -51,8 +51,11 @@ const { handleProdigiCallback } = await import("../src/server/fulfillment/prodig
 const { createSandboxOrder } = await import("../src/server/fulfillment/prodigi-orders.ts");
 const { SqliteProdigiStore } = await import("../src/server/fulfillment/prodigi-store.ts");
 const { migrateProdigi } = await import("../src/server/fulfillment/prodigi-migrations.ts");
-const { listProdigiAlerts } = await import("../src/server/fulfillment/prodigi-jobs.ts");
-const { callbackUrl, PRODIGI_SCOPE } = await import("../src/server/fulfillment/prodigi-config.ts");
+const { listProdigiAlerts, SqliteProdigiJobQueue, abandonAlertHook } = await import("../src/server/fulfillment/prodigi-jobs.ts");
+const { callbackUrl, prodigiScope } = await import("../src/server/fulfillment/prodigi-config.ts");
+const { ProdigiOrderTrackingError, POST_CREATE_POLL_DELAY_MS, withCallbackUrl } = await import("../src/server/fulfillment/prodigi-orders.ts");
+const { routeLabel } = await import("../src/server/http.ts");
+const PRODIGI_SCOPE = prodigiScope("test");
 const { VENDORED_FILES } = await import("../scripts/vendor-fulfillment-connectors.mjs");
 
 after(() => {
@@ -112,11 +115,11 @@ function freshDbFile() {
   return join(scratch, `prodigi-${++dbSeq}.sqlite`);
 }
 
-function host({ file = freshDbFile(), respond = okReads(), clk = clock(), env = ENV, ...rest } = {}) {
+function host({ file = freshDbFile(), respond = okReads(), clk = clock(), env = ENV, environment = "test", ...rest } = {}) {
   const fake = fakeProdigi(respond);
   const logs = [];
   const db = openDatabase(file);
-  const h = createProdigiHost({ db, env, http: fake.port, decisionVerifier: approve, clock: clk, random: () => 0.5, log: (l) => logs.push(l), ...rest });
+  const h = createProdigiHost({ db, environment, env, http: fake.port, decisionVerifier: approve, clock: clk, random: () => 0.5, log: (l) => logs.push(l), ...rest });
   return { h, db, fake, clk, logs, file };
 }
 
@@ -289,7 +292,7 @@ test("a missing callback token secret fails closed with 503, never a match", asy
 test("without a verified owner decision (the default) no read reaches the transport", async () => {
   const fake = fakeProdigi(okReads());
   const db = openDatabase(freshDbFile());
-  const h = createProdigiHost({ db, env: ENV, http: fake.port, clock: clock(), log: () => {} });
+  const h = createProdigiHost({ db, environment: "test", env: ENV, http: fake.port, clock: clock(), log: () => {} });
   await h.reconciler.trackOrder("ord_100");
   const res = await call(h, TOKEN, event());
   assert.equal(res.status, 503);
@@ -305,6 +308,7 @@ test("sandbox order with callbacks on: callbackUrl is sent on POST /v4.0/Orders 
   const result = await createSandboxOrder({ http: fake.port, secrets: h.secrets, decisionVerifier: approve, sandboxCallsEnabled: true, callbacks: h, env: ENV }, orderInput);
   assert.equal(result.callbackUrlSent, true);
   assert.equal(result.tracking, "now");
+  assert.equal(result.readBackQueued, true);
   const [create] = fake.requests;
   assert.equal(create.method, "POST");
   assert.equal(create.url, "https://api.sandbox.prodigi.com/v4.0/Orders");
@@ -480,8 +484,8 @@ test("scheduler: a leased job held by a crashed worker is taken over only after 
   const clk = clock();
   const a = host({ file, clk, leaseMs: 60_000, workerId: "w_a" });
   a.h.queue.enqueue("track", "ord_100", {}, 0);
-  const claimed = a.h.queue.claim("w_a", 8);
-  assert.equal(claimed.length, 1);
+  const claimed = [a.h.queue.claimOne("w_a")];
+  assert.ok(claimed[0]);
   // Worker A dies here without completing or releasing. Worker B, another connection, cannot take it yet.
   const b = host({ file, clk, leaseMs: 60_000, workerId: "w_b" });
   assert.equal(await b.h.worker.tick(), 0);
@@ -526,11 +530,11 @@ test("an abandoned chain stores one alert, logs it, queues a poll, and the poll'
   assert.equal(h.queue.list().length, 1, "the retryable failure recorded a job");
   // From here Prodigi rejects the credential: a non-retryable failure abandons the chain with read_failed.
   mode = "unauthorized";
-  for (let i = 0; i < 5 && listProdigiAlerts(h.db).length === 0; i++) {
+  for (let i = 0; i < 5 && listProdigiAlerts(h.db, "test").length === 0; i++) {
     clk.advance(10_000);
     await h.worker.tick();
   }
-  const [alert, ...more] = listProdigiAlerts(h.db);
+  const [alert, ...more] = listProdigiAlerts(h.db, "test");
   assert.equal(more.length, 0);
   assert.equal(alert.orderId, "ord_100");
   assert.equal(alert.reason, "read_failed");
@@ -539,11 +543,11 @@ test("an abandoned chain stores one alert, logs it, queues a poll, and the poll'
   assert.ok(logs.some((l) => l.startsWith("[prodigi] reconcile_abandoned order=ord_100 reason=read_failed") && l.includes("poll=queued")));
   assert.equal(logs.join("\n").includes(TOKEN), false, "no token in the log");
   assert.equal(await h.store.getPendingReconciliation({ scope: PRODIGI_SCOPE, orderId: "ord_100" }), undefined);
-  // The poll job runs reconcileOrder and records what it found.
-  assert.deepEqual(h.queue.list().map((j) => j.kind), ["poll"]);
+  // The poll job runs reconcileOrder and records what it found. Rows are claimed one at a time, so the poll may
+  // already have run in the tick that queued it.
   clk.advance(1);
   await h.worker.tick();
-  const [polled] = listProdigiAlerts(h.db);
+  const [polled] = listProdigiAlerts(h.db, "test");
   assert.equal(polled.pollStatus, "read_failed");
   assert.equal(polled.pollError, "authentication_failed");
   assert.equal(h.queue.list().length, 0);
@@ -551,16 +555,15 @@ test("an abandoned chain stores one alert, logs it, queues a poll, and the poll'
 });
 
 test("the abandon hook is idempotent on dedupeKey: a repeat neither duplicates the alert nor queues a second poll", async () => {
-  const { abandonAlertHook, SqliteProdigiJobQueue } = await import("../src/server/fulfillment/prodigi-jobs.ts");
   const db = openDatabase(freshDbFile());
   migrateProdigi(db);
-  const queue = new SqliteProdigiJobQueue(db);
+  const queue = new SqliteProdigiJobQueue(db, { environment: "test" });
   const logs = [];
   const hook = abandonAlertHook(db, queue, { log: (l) => logs.push(l) });
   const ev = { outcome: "reconcile_abandoned", scope: S, orderId: "ord_7", reason: "horizon_exceeded", attempts: 3, coverAfter: "2026-10-11T12:00:00.000Z", requiredStage: "Complete", firstReceivedAt: "2026-10-11T11:00:00.000Z", abandonedAt: "2026-10-11T13:00:00.000Z", dedupeKey: "ord_7|2026-10-11T11:00:00.000Z|2026-10-11T12:00:00.000Z", errorCode: "provider_unavailable" };
   hook(ev);
   hook(ev);
-  assert.equal(listProdigiAlerts(db).length, 1);
+  assert.equal(listProdigiAlerts(db, "test").length, 1);
   assert.deepEqual(queue.list().map((j) => j.kind), ["poll"]);
   assert.match(logs[1], /repeat$/);
   db.close();
@@ -574,4 +577,191 @@ test("the migration is recorded in module_schema and leaves PRAGMA user_version 
   assert.equal(db.prepare("PRAGMA user_version").get().user_version, before);
   assert.equal(db.prepare("SELECT version FROM module_schema WHERE module = 'prodigi-callbacks'").get().version, 1);
   db.close();
+});
+
+// ---- review follow-ups ----
+
+test("environments: two environments on one database never run, list or alert each other's rows", async () => {
+  const file = freshDbFile();
+  const clk = clock();
+  const preview = host({ file, clk, environment: "preview", workerId: "w_preview" });
+  const publish = host({ file, clk, environment: "production", workerId: "w_publish" });
+  assert.notDeepEqual(preview.h.scope, publish.h.scope);
+  await preview.h.reconciler.trackOrder("ord_100");
+  preview.h.queue.enqueue("poll", "ord_100", {}, 0);
+  assert.equal(publish.h.queue.list().length, 0);
+  assert.equal(publish.h.queue.claimOne("w_publish"), null);
+  assert.equal(await publish.h.worker.tick(), 0, "production never runs preview's job");
+  assert.equal(await publish.h.store.getOrder({ scope: publish.h.scope, orderId: "ord_100" }), undefined, "store rows are scoped too");
+  // A production callback for preview's order is not_tracked there.
+  assert.equal((await call(publish.h, TOKEN, event())).status, 503);
+  assert.equal(await preview.h.worker.tick(), 1);
+  assert.equal(preview.fake.reads(), 1);
+  assert.equal(publish.fake.reads(), 0);
+  abandonAlertHook(preview.db, preview.h.queue, { log: () => {} })({ outcome: "reconcile_abandoned", scope: preview.h.scope, orderId: "ord_100", reason: "read_failed", attempts: 1, coverAfter: "x", requiredStage: null, firstReceivedAt: "y", abandonedAt: "z", dedupeKey: "ord_100|y|x" });
+  assert.equal(listProdigiAlerts(preview.db, "preview").length, 1);
+  assert.equal(listProdigiAlerts(publish.db, "production").length, 0);
+  assert.equal(publish.h.queue.list().length, 0, "the alert's poll is preview's");
+  preview.h.close();
+  publish.h.close();
+});
+
+test("callbacks stay off unless TICKETSTUB_OPS_ENVIRONMENT names the environment", async () => {
+  resetProdigiCallbackHost();
+  process.env.TICKETSTUB_PRODIGI_CALLBACKS = "sandbox";
+  const warn = console.warn;
+  const lines = [];
+  console.warn = (l) => lines.push(String(l));
+  try {
+    for (const value of [undefined, "", "unspecified", "staging"]) {
+      if (value === undefined) delete process.env.TICKETSTUB_OPS_ENVIRONMENT;
+      else process.env.TICKETSTUB_OPS_ENVIRONMENT = value;
+      assert.equal(prodigiCallbackHost(() => assert.fail("must not open the database")), null, String(value));
+      assert.equal((await handleProdigiCallback(post(event()), TOKEN)).status, 404);
+    }
+  } finally {
+    console.warn = warn;
+    delete process.env.TICKETSTUB_PRODIGI_CALLBACKS;
+    delete process.env.TICKETSTUB_OPS_ENVIRONMENT;
+    resetProdigiCallbackHost();
+  }
+  assert.ok(lines.some((l) => /TICKETSTUB_OPS_ENVIRONMENT/.test(l)));
+});
+
+test("lease per job: a slow first job never lets a second worker take the next row while it waits", async () => {
+  const file = freshDbFile();
+  const clk = clock();
+  const a = host({ file, clk, leaseMs: 1_000, workerId: "w_a" });
+  const b = host({ file, clk, leaseMs: 1_000, workerId: "w_b" });
+  a.h.queue.enqueue("track", "ord_100", {}, 0);
+  a.h.queue.enqueue("track", "ord_101", {}, 0);
+  const real = a.h.reconciler.trackOrder.bind(a.h.reconciler);
+  const stolen = [];
+  a.h.reconciler.trackOrder = async (orderId) => {
+    if (orderId === "ord_100") clk.advance(5_000); // far past a batch-wide lease
+    else stolen.push(b.h.queue.claimOne("w_b")); // B tries while A runs the second row
+    return real(orderId);
+  };
+  assert.equal(await a.h.worker.tick(), 2);
+  assert.deepEqual(stolen, [null], "the second row was leased when its run started, so B could not take it");
+  assert.equal(a.h.queue.list().length, 0);
+  a.h.close();
+  b.h.close();
+});
+
+test("createSandboxOrder: if trackOrder and the track job both fail, it stores a track_failed alert and throws with the order ID", async () => {
+  const { h, fake } = host();
+  h.reconciler.trackOrder = async () => { throw new Error("store blip"); };
+  h.queue.enqueue = () => { throw new Error("database is locked"); };
+  const error = console.error;
+  console.error = () => {};
+  try {
+    await assert.rejects(
+      createSandboxOrder({ http: fake.port, secrets: h.secrets, decisionVerifier: approve, sandboxCallsEnabled: true, callbacks: h, env: ENV }, orderInput),
+      (e) => e instanceof ProdigiOrderTrackingError && e.orderId === "ord_100" && e.alerted === true && /exists at Prodigi: ord_100, tracking pending/.test(e.message),
+    );
+  } finally {
+    console.error = error;
+  }
+  const [alert] = listProdigiAlerts(h.db, "test");
+  assert.equal(alert.reason, "track_failed");
+  assert.equal(alert.orderId, "ord_100");
+  h.close();
+});
+
+test("createSandboxOrder: a delayed read-back poll covers a callback lost before tracking", async () => {
+  const { h, fake, clk } = host();
+  await createSandboxOrder({ http: fake.port, secrets: h.secrets, decisionVerifier: approve, sandboxCallsEnabled: true, callbacks: h, env: ENV }, orderInput);
+  const [poll] = h.queue.list();
+  assert.equal(poll.kind, "poll");
+  assert.equal(poll.dueAt, clk.now() + POST_CREATE_POLL_DELAY_MS);
+  assert.equal(await h.worker.tick(), 0, "not before the delay");
+  clk.advance(POST_CREATE_POLL_DELAY_MS);
+  assert.equal(await h.worker.tick(), 1);
+  assert.equal(fake.reads(), 1);
+  assert.equal((await h.store.getOrder({ scope: h.scope, orderId: "ord_100" })).stage, "InProgress");
+  h.close();
+});
+
+test("createSandboxOrder: a body the callbackUrl wrapper refuses is reported not_dispatched, and nothing reaches the transport", async () => {
+  const { h, fake } = host();
+  const parse = JSON.parse;
+  // Make the wrapper see a create body that already carries a callbackUrl.
+  JSON.parse = (text, ...rest) => (typeof text === "string" && text.includes("merchantReference") ? { callbackUrl: "https://elsewhere.test/" } : parse(text, ...rest));
+  try {
+    await assert.rejects(
+      createSandboxOrder({ http: fake.port, secrets: h.secrets, decisionVerifier: approve, sandboxCallsEnabled: true, callbacks: h, env: ENV }, orderInput),
+      (e) => e.code === "invalid_input" && e.sideEffectState === "not_dispatched",
+    );
+  } finally {
+    JSON.parse = parse;
+  }
+  assert.equal(fake.requests.length, 0);
+  const wrapped = withCallbackUrl(fake.port, "https://x.test/cb");
+  await assert.rejects(wrapped.send({ method: "POST", url: "https://api.sandbox.prodigi.com/v4.0/Orders", headers: {}, body: "[]", signal: AbortSignal.timeout(1000) }));
+  assert.equal(wrapped.refused(), true);
+  assert.equal(fake.requests.length, 0);
+  h.close();
+});
+
+test("a wrong token is 404 even when the body stream fails or the host cannot start; a right one is 400 / 503", async () => {
+  const { h } = host();
+  await h.reconciler.trackOrder("ord_100");
+  const broken = () => new Request("https://preview.example.test/api/fulfillment/prodigi/callbacks/x", {
+    method: "POST", duplex: "half",
+    body: new ReadableStream({ pull(c) { c.error(new Error("socket reset")); } }),
+  });
+  const bad = "W".repeat(43);
+  const r1 = await handleProdigiCallback(broken(), bad, () => h);
+  assert.equal(r1.status, 404);
+  assert.equal((await handleProdigiCallback(broken(), TOKEN, () => h)).status, 400);
+  // The host fails to start (database unusable): the configured tokens still decide 404 against 503.
+  Object.assign(process.env, { PRODIGI_SANDBOX_CALLBACK_TOKEN: TOKEN });
+  const error = console.error;
+  console.error = () => {};
+  try {
+    const failing = () => { throw new Error("disk I/O error"); };
+    assert.equal((await handleProdigiCallback(post(event()), bad, failing)).status, 404);
+    assert.equal((await handleProdigiCallback(post(event()), "", failing)).status, 404);
+    const ok = await handleProdigiCallback(post(event()), TOKEN, failing);
+    assert.equal(ok.status, 503);
+    assert.equal((await ok.json()).error.code, "callbacks_unavailable");
+  } finally {
+    console.error = error;
+    delete process.env.PRODIGI_SANDBOX_CALLBACK_TOKEN;
+  }
+  h.close();
+});
+
+test("the host closes the database connection it opened when startup fails", () => {
+  resetProdigiCallbackHost();
+  Object.assign(process.env, { TICKETSTUB_PRODIGI_CALLBACKS: "sandbox", TICKETSTUB_OPS_ENVIRONMENT: "test" });
+  let closed = 0;
+  try {
+    const open = () => {
+      const db = new DatabaseSync(freshDbFile());
+      db.exec("CREATE TABLE prodigi_orders (x)"); // the migration then fails: table already exists
+      const close = db.close.bind(db);
+      db.close = () => { closed += 1; close(); };
+      return db;
+    };
+    assert.throws(() => prodigiCallbackHost(open), /already exists/);
+    assert.throws(() => prodigiCallbackHost(open), /already exists/);
+  } finally {
+    delete process.env.TICKETSTUB_PRODIGI_CALLBACKS;
+    delete process.env.TICKETSTUB_OPS_ENVIRONMENT;
+    resetProdigiCallbackHost();
+  }
+  assert.equal(closed, 2, "one close per failed open, no leaked connections");
+});
+
+test("the storage_unavailable route label never carries a path token", () => {
+  const token = "Abcdefghij_klmnopqrstuvwxyz0123456789-ABCDEF";
+  assert.equal(routeLabel(`/api/fulfillment/prodigi/callbacks/${token}`), "fulfillment_prodigi_callbacks");
+  assert.equal(routeLabel("/api/fulfillment/prodigi/callbacks/abcdefghijklmnopqrstuvwxyzabcdefghijklmnopq"), "fulfillment_prodigi_callbacks");
+  assert.equal(routeLabel("/api/share/Zq9x"), "share");
+  assert.equal(routeLabel("/api/u/abc"), "u");
+  assert.equal(routeLabel("/api/auth/link"), "auth_link");
+  assert.equal(routeLabel("/api/wall/sync"), "wall_sync");
+  assert.equal(routeLabel("/api/files/0f3a.png"), "files");
 });

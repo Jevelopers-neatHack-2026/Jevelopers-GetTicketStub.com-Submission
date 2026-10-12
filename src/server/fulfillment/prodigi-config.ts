@@ -12,8 +12,12 @@ import type { ProdigiSandboxDecision } from "../vendor/fulfillment-connectors/di
 //   PRODIGI_SANDBOX_API_KEY                  the sandbox API key the authenticated reads use (fulfillment-connectors'
 //                                            predeclared binding). Optional until reads are approved.
 //   APP_URL                                  existing: the public https origin the callbackUrl is built on.
+//   TICKETSTUB_OPS_ENVIRONMENT               existing: production | preview | development | test. Required: it
+//                                            partitions the shared database between Preview and Publish.
 //
 // The env names are fixed by 0003; the secret references are what the reconciler is configured with.
+
+type Env = Readonly<Record<string, string | undefined>>;
 
 export const CALLBACKS_SETTING = "TICKETSTUB_PRODIGI_CALLBACKS";
 export const CALLBACK_ROUTE_PATH = "/api/fulfillment/prodigi/callbacks/";
@@ -32,8 +36,23 @@ export const CALLBACK_TOKEN_PREVIOUS_BINDING: SecretReferenceBinding = Object.fr
   envVar: "PRODIGI_SANDBOX_CALLBACK_TOKEN_PREVIOUS",
 });
 
-/** The scope every callback, order and job of this deployment belongs to (identifiers exclude "_"). */
-export const PRODIGI_SCOPE = Object.freeze({ tenantId: "getticketstub", projectId: "prodigi-sandbox" });
+/**
+ * The deployment environment, from the existing TICKETSTUB_OPS_ENVIRONMENT (production | preview | development | test).
+ * Preview and Publish share one database on Plus Launch, so callbacks stay off unless it names one of these: every
+ * store, job and alert row is tagged with it, and a worker only ever claims its own environment's jobs.
+ */
+export const PRODIGI_ENVIRONMENTS = ["production", "preview", "development", "test"] as const;
+export type ProdigiEnvironment = (typeof PRODIGI_ENVIRONMENTS)[number];
+
+export function prodigiEnvironment(env: Env = process.env): ProdigiEnvironment | null {
+  const raw = env.TICKETSTUB_OPS_ENVIRONMENT?.trim().replace(/^["']|["']$/g, "").toLowerCase() ?? "";
+  return (PRODIGI_ENVIRONMENTS as readonly string[]).includes(raw) ? (raw as ProdigiEnvironment) : null;
+}
+
+/** The scope every callback, order and job of one environment belongs to (identifiers exclude "_"). */
+export function prodigiScope(environment: ProdigiEnvironment): { readonly tenantId: string; readonly projectId: string } {
+  return Object.freeze({ tenantId: "getticketstub", projectId: `prodigi-sandbox-${environment}` });
+}
 
 /**
  * The owner-delegated sandbox validation decision (0003 R1/R3). It only names the decision: a real
@@ -47,8 +66,6 @@ export const PRODIGI_SANDBOX_DECISION: ProdigiSandboxDecision = Object.freeze({
 });
 
 export type ProdigiCallbackMode = { state: "off" } | { state: "sandbox" } | { state: "refused"; value: "live" | "unrecognized" };
-
-type Env = Readonly<Record<string, string | undefined>>;
 
 export function prodigiCallbackMode(env: Env = process.env): ProdigiCallbackMode {
   const raw = env[CALLBACKS_SETTING]?.trim().toLowerCase() ?? "";

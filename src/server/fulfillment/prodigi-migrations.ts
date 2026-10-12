@@ -4,7 +4,10 @@ import type { DatabaseSync } from "node:sqlite";
 // Forward-only migrations for the Prodigi callback tables, in the same style as src/server/migrations.ts, but with
 // their own version row in `module_schema` instead of PRAGMA user_version. The app's main list is positional and
 // several open branches append to it; keeping this module's chain separate means neither renumbers the other.
-// They live in the app database (TICKETSTUB_DB), so the existing backup and restore tooling copies them.
+// They live in the app database (TICKETSTUB_DB), so the existing backup and restore tooling copies them. On Plus
+// Launch, Preview and Publish share that file, so every row carries its deployment environment
+// (TICKETSTUB_OPS_ENVIRONMENT): store rows through the scope's project_id ("prodigi-sandbox-<environment>"), job and
+// alert rows through an environment column. A worker claims only its own environment's jobs.
 // Never edit one that has shipped; add a new entry.
 //
 // Nothing stored here is personal: Prodigi order and event IDs, stages, step states, shipment IDs, times and
@@ -58,6 +61,7 @@ const MIGRATIONS: string[] = [
   -- lease that runs out (crash, restart) makes the row claimable again. A row is deleted only when its run returns.
   CREATE TABLE prodigi_jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    environment TEXT NOT NULL,
     kind TEXT NOT NULL CHECK (kind IN ('reconcile', 'poll', 'track')),
     order_id TEXT NOT NULL,
     payload TEXT NOT NULL,
@@ -68,12 +72,14 @@ const MIGRATIONS: string[] = [
     last_error TEXT,
     created_at INTEGER NOT NULL
   );
-  CREATE INDEX prodigi_jobs_due ON prodigi_jobs (due_at, id);
+  CREATE INDEX prodigi_jobs_due ON prodigi_jobs (environment, due_at, id);
 
-  -- reconcile_abandoned alerts, one per dedupe_key (orderId|firstReceivedAt|coverAfter). Inserting one also queues
+  -- Alerts, one per environment and dedupe_key: reconcile_abandoned (orderId|firstReceivedAt|coverAfter), or
+  -- track_failed when an order exists at Prodigi but neither trackOrder nor its retry job could be written. Inserting one also queues
   -- a poll job in the same transaction; poll_status records what that poll found, for the operator.
   CREATE TABLE prodigi_alerts (
-    dedupe_key TEXT PRIMARY KEY,
+    environment TEXT NOT NULL,
+    dedupe_key TEXT NOT NULL,
     order_id TEXT NOT NULL,
     reason TEXT NOT NULL,
     error_code TEXT,
@@ -85,9 +91,10 @@ const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL,
     poll_status TEXT NOT NULL DEFAULT 'queued',
     polled_at INTEGER,
-    poll_error TEXT
+    poll_error TEXT,
+    PRIMARY KEY (environment, dedupe_key)
   );
-  CREATE INDEX prodigi_alerts_created ON prodigi_alerts (created_at);
+  CREATE INDEX prodigi_alerts_created ON prodigi_alerts (environment, created_at);
   `,
 ];
 

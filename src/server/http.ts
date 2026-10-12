@@ -57,13 +57,30 @@ export function route<A extends unknown[]>(fn: (...args: A) => Promise<Response>
       return tagged(await fn(...args), requestId);
     } catch (e) {
       if (e instanceof HttpError && e.code === "storage_unavailable") {
-        const path = req ? new URL(req.url).pathname.replace(/^\/api\//, "").replace(/[^a-z0-9]+/gi, "_").toLowerCase().slice(0, 40) : "unknown";
+        const path = req ? routeLabel(new URL(req.url).pathname) : "unknown";
         const ev = sanitizeEvent({ type: "storage_unavailable", requestId, fields: { code: "storage_unavailable", route: /^[a-z]/.test(path) ? path : "unknown" } });
         if (ev) pushRing(ev);
       }
       return tagged(errorResponse(e), requestId);
     }
   };
+}
+
+const TOKEN_PARENTS = new Set(["callbacks", "share", "gift", "u", "claim", "stub-image", "files"]);
+
+/**
+ * A log-safe label for a request path: the static segments only. It stops at the first segment that follows a
+ * token-bearing parent (`/api/fulfillment/prodigi/callbacks/{token}`, `/api/share/{token}` …) or that does not look
+ * like a static route name, so a path token can never reach the event ring.
+ */
+export function routeLabel(pathname: string): string {
+  const kept: string[] = [];
+  for (const segment of pathname.replace(/^\/api\//, "").split("/").filter(Boolean)) {
+    if (!/^[a-z][a-z-]{0,23}$/.test(segment)) break;
+    kept.push(segment);
+    if (TOKEN_PARENTS.has(segment)) break;
+  }
+  return kept.join("_").replace(/[^a-z0-9]+/g, "_").slice(0, 40);
 }
 
 export const notFound = () => new HttpError(404, "not_found", "We couldn't find that.");

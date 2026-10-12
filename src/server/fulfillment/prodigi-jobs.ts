@@ -16,8 +16,10 @@ import {
 // - schedule() inserts a row due at now + job.delayMs. Every schedule is a new row: the reconciler collapses
 //   duplicates itself (superseded / obsolete), and a resumed chain may reuse the running job's attempt number, so
 //   rows are never merged or dropped in favour of an older one.
-// - A worker leases due rows (BEGIN IMMEDIATE, so two workers never take the same row) and deletes a row only when
-//   its run returns. If the run throws (store blip, abandon hook failure, schedule failure) the row is released with
+// - Rows carry the deployment environment. Preview and Publish share one database on Plus Launch, and a queue
+//   only ever inserts, claims, lists or releases its own environment's rows.
+// - A worker leases one due row at a time, right before running it (BEGIN IMMEDIATE, so two workers never take the
+//   same row), so a long batch can never outrun a lease. It deletes a row only when its run returns. If the run throws (store blip, abandon hook failure, schedule failure) the row is released with
 //   a backoff and retried. If the process dies, the lease runs out and any worker takes the row again: jobs survive
 //   a restart.
 // - The abandon hook stores an alert and queues a poll (reconcileOrder) in one transaction, and logs one line.
@@ -34,6 +36,8 @@ export interface ProdigiJobRow {
 }
 
 export interface ProdigiJobQueueOptions {
+  /** The deployment environment whose rows this queue owns. */
+  readonly environment: string;
   readonly clock?: { now(): number };
   /** How long a leased row is held before another worker may take it. Longer than any one run. Default 5 min. */
   readonly leaseMs?: number;
@@ -45,9 +49,12 @@ const RETRY_MAX_MS = 5 * 60_000;
 export class SqliteProdigiJobQueue implements ProdigiReconciliationScheduler {
   readonly durable = true;
   readonly leaseMs: number;
+  readonly environment: string;
   private readonly clock: { now(): number };
 
-  constructor(private readonly db: DatabaseSync, options: ProdigiJobQueueOptions = {}) {
+  constructor(private readonly db: DatabaseSync, options: ProdigiJobQueueOptions) {
+    if (!/^[a-z]{1,32}$/.test(options.environment)) throw new Error("invalid environment");
+    this.environment = options.environment;
     this.clock = options.clock ?? { now: () => Date.now() };
     this.leaseMs = options.leaseMs ?? 5 * 60_000;
   }
@@ -61,27 +68,28 @@ export class SqliteProdigiJobQueue implements ProdigiReconciliationScheduler {
   enqueue(kind: ProdigiJobKind, orderId: string, payload: Record<string, unknown>, delayMs = 0): number {
     const now = this.clock.now();
     const res = this.db
-      .prepare("INSERT INTO prodigi_jobs (kind, order_id, payload, due_at, created_at) VALUES (?, ?, ?, ?, ?)")
-      .run(kind, orderId, JSON.stringify(payload), now + Math.max(0, delayMs), now);
+      .prepare("INSERT INTO prodigi_jobs (environment, kind, order_id, payload, due_at, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(this.environment, kind, orderId, JSON.stringify(payload), now + Math.max(0, delayMs), now);
     return Number(res.lastInsertRowid);
   }
 
-  /** Leases up to `limit` due rows to `owner`. A row whose lease ran out is due again. */
-  claim(owner: string, limit: number): ProdigiJobRow[] {
+  /**
+   * Leases the next due row of this environment to `owner`, or returns null. One row per call: the worker claims
+   * each row right before running it, so the lease always starts when the run does. A row whose lease ran out is
+   * due again.
+   */
+  claimOne(owner: string): ProdigiJobRow | null {
     const now = this.clock.now();
+    const due = "environment = ? AND due_at <= ? AND (lease_until IS NULL OR lease_until <= ?)";
     // The loop asks every second; take the write lock only when something is due.
-    const due = "due_at <= ? AND (lease_until IS NULL OR lease_until <= ?)";
-    if (!this.db.prepare(`SELECT 1 AS x FROM prodigi_jobs WHERE ${due} LIMIT 1`).get(now, now)) return [];
+    if (!this.db.prepare(`SELECT 1 AS x FROM prodigi_jobs WHERE ${due} LIMIT 1`).get(this.environment, now, now)) return null;
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      const rows = this.db.prepare(
-        "SELECT id, kind, order_id, payload, due_at, runs FROM prodigi_jobs " +
-          "WHERE due_at <= ? AND (lease_until IS NULL OR lease_until <= ?) ORDER BY due_at, id LIMIT ?",
-      ).all(now, now, limit) as { id: number; kind: ProdigiJobKind; order_id: string; payload: string; due_at: number; runs: number }[];
-      const lease = this.db.prepare("UPDATE prodigi_jobs SET lease_owner = ?, lease_until = ?, runs = runs + 1 WHERE id = ?");
-      for (const r of rows) lease.run(owner, now + this.leaseMs, r.id);
+      const r = this.db.prepare(`SELECT id, kind, order_id, payload, due_at, runs FROM prodigi_jobs WHERE ${due} ORDER BY due_at, id LIMIT 1`)
+        .get(this.environment, now, now) as { id: number; kind: ProdigiJobKind; order_id: string; payload: string; due_at: number; runs: number } | undefined;
+      if (r) this.db.prepare("UPDATE prodigi_jobs SET lease_owner = ?, lease_until = ?, runs = runs + 1 WHERE id = ?").run(owner, now + this.leaseMs, r.id);
       this.db.exec("COMMIT");
-      return rows.map((r) => ({ id: Number(r.id), kind: r.kind, orderId: r.order_id, payload: JSON.parse(r.payload), dueAt: Number(r.due_at), runs: Number(r.runs) + 1 }));
+      return r ? { id: Number(r.id), kind: r.kind, orderId: r.order_id, payload: JSON.parse(r.payload), dueAt: Number(r.due_at), runs: Number(r.runs) + 1 } : null;
     } catch (e) {
       this.db.exec("ROLLBACK");
       throw e;
@@ -90,21 +98,21 @@ export class SqliteProdigiJobQueue implements ProdigiReconciliationScheduler {
 
   /** The run returned: the row is done. Only the lease holder may delete it. */
   complete(id: number, owner: string): boolean {
-    return Number(this.db.prepare("DELETE FROM prodigi_jobs WHERE id = ? AND lease_owner = ?").run(id, owner).changes) === 1;
+    return Number(this.db.prepare("DELETE FROM prodigi_jobs WHERE id = ? AND environment = ? AND lease_owner = ?").run(id, this.environment, owner).changes) === 1;
   }
 
   /** The run threw: release the row with a capped exponential backoff, so the queue retries it. */
   release(id: number, owner: string, runs: number, errorCode: string): boolean {
     const delay = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.min(Math.max(runs - 1, 0), 16));
     return Number(this.db.prepare(
-      "UPDATE prodigi_jobs SET lease_owner = NULL, lease_until = NULL, due_at = ?, last_error = ? WHERE id = ? AND lease_owner = ?",
-    ).run(this.clock.now() + delay, errorCode.slice(0, 64), id, owner).changes) === 1;
+      "UPDATE prodigi_jobs SET lease_owner = NULL, lease_until = NULL, due_at = ?, last_error = ? WHERE id = ? AND environment = ? AND lease_owner = ?",
+    ).run(this.clock.now() + delay, errorCode.slice(0, 64), id, this.environment, owner).changes) === 1;
   }
 
-  /** Rows by kind, for tests and diagnostics. */
+  /** This environment's rows, for tests and diagnostics. */
   list(): { id: number; kind: ProdigiJobKind; orderId: string; dueAt: number; leased: boolean; runs: number; lastError: string | null }[] {
     const now = this.clock.now();
-    return (this.db.prepare("SELECT id, kind, order_id, due_at, lease_until, runs, last_error FROM prodigi_jobs ORDER BY due_at, id").all() as Record<string, unknown>[])
+    return (this.db.prepare("SELECT id, kind, order_id, due_at, lease_until, runs, last_error FROM prodigi_jobs WHERE environment = ? ORDER BY due_at, id").all(this.environment) as Record<string, unknown>[])
       .map((r) => ({
         id: Number(r.id),
         kind: r.kind as ProdigiJobKind,
@@ -120,6 +128,7 @@ export class SqliteProdigiJobQueue implements ProdigiReconciliationScheduler {
 // ---- alerts ----
 
 export interface ProdigiAlert {
+  environment: string;
   dedupeKey: string;
   orderId: string;
   reason: string;
@@ -150,10 +159,10 @@ export function abandonAlertHook(db: DatabaseSync, queue: SqliteProdigiJobQueue,
     db.exec("BEGIN IMMEDIATE");
     try {
       const res = db.prepare(
-        "INSERT OR IGNORE INTO prodigi_alerts (dedupe_key, order_id, reason, error_code, attempts, required_stage, cover_after, first_received_at, abandoned_at, created_at) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO prodigi_alerts (environment, dedupe_key, order_id, reason, error_code, attempts, required_stage, cover_after, first_received_at, abandoned_at, created_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).run(
-        event.dedupeKey, event.orderId, event.reason, event.errorCode ?? null, event.attempts, event.requiredStage,
+        queue.environment, event.dedupeKey, event.orderId, event.reason, event.errorCode ?? null, event.attempts, event.requiredStage,
         event.coverAfter, event.firstReceivedAt, event.abandonedAt, clock.now(),
       );
       fresh = Number(res.changes) === 1;
@@ -167,8 +176,22 @@ export function abandonAlertHook(db: DatabaseSync, queue: SqliteProdigiJobQueue,
   };
 }
 
-export function listProdigiAlerts(db: DatabaseSync): ProdigiAlert[] {
-  return (db.prepare("SELECT * FROM prodigi_alerts ORDER BY created_at, dedupe_key").all() as Record<string, unknown>[]).map((r) => ({
+/**
+ * An order exists at Prodigi but neither trackOrder nor its durable track job could be written (the database was
+ * failing). Best effort: if this write fails too, the caller's explicit error is all that is left.
+ */
+export function recordTrackFailedAlert(db: DatabaseSync, environment: string, orderId: string, now: number): boolean {
+  const at = new Date(now).toISOString();
+  const res = db.prepare(
+    "INSERT OR IGNORE INTO prodigi_alerts (environment, dedupe_key, order_id, reason, error_code, attempts, required_stage, cover_after, first_received_at, abandoned_at, created_at, poll_status) " +
+      "VALUES (?, ?, ?, 'track_failed', NULL, 0, NULL, ?, ?, ?, ?, 'not_queued')",
+  ).run(environment, `${orderId}|track_failed`, orderId, at, at, at, now);
+  return Number(res.changes) === 1;
+}
+
+export function listProdigiAlerts(db: DatabaseSync, environment: string): ProdigiAlert[] {
+  return (db.prepare("SELECT * FROM prodigi_alerts WHERE environment = ? ORDER BY created_at, dedupe_key").all(environment) as Record<string, unknown>[]).map((r) => ({
+    environment: r.environment as string,
     dedupeKey: r.dedupe_key as string,
     orderId: r.order_id as string,
     reason: r.reason as string,
@@ -195,7 +218,7 @@ export interface ProdigiWorkerOptions {
   readonly workerId?: string;
   /** How often the loop looks for due rows. Default 1 s. */
   readonly intervalMs?: number;
-  /** Rows taken per tick. Default 8. */
+  /** Rows run per tick, each claimed (and leased) right before it runs. Default 8. */
   readonly batch?: number;
   readonly log?: (line: string) => void;
 }
@@ -240,14 +263,16 @@ export class ProdigiJobWorker {
 
   private async drain(): Promise<number> {
     const { queue } = this.options;
-    let rows: ProdigiJobRow[];
-    try {
-      rows = queue.claim(this.workerId, this.options.batch ?? 8);
-    } catch (e) {
-      this.log(`[prodigi] job claim failed: ${errorCodeOf(e)}`);
-      return 0;
-    }
-    for (const row of rows) {
+    let ran = 0;
+    for (; ran < (this.options.batch ?? 8); ran++) {
+      let row: ProdigiJobRow | null;
+      try {
+        row = queue.claimOne(this.workerId);
+      } catch (e) {
+        this.log(`[prodigi] job claim failed: ${errorCodeOf(e)}`);
+        break;
+      }
+      if (!row) break;
       try {
         await this.run(row);
         queue.complete(row.id, this.workerId);
@@ -260,10 +285,10 @@ export class ProdigiJobWorker {
           continue;
         }
         queue.release(row.id, this.workerId, row.runs, code);
-        this.log(`[prodigi] ${row.kind} job ${row.id} order=${row.orderId} failed (${code}); retrying`);
+        this.log(`[prodigi] ${row.kind} job ${row.id} order=${row.orderId} failed (${code}) on run ${row.runs}; retrying`);
       }
     }
-    return rows.length;
+    return ran;
   }
 
   private async run(row: ProdigiJobRow): Promise<void> {
@@ -282,15 +307,16 @@ export class ProdigiJobWorker {
       }
       return;
     }
-    // poll: the abandoned chain's order, read once more through reconcileOrder; the alert keeps the outcome.
+    // poll: reconcileOrder once. Queued for an abandoned chain (the alert keeps the outcome), and after each created
+    // order as a delayed read-back, so an early callback answered not_tracked is covered even if never redelivered.
     const result = await reconciler.reconcileOrder(row.orderId);
     const dedupeKey = typeof row.payload.dedupeKey === "string" ? row.payload.dedupeKey : null;
     if (dedupeKey) {
-      db.prepare("UPDATE prodigi_alerts SET poll_status = ?, polled_at = ?, poll_error = ? WHERE dedupe_key = ?")
-        .run(result.status, this.clock.now(), result.errorCode ?? null, dedupeKey);
+      db.prepare("UPDATE prodigi_alerts SET poll_status = ?, polled_at = ?, poll_error = ? WHERE environment = ? AND dedupe_key = ?")
+        .run(result.status, this.clock.now(), result.errorCode ?? null, this.options.queue.environment, dedupeKey);
     }
     if (result.status === "read_failed" || result.status === "retries_exhausted") {
-      this.log(`[prodigi] poll order=${row.orderId} ${result.status}${result.errorCode ? ` (${result.errorCode})` : ""}; alert stays open`);
+      this.log(`[prodigi] poll order=${row.orderId} ${result.status}${result.errorCode ? ` (${result.errorCode})` : ""}${dedupeKey ? "; alert stays open" : ""}`);
     }
   }
 }
