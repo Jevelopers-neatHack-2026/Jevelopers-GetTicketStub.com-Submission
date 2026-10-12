@@ -8,7 +8,7 @@ permissions:
 jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,9 +22,13 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - name: Verify analytics consent and page-view ordering in Chrome (offline, synthetic ID)
+        run: node scripts/check-analytics-order.mjs
+      - name: Verify analytics customer journeys in Chrome (offline, synthetic ID, phone and desktop)
+        run: node scripts/check-analytics-journeys.mjs
       - name: Verify authentication and storage fixtures
         run: |
-          for suite in foundation access finance-context degraded; do
+          for suite in foundation access finance-context degraded mail-off backup-drill; do
             npm run verify:product -- --suite "$suite" --mode fixture --evidence-dir /tmp/ticketstub-product-evidence
           done
       - name: Verify production server on platform port

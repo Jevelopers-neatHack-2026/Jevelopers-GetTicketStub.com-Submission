@@ -956,7 +956,7 @@ async function gt09() {
   const down = sanitizeEvent({ type: "storage_unavailable", fields: { code: "storage_unavailable", route: "auth_link" } });
   pushRing(down);
   check("events: with storage down an event goes to the in-memory ring", ringEvents().some((e) => e.type === "storage_unavailable" && e.fields.route === "auth_link"));
-  check("events: exportToHarness is a no-op stub (nothing sent, nothing thrown)", (await exportToHarness([down])) === undefined);
+  check("events: exportToHarness does nothing unless TICKETSTUB_HARNESS_EXPORT=neatlogs (nothing sent, nothing thrown)", process.env.TICKETSTUB_HARNESS_EXPORT === "neatlogs" || (await exportToHarness([down])) === undefined);
 
   // --- Real actions, then what was recorded.
   const P = client("evP"); // owner

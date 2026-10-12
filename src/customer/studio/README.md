@@ -29,6 +29,7 @@ providers, in live mode:
 |---|---|---|
 | `ANTHROPIC_API_KEY` | One research call per event to pull extra facts from the page; free-text agent replies (`claude-sonnet-5-5`) | Facts come from the page's schema.org data and Open-Meteo only; the agent uses rule-based replies |
 | `OPENAI_API_KEY` | Generated, text-free art (`gpt-image-1`) | Procedural art, labelled "Sample art" |
+| `OPEN_METEO_API_KEY` | Weather and place lookups on the Open-Meteo customer endpoints (API Standard; no historical weather) | The free Open-Meteo endpoints, for evaluation only, not commercial use |
 
 When a capability's provider is set to `openrouter`, it needs its own model and
 key instead, with no shared `OPENROUTER_API_KEY` and no fallback to another key
