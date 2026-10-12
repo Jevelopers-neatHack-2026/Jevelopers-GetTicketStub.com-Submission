@@ -128,6 +128,38 @@ test('forged, cross-tenant, wrong-audience, expired, revoked, and unavailable ap
   await assert.rejects(createArtworkHandoff(handoffArgs(throwing)), codeIs('verifier_unavailable'));
 });
 
+test('approval timestamps reject impossible calendar values before calling the verifier again', async () => {
+  const { handoff } = await createHandoff();
+  for (const issuedAt of [
+    '2026-02-30T12:00:00Z',
+    '2026-04-31T12:00:00Z',
+    '2023-02-29T12:00:00Z',
+    '1900-02-29T12:00:00Z',
+    '2026-01-01T24:00:00Z',
+    '2026-01-01T12:00:00.1234Z',
+    '2026-01-01T12:00:00',
+    '2026-01-01T12:00:00Z\n',
+  ]) {
+    const invalid = structuredClone(handoff);
+    invalid.approval.issued_at = issuedAt;
+    let verifierCalls = 0;
+    await assert.rejects(verifyHandoffApproval({
+      approvalVerifier: { async verifyApproval() { verifierCalls += 1; return { status: 'rejected' }; } },
+      handoff: invalid,
+      expected_audience: 'test:print-consumer',
+      trustedScope,
+      now,
+    }), codeIs('invalid_timestamp'));
+    assert.equal(verifierCalls, 0, 'invalid embedded timestamps are rejected before the verifier callback');
+  }
+
+  const valid = structuredClone(handoff);
+  valid.approval.issued_at = '2026-10-10T14:00:00.123Z';
+  const normalized = validateArtworkHandoff(valid, trustedScope, { now });
+  assert.equal(normalized.approval.issued_at, valid.approval.issued_at,
+    'the UTC timestamp spelling and fractional bytes are preserved');
+});
+
 test('consumption rechecks current revocation and accepts a verifier-managed key rotation', async () => {
   const { handoff, verifier } = await createHandoff();
   verifier.key_id = 'test:key-v2';

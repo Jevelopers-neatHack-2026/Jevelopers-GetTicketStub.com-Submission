@@ -5,6 +5,7 @@ import {
   normalizeResearchPackage,
   validateCreativeBrief,
 } from "../contracts/index.mjs";
+import { isValidIsoDateTime } from "../contracts/validation.mjs";
 import { acceptVerifiedInvalidation } from "./store.mjs";
 export { createCreativeBriefStore, initializeCreativeBriefDatabase, openCreativeBriefStore } from "./store.mjs";
 
@@ -190,8 +191,7 @@ function expectString(value, field, { max = 2048, pattern = null } = {}) {
 
 function expectIsoDateTime(value, field) {
   const text = expectString(value, field, { max: 40, pattern: ISO_DATE_TIME });
-  const millis = Date.parse(text);
-  if (!Number.isFinite(millis)) fail("invalid_input", "A UTC date-time is required.", field);
+  if (!isValidIsoDateTime(text)) fail("invalid_input", "A UTC date-time is required.", field);
   return text;
 }
 

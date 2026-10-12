@@ -84,10 +84,34 @@ export function assertOnlyKeys(object, allowed, contract, path = "") {
   }
 }
 
+const ISO_DATE_TIME_PARTS = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?([Zz]|([+-])(\d{2}):?(\d{2}))$/;
+
+/** Strict calendar and explicit-zone validation shared by timestamp boundaries. */
+export function isValidIsoDateTime(value) {
+  if (typeof value !== "string") return false;
+  const match = ISO_DATE_TIME_PARTS.exec(value);
+  if (!match || match[0] !== value) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = match[6] === undefined ? undefined : Number(match[6]);
+  const offsetHour = match[10] === undefined ? undefined : Number(match[10]);
+  const offsetMinute = match[11] === undefined ? undefined : Number(match[11]);
+
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || (second !== undefined && second > 59)) return false;
+  if (offsetHour !== undefined && (offsetHour > 23 || offsetMinute > 59)) return false;
+
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day >= 1 && day <= daysInMonth[month - 1];
+}
+
 export function assertIsoDateTime(value, contract, field) {
   expectString(value, contract, field, { maxLength: 40 });
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed) || !/^\d{4}-\d{2}-\d{2}T/.test(value)) {
+  if (!isValidIsoDateTime(value)) {
     fail("invalid_datetime", contract, field, field + " must be an ISO date-time.");
   }
   return value;

@@ -1,11 +1,11 @@
-import { test, expect } from './capture-test.mjs';
+import { test, expect, resetFixture } from './capture-test.mjs';
 import AxeBuilder from '@axe-core/playwright';
 const counts=async request=>(await request.get('/api/counters')).json();
 async function apply(page){await page.getByLabel('Artwork style').selectOption('vibrant');const pending=page.waitForResponse('**/api/apply');await page.getByRole('button',{name:'Apply changes',exact:true}).click();const result=await(await pending).json();expect(result.ok).toBe(true);await expect(page.locator('#inspect')).toBeEnabled();return result;}
 async function inspect(page){const pending=page.waitForResponse('**/api/inspection');await page.locator('#inspect').focus();await page.keyboard.press('Enter');return(await pending).json();}
-test.beforeEach(async({page,request})=>{await request.post('/__fixture/reset',{data:{}});await page.goto('/');await expect(page.getByLabel('Artwork style')).toBeVisible();});
+test.beforeEach(async({page,request})=>{await resetFixture(request, {});await page.goto('/');await expect(page.getByLabel('Artwork style')).toBeVisible();});
 for(const format of ['png','jpeg','webp'])test(`completed ${format} Apply reload before first inspection recovers exact saved source read-only`,async({page,request},info)=>{
- await request.post('/__fixture/reset',{data:{native_format:format}});await page.reload();await expect(page.getByLabel('Artwork style')).toBeVisible();
+ await resetFixture(request, {native_format:format});await page.reload();await expect(page.getByLabel('Artwork style')).toBeVisible();
  const edit=await apply(page),design=edit.result.design_version,before=await counts(request);
  expect(before).toMatchObject({image_calls:1,observer_calls:0,jev_calls:0,reservations:1});
  await request.post('/__fixture/state',{data:{restart:true}});
@@ -27,7 +27,7 @@ test('delayed startup source recovery cannot replace a newer explicit Apply',asy
  const before=await counts(request);expect(before).toMatchObject({image_calls:2,observer_calls:0,reservations:2});const view=(await inspect(page)).view;expect(view.references.source_operation_id).toBe(second.operation_id);expect(view.references.design_version_id).toBe(second.result.design_version.design_version_id);expect((await counts(request)).image_calls).toBe(2);
 });
 for(const format of ['png','jpeg','webp'])test(`actual ${format} keyboard Apply→inspect, safe review, durable reload and axe`,async({page,request},info)=>{
- await request.post('/__fixture/reset',{data:{native_format:format}});await page.reload();await expect(page.getByLabel('Artwork style')).toBeVisible();
+ await resetFixture(request, {native_format:format});await page.reload();await expect(page.getByLabel('Artwork style')).toBeVisible();
  await expect(page.locator('#inspect')).toBeDisabled();expect(await counts(request)).toMatchObject({image_calls:0,observer_calls:0,reservations:0});
  const edit=await apply(page);expect(await counts(request)).toMatchObject({image_calls:1,observer_calls:0,jev_calls:0,reservations:1});
  const result=await inspect(page);expect(result.view.status).toBe('completed');expect(result.view.outcome).toBe('acceptable_for_review');expect(result.view.references.design_version_id).toBe(edit.result.design_version.design_version_id);expect(result.view.references.inspection_action_id).not.toBe(edit.action_id);
