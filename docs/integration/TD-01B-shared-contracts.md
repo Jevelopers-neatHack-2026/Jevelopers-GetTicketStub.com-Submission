@@ -35,7 +35,7 @@ node scripts/producer-consumer-check.mjs <temp copy of producer checkout> .share
 
 ## Results
 
-Tested consumer: commit `fdd70c6d0d00d389b8e1e16dce5f1c2a4d0af01e`, tree `8f79da7a66b155457fe6cbf7511fa65d548f039b`. The commit that adds this document changes documentation only. Base: origin/main `380bba6c75789ac65a7cc6eb6d6d19469a4e5823`.
+Tested consumer: commit `42e8d5e378e814d43f681688d2e03b107a60c792`, tree `1a2c695496f20f65b4416a1378f2cc059b2342c1`. The commit that adds this document changes documentation only. Base: origin/main `380bba6c75789ac65a7cc6eb6d6d19469a4e5823`.
 
 | Command | Result |
 | --- | --- |
@@ -44,7 +44,7 @@ Tested consumer: commit `fdd70c6d0d00d389b8e1e16dce5f1c2a4d0af01e`, tree `8f79da
 | `npm run typecheck` | pass |
 | `npm test -- --run` | 5 files, 177 tests passed (same counts as the base) |
 | `npm run build` | pass |
-| `npm run test:contracts` | tsc pass; 2 files, 56 tests passed; driver status passed |
+| `npm run test:contracts` | driver (with independent package verification) passed; tsc pass; 3 files, 74 tests passed |
 | driver on Node 22.23.3 and on 24.21.0 | passed; 11 contracts, 249 package fixture cases, 13 of 13 domain cases |
 | producer `consumerChecks` on a temp copy, Node 22.23.3 | team-dashboard row passed; 11 observed contracts; 249 trusted fixture cases; 27 package modules imported and byte-checked; zero team-dashboard failures |
 
