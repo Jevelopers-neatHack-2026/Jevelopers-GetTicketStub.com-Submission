@@ -9,7 +9,7 @@ import { DownloadBrowserSessions } from "./lib/download-browser-sessions.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const SOURCE_FILES = ["scripts/check-download-browser-identity.mjs", "scripts/lib/download-browser-sessions.mjs",
-  "scripts/lib/cdp.mjs", "scripts/lib/download-receipts.mjs", "scripts/lib/download-capture-diagnostics.mjs"];
+  "scripts/lib/cdp.mjs", "scripts/lib/download-profile-cleanup.mjs", "scripts/lib/download-receipts.mjs", "scripts/lib/download-capture-diagnostics.mjs"];
 
 function sourceEvidence() {
   try {

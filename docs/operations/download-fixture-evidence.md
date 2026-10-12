@@ -80,6 +80,9 @@ and workers are still rejected by the unchanged blank-target rule. A valid task 
 for removal verification even when target validation fails; confirmed removal never converts that identity failure
 into a pass. The launcher requests `about:blank`; diagnostics do not infer which startup target caused a failure
 that omitted its inventory. `browser_ui` is classified explicitly but remains rejected, including at a blank URL.
+For that type only, exact pinned tab-search, omnibox-popup and omnibox-popup AIM URLs receive fixed
+`browserUiUrlClass` names. Other URLs, including query/fragment variants, remain `unrecognized`; raw URLs are
+never retained. These diagnostic names do not accept any target or imply that every startup target was blank.
 
 Download qualification requests the launcher's explicit `downloadIsolation` option for its baseline session,
 all four additional sessions and the identity preflight. Only this option adds `--disable-extensions` and
@@ -92,6 +95,8 @@ revision of the retained failed preflight: [extension switch](https://github.com
 [component switch](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/common/chrome_switches.h),
 [component loading](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/browser/extensions/component_loader.cc)
 and [browser UI type](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/content/browser/devtools/devtools_agent_host_impl.cc).
+The [pinned internal URL constants](https://github.com/chromium/chromium/blob/b510e9d7cd3a2fbd78d0ddc42234103206c5f78d/chrome/common/webui_url_constants.h)
+ground the fixed diagnostic names; they are not an observed target inventory.
 
 Each session's collector starts before application navigation and remains attached through bounded browser
 shutdown. Its final snapshot is then retained and the listener detached. Process exit, profile removal and
@@ -100,6 +105,16 @@ Every action, producer, native GUID, event and violation is aggregated with its 
 from separate processes are not deduplicated. Per-case receipts and `downloadReceipts.directories` bind every
 saved GUID to its own session directory. Missing sessions, unsupported setup, late events and incomplete cleanup
 remain explicit and fail closed while the remaining fixed pairs are still attempted. There is no browser retry.
+
+Only the download launch mode adds counted profile removal after confirmed process exit. It has a two-second
+overall observation budget and at most four attempts, retaining fixed error codes, removal/absence status and
+every requested delay. Only the transient errors documented by [Node22.23.3](https://github.com/nodejs/node/blob/v22.23.3/doc/api/fs.md#fsrmsyncpath-options)
+permit 100/200/300ms cleanup backoffs; each individual removal disables hidden retries. These filesystem delays
+occur after the browser exits and never delay or retry an image capture. Unknown errors, missing receipts,
+deadline expiry or unverified absence remain incomplete; a late filesystem completion cannot revise a timeout.
+The manager also checks profile absence independently after close. A failed removal keeps the already proven
+process exit truthful, but still fails cleanup and session qualification. Other browser consumers keep their
+existing close behavior. No profile path or raw filesystem error message is retained.
 
 The existing final pre-screenshot evaluation also records bounded computed state for the actual image, figure
 and up to sixteen ancestors per image, including ancestors above the figure. It records numeric transforms,

@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { cleanupDownloadProfile } from "./download-profile-cleanup.mjs";
 
 const CANDIDATES = [
   process.env.CHROME_PATH,
@@ -106,6 +107,11 @@ export async function launchBrowser(options) {
         child.stderr.destroy();
       }
       if (!exited) throw new Error("Chrome did not exit after bounded shutdown");
+      if (options?.downloadIsolation === true) {
+        // Filesystem cleanup has its own receipt; a cleanup failure must not
+        // relabel the process exit that was already confirmed above.
+        return { profileCleanup: await cleanupDownloadProfile(profile) };
+      }
       try {
         rmSync(profile, { recursive: true, force: true });
       } catch {

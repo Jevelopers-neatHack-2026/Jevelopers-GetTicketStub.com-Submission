@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { DownloadBrowserSessions, browserSessionIdForPair, observeBrowserIdentity, profileArgument } from "../scripts/lib/download-browser-sessions.mjs";
 import { captureQualificationPlan } from "../scripts/lib/download-capture-qualification.mjs";
 import { runBrowserIdentityPreflight } from "../scripts/check-download-browser-identity.mjs";
+import { cleanupDownloadProfile } from "../scripts/lib/download-profile-cleanup.mjs";
 
 const plan = captureQualificationPlan([{ name: "390" }, { name: "1440" }]);
 const expected = [...new Set(plan.map(browserSessionIdForPair))];
@@ -140,9 +141,37 @@ test("browser UI is a bounded diagnostic class and never an accepted startup tar
       assert.deepEqual(result.evidence.initialTargets.reasons, url === "about:blank"
         ? ["target_type_unaccepted"] : ["target_type_unaccepted", "target_url_unaccepted"]);
       assert.deepEqual(result.evidence.initialTargets.targets[1], { typeClass: "browser_ui",
-        urlClass: url === "about:blank" ? "about_blank" : "chrome_internal", subtypeClass: "absent" });
+        urlClass: url === "about:blank" ? "about_blank" : "chrome_internal", browserUiUrlClass: "unrecognized", subtypeClass: "absent" });
       assert.doesNotMatch(JSON.stringify(result.evidence), /CANARY|chrome:\/\//);
     }
+  });
+});
+
+test("only exact pinned browser UI URLs receive fixed names and every one remains rejected", async () => {
+  await withProfile(async (path, start) => {
+    const cases = [
+      ["chrome://tab-search.top-chrome/", "tab_search"],
+      ["chrome://omnibox-popup.top-chrome/", "omnibox_popup"],
+      ["chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html", "omnibox_popup_aim"],
+      ["chrome://tab-search.top-chrome/?SECRET_CANARY", "unrecognized"],
+      ["chrome://omnibox-popup.top-chrome/#SECRET_CANARY", "unrecognized"],
+      ["chrome://omnibox-popup.top-chrome.evil.invalid/", "unrecognized"],
+      ["chrome://PRIVATE_CANARY/", "unrecognized"],
+      ["https://SECRET_CANARY/", "unrecognized"],
+      [`chrome://SECRET_CANARY/${"x".repeat(4096)}`, "unrecognized"],
+    ];
+    for (const [url, name] of cases) {
+      const result = await observeBrowserIdentity(connection(path, { "Target.getTargets": { targetInfos: [{ type: "browser_ui", url }] } }), start);
+      assert.equal(result.evidence.status, "unavailable");
+      assert.deepEqual(result.evidence.initialTargets.reasons, ["target_type_unaccepted", "target_url_unaccepted"]);
+      assert.equal(result.evidence.initialTargets.targets[0].browserUiUrlClass, name);
+      assert.doesNotMatch(JSON.stringify(result.evidence), /CANARY|chrome:\/\/|https:\/\//);
+    }
+    const content = await observeBrowserIdentity(connection(path, { "Target.getTargets": {
+      targetInfos: [{ type: "page", url: "chrome://tab-search.top-chrome/" }],
+    } }), start);
+    assert.equal(content.evidence.status, "unavailable");
+    assert.equal(content.evidence.initialTargets.targets[0].browserUiUrlClass, undefined);
   });
 });
 
@@ -173,6 +202,10 @@ function harness(options = {}) {
         trace.push([ordinal, "close"]);
         options.onClose?.(ordinal, collectors[ordinal - 1]);
         if (options.closeFails === ordinal) throw new Error("SECRET_CANARY");
+        if (options.cleanupMissing === ordinal) return undefined;
+        return { profileCleanup: options.cleanupIncomplete === ordinal
+          ? { status: "incomplete", reason: "cleanup_deadline", complete: false, attempts: [{ ordinal: 1, remove: { status: "timed_out" } }] }
+          : { status: "confirmed_absent", complete: true, attempts: [] } };
       } };
       browsers.push(browser);
       if (options.launchFails === ordinal) throw new Error("SECRET_CANARY");
@@ -314,6 +347,24 @@ test("unconfirmed process/profile cleanup or missing final collector state fails
   }
 });
 
+test("missing or incomplete cleanup never relabels confirmed exit or qualifies from later profile absence", async () => {
+  for (const options of [{ cleanupIncomplete: 2 }, { cleanupMissing: 2 }]) {
+    const h = harness(options);
+    try {
+      const record = await runAll(h);
+      const session = record.sessions[1];
+      assert.equal(session.shutdown, "confirmed_process_exit");
+      assert.equal(session.profileRemoval, "confirmed_absent");
+      assert.equal(session.profileCleanup.complete, false);
+      assert.equal(session.complete, false); assert.equal(session.passed, false);
+      assert.equal(record.complete, false); assert.equal(record.passed, false);
+      assert.ok(session.faults.includes("profile_cleanup_incomplete"));
+      assert.ok(record.sessions.slice(2).every((item) => item.passed));
+      await assert.rejects(h.manager.closeAll(), /browser_session_cleanup_unconfirmed/);
+    } finally { h.cleanup(); }
+  }
+});
+
 test("aggregation keeps equal inner IDs in different browser sessions with every native directory and row", async () => {
   const h = harness({ onClose(ordinal, collector) {
     collector.data.actions.push({ id: "same-action", status: "download" });
@@ -356,7 +407,7 @@ function identityPreflightDependencies(nonblank, launchOptions = []) {
       profile = mkdtempSync(join(tmpdir(), "ticketstub-chrome-"));
       return { ...connection(profile, nonblank ? { "Target.getTargets": { targetInfos: [{ type: "page", url: "chrome://SECRET_CANARY" }] } } : {}),
         newPage() { throw new Error("preflight must not create an application page"); },
-        async close() { rmSync(profile, { recursive: true, force: true }); } };
+        async close() { return { profileCleanup: await cleanupDownloadProfile(profile) }; } };
     },
     makeReceipts() { return { async start() {}, snapshot: empty, stop() {} }; },
     async version() { return { status: "recorded", product: "SyntheticControl/1.0" }; },

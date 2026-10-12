@@ -15,6 +15,13 @@ const CLOCK_RESOLUTION_MS = 1000; // filesystem birth-time precision, not a brow
 const MAX_INITIAL_TARGETS = 32;
 const MAX_TARGET_URL_CHARS = 4096;
 const DOWNLOAD_LAUNCH_OPTIONS = Object.freeze({ downloadIsolation: true });
+// Exact constants at measured Chromium revision b510e9d7. Diagnostic classes
+// only: none of these URLs changes the strict startup target predicate below.
+const BROWSER_UI_URL_CLASSES = new Map([
+  ["chrome://tab-search.top-chrome/", "tab_search"],
+  ["chrome://omnibox-popup.top-chrome/", "omnibox_popup"],
+  ["chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html", "omnibox_popup_aim"],
+]);
 
 async function bounded(promise, ms) {
   let timer;
@@ -57,6 +64,8 @@ function initialTargetsEvidence(targets) {
         ["data:", "data"], ["blob:", "blob"]].find(([prefix]) => url.startsWith(prefix))?.[1] ?? "other";
     }
     return { typeClass: knownTypes.includes(type) ? type : "unrecognized", urlClass,
+      ...(type === "browser_ui" ? { browserUiUrlClass: typeof url === "string" && url.length <= MAX_TARGET_URL_CHARS
+        ? BROWSER_UI_URL_CLASSES.get(url) ?? "unrecognized" : "unrecognized" } : {}),
       subtypeClass: target?.subtype === undefined ? "absent" : target.subtype === "prerender" ? "prerender" : "unrecognized" };
   });
   return { status: reasons.size ? "rejected" : "accepted", reasons: [...reasons], observedCount: infos.length,
@@ -180,7 +189,12 @@ export class DownloadBrowserSessions {
     entry.closed = true;
     const { record } = entry;
     if (entry.browser) {
-      try { await entry.browser.close(); record.shutdown = "confirmed_process_exit"; }
+      try {
+        const closed = await entry.browser.close();
+        record.shutdown = "confirmed_process_exit";
+        record.profileCleanup = closed?.profileCleanup ?? { status: "unavailable", reason: "cleanup_receipt_missing", complete: false, attempts: [] };
+        if (record.profileCleanup.status !== "confirmed_absent" || record.profileCleanup.complete !== true) this.fault(sessionId, "profile_cleanup_incomplete");
+      }
       catch { record.shutdown = "unconfirmed_process_exit"; this.fault(sessionId, "browser_shutdown_failed"); }
     } else { record.shutdown = "missing_browser_handle"; this.fault(sessionId, "browser_shutdown_unavailable"); }
     try { record.profileRemoval = this.dependencies.removed(entry.profilePath); }
@@ -202,7 +216,7 @@ export class DownloadBrowserSessions {
 
   async closeAll() {
     for (const sessionId of this.entries.keys()) await this.close(sessionId);
-    if ([...this.entries.values()].some(({ record }) => record.shutdown !== "confirmed_process_exit" || record.profileRemoval !== "confirmed_absent" || !record.collectorStopped)) {
+    if ([...this.entries.values()].some(({ record }) => record.shutdown !== "confirmed_process_exit" || record.profileCleanup?.complete !== true || record.profileRemoval !== "confirmed_absent" || !record.collectorStopped)) {
       throw new Error("browser_session_cleanup_unconfirmed");
     }
   }
@@ -212,7 +226,7 @@ export class DownloadBrowserSessions {
       const entry = this.entries.get(sessionId);
       if (!entry) return { sessionId, setup: "not_attempted", passed: false, faults: ["browser_session_missing"] };
       const { record, snapshot } = entry;
-      const complete = record.shutdown === "confirmed_process_exit" && record.profileRemoval === "confirmed_absent"
+      const complete = record.shutdown === "confirmed_process_exit" && record.profileCleanup?.complete === true && record.profileRemoval === "confirmed_absent"
         && record.collectorStopped && !!snapshot;
       return { ...record, complete, passed: complete && record.setup === "ready" && !record.faults.length
         && !snapshot.violations.length && (record.mode === "baseline_shared" || record.identity?.status === "established"),
