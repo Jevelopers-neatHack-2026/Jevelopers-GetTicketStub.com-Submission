@@ -28,11 +28,7 @@ jobs:
         run: node scripts/check-analytics-journeys.mjs
       - name: Verify authentication and storage fixtures
         run: |
-<<<<<<< HEAD
-          for suite in foundation access approval order-auth degraded; do
-=======
-          for suite in foundation access approval degraded mail-off backup-drill; do
->>>>>>> origin/feat/gt-06b-approval
+          for suite in foundation access approval order-auth degraded mail-off backup-drill; do
             npm run verify:product -- --suite "$suite" --mode fixture --evidence-dir /tmp/ticketstub-product-evidence
           done
       - name: Verify production server on platform port
