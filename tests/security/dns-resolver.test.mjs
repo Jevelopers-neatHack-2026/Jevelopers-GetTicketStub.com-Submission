@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createSocket } from "node:dgram";
 import net from "node:net";
 import test from "node:test";
 import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { DnsWireResolver } from "../../src/security/internal/dns-wire.mjs";
 
 function encodeName(name) {
@@ -159,6 +162,12 @@ test("connected UDP resolver ignores a response from an unconfigured source port
 
 test("validates transaction IDs and questions again after UDP truncation fallback", async (t) => {
   const tcp = net.createServer((socket) => {
+    // Rejecting one malformed family aborts the sibling connection; its local
+    // fixture peer may observe that reset while its response is still pending.
+    socket.on("error", (error) => {
+      assert.equal(error.code, "ECONNRESET", "unexpected local TCP fixture error");
+      t.diagnostic("local TCP fixture observed the resolver's sibling cancellation reset");
+    });
     let buffer = Buffer.alloc(0);
     socket.on("data", (chunk) => {
       buffer = Buffer.concat([buffer, chunk]);
@@ -240,3 +249,35 @@ test("cancellation and expired deadlines are honored for literal IP results", as
   await assert.rejects(resolver.resolve("8.8.8.8", { signal: controller.signal }), { code: "CANCELED" });
   await assert.rejects(resolver.resolve("8.8.8.8", { deadline: performance.now() - 1 }), { code: "DEADLINE_EXCEEDED" });
 });
+
+const runChild = promisify(execFile);
+const connectFixture = fileURLToPath(new URL("./fixtures/dns-connect-lifecycle.mjs", import.meta.url));
+for (const [scenario, description] of [
+  ["control", "DNS connect lifecycle retains valid native loopback resolution"],
+  ["native-error-semantics", "native UDP connect errors arrive asynchronously without a connected send destination"],
+  ["connect-error", "DNS connect callback errors settle as DNS_FAILURE without sending"],
+  ["connect-error-fallback", "DNS connect callback errors allow recovery through the next configured resolver"],
+  ["late-cancel", "DNS connect callbacks delivered after cancellation cannot send"],
+  ["late-deadline", "DNS connect callbacks past the deadline cannot send before the overdue timer fires"],
+  ["closed-before-callback", "DNS native synchronous send errors settle without escaping the connect callback"],
+  ["tcp-control", "DNS connect lifecycle retains valid native TCP fallback responses"],
+  ["tcp-cancel", "DNS TCP connect events delivered after cancellation cannot write"],
+  ["tcp-deadline", "DNS TCP connect events past the deadline cannot write before the overdue timer fires"],
+  ["tcp-malformed-family", "a valid A answer cannot hide a malformed AAAA TCP fallback response"],
+  ["tcp-family-control", "a valid A answer and validated AAAA TCP NODATA remain a valid combined result"],
+]) {
+  test(description, async (t) => {
+    // Each fault control uses native numeric-loopback UDP/TCP in a separate process:
+    // baseline callback crashes and builtin decoration cannot escape into siblings.
+    const { stdout, stderr } = await runChild(process.execPath, [connectFixture, scenario], {
+      timeout: 8_000,
+      maxBuffer: 256 * 1024,
+    });
+    if (stderr) t.diagnostic(stderr.trim());
+    const result = JSON.parse(stdout.trim());
+    assert.equal(result.scenario, scenario);
+    assert.equal(result.mode, scenario.startsWith("tcp-") ? "synthetic_local_native_dns_tcp" : "synthetic_local_native_udp");
+    assert.equal(result.phase, "complete");
+    assert.equal(result.processExit, 0);
+  });
+}
