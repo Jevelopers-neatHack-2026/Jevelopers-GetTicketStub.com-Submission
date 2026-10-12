@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { dispatchVerification } from "../../scripts/verify/dispatcher.js";
 import { independentTestEnvironment } from "../../src/internal/independent-tests.js";
+import { diagnosticSchema } from "../../src/internal/independent-diagnostics.js";
 import { fixture } from "../fixtures/durability/fixture.js";
 
 const expected = {
@@ -35,8 +36,8 @@ for (const suite of [
 	"restart-recovery",
 	"metering-traces",
 ] as const) {
-	test(`runs private checks but preserves the missing external gate for ${suite}`, {
-		timeout: 20000,
+	test(`runs complete checks with the registered local scope for ${suite}`, {
+		timeout: 360000,
 	}, async () => {
 		using f = fixture();
 		const exit = await dispatchVerification({
@@ -44,7 +45,7 @@ for (const suite of [
 			mode: "offline",
 			evidenceDir: f.root,
 		});
-		assert.equal(exit, 1);
+		assert.equal(exit, suite === "artifact-storage" ? 0 : 1);
 		const receipt: unknown = JSON.parse(
 			await readFile(join(f.root, `${suite}.json`), "utf8"),
 		);
@@ -54,9 +55,36 @@ for (const suite of [
 		assert.ok(
 			typeof receipt === "object" && receipt !== null && "status" in receipt,
 		);
-		assert.equal(receipt.status, "failed");
-		assert.ok("externalState" in receipt);
-		assert.equal(receipt.externalState, "external-blocked");
+		if (suite === "artifact-storage") {
+			assert.equal(receipt.status, "passed");
+			assert.ok("result" in receipt);
+			const result = z
+				.object({
+					mode: z.literal("local-storage-adapter-conformance"),
+					accepted: z.literal(false),
+					live_integration: z.literal(false),
+					handoff_eligibility: z.literal("unproven"),
+					externalState: z.literal("external-blocked"),
+					checks: z.object({
+						durability: z.object({
+							tests: z.literal(80),
+							passed: z.literal(80),
+						}),
+						canonical: z.object({
+							tests: z.literal(74),
+							passed: z.literal(74),
+						}),
+					}),
+				})
+				.parse(receipt.result);
+			assert.equal(result.accepted, false);
+			assert.ok(!JSON.stringify(receipt).includes(f.root));
+			assert.ok(!JSON.stringify(receipt).includes(process.cwd()));
+		} else {
+			assert.equal(receipt.status, "failed");
+			assert.ok("externalState" in receipt);
+			assert.equal(receipt.externalState, "external-blocked");
+		}
 		assert.equal(local.exitCode, 0);
 		assert.equal(local.tests, expected[suite]);
 		assert.equal(local.passed, expected[suite]);
@@ -92,20 +120,28 @@ for (const suite of [
 		assert.equal(canary.executed, true);
 	});
 
-	test(`normal CLI executes expected private tests and preserves external blocking for ${suite}`, {
-		timeout: 20000,
+	test(`normal CLI executes expected tests with the registered local scope for ${suite}`, {
+		timeout: 360000,
 	}, async () => {
 		using f = fixture();
 		const result = spawnSync(
 			process.execPath,
 			[cli, "--suite", suite, "--mode", "offline", "--evidence-dir", f.root],
-			{ env: independentTestEnvironment(), timeout: 15000, encoding: "utf8" },
+			{ env: independentTestEnvironment(), timeout: 350000, encoding: "utf8" },
 		);
 		assert.ifError(result.error);
-		assert.equal(result.status, 1);
-		const local = localSchema.parse(
-			JSON.parse(await readFile(join(f.root, `${suite}-local.json`), "utf8")),
+		const decoded: unknown = JSON.parse(
+			await readFile(join(f.root, `${suite}-local.json`), "utf8"),
 		);
+		const { diagnostic } = z
+			.object({ diagnostic: diagnosticSchema.optional() })
+			.parse(decoded);
+		assert.equal(
+			result.status,
+			suite === "artifact-storage" ? 0 : 1,
+			JSON.stringify(diagnostic),
+		);
+		const local = localSchema.parse(decoded);
 		assert.equal(local.tests, expected[suite]);
 		assert.equal(local.passed, expected[suite]);
 		assert.ok((await readdir(local.evidenceDir)).includes("job-gc-stage.json"));

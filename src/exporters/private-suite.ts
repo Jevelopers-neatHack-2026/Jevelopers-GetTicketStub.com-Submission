@@ -10,6 +10,7 @@ import {
 } from "../internal/independent-tests.js";
 import { IndependentTestFailure } from "../internal/independent-diagnostics.js";
 import { VerificationFailure } from "../runtime/errors.js";
+import { verifyStorageConformance } from "./storage-suite.js";
 export { suiteNames, suiteRegistry } from "./private-suite-registry.js";
 import type { SuiteName } from "./private-suite-registry.js";
 export type { SuiteName } from "./private-suite-registry.js";
@@ -185,6 +186,10 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 			evidenceEnvironment: { directoryVariable },
 			expectedTests,
 		});
+		const conformance =
+			suite === "artifact-storage"
+				? await verifyStorageConformance(result, root)
+				: undefined;
 		await writeFile(
 			receipt,
 			JSON.stringify(
@@ -192,11 +197,13 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 					state: "passed-private-mechanisms",
 					...result,
 					externalState: "external-blocked",
+					...(conformance ? { conformance } : {}),
 				},
 				null,
 				2,
 			),
 		);
+		return conformance;
 	} catch (error) {
 		if (error instanceof Error) {
 			await writeFile(

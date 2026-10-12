@@ -46,9 +46,9 @@ export const suiteRegistry = {
 			"PP-05 private asset checks tested; canonical authoritative permission lookup and real approved asset fixtures absent",
 	},
 	"artifact-storage": {
-		state: "external-blocked",
+		state: "local-conformance",
 		dependency:
-			"PP-10A private adapter tested; accepted canonical request/hash/scope adapter and app access fixtures absent",
+			"PP-10A local SQLite and canonical request/hash/scope conformance; injected test authority only, live app/supplier/Finance acceptance and handoff eligibility unproven",
 	},
 	preflight: {
 		state: "external-blocked",
@@ -104,6 +104,7 @@ export const suiteRegistry = {
 	{
 		readonly state:
 			| "implemented"
+			| "local-conformance"
 			| "unimplemented"
 			| "aggregate"
 			| "external-blocked";

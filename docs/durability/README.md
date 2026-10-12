@@ -1,9 +1,11 @@
 # Private local durability
 
 These modules implement local storage, batch recovery and staged observations.
-They are absent from the root package exports. They are not canonical API,
-JobStatus, ProductionBundle, UsageEvent, EvaluationEvidence, authentication or
-finance implementations. Issues #10, #17 and #18 remain open dependency gates.
+They are absent from the root package exports. The candidate API connects these
+primitives to canonical requests through injected host ports. Local storage
+conformance does not establish live authentication, supplier, app or Finance
+acceptance, or make a completed draft eligible for handoff. Reviewers retain
+issue closure authority; recovery and observation leaf gates remain blocked.
 
 ## Running and observing
 
@@ -20,14 +22,33 @@ npm run verify -- --suite restart-recovery --mode offline --evidence-dir out/evi
 npm run verify -- --suite metering-traces --mode offline --evidence-dir out/evidence
 ```
 
-Each named verification suite run from a normal CLI saves private receipts
-and crash/process artifacts, then exits **1** with status=failed and an explicit
-externalState=external-blocked field, preserving the runtime receipt contract.
-Release also exits 1. Passing local mechanisms cannot satisfy unavailable
-canonical, supplier, app or finance semantics. CSV remains unsupported.
+`artifact-storage` exits **0** only after the original exact 80-test independent
+durability run (including its canary and 24 fresh nonce-bound process artifacts)
+and 74 additional existing canonical/denial tests (including another canary)
+pass. Both children must exit zero with no skipped, cancelled or todo tests.
+Missing tests, incomplete counts, absent/stale evidence and nonzero child exits
+fail and replace any earlier passing receipt. No stored passing receipt is
+adopted as evidence for a new run.
+
+The dispatcher receipt has status=passed with
+result.mode=local-storage-adapter-conformance, accepted=false,
+live_integration=false, handoff_eligibility=unproven and
+externalState=external-blocked. `local-conformance` is a registry marker for
+this PP-10A local adapter leaf only, not a new canonical wire protocol or
+accepted integration state. Its provenance includes measured environment and
+package-lock identity, compiled test digests, child counts/nonces, output
+digests and artifact digests; absolute test/evidence paths stay in the private
+local receipt. Canonical tests use actual rendering and the measured runtime.
+The matching macOS profile is supplemental; pinned Linux CI is authoritative
+for renderer-dependent cases. A fresh Linux run is required for a changed head.
+
+`restart-recovery` and `metering-traces` retain exit **1**, status=failed and
+externalState=external-blocked after their private checks. Release retains
+RELEASE_INCOMPLETE and missing external pins even when storage passes locally.
+All other leaf gates and missing/unknown argument refusal are unchanged.
 The independently reproduced DUR-R4 nested-dispatch defect is fixed in this
 private candidate after explicit dispatcher ownership handoff; see
-[the dispatcher handoff](dispatcher-handoff.md). Private success requires exact
+[the dispatcher handoff](dispatcher-handoff.md). Local success requires exact
 test counts, an executed canary and fresh process artifacts. Fresh independent
 candidate review remains required.
 
@@ -45,7 +66,7 @@ in transactional BLOBs, avoiding a filesystem/metadata dual-write window.
 Process death rolls back unfinished transactions; committed bytes, output sets,
 row state and observations survive together. This relies on local filesystem
 SQLite locking/fsync guarantees. Network filesystems, power-loss on defective
-storage, Linux CI and Windows behavior have not been independently established.
+storage and Windows behavior have not been independently established.
 No claim of exactly-once execution is made.
 
 `LocalArtifactStore.bind` consumes already validated/authenticated tenant and
@@ -53,8 +74,10 @@ project context, opaque canonical-request bytes and their supplied SHA-256.
 It verifies the digest but does not normalize public requests. Its private key
 framing hashes tenant/project and operation/key independently; these are local
 index identities, not canonical source/composition/manifest/bundle fingerprints.
-The future adapter must include accepted canonical refs, revisions, options and
-trusted scope in the supplied request fingerprint and verify app authority.
+The candidate adapter binds normalized canonical refs, revisions, options,
+policies, runtime commitments and injected trusted scope to that fingerprint.
+Real host adoption must supply authenticated authority; the local fixtures
+cannot establish customer authority or live app acceptance.
 
 Binding is transactional. Equal scoped key/digest returns the stable operation;
 a changed digest conflicts. Logical operations remain separate even when their
@@ -75,7 +98,36 @@ cleanup. Repeated cleanup also collects legacy abandoned orphan bytes.
 
 Completion grants no approval. Retrieval always reports handoffEligible=false.
 `deny` provides irreversible local access denial without modifying output bytes;
-canonical approval/revocation and handoff eligibility adapters remain upstream.
+the candidate refreshes injected canonical/private permissions on observation
+and replay. Actual upstream approval authority and handoff eligibility remain
+external acceptance obligations.
+
+## PP-10A criterion coverage
+
+The canonical selection is defined in `src/exporters/storage-suite.ts` and reuses
+the current tests identified by the independent storage audit:
+
+| Criterion | Existing canonical/denial checks added to the 80 durability checks |
+| --- | --- |
+| PP-10A.1 identities and scoped hashes | canonical-production-runtime-record (8), idempotency (2), export-redelivery (4), provenance (1) |
+| PP-10A.2 scoped key binding and concurrency | canonical-production-idempotency (2), export-redelivery (4) |
+| PP-10A.3 distinct histories and side-effect-free replay | canonical-production-review-regressions (18), export-redelivery (4), permission-replay (5) |
+| PP-10A.4 immutable publication and crash reconciliation | canonical-production-completion (11), original durability process/cleanup checks |
+| PP-10A.5 scope, integrity and current permissions | canonical-production-boundary (16), permission-replay (5), durability-denial (8) |
+
+Files are under `tests/integration/` except boundary and denial under
+`tests/unit/`; all names have `.test.ts`. The table overlaps by criterion;
+the additional run executes 73 unique tests plus its canary, not the sum of
+table rows. It does not include the parallel #17 retry regression or certify
+canonical per-row draft visibility, recovery completion or Finance intake.
+
+The independently audited base `300f997c87e36077a93dd1c4951420878a5c847c`
+has [Linux run 38205370188, attempt 1](https://github.com/Jevelopers-neatHack-2026/print-production/actions/runs/38205370188):
+729/729 union tests, zero failed/cancelled/skipped/todo. Its union digest is
+`dd65fef9dc36ace7cea526c7ab17633400b4f56a8c0166ef11988ce7ea3d5ddf`.
+That immutable evidence supports the base implementation and is not substituted
+for execution of the named command on a new head. Hosting-provider selection
+is outside this leaf; deployed adapters must meet these consistency guarantees.
 
 ## Batch state and recovery
 
