@@ -514,7 +514,9 @@ function limitationFor(code) {
   if (code === 'RESOURCE_LIMIT') return 'resource_limit';
   if (code === 'MALFORMED_ENCODING' || code === 'UNSUPPORTED_ENCODING') return 'malformed_or_unsupported_encoding';
   if (code === 'NO_IDENTITY_CANDIDATES') return 'no_supported_identity_or_link_candidates';
-  if (code === 'EXTRACTION_UNUSABLE' || code === 'ACCESS_RESTRICTED') return 'source_incomplete_or_access_restricted';
+  if (code === 'JS_REQUIRED') return 'dynamic_rendering_required';
+  if (code === 'ACCESS_RESTRICTED') return 'source_access_restricted';
+  if (code === 'EXTRACTION_UNUSABLE') return 'source_incomplete_or_access_restricted';
   if (code === 'EVIDENCE_EXPIRED') return 'selected_evidence_expired_or_revoked';
   if (code === 'EVIDENCE_KEY_UNAVAILABLE') return 'selected_evidence_key_unavailable';
   if (code === 'DEADLINE_EXCEEDED') return 'deadline_exceeded';

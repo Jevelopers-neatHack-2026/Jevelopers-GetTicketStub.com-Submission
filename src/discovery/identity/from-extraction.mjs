@@ -78,6 +78,11 @@ const ERROR_MESSAGES = Object.freeze({
   CANCELED: "Source identity composition was canceled",
   DEADLINE_EXCEEDED: "Source identity composition exceeded its deadline",
   RESOURCE_LIMIT: "Source identity composition exceeded a configured bound",
+  JS_REQUIRED: "The source requires JavaScript rendering, which is not supported",
+  ACCESS_RESTRICTED: "The source reports an access restriction",
+  UNSUPPORTED_MEDIA: "The source media type is not supported for deterministic extraction",
+  UNSUPPORTED_ENCODING: "The source character encoding is not supported",
+  MALFORMED_ENCODING: "The source character encoding is malformed",
   EXTRACTION_UNUSABLE: "Deterministic extraction did not produce a usable source result",
   SOURCE_BINDING_FAILED: "A source candidate could not be bound to its exact bytes",
   NO_IDENTITY_CANDIDATES: "No eligible source-backed identity candidates were found",
@@ -942,6 +947,8 @@ function projectStoredSource(source) {
 function validateExtractorResult(extraction) {
   if (extraction.status === "CANCELED" || extraction.termination === "CANCELED") fail("CANCELED");
   if (extraction.termination !== null || extraction.status === "RESOURCE_LIMIT") fail("RESOURCE_LIMIT");
+  if (["JS_REQUIRED", "ACCESS_RESTRICTED", "UNSUPPORTED_MEDIA", "UNSUPPORTED_ENCODING", "MALFORMED_ENCODING"]
+    .includes(extraction.status)) fail(extraction.status);
   if (!['PARTIAL', 'NO_ANSWER'].includes(extraction.status) || !extraction.source || !extraction.sourceHash) {
     fail("EXTRACTION_UNUSABLE");
   }
