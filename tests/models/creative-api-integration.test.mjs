@@ -21,6 +21,94 @@ import { createVersion } from "../versions/helpers.mjs";
 const NOW = Date.parse("2026-10-10T18:00:00.000Z");
 const MODEL = "gpt-image-2.5-sunburst-2026-09-08";
 const SCOPE = Object.freeze({ tenant_id: "tenant-api-1", project_id: "project-api-1", brief_id: "brief-api-1" });
+
+for (const operation of ["generate", "edit"]) test(`actual API and C03 admit the prepared native ${operation} target and exact transport identity`, async (t) => {
+  const context = await setup(t);
+  let plan = await jsonFixture("generate-plan");
+  plan.base.brief_hash = canonicalHash(context.brief);
+  plan.source_refs = ["page-1"]; plan.steps[0].source_refs = ["page-1"];
+  if (operation === "edit") {
+    const seed = await context.api.invoke(authorizedActor(), apiRequest("prepared-edit-seed", "generate", plan, "page-1"));
+    assert.equal(seed.ok, true, JSON.stringify(seed));
+    plan = await jsonFixture("edit-plan");
+    plan.base.brief_hash = canonicalHash(context.brief);
+    plan.base.design_hash = seed.result.design_version.design_hash;
+    plan.base.design_version_id = seed.result.design_version.design_version_id;
+    plan.source_refs = ["page-2"]; plan.steps[0].source_refs = ["page-2"];
+    plan.steps[0].parameters.design_version_id = seed.result.design_version.design_version_id;
+    plan.steps[0].parameters.artifact_id = seed.result.design_version.artifact.artifact_id;
+    plan.expected_result.parent_version_id = seed.result.design_version.design_version_id;
+  }
+  let admitted;
+  let dispatched;
+  let renders = 0;
+  const originalReserve = context.ports.metering.reserveAttempt;
+  context.ports.metering.reserveAttempt = async (attempt, target) => {
+    assert.equal(renders, 1, "real prompt preparation precedes admission");
+    assert.equal(target.target_binding.billable_attempt_id, attempt.billable_attempt_id);
+    assert.equal(target.target_binding.deadline_at, target.deadline_at);
+    assert.match(target.target_binding_sha256, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(Object.isFrozen(target.target_binding), true);
+    admitted = target;
+    return originalReserve(attempt);
+  };
+  const native = createNativeProvider({ store: context.store, referenceAssetBytes: context.referenceAssetBytes,
+    promptPort: { render() { renders++; return "Prepared actual API fixture prompt"; } },
+    fetchImpl: async (_url, init) => {
+      context.counters.provider_posts++;
+      const prompt = operation === "generate" ? JSON.parse(init.body).prompt : init.body.get("prompt");
+      assert.equal(hash(Buffer.from(prompt)), admitted.target_binding.prompt_sha256);
+      return Response.json({ data: [{ b64_json: makePng().toString("base64") }], usage: {
+        input_tokens: 20, output_tokens: 10, total_tokens: 30,
+        input_tokens_details: { image_tokens: 18, text_tokens: 2 }, output_tokens_details: { image_tokens: 9, text_tokens: 1 },
+      } });
+    } });
+  context.ports.provider = { ...native, async [operation](input) {
+    dispatched = input;
+    assert.equal(input.transport_attempt_id, admitted.transport_attempt_id);
+    assert.equal(input.prepared_attempt.target_binding_sha256, admitted.target_binding_sha256);
+    assert.equal(input.reservation_ref, `reservation:${input.attempt.billable_attempt_id}`);
+    return native[operation](input);
+  } };
+  context.ports.telemetry.usage_profile_authority = mockOwnerUsageProfileAuthority();
+  const body = apiRequest(`prepared-native-${operation}`, operation, plan, operation === "generate" ? "page-1" : "page-2",
+    operation === "edit" ? { design_version_id: plan.base.design_version_id } : {});
+  const result = await context.api.invoke(authorizedActor(), body);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(context.counters.provider_posts, 1);
+  assert.equal(renders, 1, "dispatch consumes prepared prompt without rendering again");
+  assert.equal(context.counters.usage_observations.at(-1).transport_attempt_id, dispatched.transport_attempt_id);
+  const replay = await context.api.invoke(authorizedActor(), body);
+  assert.equal(replay.ok, true, JSON.stringify(replay));
+  assert.equal(context.counters.provider_posts, 1);
+  assert.equal(renders, 1);
+});
+
+test("actual API cancellation while native preparation awaits cannot reserve or dispatch", async (t) => {
+  const context = await setup(t);
+  const plan = await jsonFixture("generate-plan");
+  plan.base.brief_hash = canonicalHash(context.brief); plan.source_refs = ["page-1"]; plan.steps[0].source_refs = ["page-1"];
+  const entered = deferred(); const release = deferred();
+  let preparingJobId;
+  const native = createNativeProvider({ store: context.store, referenceAssetBytes: context.referenceAssetBytes,
+    promptPort: { async render() { entered.resolve(); await release.promise; return "Cancelled preparation prompt"; } },
+    fetchImpl: () => { assert.fail("cancelled preparation reached transport"); } });
+  context.ports.provider = { ...native, prepareAttempt(input) {
+    preparingJobId = input.job_id;
+    return native.prepareAttempt(input);
+  } };
+  const body = apiRequest("cancel-preparation-action", "generate", plan, "page-1");
+  const flight = context.api.invoke(authorizedActor(), body);
+  await entered.promise;
+  const cancelled = await context.ports.jobs.cancel({ scope: SCOPE, actor_id: authorizedActor().actor_id, job_id: preparingJobId,
+    target_action_id: body.action_id, action_id: "cancel-preparation-command", request_hash: canonicalHash({ cancel: true }) });
+  release.resolve();
+  const result = await flight;
+  assert.equal(cancelled.kind, "cancelled");
+  assert.equal(result.ok, false);
+  assert.equal(context.counters.reserves, 0);
+  assert.equal(context.counters.provider_posts, 0);
+});
 const hash = (value) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 
 async function jsonFixture(path) {

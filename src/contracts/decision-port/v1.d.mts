@@ -206,6 +206,21 @@ export declare function validateDecisionRequest(
   value: DecisionPortRequest | Record<string, unknown>,
   options: { trustedScope: TrustedScope },
 ): DecisionPortRequest;
+export type UnreservedDecisionPortRequest = Omit<DecisionPortRequest, "budget_ref"> & {
+  budget_ref: Omit<DecisionPortRequest["budget_ref"], "reservation_ref">;
+};
+export interface DecisionExecutionTarget {
+  readonly [field: string]: unknown;
+  readonly contract: "DecisionExecutionTarget";
+  readonly schema_version: "1.0";
+  readonly request: Readonly<UnreservedDecisionPortRequest>;
+}
+export declare function decisionExecutionTarget(value: DecisionPortRequest | UnreservedDecisionPortRequest | Record<string, unknown>,
+  options?: { trustedScope: TrustedScope }): DecisionExecutionTarget;
+export declare function decisionExecutionTargetHash(value: DecisionPortRequest | UnreservedDecisionPortRequest | Record<string, unknown>,
+  options?: { trustedScope: TrustedScope }): `sha256:${string}`;
+export declare function planDecisionExecutionQuestionBatches(value: UnreservedDecisionPortRequest,
+  options: { trustedScope: TrustedScope }): string[][];
 export declare function validateDecisionResult(
   request: DecisionPortRequest,
   result: DecisionPortResult | Record<string, unknown>,

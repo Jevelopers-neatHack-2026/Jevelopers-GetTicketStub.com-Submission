@@ -29,6 +29,7 @@ const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, value) => {
 const PRIVATE_PROVIDER_REQUEST_IDS = new WeakMap();
 const PRIVATE_TARGET_BINDING_SHA256 = new WeakMap();
 const PRIVATE_RETRY_DISPOSITIONS = new WeakMap();
+const PREPARED_IMAGE_ATTEMPTS = new WeakMap();
 
 
 export class OpenAIImagesProviderError extends Error {
@@ -1080,7 +1081,7 @@ function targetBinding({ driver, attempt, operation, config, endpoint, nodeVersi
   });
 }
 
-function validateAttempt(input, operation, driver) {
+function validateAttempt(input, operation, driver, { preparation = false } = {}) {
   if (!isRecord(input) || !isRecord(input.scope) || !isRecord(input.attempt) || !isRecord(input.brief) || !isRecord(input.plan)) {
     fail("invalid_provider_input", "Trusted runtime provider input is incomplete.", { outcome: "failed" });
   }
@@ -1091,17 +1092,17 @@ function validateAttempt(input, operation, driver) {
       input.attempt.tenant_id !== input.scope.tenant_id || input.attempt.project_id !== input.scope.project_id ||
       typeof input.attempt.budget_scope_id !== "string" || !input.attempt.billable_attempt_id ||
       !isDate(input.deadline_at) || !input.signal || typeof input.signal.aborted !== "boolean" ||
-      typeof input.recordTransportAttempt !== "function" || typeof input.revalidateDispatch !== "function" ||
+      !preparation && (typeof input.recordTransportAttempt !== "function" || typeof input.revalidateDispatch !== "function" ||
       typeof input.dispatch_intent_ref !== "string" ||
       typeof input.reservation_ref !== "string" || !OPAQUE_REF.test(input.reservation_ref) ||
-      typeof input.transport_attempt_id !== "string" || !OPAQUE_REF.test(input.transport_attempt_id)) {
+      typeof input.transport_attempt_id !== "string" || !OPAQUE_REF.test(input.transport_attempt_id))) {
     fail("provider_attempt_mismatch", "Metered attempt does not match the pinned image operation.", { outcome: "failed" });
   }
   const conceptMode = operation === "edit" && input.concept_reference_manifest !== undefined;
   if (conceptMode && (input.base_design !== null || input.image_reference_manifest !== undefined ||
       typeof input.concept_batch_id !== "string" || typeof input.concept_id !== "string" ||
-      typeof input.stageConceptResponse !== "function" || typeof input.recordConceptDispatchBinding !== "function" ||
-      typeof input.assertDispatchCurrent !== "function")) {
+      !preparation && (typeof input.stageConceptResponse !== "function" || typeof input.recordConceptDispatchBinding !== "function" ||
+      typeof input.assertDispatchCurrent !== "function"))) {
     fail("invalid_reference_manifest", "Parentless concept edits require only the versioned concept reference manifest.", {
       outcome: "failed", field: "concept_reference_manifest",
     });
@@ -1204,7 +1205,7 @@ function validateAttempt(input, operation, driver) {
   }
   if (input.signal.aborted) fail("cancelled_before_dispatch", "Image request was cancelled before provider dispatch.", { outcome: "failed" });
   const identities = [input.attempt.logical_operation_id, input.attempt.billable_attempt_id,
-    input.transport_attempt_id, input.dispatch_intent_ref, input.reservation_ref];
+    ...(preparation ? [] : [input.transport_attempt_id, input.dispatch_intent_ref, input.reservation_ref])];
   if (identities.some((id) => typeof id !== "string" || !OPAQUE_REF.test(id) || SENSITIVE_ID_VALUE.test(id)) ||
       new Set(identities).size !== identities.length) {
     fail("provider_attempt_mismatch", "Operation, billing, transport, reservation, and dispatch identities must be distinct.", { outcome: "failed" });
@@ -1253,29 +1254,85 @@ function retryAdvisory(response, retryContext, now) {
  * endpoints, request body, error and usage mapping, output validation) comes from
  * the driver; every authority, identity, fence and publication check is shared.
  */
-async function runImageDispatch(driver, operation, rawInput) {
-  const { capabilityPort, authorizationPort, credentialPort, promptPort, assetPort, fetchImpl, now, idFactory,
-    retryPolicy, nodeVersion, service } = driver;
-  // Capture caller-owned JSON before the first awaited port call. Later
-  // mutations cannot change the prompt, provider body, or authorization hash.
-  const input = validateAttempt(snapshotProviderInput(rawInput), operation, driver);
+// Only immutable JSON execution input is admitted to preparation. Accessors,
+// proxies, cycles, oversized trees and caller-owned image buffers are rejected.
+function preparationContext(raw) {
+  if (!isRecord(raw) || utilTypes.isProxy(raw)) fail("invalid_provider_input", "Image preparation requires plain execution data.", { outcome: "failed" });
+  const fields = ["scope", "actor_id", "job_id", "attempt", "brief", "base_design", "plan",
+    "image_reference_manifest", "concept_reference_manifest", "concept_batch_id", "concept_id", "decision_result"];
+  let nodes = 0;
+  let bytes = 0;
+  const seen = new Set();
+  const copy = (value, depth) => {
+    if (++nodes > 20_000 || depth > 64) throw new Error();
+    if (typeof value === "string") {
+      bytes += Buffer.byteLength(value, "utf8");
+      if (value.length > 128_000 || bytes > MAX_PROVIDER_CONTEXT_BYTES) throw new Error();
+      return value;
+    }
+    if (value === null || typeof value === "boolean") return value;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value !== "object" || utilTypes.isProxy(value) || seen.has(value) ||
+        !Array.isArray(value) && !isRecord(value)) throw new Error();
+    seen.add(value);
+    if (Array.isArray(value) && value.length > 20_000) throw new Error();
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const keys = Reflect.ownKeys(descriptors);
+    if (keys.length > 20_000 || keys.some((key) => typeof key !== "string")) throw new Error();
+    const result = Array.isArray(value) ? [] : Object.create(null);
+    for (const key of keys) {
+      bytes += Buffer.byteLength(key, "utf8");
+      if (key.length > 256 || bytes > MAX_PROVIDER_CONTEXT_BYTES) throw new Error();
+      const descriptor = descriptors[key];
+      if (!Object.hasOwn(descriptor, "value")) throw new Error();
+      if (Array.isArray(value) && key === "length") continue;
+      if (Array.isArray(value) && !/^(?:0|[1-9]\d*)$/.test(key)) throw new Error();
+      if (descriptor.value === undefined && !Array.isArray(value)) continue;
+      Object.defineProperty(result, key, { value: copy(descriptor.value, depth + 1), enumerable: true });
+    }
+    if (Array.isArray(value) && Object.keys(result).length !== value.length) throw new Error();
+    seen.delete(value);
+    return Object.freeze(result);
+  };
+  try {
+    const context = {};
+    for (const field of fields) {
+      const descriptor = Object.getOwnPropertyDescriptor(raw, field);
+      if (!descriptor) continue;
+      if (!Object.hasOwn(descriptor, "value")) throw new Error();
+      if (descriptor.value !== undefined) context[field] = copy(descriptor.value, 0);
+    }
+    const text = JSON.stringify(context);
+    if (Buffer.byteLength(text, "utf8") > MAX_PROVIDER_CONTEXT_BYTES) throw new Error();
+    return Object.freeze(context);
+  } catch {
+    fail("invalid_provider_input", "Image preparation requires bounded JSON data without accessors.", { outcome: "failed" });
+  }
+}
+
+async function prepareImageAttempt(driver, operation, rawInput) {
+  const context = preparationContext(rawInput);
+  const field = (name) => {
+    const descriptor = Object.getOwnPropertyDescriptor(rawInput, name);
+    if (descriptor && !Object.hasOwn(descriptor, "value")) {
+      fail("invalid_provider_input", "Preparation fields cannot be accessors.", { outcome: "failed" });
+    }
+    return descriptor?.value;
+  };
+  operation ??= field("operation");
+  if (!["generate", "edit"].includes(operation)) fail("unsupported_operation", "Image preparation requires an explicit supported operation.", { outcome: "failed" });
+  const input = validateAttempt(Object.freeze({ ...context, signal: field("signal"),
+    deadline_at: field("deadline_at") }), operation, driver, { preparation: true });
   const conceptMode = operation === "edit" && input.concept_reference_manifest !== undefined;
-  // Capability and input-shape denial happens before any port, credential, or transport work.
   driver.preflight(input, operation, conceptMode);
   const config = driver.validateConfiguration(operation);
   const endpoint = driver.endpointFor(operation);
-  if (input.attempt.provider.endpoint !== endpoint) fail("provider_attempt_mismatch", "Metered endpoint does not match the requested operation.", { outcome: "failed" });
-
-  const reservationRef = input.reservation_ref;
-  if (typeof reservationRef !== "string" || !OPAQUE_REF.test(reservationRef)) {
-    fail("reservation_reference_missing", "C03 reservation reference is not wired into this provider call.", { outcome: "failed", field: "reservation_ref" });
-  }
+  const { promptPort, assetPort, now, nodeVersion } = driver;
   const deadlineMs = Date.parse(input.deadline_at);
   const initialNow = now();
   if (!Number.isFinite(initialNow) || initialNow >= deadlineMs || input.signal.aborted) {
-    fail("deadline_or_cancelled", "The authorized image operation is no longer current.", { outcome: "failed" });
+    fail("deadline_or_cancelled", "The image operation is no longer current for preparation.", { outcome: "failed" });
   }
-
   let prompt;
   let editAssets;
   if (operation === "generate") prompt = await makePrompt(input, promptPort, operation);
@@ -1309,6 +1366,38 @@ async function runImageDispatch(driver, operation, rawInput) {
     deadlineAt: input.deadline_at, inputSha256, promptSha256, planSha256, parentArtifactSha256,
     maskContentSha256, imageReferenceManifestSha256 });
   const targetSha = hashJson(binding);
+  const token = Object.freeze(Object.create(null));
+  const prepared = Object.freeze({ token, target_binding: binding, target_binding_sha256: targetSha,
+    deadline_at: input.deadline_at });
+  PREPARED_IMAGE_ATTEMPTS.set(token, { driver, operation, prepared, context, signal: input.signal,
+    config, endpoint, conceptMode, prompt, editAssets, promptSha256, binding, targetSha });
+  return prepared;
+}
+
+async function runImageDispatch(driver, operation, rawInput) {
+  const { capabilityPort, authorizationPort, credentialPort, fetchImpl, now, idFactory,
+    retryPolicy, service } = driver;
+  const input = validateAttempt(snapshotProviderInput(rawInput), operation, driver);
+  const prepared = rawInput.prepared_attempt === undefined
+    ? await prepareImageAttempt(driver, operation, input) : rawInput.prepared_attempt;
+  const state = prepared && typeof prepared === "object" ? PREPARED_IMAGE_ATTEMPTS.get(prepared.token) : undefined;
+  if (!state || state.prepared !== prepared || state.driver !== driver || state.operation !== operation) {
+    fail("prepared_attempt_mismatch", "The provider did not mint this exact prepared attempt.", { outcome: "failed" });
+  }
+  // Consume before any authority callback: replay, parallel dispatch and a failed
+  // attempt cannot use this reservation-free preparation for another transport.
+  PREPARED_IMAGE_ATTEMPTS.delete(prepared.token);
+  if (state.signal !== input.signal || prepared.deadline_at !== input.deadline_at ||
+      hashJson(state.context) !== hashJson(preparationContext(input))) {
+    fail("prepared_attempt_mismatch", "The immutable prepared image input changed before dispatch.", { outcome: "failed" });
+  }
+  const { config, endpoint, conceptMode, prompt, editAssets, promptSha256, binding, targetSha } = state;
+  const reservationRef = input.reservation_ref;
+  const deadlineMs = Date.parse(input.deadline_at);
+  const initialNow = now();
+  if (!Number.isFinite(initialNow) || initialNow >= deadlineMs || input.signal.aborted) {
+    fail("deadline_or_cancelled", "The prepared image operation is no longer current.", { outcome: "failed" });
+  }
   const capabilityExpected = {
     scope: input.scope,
     budget_scope_id: input.attempt.budget_scope_id,
@@ -1435,7 +1524,7 @@ async function runImageDispatch(driver, operation, rawInput) {
   const postAck = Object.freeze({ ...postAckAuthority, capability: postAckCapability });
   const fenceNow = now();
   assertLiveFence(input, postAck, credential, fenceNow, deadlineMs, expected, transportAckState);
-  if (conceptMode) {
+  if (conceptMode || typeof input.assertDispatchCurrent === "function") {
     let dispatchCurrent;
     try { dispatchCurrent = input.assertDispatchCurrent(); }
     catch { fail("dispatch_fence_closed", "The same-connection job and lease owner fence closed before the native edit request.", { outcome: "unknown" }); }
@@ -1696,6 +1785,6 @@ export {
   HASH, OPAQUE_REF, MAX_IMAGE_BYTES, MAX_PIXELS, MAX_PROMPT_CODE_POINTS, PRIVATE_PROVIDER_REQUEST_IDS,
   PRIVATE_RETRY_DISPOSITIONS, PRIVATE_TARGET_BINDING_SHA256,
   amountAtMost, attachUsageObservation, checkRef, fail, freezeUsageObservation, hashJson, isDate, isRecord,
-  responseHeader, runImageDispatch, safeProviderRequestRef, sha256, snapshotJson, inspectConceptReferenceBytes,
+  responseHeader, runImageDispatch, prepareImageAttempt, safeProviderRequestRef, sha256, snapshotJson, inspectConceptReferenceBytes,
   exactUsage, usageWithMissingField, parseRetryAfter, snapshotUsageData,
 };

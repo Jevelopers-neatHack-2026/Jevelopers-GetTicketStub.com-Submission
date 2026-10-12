@@ -1096,6 +1096,8 @@ export interface CreativeRuntimePorts {
       Promise<Readonly<{ reconciled: number; remaining: number }>> | Readonly<{ reconciled: number; remaining: number }>;
   };
   provider?: {
+    /** Optional for legacy providers; native adapters prepare the exact immutable target before C03 admission. */
+    prepareAttempt?(input: ImagePreparationInput): Promise<PreparedImageAttempt> | PreparedImageAttempt;
     resolveRoute(input: CreativeProviderRouteInput):
       Promise<CreativeProviderRoute> | CreativeProviderRoute;
     generate(input: ProviderInput): Promise<ProviderOutput>;
@@ -1228,6 +1230,8 @@ export interface ProviderInput {
   readonly concept_batch_id?: string;
   readonly concept_id?: string;
   decision_result?: DecisionPortResult;
+  /** Provider-minted single-use preparation; never caller-authored admission data. */
+  readonly prepared_attempt?: PreparedImageAttempt;
   /** Exact reservation reference validated and returned by the trusted C03 authority. */
   readonly reservation_ref: string;
   transport_attempt_id: string;
@@ -1286,6 +1290,19 @@ export interface ProviderInput {
   deadline_at: string;
 }
 
+export interface PreparedImageAttempt {
+  readonly token: object;
+  readonly target_binding: Readonly<Record<string, unknown>>;
+  readonly target_binding_sha256: `sha256:${string}`;
+  readonly deadline_at: string;
+}
+export type ImagePreparationInput = Readonly<Pick<ProviderInput,
+  "scope" | "actor_id" | "job_id" | "attempt" | "brief" | "base_design" | "image_reference_manifest" |
+  "concept_reference_manifest" | "concept_batch_id" | "concept_id" | "decision_result" | "signal" | "deadline_at"> & {
+    operation: "generate" | "edit";
+    plan: EditPlan | CreativeConceptNativePlan;
+  }>;
+
 /** Minimal internal plan passed to native Images edit for a parentless concept candidate. */
 export interface CreativeConceptNativePlan {
   readonly operation: "concept.generate";
@@ -1330,6 +1347,9 @@ export interface DecisionDispatchInput extends Omit<MeteredDispatchContext, "rec
   transport_attempt_id: string;
   deadline_at: string;
   dispatch_intent_ref: string;
+  target_binding_sha256: `sha256:${string}`;
+  /** Synchronous final owner read immediately before the real JEV transport write. */
+  assertDispatchCurrent(): string;
   recordTransportAttempt(transport_attempt_id: string): Promise<string>;
   revalidateDispatch(input: Readonly<{ reservation_ref: string; billable_attempt_id: string; transport_attempt_id: string;
     dispatch_intent_ref: string; target_binding_sha256: `sha256:${string}`; signal: AbortSignal }>): Promise<string>;

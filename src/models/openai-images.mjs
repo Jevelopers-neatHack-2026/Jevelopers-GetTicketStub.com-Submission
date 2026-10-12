@@ -3,7 +3,7 @@ import {
   HASH, MAX_PIXELS, OPAQUE_REF, OpenAIImagesProviderError, PRIVATE_PROVIDER_REQUEST_IDS, PRIVATE_TARGET_BINDING_SHA256,
   checkRef, evaluateOpenAIImageRetry, exactUsage, fail, freezeUsageObservation, hashJson, inspectConceptReferenceBytes,
   inspectOpenAIImageBytes, isRecord, readPrivateOpenAIImageRequestId, readPrivateOpenAIImageRetryDisposition,
-  readPrivateOpenAIImageTargetBindingSha256, responseHeader, runImageDispatch, safeProviderRequestRef,
+  readPrivateOpenAIImageTargetBindingSha256, responseHeader, runImageDispatch, prepareImageAttempt, safeProviderRequestRef,
   snapshotJson, snapshotUsageData, usageWithMissingField,
 } from "./image-adapter-core.mjs";
 import { IMAGE_PROVIDER_ROUTES } from "./image-routes.mjs";
@@ -320,6 +320,7 @@ export function createOpenAIImagesProvider({ model_id, configuration, capability
 
   return Object.freeze({
     resolveRoute,
+    prepareAttempt(input) { return prepareImageAttempt(driver, undefined, input); },
     getConceptConfiguration() {
       return Object.freeze({ model_id: profile.model_id, configuration: pinnedConfiguration });
     },
