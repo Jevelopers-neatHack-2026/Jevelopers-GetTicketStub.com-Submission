@@ -57,7 +57,7 @@ The local executor is a static bounded pure-operation registry. Arbitrary callba
 
 ## Telemetry and retention
 
-Worker lifecycle events use a fixed event allowlist and existing HMAC-tokenized local telemetry projection. A failed or hung sink leaves its cursor pending; it does not overlap another sink call or release a financial hold. The current worker CLI does not configure a remote sink. The test suite injects a bounded local sink to verify timeout and cursor retention; this is not Neatlogs ingestion or sponsor evidence.
+Worker lifecycle events use a fixed event allowlist and existing HMAC-tokenized local telemetry projection. A failed or hung sink leaves its cursor pending; it does not overlap another sink call or release a financial hold. The current worker CLI does not configure a remote sink. The test suite injects a bounded local sink to verify timeout and cursor retention; this is not Neatlogs ingestion or sponsor evidence. Opt-in Neatlogs export composes the same exporter with a durable local outbox sink outside the worker. See `docs/runbooks/neatlogs.md`, section "Runtime path". The worker itself still performs no network I/O.
 
 Retention is `retention_not_configured`. The harness exposes a bounded owner request record but performs no deletion, settlement, or hold release. Immutable checkpoints, workflow events, receipts, JEV markers, observations, telemetry outbox rows, and unknown outcomes remain retained until their authoritative owners provide an accepted policy and acknowledgment contract. Keep any stable telemetry tokenization key in its approved secret store; this worker supplies no key and uses no raw-ID fallback.
 
