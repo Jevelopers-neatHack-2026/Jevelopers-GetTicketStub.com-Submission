@@ -312,3 +312,56 @@ test('320 CSS pixels: no page-level horizontal scroll, controls inside the viewp
   for (const button of [prepareButton(page), downloadButton(page)]) expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await scan(page, 'export-prepared-320');
 });
+
+/**
+ * SYNTHETIC_DENIAL_CAPTURE_SUPPLEMENT_ONLY. The fixture host replays the EXACT `actualResult` of two ACTUAL captured producer cases (task-local PostgreSQL with synthetic postings behind a
+ * synthetic single-state authority host; not a live issuer, not fresh database execution, not a live Finance integration). The page's own access is ALLOWED (read and export are both
+ * stated by the host), so the denial below is the producer's answer. The positive JSON and TEST_BUILT CSV download journeys above are unchanged. Authored for hosted Linux; not executed in the author's sandbox.
+ */
+test.describe('captured producer denials: current UI access allowed, producer denies', () => {
+  const captured: readonly (readonly [string, string, string, string, string])[] = [
+    ['captured-late-forbidden', 'FORBIDDEN_SCOPE', 'Export is not permitted for this scope or access. No file was produced.', 'Current financial disclosure is not authorized.', 'ci1:af813163-9fbc-448f-aebd-1ea541c3ee5f'],
+    ['captured-entry-source', 'SOURCE_UNAVAILABLE', 'The export source is unavailable right now. No file was produced.', 'A coherent current financial disclosure capability is unavailable.', 'ci1:abc3f0e8-5fcf-47bd-975a-3e5d416dd853'],
+  ];
+  for (const [behavior, code, copy, message, diagnostic] of captured) {
+    test(`${behavior} (${code}): keyboard prepare shows the generic copy, no download, no artifact, message, diagnostic, token or cursor anywhere`, async ({ page }) => {
+      await open(page, `v2export=${behavior}`);
+      const region = exportRegion(page);
+      await expect(region.getByRole('note')).toContainText('SYNTHETIC_EXPORT_CONFORMANCE_ONLY');
+      // The UI itself would allow this export: the prepare control is live and no unavailable reason is shown.
+      await expect(prepareButton(page)).toBeVisible();
+      await expect(region).not.toContainText('Export unavailable');
+      await tabTo(page, prepareButton(page));
+      await page.keyboard.press('Enter');
+      await expect(region.getByRole('alert')).toContainText(copy);
+      expect(await prepareButton(page).evaluate((element) => element === document.activeElement)).toBe(true);
+      await expect(region.getByRole('button', { name: /^Download / })).toHaveCount(0);
+      await expect(region).not.toContainText(/Prepared for manual handoff|Export id|sha256:/u);
+      await noDownload(page);
+      const sent = await requests(page);
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({ format: 'json', destination: 'cfo.ai', revision: '1' });
+      await expectPrivate(page, [message, diagnostic, 'ci1:', 'fixture-token', 'finance_reporting_export_proposal', 'currency,scale,metric']);
+      await leaks(page);
+      await scan(page, `export-captured-${behavior}`);
+    });
+  }
+  test('320 CSS pixels: the captured denial keeps the keyboard path, a non-scrolling page, axe clean, and controls of at least 24 CSS pixels', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await open(page, 'v2export=captured-late-forbidden');
+    const region = exportRegion(page);
+    await region.scrollIntoViewIfNeeded();
+    await tabTo(page, prepareButton(page));
+    await page.keyboard.press('Enter');
+    await expect(region.getByRole('alert')).toContainText('Export is not permitted for this scope or access. No file was produced.');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+    for (const control of [prepareButton(page), region.getByRole('radio', { name: 'JSON (summary.json)' }), region.getByRole('radio', { name: 'CSV (metrics.csv)' })]) {
+      const box = (await control.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(320);
+      expect(box.height).toBeGreaterThanOrEqual(24);
+    }
+    await expect(region.getByRole('button', { name: /^Download / })).toHaveCount(0);
+    await scan(page, 'export-captured-denial-320');
+  });
+});
