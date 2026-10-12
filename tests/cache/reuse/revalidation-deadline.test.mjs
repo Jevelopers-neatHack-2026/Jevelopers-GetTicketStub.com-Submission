@@ -25,6 +25,7 @@ test('refresh transport keeps the original deadline after retained source prepar
   const admission = await env.admit();
   let resolverDeadline;
   let preparationHeld = false;
+  const preparationTimes = {};
   const fetcher = new SafeFetcher(localTestSeam({
     port: Number(new URL(env.sourceUrl).port),
     resolveOverride(_hostname, options) {
@@ -32,14 +33,19 @@ test('refresh transport keeps the original deadline after retained source prepar
       return { addresses: ['127.0.0.1'], aliases: [] };
     },
   }));
-  const timeoutMs = 1_000;
+  // This success control checks propagation of the original deadline, not a
+  // one-second performance promise from a shared CI runner. The deliberately
+  // expired native-boundary controls below retain their shorter exact budgets.
+  const timeoutMs = 5_000;
   const coordinator = env.makeCoordinator({
     safeFetcher: fetcher,
     timeoutMs,
     async readRetainedSource(input) {
       if (input.phase === 'prepare') {
         preparationHeld = true;
+        preparationTimes.started = performance.now();
         await new Promise((resolve) => setTimeout(resolve, 200));
+        preparationTimes.finished = performance.now();
       }
       return env.readRetainedSource(input);
     },
@@ -49,12 +55,24 @@ test('refresh transport keeps the original deadline after retained source prepar
     profileRef: env.profile.profileRef, scopeKind: 'tenant_private', admissionRef: admission.admissionRef,
   });
   const startedAfter = performance.now();
-  const result = await pending;
-  t.diagnostic(JSON.stringify({ startedBefore, startedAfter, timeoutMs, resolverDeadline }));
+  let result;
+  let outcome = 'pending';
+  try {
+    result = await pending;
+    outcome = result.status;
+  } catch (error) {
+    outcome = error.code ?? error.name;
+    throw error;
+  } finally {
+    t.diagnostic(JSON.stringify({ startedBefore, startedAfter, finishedAt: performance.now(),
+      timeoutMs, preparationTimes, resolverDeadline: resolverDeadline ?? null, outcome }));
+  }
   assert.equal(preparationHeld, true);
   assert.equal(result.status, 'completed');
   assert.equal(result.receipt.responseKind, 'not_modified');
   assert.ok(Number.isFinite(resolverDeadline));
+  assert.ok(resolverDeadline >= startedBefore + timeoutMs,
+    'transport must retain the original budget rather than substitute an earlier deadline');
   assert.ok(resolverDeadline <= startedAfter + timeoutMs,
     'retained-source preparation must consume the same absolute transport budget');
   assert.equal(env.state.requests.length, 2);
