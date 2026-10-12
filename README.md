@@ -19,12 +19,18 @@ Cross-component verification for TicketStub, and the home of the master acceptan
 
 ## Status
 
-This is an incremental runner/SDK verification tool: a typed CLI, inert fixtures, scenario
+This is incremental runner/SDK verification tooling: a typed CLI, inert fixtures, scenario
 oracles (42 cases, 142 obligations), benchmark statistics, immutable reports and offline CI.
-It is proposed for merge as tooling only, pending final review and Linux CI. It is not a release, and it does not establish
-integrated product acceptance, which needs owner runners, exact composed release pins,
-ratified datasets and policy, and authorized real evidence. Producer release and adoption
-holds remain.
+Its scope is the tooling only. Passing CI and review are not product proof. Integrated product
+acceptance still needs owner runners, exact composed release pins, ratified datasets and
+policy, and authorized real evidence. The producer release, adoption and product holds are
+retained, and nothing here claims producer acceptance.
+
+Complete benchmark work in [issue #15](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/15)
+and [issue #16](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16) is
+deferred until after deployment by explicit user instruction, as an initial-deployment
+exception. Benchmark promotion stays blocked pending ratified evidence, and the 142
+obligations, master checklist states and policy are unchanged.
 
 Print-invalid component verification is **blocked** and out of this change. The experimental
 print slice (nested Docker plus Bubblewrap execution) did not run in CI and is kept as work
@@ -62,9 +68,9 @@ Nothing here claims print containment or print execution evidence.
   product acceptance. Missing assembly is reported as blocked.
 - Accepting the owner decision memos does not grant any finance, payment or provider authority;
   see the Decisions section.
-- The broader [draft PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23)
-  remains on maintainer hold; merging accepted evidence into this candidate does not
-  approve or release its verification tooling.
+- [PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23) carries this
+  incremental runner/SDK tooling under the user's merge-when-ready request. That request does
+  not approve or accept any producer release, adoption or product claim.
 - Planned work is tracked in [IE-EPIC #1](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1)
   and its linked IE issues, ending with the [IE-12 release gate](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22).
 
@@ -84,7 +90,9 @@ uv run integration-evals run
 
 The standalone stdlib evidence-audit and rerun tools (`tools/`, `tests/test_audit_evidence.py`,
 `tests/test_rerun_report.py`) are excluded from the strict package scope above and have their
-own checks, which also run in CI:
+own checks, which also run in CI. The stdlib ruff command names `tools` and the two test files
+explicitly; do not run it with a bare `--config` over the whole tree, which would scan the
+Python 3.13 package sources with the wrong rules:
 
 ```sh
 uv run basedpyright -p pyrightconfig.stdlib.json
