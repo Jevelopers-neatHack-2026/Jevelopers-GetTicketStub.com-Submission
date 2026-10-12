@@ -127,15 +127,19 @@ const { state, access: readAccess } = await readRoute({ credential: serverHeldCr
 
 The mounted test runs on both the overview and a transaction-detail path. A forged projection naming another tenant renders either restricted or the caller's own verified data, never the victim canary, and the read result's `access` carries the verified scope. The string-form cases prove the fixture verifier's checks only. See "Trust boundary".
 
-## Owner decisions needed
+## Owner decisions (decided, owner-delegated 2026-10-12)
 
-1. **Verifier implementation and credential.** Which host mechanism implements `HostSessionVerifier`: the GT-08 signed context (`ticketstub.context/2`, PR #42) verified in-process, a call to `POST /api/context/verify`, or a direct session-store lookup. Also, what string the host passes as the credential.
-2. **Audience value.** PR #42 proposes `ticketstub.finance`; it is used here only in tests.
-3. **Permission matrix acceptance** (TD-07.A). Host and Finance must accept the route → capability mapping above, including whether detail routes need a separate private-detail grant and whether `finance-admin`/read-only roles are adopted.
-4. **Field redaction contract** (TD-07.B). Which fields each grant may see; the reader receives `capabilities` to apply it, but no redaction policy is defined here.
-5. **Project selection.** How the host maps a dashboard URL to a `projectId` request (PR #42 uses `?project=kind:id` on the context endpoint).
-6. **Finance vocabulary and revision.** Finance must accept the `environment`/`billingMode` mapping (`ticketstub.finance-scope-adapter/1`) and the `revision` derivation from `membershipRevision`. The host must also decide whether its read re-checks the revision transactionally or accepts the documented residual window.
-7. **Context lifetime cap.** Whether 15 minutes is the right default for `maxContextTtlMs`.
+The owner delegated these decisions on 2026-10-12. They are recorded with rationale in [integration-evals decision 0003](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/decisions/0003-owner-delegated-decisions-2026-10-12.md) ([PR #39](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/39)), rows D1-D8. They bind the host composition. **They change no code in this package**, and the package defaults stay as documented above.
+
+1. **Verifier and credential (D1, D2).** The verifier is in-process GT-08: the host's `HostSessionVerifier` calls `verifyContextTokenLive` on a `ticketstub.context/2` token. It does not use `POST /api/context/verify` or a direct session-store lookup. The credential is a fresh `/2` token. The host server mints it for each request from the httpOnly session cookie, and it never goes to the browser.
+2. **Audience (D3).** `ticketstub.finance`, matching `CONTEXT_AUDIENCE`'s default.
+3. **Permission matrix (D4).** `team-dashboard.permissions/1` is accepted as written above. **No separate private-detail grant**: detail routes require `finance.read`. No `finance-admin` or read-only roles are added; role stays informational.
+4. **Field redaction (D5).** One policy for every grant. Reads return amounts, currency, kind-prefixed ids, statuses, categories and timestamps. They never return customer name, email, recipient or address, card metadata, raw provider payloads, free-text notes, credentials or tokens. `finance.export` widens no field.
+5. **Project selection (D6).** The dashboard URL carries `?project=<kind>:<id>`, which goes into PR #42's server-side derivation. A project the caller does not hold returns the same 404 as a nonexistent one. With no project, staff get the platform context and everyone else gets the no-project state.
+6. **Finance vocabulary and revision (D7).** `ticketstub.finance-scope-adapter/1` and `` `${actorId}@${membershipRevision}` `` are accepted. Finance (Neon) and membership (SQLite) live in different databases, so the host **accepts the documented residual window** instead of a transactional re-check, and records it in its integration evidence.
+7. **Context lifetime cap (D8).** The getticketstub.com composition sets `maxContextTtlMs: 360000`: the issuer's 5-minute token plus 1 minute. The package default stays 15 minutes.
+
+Still open: Finance's review acknowledgement of the matrix and mapping (D4, D7), and the actual host wiring.
 
 ## Not covered
 
