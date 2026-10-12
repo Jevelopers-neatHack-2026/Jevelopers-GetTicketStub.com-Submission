@@ -1,9 +1,31 @@
+import json
+import os
 from pathlib import Path
 
 import pytest
 
-from integration_evals.artifacts import confined_path, digest, reject_leaks
+from integration_evals import artifacts
+from integration_evals.artifacts import confined_path, digest, read_bytes, reject_leaks
 from integration_evals.errors import InvalidArtifactError
+from tests.leak_matrix import BENIGN, CASES, deep_scalar
+
+
+def payload_id(payload: bytes) -> str:
+    return f"{len(payload)}b-{digest(payload)[:8]}"
+
+
+HUGE = "1" * 5000
+ESCAPED_KEY = '{"\\u0061pi_key":"fictional-long-credential-123","n":'
+RESOURCE_PAYLOADS = (
+    (ESCAPED_KEY + HUGE + "}").encode(),
+    json.dumps({"body": ESCAPED_KEY + HUGE + "}"}).encode(),
+    json.dumps({"body": '{"n":' + HUGE + "}"}).encode(),
+    b"[" * 256 + b"]" * 256,
+    b"[" * 512 + b"]" * 512,
+    json.dumps({"body": "[" * 256 + "]" * 256}).encode(),
+    b'{"a":{"api_key":"fictional-long-credential-123"},"a":{}}',
+    b'{"a":{"\\u0061pi_key":"fictional-long-credential-123"},"a":{"api_key":""}}',
+)
 
 
 @pytest.mark.parametrize("reference", ["../outside", "/outside"])
@@ -38,6 +60,18 @@ def test_rejects_path_when_symlink_escapes(tmp_path: Path) -> None:
         b"IE_SECRET_CANARY_fixture_123",
         b"IE_PII_CANARY_fixture_123",
         b"https://assets.example/file?X-Amz-Signature=fictional",
+        b'{"api_key": "fictional-key-value-1234"}',
+        b'{"password": "fictional-password-1234"}',
+        b'{"authorization": "fictional-value-1234"}',
+        b'{"Authorization": "Bearer fictional-token-1234"}',
+        b"Authorization: Bearer fictionaltoken1234",
+        b'{"outer": [{"client_secret": "fictional-secret-1234"}]}',
+        b'{"body": "{\\"password\\": \\"fictional-password-1234\\"}"}',
+        b'{"\\u0070assword": "fictional-password-1234"}',
+        b'{"\\u0061pi_key":"fictional-long-credential-123","api_key":""}',
+        b'{"api_key":"","\\u0061pi_key":"fictional-long-credential-123"}',
+        b'{"a":1,"a":2}',
+        b'{"body": "{\\"\\\\u0061pi_key\\":\\"fictional-long-credential-123\\",\\"api_key\\":\\"\\"}"}',  # noqa: E501
     ],
 )
 def test_rejects_export_when_sensitive_value_present(payload: bytes) -> None:
@@ -56,3 +90,104 @@ def test_hash_changes_when_artifact_bytes_change() -> None:
     actual = digest(before)
     # Then newline normalization cannot silently change approved output.
     assert actual != digest(after)
+
+
+def test_accepts_ordinary_json_without_credentials() -> None:
+    # Given JSON that merely mentions short or non-credential fields.
+    # When scanning it.
+    reject_leaks(b'{"password": "short", "note": "bearer of news", "count": 3}', "fixture")
+    # Then ordinary data is not rejected.
+
+
+def test_read_bytes_rejects_fifo_without_blocking(tmp_path: Path) -> None:
+    # Given a FIFO with no writer, which would block a blocking open.
+    fifo = tmp_path / "pipe"
+    os.mkfifo(fifo)
+    # When reading it as an artifact.
+    with pytest.raises(InvalidArtifactError, match="non_regular_artifact"):
+        _ = read_bytes(fifo)
+    # Then it is rejected promptly as a non-regular file.
+
+
+def test_read_bytes_rejects_symlink_without_following(tmp_path: Path) -> None:
+    # Given a symlink to a regular file.
+    target = tmp_path / "target"
+    _ = target.write_bytes(b"data")
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    # When reading the link itself.
+    with pytest.raises(InvalidArtifactError, match="symlink_artifact"):
+        _ = read_bytes(link)
+    # Then the final component is never followed.
+
+
+def test_read_bytes_bounds_actual_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Given a file larger than the artifact limit.
+    monkeypatch.setattr(artifacts, "MAX_ARTIFACT_BYTES", 16)
+    big = tmp_path / "big"
+    _ = big.write_bytes(b"x" * 17)
+    exact = tmp_path / "exact"
+    _ = exact.write_bytes(b"y" * 16)
+    # When reading each.
+    with pytest.raises(InvalidArtifactError, match="oversized_artifact"):
+        _ = read_bytes(big)
+    # Then only the oversized one is rejected and the exact-limit file is read whole.
+    assert read_bytes(exact) == b"y" * 16
+
+
+@pytest.mark.parametrize("payload", RESOURCE_PAYLOADS, ids=payload_id)
+def test_rejects_export_when_json_resource_limit_or_overwrite_could_hide_credential(
+    payload: bytes,
+) -> None:
+    # Given JSON whose parsing limits or duplicate parents could mask a credential.
+    # When scanning it.
+    with pytest.raises(InvalidArtifactError, match="sensitive_content") as caught:
+        reject_leaks(payload, "fixture")
+    # Then it fails closed without echoing content.
+    assert "fictional" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b"plain text, not json", b"\xff\xfe binary", b'{"truncated": ', b'{"n": ' + b"1" * 50 + b"}"],
+)
+def test_accepts_ordinary_non_json_and_bounded_json(payload: bytes) -> None:
+    # Given trusted text, binary or invalid-JSON bytes and an ordinary bounded number.
+    # When scanning them.
+    reject_leaks(payload, "fixture")
+    # Then normal non-JSON handling is preserved.
+
+
+@pytest.mark.parametrize(
+    ("payload", "code"), [case[1:] for case in CASES], ids=[c[0] for c in CASES]
+)
+def test_rejects_decoded_json_keys_and_values_with_the_full_plaintext_policy(
+    payload: bytes, code: str
+) -> None:
+    # Given an escaped policy class in a JSON key, value or embedded JSON.
+    # When scanning the raw bytes.
+    with pytest.raises(InvalidArtifactError) as caught:
+        reject_leaks(payload, "fixture")
+    # Then the same class code is raised without echoing the value.
+    assert caught.value.code == code
+    assert str(caught.value) == f"{code}: fixture"
+
+
+@pytest.mark.parametrize("payload", BENIGN, ids=payload_id)
+def test_accepts_benign_escaped_json_and_embedded_scalars(payload: bytes) -> None:
+    # Given ordinary escaped and embedded JSON without policy content.
+    # When scanning it.
+    reject_leaks(payload, "fixture")
+    # Then the policy does not over-reject.
+
+
+def test_rejects_embedded_scalar_nesting_beyond_depth_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given a scalar string re-encoded as JSON, whose size doubles per level.
+    monkeypatch.setattr(artifacts, "MAX_JSON_DEPTH", 6)
+    reject_leaks(deep_scalar(1), "fixture")
+    # When it nests past the depth limit.
+    with pytest.raises(InvalidArtifactError, match="sensitive_content"):
+        reject_leaks(deep_scalar(8), "fixture")
+    # Then unbounded nesting fails closed while shallow nesting passes.

@@ -12,17 +12,30 @@ Cross-component verification for TicketStub, and the home of the master acceptan
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
   <a href="#status"><img alt="Status: verification tooling; integrated acceptance pending" src="https://img.shields.io/badge/status-tooling%20candidate-B4693E?style=flat-square&labelColor=17140F"></a>
-  <a href="planning/acceptance-checklist.md"><img alt="Acceptance checklist: 47 criteria, 3 verified" src="https://img.shields.io/badge/criteria-3%20of%2047%20verified-26302A?style=flat-square&labelColor=17140F"></a>
+  <a href="planning/acceptance-checklist.md"><img alt="Acceptance checklist: 47 criteria, 3 sponsor criteria owner-accepted, 44 planned" src="https://img.shields.io/badge/criteria-3%20accepted%20%C2%B7%2044%20planned-26302A?style=flat-square&labelColor=17140F"></a>
 </p>
 
 [Status](#status) · [What's here](#whats-here) · [Docs](#docs) · [Related](#related-repositories)
 
 ## Status
 
-This candidate includes a typed verification CLI, inert fixtures, scenario oracles,
-benchmark statistics, immutable reports, and offline CI. Integrated product acceptance
-remains incomplete until owner runners, exact composed release pins, ratified datasets
-and policy, and authorized real evidence satisfy the required boundaries.
+This is incremental runner/SDK verification tooling: a typed CLI, inert fixtures, scenario
+oracles (42 cases, 142 obligations), benchmark statistics, immutable reports and offline CI.
+Its scope is the tooling only. Passing CI and review are not product proof. Integrated product
+acceptance still needs owner runners, exact composed release pins, ratified datasets and
+policy, and authorized real evidence. The producer release, adoption and product holds are
+retained, and nothing here claims producer acceptance.
+
+Complete benchmark work in [issue #15](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/15)
+and [issue #16](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16) is
+deferred until after deployment by explicit user instruction, as an initial-deployment
+exception. Benchmark promotion stays blocked pending ratified evidence, and the 142
+obligations, master checklist states and policy are unchanged.
+
+Print-invalid component verification is **blocked** and out of this change. The experimental
+print slice (nested Docker plus Bubblewrap execution) did not run in CI and is kept as work
+in progress in draft [PR #40](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/40).
+Nothing here claims print containment or print execution evidence.
 
 - SPN-01 (Neatlogs), SPN-02 (Entire) and SPN-03 (CFO.ai) are owner-accepted as recorded in the
   [master checklist](planning/acceptance-checklist.md) and [evidence index](evidence/README.md).
@@ -41,15 +54,23 @@ and policy, and authorized real evidence satisfy the required boundaries.
   [checkpoint record](evidence/entire/2026-10-11/checkpoint.md).
 - CFO.ai revision 2 is accepted with hypothetical forecasts; the authoritative Finance
   summary export, actual cash, demo coverage and submission remain open.
-- The controlled private shared-contracts 0.9.7 consumer checks 86 versions across 76 names
+- **CFO.ai revision 2 generic export:** the owner's sponsor acceptance of SPN-03 is not approval of the
+  generic editable forecast export. Finance's latest `REQUEST_CHANGES` on
+  [issue #20](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20) leaves CFO-R2-001
+  (a blank cash issue in that export) unresolved, so treat the generic export as not approved until it is closed.
+- The shared owner confirmed (shared-contracts SC31, comment 6115337714) that the same immutable
+  0.9.7 archive `d432ad5` (`771a9f5`) may be used for private offline development. That is not
+  a release or adoption approval. The controlled private shared-contracts 0.9.7 consumer checks 86 versions across 76 names
   and 1,641 frozen fixture cases, with separate source and installed SDK receipts.
   [Private consumption instructions](docs/execution-protocol.md#canonical-candidate-conformance)
   describe exact package pins, readonly callers and the remaining owner boundaries.
 - Local tooling and canonical contract checks do not establish complete integrated
   product acceptance. Missing assembly is reported as blocked.
-- The broader [draft PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23)
-  remains on maintainer hold; merging accepted evidence into this candidate does not
-  approve or release its verification tooling.
+- Accepting the owner decision memos does not grant any finance, payment or provider authority;
+  see the Decisions section.
+- [PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23) carries this
+  incremental runner/SDK tooling under the user's merge-when-ready request. That request does
+  not approve or accept any producer release, adoption or product claim.
 - Planned work is tracked in [IE-EPIC #1](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1)
   and its linked IE issues, ending with the [IE-12 release gate](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22).
 
@@ -65,6 +86,17 @@ uv run basedpyright
 uv run ruff check
 uv run ruff format --check
 uv run integration-evals run
+```
+
+The standalone stdlib evidence-audit and rerun tools (`tools/`, `tests/test_audit_evidence.py`,
+`tests/test_rerun_report.py`) are excluded from the strict package scope above and have their
+own checks, which also run in CI. The stdlib ruff command names `tools` and the two test files
+explicitly; do not run it with a bare `--config` over the whole tree, which would scan the
+Python 3.13 package sources with the wrong rules:
+
+```sh
+uv run basedpyright -p pyrightconfig.stdlib.json
+uv run ruff check --config ruff-stdlib.toml tools tests/test_audit_evidence.py tests/test_rerun_report.py
 ```
 
 Ruff checks project Python source and tests. Its five exact exclusions in `pyproject.toml`
@@ -96,11 +128,24 @@ caps, permitted operations and cleanup. `--authorize-paid` is an execution confi
 within existing owner authority, not a budget grant. No paid calls occur by default.
 Provider modes and source origins are recorded separately.
 
-[Print-invalid component verification](docs/print-component.md) documents the pinned
-negative-only consumer and its required Linux runtime evidence.
-
 [Execution protocol and owner handoff](docs/execution-protocol.md) describes the manifest,
 runner observations, isolation, evidence, benchmarks, reruns, and remaining obligations.
+
+### Decisions
+
+[Decisions 0001 (finance persistence), 0002 (payment provider) and 0003](planning/decisions/) are recorded as **accepted (owner-delegated 2026-10-12)**, per the owner's session instruction as documented in 0003. Approving these memos did not execute any provisioning (no account creation, terms, key issuance, callback registration or provider call); owner-only actions remain. Live checkout stays disabled until LIVE-01 and launch approval. These memos set direction; they are not operational authority or verification.
+
+### Evidence audit
+
+[`docs/evidence-audit.md`](docs/evidence-audit.md) describes the evidence integrity audit. To run it from the repository root:
+
+```sh
+python3 tools/audit_evidence.py
+python3 -m unittest -v tests.test_audit_evidence
+python3 -m unittest -v tests.test_rerun_report
+```
+
+These stdlib-only checks (Python 3.11+, no package install) run separately from the Python 3.13 package suite above (`uv run pytest`). They cover evidence **integrity only** (for example, files and checksums). They do not promote any criterion to accepted or verified and are not acceptance evidence.
 
 ## What's here
 
@@ -109,9 +154,9 @@ This repository owns reproducible evaluations across ownership boundaries: the c
 | Path | Purpose |
 | --- | --- |
 | [`planning/acceptance-checklist.md`](planning/acceptance-checklist.md) | Master acceptance criteria (ARC, CON, AGT, ART, FUL, FIN, BUD, DASH, EVAL, SPN, LIVE) with verify and evidence rules |
-| [`planning/acceptance-checklist.json`](planning/acceptance-checklist.json) | Machine-readable tracker with acceptance states, evidence and tested revisions |
-| [`planning/decisions/`](planning/decisions/) | Proposed owner decision memos (finance persistence, payment provider); none accepted |
-| [`evidence/README.md`](evidence/README.md) | Index of planned evidence and dated owner-accepted sponsor records |
+| [`planning/acceptance-checklist.json`](planning/acceptance-checklist.json) | Machine-readable tracker: 3 owner-accepted sponsor criteria with evidence and revision refs; the rest planned and empty |
+| [`planning/decisions/`](planning/decisions/) | Owner decision memos 0001-0003, accepted (owner-delegated 2026-10-12); nothing executed |
+| [`evidence/README.md`](evidence/README.md) | Index of submission evidence: three sponsor records plus planned entries |
 | [`docs/architecture/`](docs/architecture/OWNERSHIP.md) | [Ownership](docs/architecture/OWNERSHIP.md) and the [acceptance view](docs/architecture/ACCEPTANCE.md) for this repository |
 
 Other repositories link their `docs/architecture/ACCEPTANCE.md` views to this checklist. Change criterion state here, and only after recording actual evidence and the tested revisions ([state rules](planning/acceptance-checklist.md#state-and-dependency-tracking)).
@@ -119,7 +164,7 @@ Other repositories link their `docs/architecture/ACCEPTANCE.md` views to this ch
 ## Docs
 
 - [Acceptance checklist](planning/acceptance-checklist.md) and [JSON tracker](planning/acceptance-checklist.json)
-- [Evidence index](evidence/README.md)
+- [Evidence index](evidence/README.md) · [Evidence audit](docs/evidence-audit.md)
 - [Ownership](docs/architecture/OWNERSHIP.md) · [Acceptance view](docs/architecture/ACCEPTANCE.md)
 - [Architecture kit v1.0](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
 - [Acceptance evidence standard](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/standards/acceptance-evidence.md)

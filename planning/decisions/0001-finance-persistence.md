@@ -1,6 +1,6 @@
 # Decision 0001: Production finance persistence
 
-- Status: **proposed; owner decision required.** Nothing here is accepted or implemented. No account was created and no terms were accepted.
+- Status: **accepted (owner-delegated 2026-10-12).** See [0003](0003-owner-delegated-decisions-2026-10-12.md) rows P1-P3. Sub-choices made: Neon (Option C), Postgres 16, Launch plan; region `aws-us-east-1` (or `aws-us-west-2` if the dashboard shows a western host origin); scale to zero disabled on `production`, kept on `preview`; PITR history raised to 7 days; binding name `FINANCE_DATABASE_URL` decided. Supabase stays the fallback only. Accepting the decision executed nothing: no account was created, no terms were accepted and no database exists. Owner actions 2-6 below remain owner-only.
 - Tracker: [getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27), "Select and integrate production finance persistence". Related: LIVE-02 (restore), BUD-01..04, FIN-01..10 in the [acceptance checklist](../acceptance-checklist.md).
 - Decider: Finance and reliability owner (CompleteDotTech). Implementation in `cost-intelligence` stays with its owners; the CI-05A/B reservation authority ([#12](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/12), [#13](https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/13)) is unaffected by this memo.
 - Date: 2026-10-11
@@ -56,8 +56,8 @@ SQLite (A) and MySQL (B) are rejected because they would discard the tested corr
 1. **Decide:** Neon (recommended), Supabase, or another option. Also decide the plan tier and region.
 2. **Account and terms:** create the provider organization under the company identity and accept its terms of service and data processing addendum yourself. Agents must not do this. Check current pricing and set a spend cap or alert.
 3. **Create** project `cost-intelligence`, Postgres **16**, with two databases or branches (`preview`, `production`). Each gets a least-privilege application role (no CREATEDB, no superuser) and a separate migration role. **Do not** add the disposable-database marker. **Disable scale to zero on the `production` compute** (requires a paid plan); decide whether `preview` keeps it.
-4. **Secrets:** put the connection strings into GoDaddy Preview and Publish environment variables under a production name such as `FINANCE_DATABASE_URL` (the name is final once the adapter PR fixes it). Never use `CI_TEST_DATABASE_URL` for this, and never paste values into issues or evidence.
-5. **Backups:** confirm the PITR window. Approve a restore rehearsal for LIVE-02.
+4. **Secrets:** *(superseded by the Status line: the name is decided as `FINANCE_DATABASE_URL`; entering the values remains an owner action.)* Put the connection strings into GoDaddy Preview and Publish environment variables under a production name such as `FINANCE_DATABASE_URL` (the name is final once the adapter PR fixes it). Never use `CI_TEST_DATABASE_URL` for this, and never paste values into issues or evidence.
+5. **Backups:** *(superseded by the Status line: raise PITR history to 7 days.)* Confirm the PITR window. Approve a restore rehearsal for LIVE-02.
 6. **Then:** authorize the adapter and migration PRs (cost-intelligence owners, getticketstub.com composition) and a run of the ledger/pricing suites against a *separate disposable* branch.
 
 ## Sources

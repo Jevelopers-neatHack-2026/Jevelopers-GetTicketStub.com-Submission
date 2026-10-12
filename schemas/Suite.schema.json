@@ -127,6 +127,36 @@
           "title": "Safety",
           "type": "boolean"
         },
+        "category": {
+          "anyOf": [
+            {
+              "enum": [
+                "functional",
+                "safety",
+                "authorization",
+                "benchmark"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "quarantined": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quarantined"
+        },
         "mandatory": {
           "default": true,
           "title": "Mandatory",

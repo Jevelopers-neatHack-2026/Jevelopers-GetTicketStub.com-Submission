@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Literal
 
 from integration_evals.artifacts import digest, read_bytes
+from integration_evals.history import History, runs_of, validate_record
 from integration_evals.models import Outcome, Record, Run, Status, Suite
 from integration_evals.report_validation import validate_run
 from integration_evals.reporting import Tracker, coverage
@@ -35,13 +36,32 @@ class ReleaseAudit(Record):
     limitations: tuple[str, ...]
 
 
-def audit(run: Run, tracker: Tracker, requirements: Requirements, suite: Suite) -> ReleaseAudit:
+def audit(
+    run: Run | History, tracker: Tracker, requirements: Requirements, suite: Suite
+) -> ReleaseAudit:
     """List every launch leaf and original acceptance row without premature closure."""
-    validate_run(run, suite)
+    history = runs_of(run)
+    if isinstance(run, History):
+        validate_record(run, suite)
+    else:
+        validate_run(run, suite)
+    quarantined: set[str] = (
+        {item.case_id for item in run.quarantines} if isinstance(run, History) else set()
+    )
+    quarantined.update(case.id for case in suite.cases if case.quarantined is True)
     obligations: list[Obligation] = []
     for leaf in requirements.leaves:
-        results = tuple(result for result in run.results if leaf.id in result.requirements)
-        blockers = tuple(result for result in results if result.outcome is not Outcome.PASSED)
+        results = tuple(
+            result
+            for sample in history
+            for result in sample.results
+            if leaf.id in result.requirements
+        )
+        blockers = tuple(
+            result
+            for result in results
+            if result.outcome is not Outcome.PASSED or result.case_id in quarantined
+        )
         obligations.append(
             Obligation(
                 id=leaf.id,
@@ -71,8 +91,8 @@ def audit(run: Run, tracker: Tracker, requirements: Requirements, suite: Suite) 
                 )
             )
     return ReleaseAudit(
-        integration_revision=run.integration_revision,
-        run_id=run.id,
+        integration_revision=history[-1].integration_revision,
+        run_id=history[-1].id,
         tooling_readiness="partial",
         product_acceptance="blocked",
         obligations=tuple(obligations),

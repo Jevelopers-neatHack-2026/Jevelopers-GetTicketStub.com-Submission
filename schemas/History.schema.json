@@ -1,0 +1,834 @@
+{
+  "$defs": {
+    "CaseResult": {
+      "additionalProperties": false,
+      "description": "Result with honest costs, observed evidence mode and blockers.",
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "requirements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requirements",
+          "type": "array"
+        },
+        "outcome": {
+          "$ref": "#/$defs/Outcome"
+        },
+        "criterion_status": {
+          "$ref": "#/$defs/Status"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "duration_seconds": {
+          "minimum": 0,
+          "title": "Duration Seconds",
+          "type": "number"
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost"
+        },
+        "cost_status": {
+          "default": "unknown",
+          "enum": [
+            "unknown",
+            "estimated",
+            "confirmed"
+          ],
+          "title": "Cost Status",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "blocker_owner": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Blocker Owner"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exit Code"
+        },
+        "cleanup_status": {
+          "default": "not-run",
+          "enum": [
+            "not-run",
+            "passed",
+            "failed",
+            "unknown"
+          ],
+          "title": "Cleanup Status",
+          "type": "string"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "case_category": {
+          "anyOf": [
+            {
+              "enum": [
+                "functional",
+                "safety",
+                "authorization",
+                "benchmark"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Case Category"
+        },
+        "quarantined": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quarantined"
+        },
+        "evaluation_failure": {
+          "anyOf": [
+            {
+              "const": "oracle-mismatch",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluation Failure"
+        },
+        "evaluation_category": {
+          "anyOf": [
+            {
+              "const": "recorded-comparison",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluation Category"
+        }
+      },
+      "required": [
+        "case_id",
+        "requirements",
+        "outcome",
+        "criterion_status",
+        "mode",
+        "origin",
+        "duration_seconds"
+      ],
+      "title": "CaseResult",
+      "type": "object"
+    },
+    "Component": {
+      "additionalProperties": false,
+      "description": "Immutable owner-provided checkout and adapter entrypoints.",
+      "properties": {
+        "repository": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Repository",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "tree": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Tree",
+          "type": "string"
+        },
+        "lockfile_path": {
+          "title": "Lockfile Path",
+          "type": "string"
+        },
+        "lockfile_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Lockfile Digest",
+          "type": "string"
+        },
+        "command": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Command",
+          "type": "array"
+        },
+        "cleanup_command": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Cleanup Command",
+          "type": "array"
+        },
+        "supported_modes": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Mode"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supported Modes"
+        }
+      },
+      "required": [
+        "repository",
+        "revision",
+        "tree",
+        "lockfile_path",
+        "lockfile_digest"
+      ],
+      "title": "Component",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Sanitized derivative linked to an actual immutable source artifact.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "requirement": {
+          "title": "Requirement",
+          "type": "string"
+        },
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "run_id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "component": {
+          "title": "Component",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "original_cutoff": {
+          "format": "date-time",
+          "title": "Original Cutoff",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "permission_ref": {
+          "title": "Permission Ref",
+          "type": "string"
+        },
+        "redaction_ref": {
+          "title": "Redaction Ref",
+          "type": "string"
+        },
+        "reviewer_access_ref": {
+          "title": "Reviewer Access Ref",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "trace",
+            "checkpoint",
+            "forecast",
+            "image",
+            "decision",
+            "evaluation"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "requirement",
+        "case_id",
+        "run_id",
+        "component",
+        "revision",
+        "created_at",
+        "original_cutoff",
+        "mode",
+        "origin",
+        "path",
+        "sha256",
+        "permission_ref",
+        "redaction_ref",
+        "reviewer_access_ref",
+        "kind"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "Origin": {
+      "description": "Where the actual artifact originated.",
+      "enum": [
+        "synthetic",
+        "recorded",
+        "sandbox-derived",
+        "live"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "Outcome": {
+      "description": "Execution result; a blocked criterion has a skipped execution.",
+      "enum": [
+        "passed",
+        "failed",
+        "skipped",
+        "error"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "Provider": {
+      "additionalProperties": false,
+      "description": "Preflight configuration; credential values never enter records.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
+        "credential_env": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credential Env"
+        },
+        "eligible": {
+          "default": false,
+          "title": "Eligible",
+          "type": "boolean"
+        },
+        "authority_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authority Ref"
+        },
+        "cap": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "cleanup_supported": {
+          "default": false,
+          "title": "Cleanup Supported",
+          "type": "boolean"
+        },
+        "allowed_operations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Operations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "mode",
+        "model"
+      ],
+      "title": "Provider",
+      "type": "object"
+    },
+    "Quarantine": {
+      "additionalProperties": false,
+      "description": "Local triage metadata; expiry never automatically releases a case.",
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "owner": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Owner",
+          "type": "string"
+        },
+        "remediation_issue": {
+          "pattern": "^https://github\\.com/[\\w.-]+/[\\w.-]+/issues/[1-9][0-9]*$",
+          "title": "Remediation Issue",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "reproduction": {
+          "const": "integration-evals history-report",
+          "default": "integration-evals history-report",
+          "title": "Reproduction",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "owner",
+        "remediation_issue",
+        "reason",
+        "expires_at"
+      ],
+      "title": "Quarantine",
+      "type": "object"
+    },
+    "Run": {
+      "additionalProperties": false,
+      "description": "Immutable evaluation execution receipt, retaining failed ancestors.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Id"
+        },
+        "execution_kind": {
+          "default": "owner-execution",
+          "enum": [
+            "owner-execution",
+            "recorded-evaluation-replay"
+          ],
+          "title": "Execution Kind",
+          "type": "string"
+        },
+        "evaluation_source_run": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluation Source Run"
+        },
+        "comparison_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comparison Digest"
+        },
+        "attempt": {
+          "default": 0,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "context": {
+          "enum": [
+            "local",
+            "ci"
+          ],
+          "title": "Context",
+          "type": "string"
+        },
+        "scope": {
+          "default": "composed",
+          "enum": [
+            "composed",
+            "component"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "selected_case_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Selected Case Ids",
+          "type": "array"
+        },
+        "integration_revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Integration Revision",
+          "type": "string"
+        },
+        "source_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Source Digest",
+          "type": "string"
+        },
+        "working_tree_dirty": {
+          "title": "Working Tree Dirty",
+          "type": "boolean"
+        },
+        "manifest_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Manifest Digest",
+          "type": "string"
+        },
+        "suite_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Suite Digest",
+          "type": "string"
+        },
+        "fixture_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Fixture Digest",
+          "type": "string"
+        },
+        "configuration_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Configuration Digest",
+          "type": "string"
+        },
+        "runtime": {
+          "title": "Runtime",
+          "type": "string"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "clock": {
+          "format": "date-time",
+          "title": "Clock",
+          "type": "string"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "providers": {
+          "items": {
+            "$ref": "#/$defs/Provider"
+          },
+          "title": "Providers",
+          "type": "array"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/CaseResult"
+          },
+          "minItems": 1,
+          "title": "Results",
+          "type": "array"
+        },
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "started_at",
+        "context",
+        "selected_case_ids",
+        "integration_revision",
+        "source_digest",
+        "working_tree_dirty",
+        "manifest_digest",
+        "suite_digest",
+        "fixture_digest",
+        "configuration_digest",
+        "runtime",
+        "seed",
+        "clock",
+        "components",
+        "providers",
+        "results"
+      ],
+      "title": "Run",
+      "type": "object"
+    },
+    "Status": {
+      "description": "Canonical criterion state.",
+      "enum": [
+        "planned",
+        "in_progress",
+        "blocked",
+        "verified",
+        "deferred"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "All original-first samples, with quarantine that applies to the entire history.",
+  "properties": {
+    "runs": {
+      "items": {
+        "$ref": "#/$defs/Run"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Runs",
+      "type": "array"
+    },
+    "quarantines": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Quarantine"
+      },
+      "title": "Quarantines",
+      "type": "array"
+    }
+  },
+  "required": [
+    "runs"
+  ],
+  "title": "History",
+  "type": "object"
+}

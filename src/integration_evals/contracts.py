@@ -17,6 +17,7 @@ from integration_evals.artifacts import confined_path, digest, read_bytes, rejec
 from integration_evals.contract_package import InstalledPackage, verify_installed_package
 from integration_evals.contract_records import ContractObservation, ContractPin, ContractReceipt
 from integration_evals.contract_sources import (
+    RequiredExport,
     bind_contract_observation,
     missing_exports,
     required_exports,
@@ -119,6 +120,7 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
     driver = Path(__file__).with_name("contract_driver.mjs")
     driver_digest = digest(read_bytes(driver))
     observation: ContractObservation | None = None
+    required: tuple[RequiredExport, ...] | None = None
     reason: str | None = None
     exit_code: int | None = None
     output = b""
@@ -129,6 +131,7 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
         if "PATH" in os.environ:
             environment["PATH"] = os.environ["PATH"]
         try:
+            required = required_exports(settings.producer)
             with (staging / "stdout").open("w+b") as stdout:
                 exit_code = invoke(
                     (
@@ -191,7 +194,11 @@ def execute_contracts(settings: ContractSettings) -> ContractReceipt:
         exit_code=exit_code,
         output_digest=digest(output),
         observation=observation,
-        missing_contracts=missing_exports(required_exports(settings.producer), available),
+        missing_contracts=(
+            missing_exports(required, available)
+            if required is not None
+            else ("canonical-catalog-unavailable",)
+        ),
         limitations=(
             (
                 "Installed public SDK fixtures; owner-boundary adoption remains unverified."

@@ -270,8 +270,10 @@ tooling suite.
 The private package lane is authorized by the producer's
 [0.9.7 review receipt](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31#issuecomment-6115337714)
 and [development permission](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/30#issuecomment-6115346934).
-Source PR #31 remains draft/unmerged; this permission does not waive draft PR #23's
-maintainer hold, release requirements or external authority.
+Source PR #31 remains draft/unmerged. The earlier maintainer hold on draft PR #23 is superseded
+for the incremental runner/SDK tooling only, by the user's merge-when-ready request. This permission
+and that request do not waive the retained producer release, adoption and product holds,
+release requirements or external authority.
 
 With Node 22.23.3 and npm 10.9.8 on PATH, reproduce the package from the exact clean
 source revision and install it privately with lifecycle scripts disabled:

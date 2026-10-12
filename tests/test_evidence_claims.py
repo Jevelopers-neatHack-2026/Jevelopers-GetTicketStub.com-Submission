@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,8 +17,11 @@ from integration_evals.models import (
     Mode,
     Origin,
     RequirementId,
+    Run,
 )
 from integration_evals.output_evidence import check_claim, retain
+from integration_evals.packaging import copy_artifacts
+from tests.leak_matrix import BENIGN, CASES
 
 
 def controlled_case() -> Case:
@@ -114,3 +118,122 @@ def test_evidence_retains_when_temporary_staging_is_removed(tmp_path: Path) -> N
     (staging / "output.json").unlink()
     staging.rmdir()
     assert (context.settings.artifacts / kept[0].path).read_bytes() == b'{"result":"controlled"}'
+
+
+def payload_id(payload: bytes) -> str:
+    return f"{len(payload)}b-{digest(payload)[:8]}"
+
+
+HUGE = "1" * 5000
+ESCAPED_KEY = '{"\\u0061pi_key":"fictional-long-credential-123","n":'
+RESOURCE_PAYLOADS = (
+    (ESCAPED_KEY + HUGE + "}").encode(),
+    json.dumps({"body": ESCAPED_KEY + HUGE + "}"}).encode(),
+    json.dumps({"body": '{"n":' + HUGE + "}"}).encode(),
+    b"[" * 256 + b"]" * 256,
+    b"[" * 512 + b"]" * 512,
+    json.dumps({"body": "[" * 256 + "]" * 256}).encode(),
+    b'{"a":{"api_key":"fictional-long-credential-123"},"a":{}}',
+    b'{"a":{"\\u0061pi_key":"fictional-long-credential-123"},"a":{"api_key":""}}',
+)
+
+
+LEAKY_JSON = (
+    *RESOURCE_PAYLOADS,
+    b'{"api_key": "fictional-key-value-1234"}',
+    b'{"password": "fictional-password-1234"}',
+    b'{"Authorization": "Bearer fictional-token-1234"}',
+    b'{"nested": {"headers": {"authorization": "fictional-value-1234"}}}',
+    b'{"body": "{\\"api_key\\": \\"fictional-key-value-1234\\"}"}',
+    b'{"\\u0061pi_key": "fictional-key-value-1234"}',
+    b"Authorization: Bearer fictionaltoken1234",
+    b'{"\\u0061pi_key":"fictional-long-credential-123","api_key":""}',
+    b'{"body": "{\\"\\\\u0061pi_key\\":\\"fictional-long-credential-123\\",\\"api_key\\":\\"\\"}"}',
+)
+
+
+@pytest.mark.parametrize("payload", LEAKY_JSON, ids=payload_id)
+def test_retain_rejects_quoted_or_bearer_credentials_without_echo(
+    tmp_path: Path, payload: bytes
+) -> None:
+    # Given staged output with a JSON or header credential and a matching digest.
+    case = controlled_case()
+    context = context_for(tmp_path, Mode.MOCK)
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    _ = (staging / "output.json").write_bytes(payload)
+    item = artifact(case, context).model_copy(update={"sha256": digest(payload)})
+    # When retaining it.
+    with pytest.raises(InvalidArtifactError, match="sensitive_content") as caught:
+        _ = retain(case, context, (item,), staging)
+    # Then it is rejected, nothing is retained, and the value is not in the diagnostic.
+    assert b"fictional" not in str(caught.value).encode()
+    assert not (context.settings.artifacts / context.run_id / case.id / "output.json").exists()
+
+
+@pytest.mark.parametrize("payload", LEAKY_JSON, ids=payload_id)
+def test_archive_copy_rejects_quoted_or_bearer_credentials_without_echo(
+    tmp_path: Path, payload: bytes
+) -> None:
+    # Given archived output with a credential and a matching digest.
+    case = controlled_case()
+    context = context_for(tmp_path, Mode.MOCK)
+    source = tmp_path / "source"
+    source.mkdir()
+    _ = (source / "output.json").write_bytes(payload)
+    item = artifact(case, context).model_copy(update={"sha256": digest(payload)})
+    run = Run.model_construct(evidence=(item,))
+    destination = tmp_path / "archive"
+    destination.mkdir()
+    # When copying it into a public archive.
+    with pytest.raises(InvalidArtifactError, match="sensitive_content") as caught:
+        copy_artifacts(run, source, destination)
+    # Then no bytes are published and the diagnostic omits the value.
+    assert b"fictional" not in str(caught.value).encode()
+    assert not (destination / "output.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("payload", "code"), [case[1:] for case in CASES], ids=[c[0] for c in CASES]
+)
+def test_export_paths_reject_decoded_json_policy_classes(
+    tmp_path: Path, payload: bytes, code: str
+) -> None:
+    # Given matching-digest output hiding a policy class in escaped JSON keys or values.
+    case = controlled_case()
+    context = context_for(tmp_path, Mode.MOCK)
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    _ = (staging / "output.json").write_bytes(payload)
+    item = artifact(case, context).model_copy(update={"sha256": digest(payload)})
+    # When retaining and archiving it.
+    with pytest.raises(InvalidArtifactError) as retained:
+        _ = retain(case, context, (item,), staging)
+    destination = tmp_path / "archive"
+    destination.mkdir()
+    with pytest.raises(InvalidArtifactError) as copied:
+        copy_artifacts(Run.model_construct(evidence=(item,)), staging, destination)
+    # Then both fail with the class code, publish nothing, and keep the value out.
+    assert retained.value.code == copied.value.code == code
+    assert str(copied.value) == f"{code}: evaluation"
+    assert not (destination / "output.json").exists()
+    assert not (context.settings.artifacts / context.run_id / case.id / "output.json").exists()
+
+
+@pytest.mark.parametrize("payload", BENIGN, ids=payload_id)
+def test_export_paths_keep_benign_escaped_json(tmp_path: Path, payload: bytes) -> None:
+    # Given ordinary escaped and embedded JSON.
+    case = controlled_case()
+    context = context_for(tmp_path, Mode.MOCK)
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    _ = (staging / "output.json").write_bytes(payload)
+    item = artifact(case, context).model_copy(update={"sha256": digest(payload)})
+    destination = tmp_path / "archive"
+    destination.mkdir()
+    # When retaining and archiving it.
+    kept = retain(case, context, (item,), staging)
+    copy_artifacts(Run.model_construct(evidence=(item,)), staging, destination)
+    # Then both preserve the exact bytes.
+    assert (context.settings.artifacts / kept[0].path).read_bytes() == payload
+    assert (destination / "output.json").read_bytes() == payload
