@@ -39,13 +39,13 @@ jobs:
             git rev-parse HEAD
             node --version
             sha256sum scripts/check-consumer-receipt.mjs tests/consumer-receipt*.test.mjs
-          } > "$RUNNER_TEMP/receipt-evidence/identity.txt"
+          } | tee "$RUNNER_TEMP/receipt-evidence/identity.txt"
       - name: Check syntax and receipt regressions
         shell: bash
         run: |
           set -euo pipefail
           node --check scripts/check-consumer-receipt.mjs
-          node --test tests/consumer-receipt.test.mjs tests/consumer-receipt-duplicates.test.mjs \
+          node --test --test-reporter=tap tests/consumer-receipt.test.mjs tests/consumer-receipt-duplicates.test.mjs \
             | tee "$RUNNER_TEMP/receipt-evidence/tests.tap"
       - name: Preserve evidence including failures
         if: always()
