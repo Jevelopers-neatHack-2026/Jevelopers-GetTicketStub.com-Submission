@@ -110,6 +110,7 @@ This repository owns reproducible evaluations across ownership boundaries: the c
 | --- | --- |
 | [`planning/acceptance-checklist.md`](planning/acceptance-checklist.md) | Master acceptance criteria (ARC, CON, AGT, ART, FUL, FIN, BUD, DASH, EVAL, SPN, LIVE) with verify and evidence rules |
 | [`planning/acceptance-checklist.json`](planning/acceptance-checklist.json) | Machine-readable tracker with acceptance states, evidence and tested revisions |
+| [`planning/decisions/`](planning/decisions/) | Proposed owner decision memos (finance persistence, payment provider); none accepted |
 | [`evidence/README.md`](evidence/README.md) | Index of planned evidence and dated owner-accepted sponsor records |
 | [`docs/architecture/`](docs/architecture/OWNERSHIP.md) | [Ownership](docs/architecture/OWNERSHIP.md) and the [acceptance view](docs/architecture/ACCEPTANCE.md) for this repository |
 
