@@ -114,6 +114,61 @@ export interface NewApproval {
   expiresAt: number;
 }
 
+/** An order authorization as stored: the signed record as canonical JSON, plus what is derived from other rows. */
+export interface OrderAuthRow {
+  id: string;
+  tenant: string;
+  /** The stub id. */
+  project: string;
+  actionId: string;
+  idemKey: string;
+  /** Hash of the normalized issue request, so a retry with the same key is told apart from a reuse with different terms. */
+  reqHash: string;
+  record: string;
+  issuedAt: number;
+  expiresAt: number;
+  revokedAt: number | null;
+  /** A newer authorization exists for the same action. */
+  superseded: boolean;
+}
+
+export interface NewOrderAuth {
+  id: string;
+  actionId: string;
+  idemKey: string;
+  reqHash: string;
+  record: string;
+  issuedAt: number;
+  expiresAt: number;
+}
+
+/** A committed claim: the single use of one authorization, made by one consumer under one idempotency key. */
+export interface OrderClaimRow {
+  authorizationId: string;
+  actionId: string;
+  tenant: string;
+  consumer: string;
+  idemKey: string;
+  claimRef: string;
+  claimedAt: number;
+}
+
+/** Everything the verifier needs about one authorization, read in one transaction so it is consistent. */
+export interface OrderAuthSnapshot {
+  auth: OrderAuthRow | null;
+  /** The referenced approval row (with its revocation), or null when missing or another tenant's. */
+  approval: ApprovalRow | null;
+  /** The owner's stub as the server holds it now, or null. */
+  stub: Stub | null;
+  account: AccountState | null;
+  /** The claim on this authorization, if any. */
+  claim: OrderClaimRow | null;
+  /** The claim made under (consumer, idemKey), on any authorization, if any. */
+  claimByKey: OrderClaimRow | null;
+}
+
+export type OrderClaimOutcome = { ok: true; claim: OrderClaimRow; replayed: boolean } | { ok: false; reason: string; fields?: string[] };
+
 export interface Storage {
   // accounts
   findOrCreateAccount(email: string, now: number): Promise<Account>;
@@ -199,6 +254,44 @@ export interface Storage {
   listApprovals(tenant: string, stubId: string): Promise<ApprovalRow[]>;
   /** Adds a revocation row for an approval this tenant holds. "already" when one exists, "missing" for an id that is not this tenant's. */
   revokeApproval(tenant: string, stubId: string, approvalId: string, now: number): Promise<"revoked" | "already" | "missing">;
+
+  // order authorizations (append-only; see src/server/order-authorization.ts)
+  /**
+   * In one write lock: a retry of the same (tenant, idemKey, reqHash) returns the stored authorization (created false); the same key with a
+   * different request is `conflict`; otherwise reads the wall stub and the referenced approval row, hands them to `make` and inserts what it
+   * returns. Null when the stub is not on the account's wall. `make` throws to refuse.
+   */
+  issueOrderAuthorization(
+    tenant: string,
+    stubId: string,
+    approvalId: string,
+    idemKey: string,
+    reqHash: string,
+    now: number,
+    make: (stub: Stub, approval: ApprovalRow | null, actionClaimed: (actionId: string) => boolean) => NewOrderAuth,
+  ): Promise<{ row: OrderAuthRow; created: boolean } | "conflict" | null>;
+  getOrderAuthorization(id: string): Promise<OrderAuthRow | null>;
+  /** Newest first. */
+  listOrderAuthorizations(tenant: string, stubId: string): Promise<OrderAuthRow[]>;
+  /** One consistent read of an authorization and everything its verdict depends on. `consumer` and `idemKey` fill claimByKey. */
+  getOrderAuthSnapshot(id: string, consumer?: string, idemKey?: string): Promise<OrderAuthSnapshot>;
+  /** Adds a revocation row for an authorization this tenant holds, claimed or not. "already" when one exists, "missing" for an id that is not this tenant's. */
+  revokeOrderAuthorization(tenant: string, stubId: string, id: string, now: number): Promise<"revoked" | "already" | "missing">;
+  /**
+   * The atomic single-use claim. In one write lock: snapshots, asks `decide` for the verdict, and only on ok inserts the claim (uniqueness on
+   * authorization, action and (consumer, idemKey) backs this up across processes). A claim already committed under the same key is returned
+   * with replayed true and nothing is inserted. A uniqueness violation is already_claimed.
+   */
+  claimOrderAuthorization(
+    id: string,
+    consumer: string,
+    idemKey: string,
+    claimRef: string,
+    now: number,
+    decide: (snap: OrderAuthSnapshot) => { ok: true } | { ok: false; reason: string; fields?: string[] },
+  ): Promise<OrderClaimOutcome>;
+  /** The claim committed under (consumer, idemKey), with the authorization's tenant and project, or null. */
+  findOrderClaim(consumer: string, idemKey: string): Promise<{ claim: OrderClaimRow; project: string } | null>;
 
   // product events (append-only; see src/server/events.ts)
   appendEvent(event: TicketstubEvent, tenantRef?: string): Promise<void>;

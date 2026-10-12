@@ -55,6 +55,10 @@ export const MESSAGES = {
   approval_conflict: { message: "This stub changed while you were approving it. Look it over once more, then approve it again.", action: RELOAD },
   approval_unavailable: { message: "We can't read this stub's art right now, so it can't be approved yet. Try again in a moment.", action: RETRY, retryable: true },
   approval_invalid: { message: "That approval doesn't cover this use. Approve the stub again from your wall.", action: WALL },
+  authorization_conflict: { message: "That order changed while you were confirming it. Look it over once more, then confirm it again.", action: RELOAD },
+  authorization_invalid: { message: "That order confirmation doesn't cover this purchase any more. Confirm the order again from your wall.", action: WALL },
+  consumer_unavailable: { message: "Order handoff isn't set up on this server yet, so nothing was sent. Your stubs are unaffected.", action: RETRY, retryable: true },
+  consumer_unauthorized: { message: "That request didn't come from a service we know, so we ignored it. Nothing was changed.", action: START },
 
   // Mail
   mail_unavailable: { message: "Email isn't switched on for this preview, so we can't send a link. Come back soon.", action: RETRY, retryable: true },
