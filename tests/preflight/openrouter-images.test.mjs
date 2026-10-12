@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { canonicalHash } from '../../src/contracts/validation.mjs';
 import {
+  AccessPreflightError,
   createOpenRouterImagesAdapter,
   executeAuthorizedAccessCell,
   openRouterCatalogEndpoint,
@@ -1801,6 +1802,339 @@ test('the final dispatch clock rejects faults and catches cancellation after com
   }
 });
 
+test('the final preparation clock cannot change the authority before host work', async () => {
+  const input = billable(); const host = []; let armed = false; let mutateOnClock = false;
+  const adapter = createOpenRouterImagesAdapter({ now() {
+    if (mutateOnClock) input.target.configuration.provider_tag = 'changed-provider';
+    return clock();
+  }, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+  dispatchPort: { async dispatch() { host.push('dispatch'); }, get prepare() {
+    if (armed) mutateOnClock = true;
+    return async () => { host.push('prepare'); };
+  } } });
+  armed = true;
+  await assert.rejects(adapter.prepare(input), (error) => error.code === 'unsupported_image_configuration');
+  assert.deepEqual(host, []);
+});
+
+test('preparation refuses object-valued configuration hashes before credential-bearing host work', async () => {
+  const input = billable(); const host = []; let accessorReads = 0;
+  input.target.configuration_sha256 = { get pin() { accessorReads += 1; return digest('synthetic-pin'); } };
+  const adapter = createOpenRouterImagesAdapter({ now: clock,
+    credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { async prepare() { host.push('prepare'); }, async dispatch() { host.push('dispatch'); } } });
+  await assert.rejects(adapter.prepare(input), (error) => error.code === 'unsupported_image_configuration');
+  assert.equal(accessorReads, 0);
+  assert.deepEqual(host, []);
+});
+
+test('host preparation invokes the captured function without reading its own call property', async () => {
+  const input = billable(); const host = []; let callReads = 0;
+  const prepareHost = async () => { host.push('prepare'); };
+  Object.defineProperty(prepareHost, 'call', { get() {
+    callReads += 1;
+    input.target.configuration.provider_tag = 'changed-provider';
+    return async () => { host.push('override'); };
+  } });
+  const adapter = createOpenRouterImagesAdapter({ now: clock,
+    credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { prepare: prepareHost, async dispatch() { host.push('dispatch'); } } });
+  assert.deepEqual(await adapter.prepare(input), { prepared: true });
+  assert.equal(callReads, 0);
+  assert.deepEqual(host, ['prepare']);
+});
+
+for (const operation of ['prepare', 'dispatch']) {
+  for (const boundary of ['options-getter', 'final-clock']) {
+    test(`host ${operation} retains its invocation intrinsic after the ${boundary}`, async () => {
+      const originalApply = Reflect.apply;
+      const calls = [];
+      let interceptedCalls = 0;
+      let interceptedCredential = false;
+      let armed = false;
+      let replaceOnClock = false;
+      const replacement = (_host, _receiver, args) => {
+        interceptedCalls += 1;
+        interceptedCredential ||= args[0]?.credential?.token === TOKEN_CANARY;
+        return { intercepted: true };
+      };
+      const host = function (input) {
+        calls.push({ receiver: this === dispatchPort, credential: input.credential.token === TOKEN_CANARY });
+        return { retained: true };
+      };
+      const dispatchPort = {
+        get prepare() {
+          if (operation !== 'prepare') return undefined;
+          if (armed && boundary === 'final-clock') replaceOnClock = true;
+          return host;
+        },
+        get dispatch() {
+          if (armed && operation === 'dispatch' && boundary === 'final-clock') replaceOnClock = true;
+          return operation === 'dispatch' ? host : async () => {};
+        },
+      };
+      const { fetchImpl, requests } = interceptedFetch();
+      try {
+        const input = billable();
+        const adapter = createOpenRouterImagesAdapter({
+          now() {
+            if (replaceOnClock) Reflect.apply = replacement;
+            return clock();
+          },
+          credentialPort: grantCredentialPort(), fetchImpl,
+          get dispatchPort() {
+            if (boundary === 'options-getter') Reflect.apply = replacement;
+            return dispatchPort;
+          },
+        });
+        armed = operation === 'prepare';
+        const prepared = await adapter.prepare(input);
+        assert.deepEqual(prepared, { prepared: true });
+        if (operation === 'dispatch') {
+          armed = true;
+          await adapter.dispatch(dispatchInput(input, prepared));
+        }
+      } finally {
+        Reflect.apply = originalApply;
+      }
+      assert.equal(interceptedCalls, 0, 'a mutable global invocation function must never receive host input');
+      assert.equal(interceptedCredential, false, 'the replacement must never receive even a synthetic credential');
+      assert.deepEqual(calls, [{ receiver: true, credential: true }], 'invoke the captured host with its original receiver');
+      assert.equal(requests.length, 0, 'the host fixture performs no external request');
+    });
+  }
+}
+
+for (const boundary of ['freeze', 'weakmap-set', 'weakmap-get', 'weakmap-delete', 'weakmap-constructor', 'trim', 'regexp-exec', 'array-is-array']) {
+  test(`credential-bearing intrinsics remain private after replacing ${boundary}`, async () => {
+    const original = { apply: Reflect.apply, freeze: Object.freeze, WeakMap,
+      set: WeakMap.prototype.set, get: WeakMap.prototype.get, delete: WeakMap.prototype.delete,
+      trim: String.prototype.trim, exec: RegExp.prototype.exec, isArray: Array.isArray };
+    let exposures = 0;
+    let constructors = 0;
+    const host = [];
+    const inspect = (value) => {
+      if (value === TOKEN_CANARY || value?.token === TOKEN_CANARY || value?.credential?.token === TOKEN_CANARY) exposures += 1;
+    };
+    const replace = () => {
+      if (boundary === 'freeze') Object.freeze = (value) => { inspect(value); return original.freeze(value); };
+      if (boundary === 'weakmap-set') original.WeakMap.prototype.set = function (key, value) {
+        inspect(value); return original.apply(original.set, this, [key, value]);
+      };
+      if (boundary === 'weakmap-get') original.WeakMap.prototype.get = function (key) {
+        const value = original.apply(original.get, this, [key]); inspect(value); return value;
+      };
+      if (boundary === 'weakmap-delete') original.WeakMap.prototype.delete = function (key) {
+        inspect(original.apply(original.get, this, [key])); return original.apply(original.delete, this, [key]);
+      };
+      if (boundary === 'weakmap-constructor') globalThis.WeakMap = class extends original.WeakMap {
+        constructor() { super(); constructors += 1; }
+        set(key, value) { inspect(value); return original.apply(original.set, this, [key, value]); }
+      };
+      if (boundary === 'trim') String.prototype.trim = function () {
+        inspect(this); return original.apply(original.trim, this, []);
+      };
+      if (boundary === 'regexp-exec') RegExp.prototype.exec = function (value) {
+        inspect(value); return original.apply(original.exec, this, [value]);
+      };
+      if (boundary === 'array-is-array') Array.isArray = (value) => { inspect(value); return original.isArray(value); };
+    };
+    const { fetchImpl, requests } = interceptedFetch();
+    try {
+      const input = billable();
+      const adapter = createOpenRouterImagesAdapter({ now: clock,
+        credentialPort: grantCredentialPort(), fetchImpl,
+        get dispatchPort() {
+          replace();
+          return { async prepare(args) { host.push(['prepare', args.credential.token === TOKEN_CANARY]); },
+            async dispatch(args) { host.push(['dispatch', args.credential.token === TOKEN_CANARY]); } };
+        },
+      });
+      const prepared = await adapter.prepare(input);
+      await adapter.dispatch(dispatchInput(input, prepared));
+      await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
+    } finally {
+      Object.freeze = original.freeze;
+      globalThis.WeakMap = original.WeakMap;
+      original.WeakMap.prototype.set = original.set;
+      original.WeakMap.prototype.get = original.get;
+      original.WeakMap.prototype.delete = original.delete;
+      String.prototype.trim = original.trim;
+      RegExp.prototype.exec = original.exec;
+      Array.isArray = original.isArray;
+    }
+    assert.equal(exposures, 0, 'global replacements cannot observe even synthetic private credentials');
+    assert.equal(constructors, 0, 'private prepared state must use the captured native constructor');
+    assert.deepEqual(host, [['prepare', true], ['dispatch', true]]);
+    assert.equal(requests.length, 0);
+  });
+}
+
+for (const [guard, record] of [
+  ['array-is-array', 'binding'], ['array-is-array', 'evidence'],
+  ['array-is-array', 'review'], ['object-keys', 'binding'],
+]) {
+  test(`credential response ${record} stays private from a replaced ${guard} guard`, async () => {
+    const original = { isArray: Array.isArray, keys: Object.keys };
+    let rawRecord;
+    let exposures = 0;
+    const host = [];
+    const { fetchImpl, requests } = interceptedFetch();
+    const port = grantCredentialPort({ mutate(value) {
+      rawRecord = record === 'binding' ? value.binding
+        : record === 'evidence' ? value.evidence : value.evidence.independent_review;
+      // A resolver can return extra fields. Reject or discard them without giving
+      // an unrelated mutable guard the raw record, even on the refusal path.
+      rawRecord.discarded_secret = TOKEN_CANARY;
+      return value;
+    } });
+    const inspect = (value) => {
+      if (value === rawRecord && value?.discarded_secret === TOKEN_CANARY) exposures += 1;
+    };
+    try {
+      const input = billable();
+      const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: port, fetchImpl,
+        get dispatchPort() {
+          if (guard === 'array-is-array') Array.isArray = (value) => { inspect(value); return original.isArray(value); };
+          if (guard === 'object-keys') Object.keys = (value) => { inspect(value); return original.keys(value); };
+          return { async prepare(args) { host.push(['prepare', args.credential.token === TOKEN_CANARY]); },
+            async dispatch(args) { host.push(['dispatch', args.credential.token === TOKEN_CANARY]); } };
+        },
+      });
+      if (record === 'binding') {
+        await assert.rejects(adapter.prepare(input), (error) => error.code === 'credential_unavailable');
+      } else {
+        const prepared = await adapter.prepare(input);
+        await adapter.dispatch(dispatchInput(input, prepared));
+        await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
+      }
+    } finally {
+      Array.isArray = original.isArray;
+      Object.keys = original.keys;
+    }
+    assert.equal(exposures, 0, 'credential-response records must not reach replacement guards');
+    assert.deepEqual(host, record === 'binding' ? [] : [['prepare', true], ['dispatch', true]]);
+    assert.equal(requests.length, 0);
+  });
+}
+
+for (const boundary of ['some', 'includes', 'iterator']) {
+  test(`unexpected credential binding fields refuse after replacing array ${boundary} and recover with a valid response`, async () => {
+    const original = { apply: Reflect.apply, some: Array.prototype.some,
+      includes: Array.prototype.includes, iterator: Array.prototype[Symbol.iterator] };
+    const unexpected = 'test_unexpected_binding_field';
+    let malformed = true;
+    let interceptedGuards = 0;
+    const calls = [];
+    const host = [];
+    const { fetchImpl, requests } = interceptedFetch();
+    const port = grantCredentialPort({ calls, mutate(value) {
+      if (malformed) value.binding[unexpected] = 'synthetic-disallowed-field';
+      return value;
+    } });
+    const input = billable();
+    let adapter;
+    try {
+      adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: port, fetchImpl,
+        get dispatchPort() {
+          if (boundary === 'some') Array.prototype.some = function (callback, thisArg) {
+            if (this.length === 6 && this[0] === 'service' && this[5] === unexpected) {
+              interceptedGuards += 1; return false;
+            }
+            return original.apply(original.some, this, [callback, thisArg]);
+          };
+          if (boundary === 'includes') Array.prototype.includes = function (value, fromIndex) {
+            if (this.length === 5 && this[0] === 'service' && value === unexpected) {
+              interceptedGuards += 1; return true;
+            }
+            return original.apply(original.includes, this, [value, fromIndex]);
+          };
+          if (boundary === 'iterator') Array.prototype[Symbol.iterator] = function () {
+            if (this.length === 1 && this[0] === 'grant_ref') {
+              interceptedGuards += 1;
+              return original.apply(original.iterator, ['grant_ref', unexpected], []);
+            }
+            return original.apply(original.iterator, this, []);
+          };
+          return { async prepare(args) { host.push(['prepare', args.credential.token === TOKEN_CANARY]); },
+            async dispatch(args) { host.push(['dispatch', args.credential.token === TOKEN_CANARY]); } };
+        },
+      });
+      await assert.rejects(adapter.prepare(input), (error) => error.code === 'credential_unavailable');
+    } finally {
+      Array.prototype.some = original.some;
+      Array.prototype.includes = original.includes;
+      Array.prototype[Symbol.iterator] = original.iterator;
+    }
+    assert.equal(interceptedGuards, 0, 'binding validation cannot call a replaced array helper');
+    assert.equal(calls.length, 1);
+    assert.deepEqual(host, [], 'a malformed binding must refuse before host preparation');
+    assert.equal(requests.length, 0);
+
+    malformed = false;
+    const prepared = await adapter.prepare(input);
+    await adapter.dispatch(dispatchInput(input, prepared));
+    await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
+    assert.equal(calls.length, 2, 'a corrected resolver response can obtain fresh single-use authority');
+    assert.deepEqual(host, [['prepare', true], ['dispatch', true]]);
+    assert.equal(requests.length, 0, 'the recovered host fixture performs no external request');
+  });
+}
+
+for (const boundary of ['object-keys', 'array-map', 'json-stringify', 'set-has', 'descriptor-getter']) {
+  test(`the final authority fence runs no replacement ${boundary} callback`, async () => {
+    const original = { apply: Reflect.apply, keys: Object.keys, map: Array.prototype.map,
+      stringify: JSON.stringify, has: Set.prototype.has,
+      descriptorGet: Object.getOwnPropertyDescriptor(Object.prototype, 'get') };
+    const restore = () => {
+      Object.keys = original.keys; Array.prototype.map = original.map;
+      JSON.stringify = original.stringify; Set.prototype.has = original.has;
+      if (original.descriptorGet) Object.defineProperty(Object.prototype, 'get', original.descriptorGet);
+      else delete Object.prototype.get;
+    };
+    const input = billable();
+    let armed = false;
+    let pending = false;
+    let installed = false;
+    let lateCallbacks = 0;
+    let hostCalls = 0;
+    let outcome;
+    let failure;
+    const mutate = () => { lateCallbacks += 1; input.grant_ref = 'grant:test:changed-by-global'; restore(); };
+    const adapter = createOpenRouterImagesAdapter({ now() {
+      if (pending && !installed) {
+        installed = true;
+        if (boundary === 'object-keys') Object.keys = (value) => { mutate(); return original.keys(value); };
+        if (boundary === 'array-map') Array.prototype.map = function (...args) {
+          mutate(); return original.apply(original.map, this, args);
+        };
+        if (boundary === 'json-stringify') JSON.stringify = (...args) => { mutate(); return original.stringify(...args); };
+        if (boundary === 'set-has') Set.prototype.has = function (value) {
+          mutate(); return original.apply(original.has, this, [value]);
+        };
+        if (boundary === 'descriptor-getter') Object.defineProperty(Object.prototype, 'get', {
+          configurable: true, get() { mutate(); return undefined; },
+        });
+      }
+      return clock();
+    }, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { get prepare() {
+      if (armed) pending = true;
+      return () => { hostCalls += 1; restore(); };
+    }, async dispatch() {} } });
+    armed = true;
+    try { outcome = await adapter.prepare(input); }
+    catch (error) { failure = error; }
+    finally { restore(); }
+    assert.equal(installed, true);
+    assert.equal(lateCallbacks, 0, 'no new callback can mutate authority after its final capture');
+    assert.equal(failure, undefined);
+    assert.deepEqual(outcome, { prepared: true });
+    assert.equal(hostCalls, 1);
+    assert.equal(input.grant_ref, GRANT);
+  });
+}
+
 test('prepare rejects deadlines crossed by host accessors or final binding getters before sharing credentials', async () => {
   for (const boundary of ['host-accessor', 'binding-getter']) {
     let currentTime = clock();
@@ -1962,3 +2296,72 @@ test('owned dispatch cancellation follows shadowed native callers despite synthe
     }
   }
 });
+
+for (const failure of ['replaced-includes', 'resolver-adapter-code', 'resolver-deadline-code',
+  'resolver-code-getter', 'response-token-getter', 'response-binding-getter', 'expiry-coercion']) {
+  test(`credential faults are sanitized by origin and recover after ${failure}`, async () => {
+    const originalIncludes = Array.prototype.includes;
+    const apply = Reflect.apply;
+    const calls = [];
+    const hostCalls = [];
+    const { fetchImpl, requests } = interceptedFetch();
+    const validResolver = grantCredentialPort();
+    let rejectCredential = true;
+    let codeReads = 0;
+    let expiryCoercions = 0;
+    const resolver = { evidence_mode: 'live', async resolveCredential(request) {
+      calls.push(request);
+      if (!rejectCredential) return validResolver.resolveCredential(request);
+      if (failure === 'replaced-includes') {
+        Array.prototype.includes = function (...args) {
+          if (this.length === 2 && this[0] === 'adapter_unavailable' && this[1] === 'preflight_deadline_passed') return true;
+          return apply(originalIncludes, this, args);
+        };
+        throw new AccessPreflightError('credential_unavailable', TOKEN_CANARY);
+      }
+      if (failure === 'resolver-adapter-code') throw new AccessPreflightError('adapter_unavailable', TOKEN_CANARY);
+      if (failure === 'resolver-deadline-code') throw new AccessPreflightError('preflight_deadline_passed', TOKEN_CANARY);
+      if (failure === 'resolver-code-getter') {
+        const cause = new AccessPreflightError('credential_unavailable', TOKEN_CANARY);
+        Object.defineProperty(cause, 'code', { get() { codeReads += 1; throw new Error(TOKEN_CANARY); } });
+        throw cause;
+      }
+      const response = await validResolver.resolveCredential(request);
+      if (failure === 'response-token-getter') {
+        Object.defineProperty(response, 'token', { get() { throw new AccessPreflightError('adapter_unavailable', TOKEN_CANARY); } });
+      } else if (failure === 'response-binding-getter') {
+        Object.defineProperty(response, 'binding', { get() { throw new AccessPreflightError('preflight_deadline_passed', TOKEN_CANARY); } });
+      } else {
+        response.expires_at = { [Symbol.toPrimitive]() {
+          expiryCoercions += 1;
+          throw new AccessPreflightError('adapter_unavailable', TOKEN_CANARY);
+        } };
+      }
+      return response;
+    } };
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: resolver, fetchImpl,
+      dispatchPort: { async prepare() { hostCalls.push('prepare'); return {}; },
+        async dispatch() { hostCalls.push('dispatch'); return { host: 'result' }; } } });
+    const input = billable();
+    let returnedError;
+    try { await adapter.prepare(input); } catch (cause) { returnedError = cause; }
+    finally { Array.prototype.includes = originalIncludes; }
+    assert.equal(calls.length, 1);
+    assert.deepEqual(hostCalls, [], 'resolver faults stop before any host work');
+    assert.equal(requests.length, 0, 'resolver faults make no external requests');
+    assert.ok(returnedError instanceof AccessPreflightError, 'the adapter returns a typed credential failure');
+    assert.equal(returnedError.code, 'credential_unavailable');
+    assert.equal(returnedError.message, 'Credential provider did not return a usable access token.');
+    assert.equal(codeReads, 0, 'a resolver-owned error is never inspected');
+    assert.equal(expiryCoercions, 0, 'a non-string expiry is never coerced');
+
+    rejectCredential = false;
+    const prepared = await adapter.prepare(input);
+    assert.deepEqual(hostCalls, ['prepare'], 'a fresh valid response recovers');
+    assert.deepEqual(await adapter.dispatch(dispatchInput(input, prepared)), { host: 'result' });
+    await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (cause) => cause.code === 'credential_unavailable');
+    assert.deepEqual(hostCalls, ['prepare', 'dispatch'], 'recovery still permits only one dispatch');
+    assert.equal(calls.length, 2);
+    assert.equal(requests.length, 0);
+  });
+}
