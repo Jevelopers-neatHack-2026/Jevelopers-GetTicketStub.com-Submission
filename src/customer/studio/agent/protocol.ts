@@ -36,6 +36,9 @@ export const LIMITS = {
 
 export type FactField = "date" | "venue" | "keep" | "unkeep";
 export type TextField = "title" | "subtitle" | "note";
+/** What a question is about: the closed set an answer can be translated against. */
+export type AskField = "date" | "venue" | TextField;
+export const ASK_FIELDS: readonly AskField[] = ["date", "venue", "title", "subtitle", "note"];
 
 export type Action =
   | { type: "set_fact"; field: FactField; value: string }
@@ -46,7 +49,7 @@ export type Action =
   /** `procedural` is the fallback (no provider call); `simulate` is a demo-only forced failure for the recovery path. */
   | { type: "remix_art"; vibe?: string; procedural?: boolean; simulate?: "failure" }
   | { type: "show_back" }
-  | { type: "ask_user"; question: string; options?: string[] }
+  | { type: "ask_user"; question: string; options?: string[]; field?: AskField }
   | { type: "none" };
 
 export type ActionType = Action["type"];
@@ -86,6 +89,15 @@ export interface AgentRequest {
   message?: string;
   /** Observed results: of the action(s) just applied (follow-up) or of the previous turn (context for a new message). */
   results?: ActionResult[];
+  /** The question the agent last asked, so a typed or tapped answer can be translated. Only meaningful with a message. */
+  pending?: PendingQuestion;
+}
+
+/** An unanswered `ask_user`, carried by the browser into the next turn. It is context, never an instruction: only the owner's Apply changes a stub. */
+export interface PendingQuestion {
+  field: AskField;
+  question: string;
+  options?: string[];
 }
 
 export interface AgentPlan {
@@ -131,6 +143,33 @@ function text(v: unknown, max: number, name: string): Parsed<string> {
   if (CONTROL.test(s)) return bad(`${name} has control characters`);
   if (/[<>]/.test(s)) return bad(`${name} has markup`);
   return good(s);
+}
+
+function parseQuestion(question: unknown, rawOptions: unknown): Parsed<{ question: string; options?: string[] }> {
+  const q = text(question, LIMITS.question, "question");
+  if (!q.ok) return q;
+  const out: { question: string; options?: string[] } = { question: q.value };
+  if (rawOptions !== undefined) {
+    if (!Array.isArray(rawOptions) || rawOptions.length > LIMITS.options) return bad(`options must be a list of at most ${LIMITS.options}`);
+    const options: string[] = [];
+    for (const o of rawOptions) {
+      const t = text(o, LIMITS.option, "option");
+      if (!t.ok) return t;
+      options.push(t.value);
+    }
+    if (options.length) out.options = options;
+  }
+  return good(out);
+}
+
+function parsePending(raw: unknown): Parsed<PendingQuestion> {
+  if (!isObject(raw)) return bad("pending must be an object");
+  const extra = onlyKeys(raw, ["field", "question", "options"]);
+  if (extra) return bad(`pending: ${extra}`);
+  if (!(ASK_FIELDS as readonly unknown[]).includes(raw.field)) return bad("pending field is not valid");
+  const q = parseQuestion(raw.question, raw.options);
+  if (!q.ok) return bad(`pending: ${q.reason}`);
+  return good({ field: raw.field as AskField, ...q.value });
 }
 
 /** Validates one action. `allowSimulate` is true only for the demo planner's forced failure. */
@@ -198,20 +237,14 @@ export function parseAction(raw: unknown, opts: { allowSimulate?: boolean } = {}
       return good(out);
     }
     case "ask_user": {
-      extra = keys(["question", "options"]);
+      extra = keys(["question", "options", "field"]);
       if (extra) return bad(extra);
-      const q = text(raw.question, LIMITS.question, "question");
+      const q = parseQuestion(raw.question, raw.options);
       if (!q.ok) return q;
-      const out: Extract<Action, { type: "ask_user" }> = { type: "ask_user", question: q.value };
-      if (raw.options !== undefined) {
-        if (!Array.isArray(raw.options) || raw.options.length > LIMITS.options) return bad(`options must be a list of at most ${LIMITS.options}`);
-        const options: string[] = [];
-        for (const o of raw.options) {
-          const t = text(o, LIMITS.option, "option");
-          if (!t.ok) return t;
-          options.push(t.value);
-        }
-        if (options.length) out.options = options;
+      const out: Extract<Action, { type: "ask_user" }> = { type: "ask_user", ...q.value };
+      if (raw.field !== undefined) {
+        if (!(ASK_FIELDS as readonly unknown[]).includes(raw.field)) return bad("unknown question field");
+        out.field = raw.field as AskField;
       }
       return good(out);
     }
@@ -307,7 +340,7 @@ function parseResults(raw: unknown): Parsed<ActionResult[]> {
 /** Validates a request body from the browser. */
 export function parseRequest(raw: unknown): Parsed<AgentRequest> {
   if (!isObject(raw)) return bad("the request must be an object");
-  const extra = onlyKeys(raw, ["schema", "state", "message", "results"]);
+  const extra = onlyKeys(raw, ["schema", "state", "message", "results", "pending"]);
   if (extra) return bad(extra);
   if (raw.schema !== AGENT_SCHEMA) return bad("unknown schema");
   const state = parseState(raw.state);
@@ -324,6 +357,13 @@ export function parseRequest(raw: unknown): Parsed<AgentRequest> {
     const r = parseResults(raw.results);
     if (!r.ok) return r;
     out.results = r.value;
+  }
+  if (raw.pending !== undefined) {
+    // a question can only be answered: without a message there is nothing to translate
+    if (out.message === undefined) return bad("pending needs a message");
+    const p = parsePending(raw.pending);
+    if (!p.ok) return p;
+    out.pending = p.value;
   }
   if (out.message === undefined && !out.results?.length) return bad("send a message or results");
   return good(out);

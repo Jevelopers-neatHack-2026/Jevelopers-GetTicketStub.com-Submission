@@ -208,6 +208,95 @@ test("an invalid date is not proposed: the planner asks instead", () => {
   assert.deepEqual(types(ask("fix the date")), ["ask_user"]);
 });
 
+// What the browser carries from one turn to the next: the first typed question of the last plan.
+const pendingOf = (plan) => {
+  const q = plan.actions.find((a) => a.type === "ask_user" && a.field);
+  return q ? { field: q.field, question: q.question, ...(q.options ? { options: q.options } : {}) } : undefined;
+};
+const answer = (prev, message) => planDemo(request({ message, pending: pendingOf(prev) }));
+
+test("a clarifying question is answered on the next turn: date and venue, typed", () => {
+  const d1 = ask("fix the date");
+  assert.deepEqual(pendingOf(d1), { field: "date", question: d1.actions[0].question });
+  assert.deepEqual(answer(d1, "11 Oct 2024").actions, [{ type: "set_fact", field: "date", value: "2024-10-11" }]);
+  assert.deepEqual(answer(d1, "October 13, 2024.").actions, [{ type: "set_fact", field: "date", value: "2024-10-13" }]);
+  const v1 = ask("change the venue");
+  assert.deepEqual(pendingOf(v1), { field: "venue", question: "Where was it?" });
+  assert.deepEqual(answer(v1, "Barrowland Ballroom").actions, [{ type: "set_fact", field: "venue", value: "Barrowland Ballroom" }]);
+  const plan = answer(v1, "Barrowland Ballroom");
+  assert.match(plan.reply, /Nothing changes until you apply it/);
+  assert.equal(P.parsePlan(plan).ok, true);
+});
+
+test("a tapped option is an answer to the pending question", () => {
+  const prev = { reply: "Which one?", actions: [{ type: "ask_user", field: "venue", question: "Which venue?", options: ["Barrowland Ballroom", "O2 Academy"] }] };
+  assert.equal(P.parsePlan(prev).ok, true);
+  assert.deepEqual(answer(prev, "O2 Academy").actions, [{ type: "set_fact", field: "venue", value: "O2 Academy" }]);
+  const dates = { reply: "Which date?", actions: [{ type: "ask_user", field: "date", question: "Which date?", options: ["2024-10-11", "2024-10-12"] }] };
+  assert.deepEqual(answer(dates, "2024-10-12").actions, [{ type: "set_fact", field: "date", value: "2024-10-12" }]);
+});
+
+test("an answer that cannot be used asks again, with a reason", () => {
+  const d1 = ask("fix the date");
+  for (const bad of ["no idea", "2024-02-31"]) {
+    const plan = answer(d1, bad);
+    assert.deepEqual(types(plan), ["ask_user"], bad);
+    assert.equal(plan.actions[0].field, "date");
+    assert.ok(plan.reply.length > 10);
+  }
+  const v1 = ask("change the venue");
+  const long = answer(v1, "x".repeat(P.LIMITS.value + 1));
+  assert.deepEqual(types(long), ["ask_user"]);
+  assert.equal(long.actions[0].field, "venue");
+  assert.deepEqual(types(answer(v1, "<script>")), ["ask_user"]);
+});
+
+test("a change of topic ignores the pending question and clears it", () => {
+  const d1 = ask("fix the date");
+  const plan = answer(d1, "make it framed");
+  assert.deepEqual(plan.actions, [{ type: "set_material", material: "framed" }]);
+  assert.equal(pendingOf(plan), undefined);
+  assert.deepEqual(answer(d1, "what time did it start?").actions, []);
+});
+
+test("the pending question is validated like every other input", () => {
+  const ok = { field: "date", question: "Which date was it?", options: ["a", "b"] };
+  assert.equal(P.parseRequest(request({ message: "x", pending: ok })).ok, true);
+  const tampered = [
+    { ...ok, field: "password" }, { ...ok, extra: 1 }, { ...ok, question: "q".repeat(P.LIMITS.question + 1) }, { ...ok, question: "<b>x</b>" },
+    { ...ok, question: "a\u0000b" }, { ...ok, options: ["a", "b", "c", "d", "e"] }, { ...ok, options: ["o".repeat(P.LIMITS.option + 1)] }, { ...ok, options: [1] },
+    { field: "date" }, "date", [], null,
+  ];
+  for (const pending of tampered) assert.equal(P.parseRequest(request({ message: "x", pending })).ok, false, JSON.stringify(pending));
+  assert.equal(P.parseRequest(request({ pending: ok, results: [] })).ok, false, "pending needs a message");
+  assert.equal(P.parseAction({ type: "ask_user", question: "q", field: "seat" }).ok, false);
+});
+
+test("the pending context never applies anything: the route returns proposals only, and a tampered one is a 400", async () => {
+  demo();
+  const pending = { field: "date", question: "Which date was it?" };
+  const res = await agent.POST(post(request({ message: "11 Oct 2024", pending })));
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.actions, [{ type: "set_fact", field: "date", value: "2024-10-11" }]);
+  assert.equal((await agent.POST(post(request({ message: "11 Oct 2024", pending: { ...pending, field: "evil" } })))).status, 400);
+  assert.equal((await agent.POST(post(request({ message: "x", pending: { ...pending, question: "q".repeat(5000) } })))).status, 400);
+});
+
+test("live mode hands the pending question to the model as data, and still validates what comes back", async () => {
+  live();
+  const prompts = [];
+  globalThis.fetch = async (url, init) => {
+    prompts.push(JSON.parse(init.body));
+    return chat('{"reply":"I can set the venue.","actions":[{"type":"set_fact","field":"venue","value":"Barrowland Ballroom"}]}');
+  };
+  const pending = { field: "venue", question: "Where was it?" };
+  const body = await (await agent.POST(post(request({ message: "Barrowland Ballroom", pending })))).json();
+  assert.deepEqual(body.actions, [{ type: "set_fact", field: "venue", value: "Barrowland Ballroom" }]);
+  assert.match(JSON.stringify(prompts[0]), /Pending question/);
+  assert.match(JSON.stringify(prompts[0]), /Where was it/);
+});
+
 test("the follow-up refers to what actually happened", () => {
   const s = P.summarize(stub());
   const applied = planDemo({ schema: P.AGENT_SCHEMA, state: { ...s, edition: "letterpress", versions: 3 }, results: [

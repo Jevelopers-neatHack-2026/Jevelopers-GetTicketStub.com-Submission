@@ -15,7 +15,7 @@ import { artOutcome, clock, errorCode, flow, since } from "@/customer/flows/even
 import { announce } from "@/customer/a11y/announce";
 import { MESSAGE_CODES } from "@/customer/feedback-messages/messages";
 import { AGENT_SCHEMA, describeAction, summarize } from "./protocol";
-import type { Action, ActionResult, ResultStatus } from "./protocol";
+import type { Action, ActionResult, PendingQuestion, ResultStatus } from "./protocol";
 import { applyToStub, proceduralArt, withArt } from "./apply";
 import styles from "./AgentChat.module.css";
 
@@ -86,6 +86,8 @@ export function AgentChat(props: {
   const itemsRef = useRef<Record<string, ItemState>>({});
   // what the last follow-up reported: context for the next message
   const lastResults = useRef<ActionResult[]>([]);
+  // the question the agent is waiting on: sent with the next message, cleared once it is answered or the topic changes
+  const pendingRef = useRef<PendingQuestion | undefined>(undefined);
 
   // Latest stub/onChange for async handlers.
   const stubRef = useRef(stub);
@@ -186,7 +188,11 @@ export function AgentChat(props: {
         state: summarize(stubRef.current),
         ...(message !== undefined ? { message } : {}),
         ...(results?.length ? { results } : {}),
+        ...(message !== undefined && pendingRef.current ? { pending: pendingRef.current } : {}),
       });
+      // the first typed question this reply asks becomes the pending one; anything else clears it
+      const q = res.actions.find((a): a is Extract<Action, { type: "ask_user" }> => a.type === "ask_user" && !!a.field);
+      pendingRef.current = q?.field ? { field: q.field, question: q.question, ...(q.options?.length ? { options: q.options } : {}) } : undefined;
       if (message !== undefined) flow("agent_message", { intent: res.actions.some((a) => a.type !== "ask_user") ? "action" : "question", result: res.provenance === "live" ? "live" : "rules" });
       say(res.reply, res.provenance === "live" ? "live" : "simulated", undefined, res.actions);
     } catch (error) {
@@ -250,8 +256,13 @@ export function AgentChat(props: {
     if (!text || busy) return;
     userSays(text);
     const t = text.toLowerCase();
-    if (/\bweather\b|\brain\b|\btemperature\b/.test(t) && !/\bmood|remix|art\b/.test(t)) return addWeather();
-    if (/\bphoto\b|\bpicture\b|\bimage of mine\b/.test(t)) {
+    const answering = pendingRef.current?.options?.some((o) => o.toLowerCase() === t);
+    if (!answering && /\bweather\b|\brain\b|\btemperature\b/.test(t) && !/\bmood|remix|art\b/.test(t)) {
+      pendingRef.current = undefined;
+      return addWeather();
+    }
+    if (!answering && /\bphoto\b|\bpicture\b|\bimage of mine\b/.test(t)) {
+      pendingRef.current = undefined;
       flow("agent_message", { intent: "photo", result: "rules" });
       say("Choose a photo to add to your stub.");
       fileRef.current?.click();

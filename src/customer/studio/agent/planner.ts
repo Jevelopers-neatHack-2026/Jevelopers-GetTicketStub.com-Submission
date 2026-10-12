@@ -4,7 +4,7 @@
 import { EDITIONS } from "../types";
 import type { Edition, Material } from "../types";
 import { LIMITS, describeAction, describeDone, editionLabel, isRealDate, parsePlan } from "./protocol";
-import type { Action, ActionResult, AgentPlan, AgentRequest, StateSummary } from "./protocol";
+import type { Action, ActionResult, AgentPlan, AgentRequest, AskField, PendingQuestion, StateSummary } from "./protocol";
 
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 /** A month name or its three-letter short form ("sept" too); anything else is not a month. */
@@ -43,7 +43,7 @@ function valueAfter(raw: string, field: RegExp): string | undefined {
 const EDITION_WORDS: Record<string, Edition> = { letterpress: "letterpress", risograph: "risograph", riso: "risograph", minimal: "minimal", classic: "classic", researched: "researched" };
 const VIBES = ["neon", "70s", "moodier", "minimal", "risograph"] as const;
 
-const ask = (question: string, options?: string[]): Action => ({ type: "ask_user", question, ...(options?.length ? { options } : {}) });
+const ask = (question: string, options?: string[], field?: AskField): Action => ({ type: "ask_user", question, ...(options?.length ? { options } : {}), ...(field ? { field } : {}) });
 
 function sentence(actions: Action[], state: StateSummary): string {
   const list = actions.map((a) => describeAction(a, state).replace(/^./, (c) => c.toLowerCase()));
@@ -69,14 +69,14 @@ function fromMessage(message: string, state: StateSummary): AgentPlan {
     else
       return {
         reply: found ? `${found.iso} is not a real calendar date, so I will not change anything.` : "I could not find a date in that.",
-        actions: [ask("Which date was it? Give a day, month and year, like 12 Oct 2024.")],
+        actions: [ask("Which date was it? Give a day, month and year, like 12 Oct 2024.", undefined, "date")],
       };
   }
   // venue
   if (/\bvenue\b/.test(t)) {
     const v = valueAfter(raw, /\bvenue\b/);
     if (v && v.length <= LIMITS.value && !/[<>]/.test(v)) actions.push({ type: "set_fact", field: "venue", value: v });
-    else if (!actions.length) return { reply: "I need the venue's name to change it.", actions: [ask("Where was it?")] };
+    else if (!actions.length) return { reply: "I need the venue's name to change it.", actions: [ask("Where was it?", undefined, "venue")] };
   }
   // title and subtitle
   for (const field of ["title", "subtitle"] as const) {
@@ -161,14 +161,46 @@ function fromResults(results: ActionResult[], state: StateSummary): AgentPlan {
     };
   }
   if (a.type === "set_fact" || a.type === "set_text") {
-    return { reply: `I could not apply that: ${reason}. Your stub is unchanged.${applied}`, actions: [ask(a.type === "set_fact" && a.field === "date" ? "Which date was it? Give a day, month and year." : "What should it say instead?")] };
+    return { reply: `I could not apply that: ${reason}. Your stub is unchanged.${applied}`, actions: [a.type === "set_fact" ? (a.field === "date" || a.field === "venue" ? ask(a.field === "date" ? "Which date was it? Give a day, month and year." : "Where was it?", undefined, a.field) : ask("What should it say instead?")) : ask("What should it say instead?", undefined, a.field)] };
   }
   return { reply: `I could not apply ${describeAction(a, state).replace(/^./, (c) => c.toLowerCase())}: ${reason}. Your stub is unchanged.${applied}`, actions: [] };
 }
 
+const FIELD_LABEL: Record<AskField, string> = { date: "date", venue: "venue", title: "title", subtitle: "subtitle", note: "note" };
+const FIELD_MAX: Record<AskField, number> = { date: LIMITS.value, venue: LIMITS.value, title: LIMITS.title, subtitle: LIMITS.subtitle, note: LIMITS.note };
+
+/**
+ * Translates an answer to the pending question into a typed proposal. Returns undefined when the message is a change
+ * of topic (the caller plans it as a new request, which clears the pending question). An answer that can't be used
+ * asks again, with a reason: it never goes quiet. The result is a proposal only; the owner still taps Apply.
+ */
+export function resolvePending(message: string, pending: PendingQuestion, state: StateSummary): AgentPlan | undefined {
+  const raw = message.trim();
+  const isOption = !!pending.options?.some((o) => o.toLowerCase() === raw.toLowerCase());
+  const again = (why: string): AgentPlan => ({ reply: why, actions: [ask(pending.question, pending.options, pending.field)] });
+  if (!isOption) {
+    // a different request (a question, or something the planner can act on) is a change of topic
+    if (raw.endsWith("?")) return undefined;
+    if (fromMessage(raw, state).actions.some((a) => a.type !== "ask_user") && !(pending.field === "date" && findDate(raw, state.dateISO ? Number(state.dateISO.slice(0, 4)) : undefined))) return undefined;
+  }
+  const answer = isOption ? pending.options!.find((o) => o.toLowerCase() === raw.toLowerCase())! : tidy(raw);
+  if (pending.field === "date") {
+    const found = findDate(answer, state.dateISO ? Number(state.dateISO.slice(0, 4)) : undefined);
+    if (!found) return again("I could not find a date in that, so nothing is proposed.");
+    if (!found.real) return again(`${found.iso} is not a real calendar date, so nothing is proposed.`);
+    return { reply: sentence([{ type: "set_fact", field: "date", value: found.iso }], state), actions: [{ type: "set_fact", field: "date", value: found.iso }] };
+  }
+  const label = FIELD_LABEL[pending.field];
+  if (!answer) return again(`I need a ${label} to propose it.`);
+  if (answer.length > FIELD_MAX[pending.field] || /[<>]/.test(answer)) return again(`That ${label} is too long or has characters I cannot use, so nothing is proposed.`);
+  const action: Action = pending.field === "venue" ? { type: "set_fact", field: "venue", value: answer } : { type: "set_text", field: pending.field, value: answer };
+  return { reply: sentence([action], state), actions: [action] };
+}
+
 /** One turn: a plan for a new message, or the follow-up to results. Always valid. */
 export function planDemo(req: AgentRequest): AgentPlan {
-  const plan = req.message !== undefined ? fromMessage(req.message, req.state) : fromResults(req.results ?? [], req.state);
+  const answered = req.message !== undefined && req.pending ? resolvePending(req.message, req.pending, req.state) : undefined;
+  const plan = answered ?? (req.message !== undefined ? fromMessage(req.message, req.state) : fromResults(req.results ?? [], req.state));
   const checked = parsePlan(plan, { allowSimulate: true });
   return checked.ok ? checked.value : { reply: "I could not turn that into a safe change.", actions: [] };
 }
