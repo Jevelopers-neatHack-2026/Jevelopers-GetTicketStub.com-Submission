@@ -5,7 +5,7 @@ import type { Finish, Material, Stub } from "@/customer/studio/types";
 import { bindingNow } from "./approval";
 import { canonicalJson as approvalJson, hashesOf, type ApprovalRecord } from "./approval-token";
 import { contextEnvironment, type RequestContext } from "./context";
-import type { Keyring } from "./keyring";
+import { secretsCollide, type Keyring } from "./keyring";
 import { orderAuthKeyring, requireOrderAuthKeyring } from "./signing-keys";
 import { HttpError } from "./http";
 import { getStorage } from "./index";
@@ -213,12 +213,14 @@ export async function revokeOrderAuthorization(tenant: string, stubId: string, i
 // Consumer side. Authentication is a stopgap: one shared HMAC key, request signing, one consumer id.
 // ---------------------------------------------------------------------------------------------
 
-/** ORDER_AUTH_CONSUMER_KEY, at least 32 characters. Never the published fixture key, never CONTEXT_SECRET. Null means the consumer port is off. */
+/** ORDER_AUTH_CONSUMER_KEY, at least 32 characters. Never the published fixture key, never CONTEXT_SECRET (raw or decoded). Null means the consumer port is off. */
 function consumerKey(): string | null {
   const k = process.env.ORDER_AUTH_CONSUMER_KEY?.trim();
   if (!k || k.length < 32 || k.includes("FIXTURE-ONLY")) return null;
   const ctx = process.env.CONTEXT_SECRET?.trim();
-  return ctx && k === ctx ? null : k;
+  // Refused when it is CONTEXT_SECRET in either reading (the same string, or one is the other's base64url), so one pasted
+  // value never covers both context tokens and consumer requests.
+  return ctx && (k === ctx || secretsCollide(k, ctx)) ? null : k;
 }
 
 /**

@@ -468,3 +468,28 @@ test("N2: a retired order-authorization key refuses a token issued after its ret
     assert.equal(verifyOrderAuthorization(at(retiredAt + 5 * 60_000 + 1), keys, expect(), NOW + 60_000).reason, "forged", "issued after retirement");
   });
 });
+
+test("re-review nit: ORDER_AUTH_CONSUMER_KEY equal to CONTEXT_SECRET, as the same string or either's base64url, turns the consumer port off", async () => {
+  const { readConsumerJson } = await loadReader();
+  const { secretsCollide } = await import("../src/server/keyring.ts");
+  const s = b64k();
+  assert.equal(secretsCollide(s, s), true);
+  assert.equal(secretsCollide(s, Buffer.from(s).toString("base64url")), true);
+  assert.equal(secretsCollide(Buffer.from(s).toString("base64url"), s), true);
+  assert.equal(secretsCollide(s, b64k()), false);
+  const req = () => new Request("http://localhost/api/order-authorizations/verify", { method: "POST", body: "{}" });
+  const saved = { k: process.env.ORDER_AUTH_CONSUMER_KEY, c: process.env.CONTEXT_SECRET };
+  try {
+    for (const [consumer, ctx] of [[s, s], [s, Buffer.from(s).toString("base64url")], [Buffer.from(s).toString("base64url"), s]]) {
+      process.env.ORDER_AUTH_CONSUMER_KEY = consumer;
+      process.env.CONTEXT_SECRET = ctx;
+      await assert.rejects(readConsumerJson(req(), 1000), (e) => e.status === 503 && e.code === "consumer_unavailable");
+    }
+    process.env.ORDER_AUTH_CONSUMER_KEY = s;
+    process.env.CONTEXT_SECRET = b64k();
+    await assert.rejects(readConsumerJson(req(), 1000), (e) => e.status === 401, "a distinct pair reaches signature checking");
+  } finally {
+    if (saved.k === undefined) delete process.env.ORDER_AUTH_CONSUMER_KEY; else process.env.ORDER_AUTH_CONSUMER_KEY = saved.k;
+    if (saved.c === undefined) delete process.env.CONTEXT_SECRET; else process.env.CONTEXT_SECRET = saved.c;
+  }
+});
