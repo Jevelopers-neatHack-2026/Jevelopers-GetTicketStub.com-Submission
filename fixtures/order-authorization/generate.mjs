@@ -88,8 +88,8 @@ const out = {};
  * expect: what the consumer names and holds. state: the issuer's current answer. intent: verify (read only), claim, or revalidate (dispatch time).
  * outcome: what a correct verifier answers. Terms in `expect` are the consumer's own copy; it never takes them from the token it is checking.
  */
-function add(name, description, token, { intent = "verify", expect = expectOf(), state = live, verifyAt = NOW + 5 * MIN, outcome }) {
-  out[name] = { fixture: name, description, intent, verifyAt: iso(verifyAt), token, expect, ...(state ? { state } : {}), outcome };
+function add(name, description, token, { intent = "verify", expect = expectOf(), state = live, verifyAt = NOW + 5 * MIN, consumer, outcome }) {
+  out[name] = { fixture: name, description, intent, verifyAt: iso(verifyAt), token, expect, ...(state ? { state } : {}), ...(consumer ? { consumer } : {}), outcome };
 }
 const sign = (r, key = FIXTURE_KEY) => signOrderAuthorization(r, key);
 const good = sign(record());
@@ -137,6 +137,7 @@ for (const [name, path, value, what] of [
 }
 
 add("expired", "Verified sixteen minutes after issue; the lifetime is fifteen.", good, { verifyAt: NOW + 16 * MIN, outcome: no("expired") });
+for (const [tag, label] of [["nan", "NaN"], ["infinity", "Infinity"], ["negative", "-1"], ["string", "a string"]]) add(`clock-${tag}`, `The valid-submit case, but the consumer's trusted clock is ${label}. A clock that is not a finite number above zero cannot judge expiry, so the answer is invalid_clock.`, good, { consumer: { clock: tag }, outcome: no("invalid_clock") });
 add("revoked", "The owner revoked it before any claim. The issuer says revoked: true.", good, { state: { ...live, revoked: true }, outcome: no("revoked") });
 add("stale-approval-revoked", "The owner revoked the print.compose approval this authorization references. The authorization itself is not revoked, and still fails: it never outlives its approval.", good, { state: { ...live, approval: "revoked" }, outcome: no("stale_approval") });
 add("stale-approval-expired", "The referenced approval has expired (seven days).", good, { state: { ...live, approval: "expired" }, outcome: no("stale_approval") });

@@ -112,6 +112,20 @@ The app keeps accounts, walls, orders and shares in one SQLite file, and art in 
 - **Writable, no volume.** Leave them unset and the defaults under `./data` work, but the data resets on each deploy. The startup line and `/api/health` (`"persistence": "default-path"`) say so. It is fine for a preview and wrong for anything people rely on.
 - **Not writable.** The server runs device-only. `/api/health` reports `"storage": "unavailable"`, every route that needs storage answers 503 `storage_unavailable` ("Saving is off on this preview."), art falls back to procedural with no OpenAI call, and the app hides sign-in and shows "Saving off · this device only". Stubs, shares (as encoded links) and sandbox orders keep working on the device. `npm run verify:product -- --suite degraded --mode fixture --evidence-dir out/evidence` proves this against a build.
 
+### Backup and restore
+
+The database runs in WAL mode, so committed rows can sit in `ticketstub.sqlite-wal` for a long time. Copying `ticketstub.sqlite` on its own, or the three files one after another, is not a backup. Use the app instead:
+
+1. Sign in as staff (an `ADMIN_EMAILS` address) and, from a page on the same site, run `fetch("/api/admin/backup", { method: "POST" }).then((r) => r.json())`. The server takes a consistent snapshot with `VACUUM INTO` on a second connection (no downtime, the app keeps writing), then copies the art and re-hashes every file. Output goes to `backups/<id>/` next to the database (`/private/backups/<id>/` on Plus Launch): `ticketstub.sqlite`, `files/` and `manifest.json`. The response is the manifest: row counts per table and file hashes, never row contents. `ok` is false if the integrity check failed or the snapshot references art that isn't on disk. `GET /api/admin/backup` lists finished backups. Anyone who isn't staff gets a 404.
+2. Download the backup folder's files from the host's File Manager (Private Storage). GoDaddy limits each download to under 25 MB; the manifest's `downloadable` says whether every file fits. Keep downloads off GitHub and out of shared folders: they hold customer data.
+3. Restore into a new, empty folder, never over a live one: `node scripts/restore-backup.mjs <backup folder> <new folder>`. It checks every hash against the manifest, runs `integrity_check`, compares row counts and prints the command to start an isolated demo-mode server on the copy with no mail or provider keys.
+
+The server also takes the same backup on its own once a week. Each hour it checks whether the newest finished backup is at least `TICKETSTUB_BACKUP_EVERY_DAYS` old (default 7; `0` or `off` turns it off) and takes one if so, logging `[backup] scheduled <id> ok`. The age is read from the backups on disk, so restarts and deploys don't reset it. A lock file in `backups/` keeps the scheduled run, a staff POST and a second process (Preview and Publish share `/private` on Plus Launch) from running at once. It only runs when `TICKETSTUB_DB` and `TICKETSTUB_FILES` are both set. A scheduled backup still lives on the same disk as the database: download one now and then.
+
+Nothing deletes backups. Prune `/private/backups` by hand, and only after the newest one has been restored and checked.
+
+The deployed checks only the owner can run (sandbox flag off, restart survival, backup download, restore drill, real-email sign-in) are in [docs/operations/deployed-auth-storage-runbook.md](docs/operations/deployed-auth-storage-runbook.md).
+
 ### Verifying it (`verify:product`)
 
 ```
@@ -128,6 +142,8 @@ npm run verify:product -- --suite foundation --mode fixture --evidence-dir out/e
 | `a11y` | GT-11: axe-core on eight pages at 390 and 1280 px, overflow at 320, 640 and 200% zoom, a keyboard walk of the critical path with dialog focus, reduced motion, and the desk colours against WCAG AA, in a real headless Chrome (needs Chrome or Edge, or `CHROME_PATH`). `accessibility` is an alias. See `docs/product/accessibility.md` |
 | `production` | `scripts/smoke-production.mjs` against a production server |
 | `degraded` | a production server whose `TICKETSTUB_DB` and `TICKETSTUB_FILES` sit under a file, so storage can't be written: the 503s, the health fields, every page rendering 200, and `smoke:production` still passing |
+| `mail-off` | #27: a production server with no `RESEND_API_KEY` and `TICKETSTUB_SANDBOX_MAIL` unset, `0`, `true`, empty or ` 1`: sign-in and email change answer 503 `mail_unavailable` with no `devLink`, the log holds no link and no full address, the stored link is a hash that lives 15 minutes, and the dev email preview is a 404. A control run with the flag at `1` must hand out a link, sets a `ts_session` cookie that is HttpOnly, SameSite=Lax, Secure, `Path=/` and 90 days, and the link works once |
+| `backup-drill` | #27: seeds a wall, art, a share, an order and an organizer event through the app, takes `POST /api/admin/backup` as staff (404 for others), restarts on the same disk, restores with `scripts/restore-backup.mjs` into a new folder, re-checks hashes, `integrity_check` and row counts, and serves the copy. The evidence file's `drill` field keeps counts and hashes only |
 
 `--mode fixture` is the only mode: the run starts its own production server on a free port with a throwaway database, no provider or mail keys, and `ADMIN_EMAILS` set to a test address, and it blocks every outbound host except loopback (`scripts/lib/fixture-network-guard.mjs`; a blocked attempt fails the run even if the code swallowed it). An unknown suite, a missing build or fixture, and any skipped check exit nonzero. Each run writes `<evidence-dir>/<suite>-<timestamp>.json` with the command, exit code, counts, timestamps, git SHA, mode and per-step results. `npm run build` must have run first. See `docs/architecture/routes.md` for the route and state map and `docs/adr/0001-runtime.md` for the runtime decision.
 

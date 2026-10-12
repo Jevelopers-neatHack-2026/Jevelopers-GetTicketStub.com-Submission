@@ -13,7 +13,8 @@
     "not_orderable",
     "already_claimed",
     "not_claimed",
-    "idempotency_conflict"
+    "idempotency_conflict",
+    "invalid_clock"
   ],
   "key": "fixture-key.json",
   "content": "content.json",
@@ -48,6 +49,10 @@
     "changed-terms-order.json",
     "changed-terms-capability-version.json",
     "expired.json",
+    "clock-nan.json",
+    "clock-infinity.json",
+    "clock-negative.json",
+    "clock-string.json",
     "revoked.json",
     "stale-approval-revoked.json",
     "stale-approval-expired.json",

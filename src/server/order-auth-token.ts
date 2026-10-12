@@ -35,9 +35,10 @@ export type OrderAuthFailure =
   | "not_orderable"
   | "already_claimed"
   | "not_claimed"
-  | "idempotency_conflict";
+  | "idempotency_conflict"
+  | "invalid_clock";
 export const ORDER_AUTH_FAILURES: readonly OrderAuthFailure[] = [
-  "unknown", "forged", "unsupported_version", "wrong_scope", "changed_terms", "revoked", "expired", "stale_approval", "stale", "not_orderable", "already_claimed", "not_claimed", "idempotency_conflict",
+  "unknown", "forged", "unsupported_version", "wrong_scope", "changed_terms", "revoked", "expired", "stale_approval", "stale", "not_orderable", "already_claimed", "not_claimed", "idempotency_conflict", "invalid_clock",
 ];
 
 export interface OrderAuthDesign {
@@ -203,7 +204,8 @@ export function orderAuthIdOf(token: string): string | null {
 
 /**
  * Checks in this order, first failure wins:
- *   unknown (not a token, or the issuer has no such record) -> forged (HMAC, constant time) -> unsupported_version
+ *   invalid_clock (`now` is not a finite number > 0: the verifier's own clock is bad, nothing can be judged; checked first of all)
+ *   -> unknown (not a token, or the issuer has no such record) -> forged (HMAC, constant time) -> unsupported_version
  *   -> wrong_scope (tenant, project, audience, action or provider differs from the consumer's)
  *   -> changed_terms (any term the consumer holds differs from the bound one: SKU, options, quote, amount, currency, destination, design, approval, capability version)
  *   -> revoked -> expired -> stale_approval (the referenced approval is not active now) -> stale (renewed, membership or capability version moved)
@@ -220,6 +222,7 @@ export function verifyOrderAuthorization(
   intent: OrderAuthIntent = "verify",
 ): OrderAuthVerifyResult {
   const no = (reason: OrderAuthFailure, fields?: string[]): OrderAuthVerifyResult => ({ ok: false, reason, ...(fields ? { fields } : {}) });
+  if (typeof now !== "number" || !Number.isFinite(now) || now <= 0) return no("invalid_clock");
   if (typeof token !== "string" || token.length > MAX_TOKEN_CHARS) return no("unknown");
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((p) => !/^[A-Za-z0-9_-]+$/.test(p))) return no("unknown");

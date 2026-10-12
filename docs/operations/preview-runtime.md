@@ -87,6 +87,50 @@ fix.
 The direct models are fixed in
 [`src/server/ai/providers.ts`](../../src/server/ai/providers.ts).
 
+### Weather (Open-Meteo)
+
+Live research adds a weather fact from the Open-Meteo forecast and geocoding APIs
+([#48](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/48)). The server-only
+`OPEN_METEO_API_KEY` holds the API Standard subscription key. When it is set, requests go to
+`customer-api.open-meteo.com` and `customer-geocoding-api.open-meteo.com` with the key. When it is blank, the free
+endpoints are used. The free tier is for evaluation and prototyping only and is not licensed for commercial
+use, so every customer-facing deployment must set the key.
+
+- **Coverage.** API Standard has no Historical Weather API; it needs the Professional plan, which is deferred and
+  not planned. A date gets weather only inside the forecast API's window: up to 92 days back and 15 days ahead.
+  Other dates show a pending weather fact. Inside the window, the API can still return no values for older
+  days. In a check on 2026-10-11, values went back about 54 days. The fact then shows "Weather lookup unavailable".
+- **Quota.** 1M calls per month. A lookup is two calls: one geocode and one single-day, two-variable forecast.
+  Open-Meteo emails at 80%, 90% and 100% of the budget.
+- **Key confidentiality.** The key travels only in the outbound request URL. The fact's `sourceUrl` is the
+  Open-Meteo attribution link, never the request URL, and operational telemetry records no URLs.
+- **Attribution (CC BY 4.0).** The fact's source is "Open-Meteo.com · place: GeoNames", and it links to
+  <https://open-meteo.com/> wherever the app links a fact's source: the facts review, agent chat and shared event page.
+  The label rounds and summarises the temperature and precipitation; the value keeps the API's figures.
+  **Gap:** a kept weather fact also appears on the stub itself, which is both a digital and a printed keepsake,
+  with no credit. Before commercial launch it needs a credit line agreed with the stub and print design.
+
+## Product analytics (optional, off by default)
+
+GA4 product analytics ([analytics.md](analytics.md)) is **off** unless a deployment sets both
+`TICKETSTUB_ANALYTICS_ENV` (`production` or `preview`) and `TICKETSTUB_GA_MEASUREMENT_ID` (`G-...`). The
+layout reads them per request, so enabling, switching property or disabling needs a restart, not a rebuild;
+they are ordinary environment variables, not `NEXT_PUBLIC_` names, and the measurement id is not a secret.
+Even when configured, nothing loads in a browser until the visitor accepts the analytics card.
+
+- Preview must use its own GA4 test property (or, deliberately, its own stream), never the production id.
+- `TICKETSTUB_GA_DEBUG=1` marks events for DebugView; use it only with the test property.
+- `TICKETSTUB_ANALYTICS_DISABLED=1` is the rollback switch; it overrides everything else.
+- No dependency was added: Web Vitals come from `next/web-vitals` bundled with Next.js. No CSP is configured;
+  if one is added, allow the Google hosts listed in [analytics.md](analytics.md#configuration-and-environments).
+- The GA4 properties exist (preview `G-M2ELMGCNKW`, production `G-RVV7ZNF463`; record in
+  [analytics.md](analytics.md#ga4-setup-record)), but no deployment sets them, so every deployment collects
+  nothing today. Use the preview id for preview and local checks only. The final live readback is pending.
+
+Offline checks: `npm test` runs `tests/analytics.test.mjs` and `tests/analytics-browser.test.mjs` (fake
+transport and fake browser, no network). Server operational logging is configured separately with
+`TICKETSTUB_OPS_TELEMETRY` ([observability.md](observability.md)).
+
 ## OpenRouter configuration
 
 OpenRouter is an optional server-side route for OpenAI and Anthropic models.
@@ -170,7 +214,9 @@ and [provider routing](https://openrouter.ai/docs/guides/routing/provider-select
 ## Verification
 
 Run `npm test` for offline adapter and route tests
-([`tests/providers.test.mjs`](../../tests/providers.test.mjs)). They intercept
+([`tests/providers.test.mjs`](../../tests/providers.test.mjs)) and the analytics suites
+([`tests/analytics.test.mjs`](../../tests/analytics.test.mjs),
+[`tests/analytics-browser.test.mjs`](../../tests/analytics-browser.test.mjs)), which never contact Google. They intercept
 all HTTP requests and use synthetic keys. Any paid smoke test requires the
 existing project budget/authorization process and sanitized evidence; no paid
 request was made to implement this support.
