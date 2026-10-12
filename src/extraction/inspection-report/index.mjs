@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { types } from "node:util";
 import { DETERMINISTIC_EXTRACTION_VERSION, EXTRACTION_LIMITS } from "../index.mjs";
 import { PDF_TEXT_READER_LIMITS } from "../pdf/index.mjs";
 
@@ -27,6 +28,9 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const matches = (pattern, value) => typeof value === "string" && pattern.test(value);
 const STATUSES = ["PARTIAL", "NO_ANSWER", "JS_REQUIRED", "ACCESS_RESTRICTED", "UNSUPPORTED_MEDIA", "UNSUPPORTED_ENCODING", "MALFORMED_ENCODING", "RESOURCE_LIMIT", "CANCELED", "INVALID_INPUT"];
 const PDF_ERRORS = ["INVALID_INPUT", "INVALID_OPTIONS", "INVALID_LIMIT", "INPUT_TOO_LARGE", "MALFORMED_PDF", "ENCRYPTED_PDF", "ACTIVE_PDF_FEATURE", "REMOTE_REFERENCE", "REMOTE_RESOURCE_ATTEMPT", "UNSUPPORTED_PDF_FEATURE", "PAGE_LIMIT", "DIMENSION_LIMIT", "TEXT_LIMIT", "OUTPUT_LIMIT", "RESOURCE_LIMIT", "NO_EMBEDDED_TEXT", "ISOLATION_UNAVAILABLE", "QUEUE_FULL", "CANCELLED", "TIMEOUT", "CALLBACK_FAILED", "PROTOCOL_ERROR", "DECODER_UNAVAILABLE", "DECODER_FAILURE"];
+const BYTE_PROTOTYPES = [Uint8Array.prototype, Buffer.prototype];
+const BYTE_METADATA = Object.getOwnPropertyDescriptors(Object.getPrototypeOf(Uint8Array.prototype));
+const BYTE_OVERRIDES = ["buffer", "byteLength", "byteOffset", "length", "valueOf", "toString", "toJSON", Symbol.toPrimitive, Symbol.iterator];
 
 export class InspectionReportError extends Error {
   constructor(code) {
@@ -45,16 +49,40 @@ function integer(value, max = INSPECTION_REPORT_LIMITS.maxCases) {
   return Number.isSafeInteger(value) && value >= 0 && value <= max;
 }
 function record(value) {
-  requireThat(value !== null && typeof value === "object" && !Array.isArray(value));
+  requireThat(value !== null && typeof value === "object" && !types.isProxy(value) && !Array.isArray(value));
   requireThat([Object.prototype, null].includes(Object.getPrototypeOf(value)));
   const descriptors = Object.getOwnPropertyDescriptors(value);
   requireThat(Reflect.ownKeys(descriptors).every((key) => typeof key === "string" && "value" in descriptors[key] && descriptors[key].enumerable));
   return value;
 }
+function dataArray(value, maximum) {
+  requireThat(!types.isProxy(value) && Array.isArray(value) && Object.getPrototypeOf(value) === Array.prototype);
+  const length = Object.getOwnPropertyDescriptor(value, "length")?.value;
+  requireThat(Number.isSafeInteger(length) && length >= 0);
+  requireThat(length <= maximum, "RESOURCE_LIMIT");
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  requireThat(Reflect.ownKeys(descriptors).length === length + 1);
+  const copy = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = descriptors[index];
+    requireThat(descriptor && "value" in descriptor && descriptor.enumerable);
+    copy.push(descriptor.value);
+  }
+  return copy;
+}
 function bytes(value, maximum, code = "RESOURCE_LIMIT") {
-  requireThat(value instanceof Uint8Array && !(value.buffer instanceof SharedArrayBuffer));
-  requireThat(value.byteLength > 0 && value.byteLength <= maximum, code);
-  try { return Buffer.from(value); } catch { throw new InspectionReportError("INVALID_INPUT"); }
+  requireThat(!types.isProxy(value) && types.isUint8Array(value));
+  requireThat(BYTE_PROTOTYPES.includes(Object.getPrototypeOf(value)));
+  requireThat(BYTE_OVERRIDES.every((key) => !Object.hasOwn(value, key)));
+  // Read native view slots and copy a new ordinary view. Caller getters,
+  // conversion hooks and subclass methods cannot run or change the byte bound.
+  const length = Reflect.apply(BYTE_METADATA.byteLength.get, value, []);
+  requireThat(length > 0 && length <= maximum, code);
+  const buffer = Reflect.apply(BYTE_METADATA.buffer.get, value, []);
+  requireThat(!types.isSharedArrayBuffer(buffer));
+  const offset = Reflect.apply(BYTE_METADATA.byteOffset.get, value, []);
+  try { return Buffer.from(new Uint8Array(buffer, offset, length)); }
+  catch { throw new InspectionReportError("INVALID_INPUT"); }
 }
 function freeze(value) {
   if (value && typeof value === "object") {
@@ -75,7 +103,7 @@ function jsonCopy(value, maximum = INSPECTION_REPORT_LIMITS.maxResultBytes) {
     if (v === null || typeof v === "boolean") { size += 5; return v; }
     if (typeof v === "number") { requireThat(Number.isFinite(v) && !Object.is(v, -0)); size += 32; return v; }
     if (typeof v === "string") { size += Buffer.byteLength(v) + 2; requireThat(size <= maximum, "RESOURCE_LIMIT"); return v; }
-    requireThat(v !== null && typeof v === "object" && !ancestors.has(v));
+    requireThat(v !== null && typeof v === "object" && !types.isProxy(v) && !ancestors.has(v));
     ancestors.add(v);
     let result;
     if (Array.isArray(v)) {
@@ -336,15 +364,15 @@ function composeValidatedInput(input) {
   const matrix = selectedArtifacts(input.artifacts, pins);
   requireThat(MODES.includes(input.requiredMode));
   requireThat(["missing", "held", "selected-unaccepted"].includes(input.mappingState));
-  requireThat(Array.isArray(input.executions) && input.executions.length <= INSPECTION_REPORT_LIMITS.maxExecutions, "RESOURCE_LIMIT");
-  requireThat(Array.isArray(input.observations) && input.observations.length <= INSPECTION_REPORT_LIMITS.maxObservations, "RESOURCE_LIMIT");
+  const executionInputs = dataArray(input.executions, INSPECTION_REPORT_LIMITS.maxExecutions);
+  const observationInputs = dataArray(input.observations, INSPECTION_REPORT_LIMITS.maxObservations);
   const byId = (a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-  const executions = input.executions.map((e) => parseExecution(e, pins, input.requiredMode)).sort(byId);
+  const executions = executionInputs.map((e) => parseExecution(e, pins, input.requiredMode)).sort(byId);
   requireThat(new Set(executions.map((e) => e.id)).size === executions.length, "DUPLICATE_ID");
   requireThat(new Set(executions.map((e) => e.component)).size === executions.length, "DUPLICATE_COMPONENT");
   const executionMap = new Map(executions.map((e) => [e.id, e]));
   let totalSourceBytes = 0;
-  const observations = input.observations.map((o) => {
+  const observations = observationInputs.map((o) => {
     record(o);
     requireThat(matches(ID, o.id) && COMPONENTS.includes(o.component) && FORMATS.includes(o.format));
     requireThat(equal(validatePins(o.pins), pins), "PIN_MISMATCH");

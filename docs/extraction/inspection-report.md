@@ -102,7 +102,7 @@ Malformed or oversized inputs throw `InspectionReportError` with a stable code s
 | JSON depth / nodes per copied or parsed value | 64 / 100,000 |
 | Execution counts | 100,000 |
 
-Existing component bounds remain in force: deterministic source is at most 2 MiB, and PDF pages/text/geometry retain the [reader limits](text-pdf.md). This synchronous, byte-bounded composer adds no scheduling service, host RSS guarantee or global monetary budget. Byte inputs must be owned `Uint8Array`-compatible views without shared backing memory; strings are not file paths and are refused. Accessors, class instances, cycles, sparse arrays, nonfinite/lossy JSON values and duplicate JSON keys are refused.
+Existing component bounds remain in force: deterministic source is at most 2 MiB, and PDF pages/text/geometry retain the [reader limits](text-pdf.md). This synchronous, byte-bounded composer adds no scheduling service, host RSS guarantee or global monetary budget. Byte inputs must be ordinary `Uint8Array` or Node `Buffer` views without shared backing memory or overridden native metadata/conversion properties. Native view slots determine the copy and byte bound; input getters are not consulted. Strings are not file paths and are refused. Proxies are refused before reflection. Execution and observation inventories must be dense ordinary arrays containing own enumerable data elements; methods, extra properties, accessors and subclasses cannot replace per-record validation. Accessors in JSON records, class instances, cycles, sparse arrays, nonfinite/lossy JSON values and duplicate JSON keys are refused.
 
 ## Actual verification route
 
@@ -116,7 +116,7 @@ node node_modules/typescript/bin/tsc --noEmit --strict --target ES2022 \
 npm run typecheck
 ```
 
-The dedicated `local inspection report integrity` workflow requires Linux/Node22.23.3, **57 cases in two explicit test files**, no skipped/canceled/TODO/failed cases, the three strict consumers and project types. Fixtures obtain real output from the existing deterministic runner **50/50** and existing text-PDF suite **14/14**, and consume actual deterministic HTML/text and native PDF results. These nested counts overlap other component gates; do not add them as independent global acceptance cases. The selected `dc97...` fixture pin and candidate schema selection are labeled synthetic host inputs, not a claim that the report function attested a Git checkout.
+The dedicated `local inspection report integrity` workflow requires Linux/Node22.23.3, **59 cases in two explicit test files**, no skipped/canceled/TODO/failed cases, the three strict consumers and project types. Fixtures obtain real output from the existing deterministic runner **50/50** and existing text-PDF suite **14/14**, and consume actual deterministic HTML/text and native PDF results. These nested counts overlap other component gates; do not add them as independent global acceptance cases. The selected `dc97...` fixture pin and candidate schema selection are labeled synthetic host inputs, not a claim that the report function attested a Git checkout.
 
 The machine line is `INSPECTION_REPORT_VERIFY_JSON=` with case `inspection-report-integrity` and `fullInspectionAdaptersAcceptance:false`. Missing/extra cases, duplicate root summaries, unavailable Linux/Node runtime and test failures exit nonzero. `--mode live` is blocked without starting a child. No existing generic runner case, package export, dependency, media reader or owner's source is changed.
 

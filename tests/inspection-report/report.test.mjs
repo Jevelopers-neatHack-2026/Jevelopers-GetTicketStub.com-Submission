@@ -265,6 +265,83 @@ test("accessors, cycles, nonfinite numbers and sparse results cannot alter canon
   reject(() => composeInspectionReport(input), "INVALID_INPUT");
 });
 
+test("raw input arrays cannot replace observation or execution validation", () => {
+  const prior = composeInspectionReport(base);
+  const outcomes = [];
+  let invoked = 0;
+  for (const field of ["executions", "observations"]) {
+    for (const attack of ["own map", "hidden map", "subclass map", "element accessor", "extra symbol", "sparse", "hidden element"]) {
+      const input = copy(base);
+      const original = input[field];
+      const forged = () => { invoked += 1; return copy(prior.report[field]); };
+      if (attack.endsWith("map")) {
+        // An accepted report view cannot substitute for validation of damaged
+        // original evidence, even when supplied by a method on a real Array.
+        if (field === "executions") original[0].summaryBytes = Buffer.from("not an execution summary");
+        else original[0].sourceBytes = Uint8Array.of(0);
+        if (attack === "subclass map") {
+          class ReplacingArray extends Array { map() { return forged(); } }
+          input[field] = new ReplacingArray(...original);
+        } else Object.defineProperty(original, "map", { value: forged, enumerable: attack === "own map" });
+      } else if (attack === "element accessor") {
+        const first = original[0];
+        Object.defineProperty(original, "0", { enumerable: true, get() { invoked += 1; return first; } });
+      } else if (attack === "extra symbol") original[Symbol("unexpected")] = "ignored metadata";
+      else if (attack === "sparse") input[field] = new Array(1);
+      else Object.defineProperty(original, "0", { value: original[0], enumerable: false });
+      try {
+        const result = composeInspectionReport(input);
+        outcomes.push({ field, attack, accepted: true, sameReportDespiteInputChange: result.sha256 === prior.sha256 });
+      } catch (error) {
+        outcomes.push({ field, attack, name: error.name, code: error.code });
+      }
+    }
+  }
+  assert.deepEqual(outcomes, ["executions", "observations"].flatMap((field) =>
+    ["own map", "hidden map", "subclass map", "element accessor", "extra symbol", "sparse", "hidden element"].map((attack) =>
+      ({ field, attack, name: "InspectionReportError", code: "INVALID_INPUT" }))));
+  assert.equal(invoked, 0, "input methods and accessors must not run before typed refusal");
+});
+
+test("proxy traps and byte-view overrides cannot run during input validation", () => {
+  const outcomes = [];
+  let invoked = 0;
+  const traps = Object.fromEntries(["get", "getPrototypeOf", "ownKeys", "getOwnPropertyDescriptor"].map((name) =>
+    [name, (...args) => { invoked += 1; return Reflect[name](...args); }]));
+  const attempt = (label, input) => {
+    const before = invoked;
+    try {
+      composeInspectionReport(input);
+      outcomes.push({ label, accepted: true, invoked: invoked - before });
+    } catch (error) {
+      outcomes.push({ label, name: error.name, code: error.code, invoked: invoked - before });
+    }
+  };
+  for (const label of ["input proxy", "pins proxy", "array proxy", "result proxy", "byte proxy"]) {
+    let input = copy(base);
+    if (label === "input proxy") input = new Proxy(input, traps);
+    else if (label === "pins proxy") input.expectedPins = new Proxy(input.expectedPins, traps);
+    else if (label === "array proxy") input.observations = new Proxy(input.observations, traps);
+    else if (label === "result proxy") input.observations[0].result = new Proxy(input.observations[0].result, traps);
+    else input.observations[0].sourceBytes = new Proxy(input.observations[0].sourceBytes, traps);
+    attempt(label, input);
+  }
+  for (const field of ["buffer", "byteLength", "byteOffset", "length"]) {
+    const input = copy(base);
+    const source = input.observations[0].sourceBytes;
+    const nativeValue = source[field];
+    Object.defineProperty(source, field, { get() { invoked += 1; return nativeValue; } });
+    attempt(`byte ${field} accessor`, input);
+  }
+  const subclassInput = copy(base);
+  class SourceBytes extends Uint8Array { get byteLength() { invoked += 1; return super.byteLength; } }
+  subclassInput.observations[0].sourceBytes = new SourceBytes(subclassInput.observations[0].sourceBytes);
+  attempt("byte subclass", subclassInput);
+  assert.deepEqual(outcomes, ["input proxy", "pins proxy", "array proxy", "result proxy", "byte proxy", "byte buffer accessor", "byte byteLength accessor", "byte byteOffset accessor", "byte length accessor", "byte subclass"].map((label) =>
+    ({ label, name: "InspectionReportError", code: "INVALID_INPUT", invoked: 0 })));
+  assert.equal(invoked, 0);
+});
+
 test("malformed optional substructures still return sanitized typed refusal", () => {
   const input = copy(base); delete input.observations[0].result.events[0].source;
   reject(() => composeInspectionReport(input), "INVALID_INPUT");
