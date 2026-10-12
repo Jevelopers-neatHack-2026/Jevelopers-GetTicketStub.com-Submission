@@ -28,7 +28,7 @@ const entries = [
   ['shared', 'ErrorEnvelopeSchema'], ['shared', 'TrustedScopeSchema'],
   ['metering', 'UsageObservationSchema'], ['metering', 'IngestionReceiptSchema'],
   ['pricing', 'RateCardSchema'], ['pricing', 'EstimateRequestSchema'], ['pricing', 'EstimateResultSchema'],
-  ['budgets', 'ReservationRequestSchema'], ['budgets', 'AuthorizationDecisionSchema'],
+  ['budgets', 'ReservationAuthorityBindingSchema'], ['budgets', 'ReservationWorkPlanSchema'], ['budgets', 'FinanceReservationAuthoritySchema'], ['budgets', 'CurrentReservationRequestSchema'], ['budgets', 'PartialAcknowledgementRequestSchema'], ['budgets', 'ReservationRequestSchema'], ['budgets', 'AuthorizationDecisionSchema'],
   ['budgets', 'MarkDispatchedCommandSchema'], ['budgets', 'SettleReservationCommandSchema'],
   ['budgets', 'ReleaseReservationCommandSchema'], ['budgets', 'ReservationCommandSchema'],
   ['budgets', 'ReservationSnapshotSchema'], ['budgets', 'BudgetChangeRequestSchema'],

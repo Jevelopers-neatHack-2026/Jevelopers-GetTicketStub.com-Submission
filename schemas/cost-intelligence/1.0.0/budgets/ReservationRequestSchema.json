@@ -257,6 +257,137 @@
           "type": "string"
         }
       }
+    },
+    "authorityBinding": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "mappingVersion",
+        "budgetScopeId",
+        "grantRef",
+        "accountRef",
+        "projectRef",
+        "provider",
+        "model",
+        "operation",
+        "targetBindingSha256",
+        "leaseRef",
+        "leaseExpiresAt"
+      ],
+      "properties": {
+        "mappingVersion": {
+          "const": "ci-reservation-authority-1.0.0",
+          "type": "string"
+        },
+        "budgetScopeId": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "grantRef": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "accountRef": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "projectRef": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "provider": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "operation": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "targetBindingSha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "leaseRef": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "leaseExpiresAt": {
+          "format": "date-time",
+          "type": "string"
+        }
+      }
+    },
+    "sourceAuthorityRef": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "contract",
+        "schema_version",
+        "id",
+        "revision",
+        "content_hash"
+      ],
+      "properties": {
+        "contract": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "content_hash": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "workPlan": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "requestedUnits",
+        "unit",
+        "unitMaximumAmount"
+      ],
+      "properties": {
+        "requestedUnits": {
+          "minimum": 1,
+          "maximum": 2147483647,
+          "type": "integer"
+        },
+        "unit": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "unitMaximumAmount": {
+          "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+          "maxLength": 40,
+          "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
+          "type": "string"
+        }
+      }
     }
   }
 }

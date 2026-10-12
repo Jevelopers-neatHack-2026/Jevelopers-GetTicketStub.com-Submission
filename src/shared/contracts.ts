@@ -104,6 +104,7 @@ export type FinanceOperation =
   | 'pricing.registerRateCardV2'
   | 'pricing.registerFxRateV2'
   | 'pricing.resolveEvidence'
+  | 'budgets.readReservation'
   | 'budgets.authorize'
   | 'budgets.markDispatched'
   | 'budgets.settle'
@@ -128,6 +129,7 @@ export type FinancePermission =
   | 'pricing.rate-card.register'
   | 'pricing.fx-rate.register'
   | 'pricing.evidence.resolve'
+  | 'budget.reservation.read'
   | 'budget.reservation.authorize'
   | 'budget.reservation.dispatch'
   | 'budget.reservation.settle'
@@ -166,6 +168,7 @@ const FinanceOperationPolicyValues = {
   'pricing.registerRateCardV2': { permission: 'pricing.rate-card.register', dataClass: 'immutable_pricing_catalog', principalKinds: ['user', 'service'] },
   'pricing.registerFxRateV2': { permission: 'pricing.fx-rate.register', dataClass: 'immutable_pricing_catalog', principalKinds: ['user', 'service'] },
   'pricing.resolveEvidence': { permission: 'pricing.evidence.resolve', dataClass: 'restricted_minimal_source_facts', principalKinds: ['user', 'service'] },
+  'budgets.readReservation': { permission: 'budget.reservation.read', dataClass: 'restricted_budget_state', principalKinds: ['user', 'service'] },
   'budgets.authorize': { permission: 'budget.reservation.authorize', dataClass: 'restricted_budget_state', principalKinds: ['user', 'service'] },
   'budgets.markDispatched': { permission: 'budget.reservation.dispatch', dataClass: 'restricted_budget_state', principalKinds: ['service'] },
   'budgets.settle': { permission: 'budget.reservation.settle', dataClass: 'restricted_budget_state', principalKinds: ['user', 'service'] },
@@ -234,6 +237,8 @@ export type PricingAuthorizationCompatibilityDecision = {
 };
 
 export type RuntimePorts = {
+  /** Explicit host-managed budget composition; absence preserves the legacy unavailable boundary. */
+  budgets?: Omit<import('../budgets/reservation-store.js').BudgetRuntimePorts, 'clock' | 'trustedContext' | 'financeAuthority'>;
   clock: Clock;
   storage: FinancialStorePort;
   providerSource: ProviderSourcePort;

@@ -90,6 +90,18 @@
       "minimum": 0,
       "type": "integer"
     },
+    "replayedStatus": {
+      "anyOf": [
+        {
+          "const": "denied",
+          "type": "string"
+        },
+        {
+          "const": "stale",
+          "type": "string"
+        }
+      ]
+    },
     "alertThresholdPercent": {
       "const": 80,
       "type": "number"

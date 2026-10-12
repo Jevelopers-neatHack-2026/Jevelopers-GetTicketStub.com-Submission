@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import {
-  authorizeReservation, changeBudgetPolicy, readCapacity, markReservationDispatched,
+  authorizeReservation, changeBudgetPolicy, readCapacity, markReservationDispatched, normalizedBudgetRequest,
 } from '../../dist/index.js';
 import {
   loadReserveFixture, setBudgetLimit, reservationPool, makePorts, makeScope, policyChange, reservationRequest,
@@ -224,7 +224,7 @@ function storedAuthorization(request, overrides = {}) {
     held_amount: request.estimate.knownSubtotal, partial_allowed_amount: null,
     estimate_completeness: request.estimate.completeness, known_subtotal: request.estimate.knownSubtotal, bounded_maximum: null,
     allow_partial: request.allowPartialAuthorization, attempt_binding: structuredClone(request.attemptBinding),
-    policy_version_id: POLICY.id, policy_ref: POLICY, rate_card_ref: null, ...overrides,
+    policy_version_id: POLICY.id, policy_ref: POLICY, rate_card_ref: null, authorization_request:normalizedBudgetRequest(request),reservation_event_id:randomUUID(),content_hash:`sha256:${'c'.repeat(64)}`,authorized_cap:request.estimate.knownSubtotal,...overrides,
   };
 }
 
@@ -248,7 +248,7 @@ test('CI-05A.1 replaying an idempotency key with a different currency, amount, p
   const variants = {
     currency: { ...original, estimate: { ...original.estimate, currency: 'EUR' }, canonicalRequest: { ...original.canonicalRequest, currency: 'EUR', requested: { ...original.canonicalRequest.requested, currency: 'EUR' } } },
     amount: { ...original, estimate: { ...original.estimate, knownSubtotal: '100' }, canonicalRequest: { ...original.canonicalRequest, requested: { amount: '100', currency: 'USD', scale: 0 } } },
-    attempt: { ...original, attemptBinding: { ...original.attemptBinding, billableAttemptId: 'another-attempt' } },
+    attempt: { ...original, attemptBinding: { ...original.attemptBinding, providerAttemptId: 'another-attempt' } },
     policy: { ...original, canonicalRequest: { ...original.canonicalRequest, policy_ref: { ...POLICY, revision: 2 } } },
     partial: { ...original, allowPartialAuthorization: true },
   };
@@ -416,7 +416,7 @@ test('CI-05A.4 slow database work past the deadline is rolled back and cannot co
   const request = await scriptedRequest(scope, { amount: '0.10' });
   const partition = partitionRows(POLICY, '5.00');
   const script = scriptedClient(async sql => {
-    if (sql.includes('WITH per_reservation')) await delay(80);
+    if (sql.includes('WITH effective_spend')) await delay(80);
     return partition(sql);
   });
   const result = await authorizeReservation(request, scriptedPorts(scope, async () => script.client, { authorityWaitMs: 25 }));
@@ -434,7 +434,7 @@ test('CI-05A.1 a conflicting policy-change replay is a typed conflict', async ()
   const change = policyChange(scope, { limitAmount: '5.00', idempotencyKey: 'policy-key' });
   const stored = {
     policy_version_id: 'p1', policy_revision: 1, currency: 'USD', limit_amount: '5.00', content_hash: POLICY.content_hash,
-    actor_reference: change.actorReference, reason_reference: change.reasonReference, source_authority_ref: change.sourceAuthorityRef,
+    actor_reference: change.actorReference, reason_reference: change.reasonReference, source_authority_ref: change.sourceAuthorityRef, change_request:normalizedBudgetRequest(change),
   };
   const run = async candidate => {
     const script = scriptedClient(sql => (sql.includes('idempotency_key = $5') ? [stored] : partitionRows(POLICY, '5.00')(sql)));
@@ -467,7 +467,7 @@ test('CI-05A.1/.6 PostgreSQL: conflicting replays and stale policy references cr
     // Same key, different currency / amount / attempt: typed conflict, one hold.
     const eur = reservationRequest(scope, reserve, { amount: '0.75', currency: 'EUR', idempotencyKey: request.idempotencyKey });
     const changedAmount = reservationRequest(scope, reserve, { amount: '4.00', idempotencyKey: request.idempotencyKey });
-    const changedAttempt = { ...request, attemptBinding: { ...request.attemptBinding, billableAttemptId: `billable-${randomUUID()}` } };
+    const changedAttempt = { ...request, attemptBinding: { ...request.attemptBinding, providerAttemptId: `provider-${randomUUID()}` } };
     for (const conflicting of [eur, changedAmount, changedAttempt]) {
       const result = await authorizeReservation(conflicting, makePorts(pool, scope));
       assert.equal(result.ok, false);
@@ -528,7 +528,7 @@ function persistingClient(policy) {
       persisted = {
         reservation_id: values[6], event_type: values[7], event_sequence: 1, currency: values[5], held_amount: values[9],
         estimate_completeness: values[10], known_subtotal: values[11], bounded_maximum: values[12], allow_partial: values[13],
-        partial_allowed_amount: values[14], policy_version_id: values[15], rate_card_ref: values[16], policy_ref: values[17], attempt_binding: values[21],
+        partial_allowed_amount: values[14], policy_version_id: values[15], rate_card_ref: values[16], policy_ref: values[17], attempt_binding: values[21], authorization_request:values[25],reservation_event_id:values[0],content_hash:values[24],authorized_cap:values[28],
       };
       return [];
     }
@@ -620,7 +620,7 @@ test('CI-05A.4 a COMMIT acknowledged only after the deadline leaves one hold tha
       pending = {
         reservation_id: values[6], event_type: values[7], event_sequence: 1, currency: values[5], held_amount: values[9],
         estimate_completeness: values[10], known_subtotal: values[11], bounded_maximum: values[12], allow_partial: values[13], partial_allowed_amount: values[14],
-        policy_version_id: values[15], rate_card_ref: values[16], policy_ref: values[17], attempt_binding: values[21],
+        policy_version_id: values[15], rate_card_ref: values[16], policy_ref: values[17], attempt_binding: values[21], authorization_request:values[25],reservation_event_id:values[0],content_hash:values[24],authorized_cap:values[28],
       };
       return [];
     }
@@ -652,4 +652,138 @@ test('CI-05A.4 a COMMIT acknowledged only after the deadline leaves one hold tha
   assert.equal(retry.value.status, 'authorized');
   assert.equal(retry.value.reservationId, persisted.reservation_id);
   assert.equal(inserts, 1, 'the same-key retry creates no second hold');
+});
+
+// CI05A public Finance-local mapping; host/source grants here are explicitly synthetic offline fixtures.
+const api = await import('../../dist/index.js');
+function publicPorts(pool, scope, options={}) {
+  const low=makePorts(pool,scope,options);
+  return {...low,storage:{isAvailable:async()=>true},providerSource:{isAvailable:async()=>true},budgets:{database:low.database,authorityWaitMs:low.authorityWaitMs,reservationAuthority:low.reservationAuthority,budgetEvidence:low.budgetEvidence}};
+}
+function currentQuery(scope,request,id,phase='preparation',extra={}) {
+  return {schemaVersion:'1.0.0',requestId:randomUUID(),scope,reservationId:id,attemptBinding:request.attemptBinding,authorityBinding:request.authorityBinding,phase,...extra};
+}
+test('public authority returns exact Finance fields and revalidates current revocation, lifetime, scope and target in both phases',async()=>{
+  const pool=reservationPool();const scope=makeScope('public-current');const fixture=await fixturePromise;
+  let revoked=false;let sourceRevoked=false;let time=new Date('2026-10-12T04:00:00Z');
+  const base=makePorts(pool,scope,{clock:{now:()=>new Date(time)}});
+  const options={clock:{now:()=>new Date(time)},reservationAuthority:{verifyCurrent:async query=>revoked?null:base.reservationAuthority.verifyCurrent(query)},budgetEvidence:{verifyCurrent:async query=>sourceRevoked?null:base.budgetEvidence.verifyCurrent(query)}};
+  const ports=publicPorts(pool,scope,options);
+  try{
+    await setBudgetLimit(pool,scope,'2');
+    const req=reservationRequest(scope,fixture,{amount:'0.75'});const result=await api.authorize(req,ports);assert.equal(result.ok,true);assert.equal(result.value.status,'authorized');
+    const f=result.value.finance;assert.equal(f.billable_attempt_id,req.attemptBinding.billableAttemptId);assert.equal(f.budget_scope_id,req.canonicalRequest.budget_scope_id);assert.equal(f.authorized_cap.amount,'0.75');assert.equal(f.held_amount.amount,'0.75');assert.equal(f.grant_ref,req.authorityBinding.grantRef);assert.match(f.evidence_sha256,/^sha256:[a-f0-9]{64}$/);
+    const read=await api.getReservationSnapshot({schemaVersion:'1.0.0',requestId:randomUUID(),scope,reservationId:result.value.reservationId},ports);assert.equal(read.ok,true);assert.equal(read.value.dispatchEligible,false);assert.equal(api.validateReservationSnapshotBoundary(read.value).ok,true);
+    const query=currentQuery(scope,req,result.value.reservationId);let current=await api.revalidateAuthorization(query,ports);assert.equal(current.value.status,'authorized');
+    for(const field of ['grantRef','accountRef','projectRef','provider','model','operation','targetBindingSha256','leaseRef','budgetScopeId']){
+      const bad={...query,authorityBinding:{...query.authorityBinding,[field]:field==='targetBindingSha256'?`sha256:${'c'.repeat(64)}`:'wrong'}};
+      current=await api.revalidateAuthorization(bad,ports);assert.equal(current.value.status,'denied',field);
+    }
+    current=await api.revalidateAuthorization({...query,expectedRevision:999},ports);assert.equal(current.value.status,'denied');
+    const dispatch=(await import('./reservation-harness.mjs')).markDispatchedCommand(scope,result.value.reservationId,1,{attemptBinding:req.attemptBinding});
+    const marked=await api.markDispatched(dispatch,ports);assert.equal(marked.ok,true);assert.equal(marked.value.state,'dispatched');
+    const post=currentQuery(scope,req,result.value.reservationId,'post_transport_ack',{dispatchIntentRef:dispatch.dispatchIntentRef,transportAttemptId:req.attemptBinding.transportAttemptId,expectedRevision:2});
+    current=await api.revalidateAuthorization(post,ports);assert.equal(current.value.status,'authorized');
+    current=await api.revalidateAuthorization({...post,dispatchIntentRef:authorityRefForTest()},ports);assert.equal(current.value.status,'denied');
+    revoked=true;for(const q of [query,post])assert.equal((await api.revalidateAuthorization(q,ports)).value.status,'denied');revoked=false;
+    sourceRevoked=true;assert.equal((await api.revalidateAuthorization(post,ports)).value.status,'denied');sourceRevoked=false;
+    time=new Date('2026-10-12T05:00:00Z');current=await api.revalidateAuthorization(post,ports);assert.equal(current.value.status,'denied');
+    const cap=await readCapacity(scope,'USD','retained',makePorts(pool,scope));assert.equal(cap.value.usedCapacity,'0.75','expiry/revocation never releases uncertain exposure');
+    const foreign=await api.getReservationSnapshot({schemaVersion:'1.0.0',requestId:randomUUID(),scope:makeScope('foreign'),reservationId:result.value.reservationId},ports);assert.equal(foreign.ok,false);
+  }finally{await pool.end();}
+});
+function authorityRefForTest(){return {contract:'cost-intelligence.authority',schema_version:'1.0.0',id:randomUUID(),revision:1,content_hash:`sha256:${'a'.repeat(64)}`};}
+test('public unknown-price authority preserves provenance and requires current exact maximum and independent source authentication',async()=>{
+  const pool=reservationPool();const scope=makeScope('maximum');const fixture=await fixturePromise;
+  try{
+    await setBudgetLimit(pool,scope,'2');const maxRef=authorityRefForTest();
+    const req=reservationRequest(scope,fixture,{amount:'0.75',estimate:{completeness:'unknown',knownSubtotal:'0',currency:'USD',rateCardRef:null,missingDimensions:['output_image_tokens'],boundedConservativeMaximum:'0.75',maximumPolicyRef:maxRef}});
+    req.authorityBinding.provider='openrouter';
+    const maximum={policyRef:maxRef,authorizedCap:'0.75',currency:'USD'};
+    const granted=await api.authorize(req,publicPorts(pool,scope,{maximum}));assert.equal(granted.value.status,'authorized');assert.equal(granted.value.estimateCompleteness,'unknown');assert.equal(granted.value.finance.authorized_cap.amount,'0.75');
+    for(const bad of [{...maximum,authorizedCap:'1'},{...maximum,currency:'EUR'},{...maximum,policyRef:{...maxRef,revision:2}}]){
+      const newReq=reservationRequest(scope,fixture,{amount:'0.75',estimate:req.estimate});newReq.authorityBinding.provider='openrouter';
+      const denied=await api.authorize(newReq,publicPorts(pool,scope,{maximum:bad}));assert.equal(denied.value.status,'denied');
+    }
+    const untrusted=await api.authorize(reservationRequest(scope,fixture),publicPorts(pool,scope,{budgetEvidence:{verifyCurrent:async()=>({status:'verified',queryDigest:`sha256:${'a'.repeat(64)}`,verifiedAt:'2026-10-12T04:00:00Z',expiresAt:'2026-10-12T05:00:00Z'})}}));assert.equal(untrusted.ok,false);
+    const query=currentQuery(scope,req,granted.value.reservationId);assert.equal((await api.revalidateAuthorization(query,publicPorts(pool,scope,{maximum}))).value.status,'authorized');assert.equal((await api.revalidateAuthorization(query,publicPorts(pool,scope))).value.status,'denied');
+  }finally{await pool.end();}
+});
+test('public partial authorization requires exact bounded acknowledged revised work and current plan evidence',async()=>{
+  const pool=reservationPool();const scope=makeScope('partial-ack');const fixture=await fixturePromise;
+  try{
+    await setBudgetLimit(pool,scope,'0.6');const req=reservationRequest(scope,fixture,{amount:'1',allowPartialAuthorization:true,workPlan:{requestedUnits:10,unit:'synthetic_work_unit',unitMaximumAmount:'0.1'}});const ports=publicPorts(pool,scope);
+    const grant=await api.authorize(req,ports);assert.equal(grant.value.status,'partial');assert.equal(grant.value.partialAuthorization.allowedWorkUnits,'6');
+    const query=currentQuery(scope,req,grant.value.reservationId);assert.equal((await api.revalidateAuthorization(query,ports)).value.status,'denied');
+    const revisedPlan={requestedUnits:6,unit:'synthetic_work_unit',unitMaximumAmount:'0.1'};
+    const ack={schemaVersion:'1.0.0',requestId:randomUUID(),idempotencyKey:randomUUID(),scope,reservationId:grant.value.reservationId,expectedRevision:1,actorReference:scope.actorId,attemptBinding:req.attemptBinding,sourceAuthorityRef:authorityRefForTest(),allowedAmount:'0.6',allowedWorkUnits:6,unit:'synthetic_work_unit',revisedPlan,revisedPlanHash:await api.budgetDigest(revisedPlan)};
+    const bad=await api.acknowledgePartial({...ack,revisedPlan:{...revisedPlan,requestedUnits:7}},ports);assert.equal(bad.ok,false);
+    const earlyDispatch=(await import('./reservation-harness.mjs')).markDispatchedCommand(scope,grant.value.reservationId,1,{attemptBinding:req.attemptBinding});
+    const [applied,early]=await Promise.all([api.acknowledgePartial(ack,ports),api.markDispatched(earlyDispatch,ports)]);assert.equal(applied.ok,true);assert.equal(applied.value.revision,2);assert.ok(!early.ok||early.value.state==='held','an ack/dispatch race cannot dispatch against the pre-ack revision');
+    const ackCount=await pool.query('SELECT count(*)::int AS count FROM cost_intelligence.budget_reservation_acknowledgements WHERE reservation_id=$1',[grant.value.reservationId]);assert.equal(ackCount.rows[0].count,1);
+    const replay=await api.acknowledgePartial(ack,ports);assert.equal(replay.value.status,'replay');
+    const changed=await api.acknowledgePartial({...ack,allowedAmount:'0.5'},ports);assert.equal(changed.ok,false);assert.equal(changed.error.code,'IDEMPOTENCY_CONFLICT');
+    assert.equal((await api.revalidateAuthorization({...query,expectedRevision:2},ports)).value.status,'authorized');
+    const base=makePorts(pool,scope);const revoked=publicPorts(pool,scope,{budgetEvidence:{verifyCurrent:async q=>q.operation==='acknowledgePartial'?null:base.budgetEvidence.verifyCurrent(q)}});
+    assert.equal((await api.revalidateAuthorization(query,revoked)).value.status,'denied');
+    const command=(await import('./reservation-harness.mjs')).markDispatchedCommand(scope,grant.value.reservationId,2,{attemptBinding:req.attemptBinding});
+    assert.equal((await api.markDispatched(command,revoked)).ok,false);const dispatched=await api.markDispatched(command,ports);assert.equal(dispatched.ok,true);assert.equal(dispatched.value.state,'dispatched');
+  }finally{await pool.end();}
+});
+test('public changeBudget rejects reductions below commitments, replays exact commands and exposes exact 80 percent state',async()=>{
+  const pool=reservationPool();const scope=makeScope('approved-policy');const fixture=await fixturePromise;
+  try{
+    const prior=await setBudgetLimit(pool,scope,'1');const ports=publicPorts(pool,scope);await api.authorize(reservationRequest(scope,fixture,{amount:'0.8'}),ports);
+    const cap=await readCapacity(scope,'USD','threshold',makePorts(pool,scope));assert.equal(cap.value.capacityState,'near_limit');assert.equal(cap.value.policyWindow,'project_lifetime');
+    const command={schemaVersion:'1.0.0',requestId:randomUUID(),idempotencyKey:randomUUID(),scope,newLimit:'0.7',currency:'USD',expectedPolicyRevision:1,expectedLedgerRevision:0,actorReference:scope.actorId,reasonReference:'approved-rule-test',sourceAuthorityRef:authorityRefForTest()};
+    const denied=await api.changeBudget(command,ports);assert.equal(denied.value.status,'denied');const deniedReplay=await api.changeBudget(command,ports);assert.equal(deniedReplay.value.status,'replay');assert.equal(deniedReplay.value.replayedStatus,'denied');assert.equal(denied.value.effectiveLimit,'1');assert.equal(denied.value.activeUnconsumedCommitments,'0.8');
+    const allowed={...command,idempotencyKey:randomUUID(),newLimit:'2'};const change=await api.changeBudget(allowed,ports);assert.equal(change.value.status,'applied');const replay=await api.changeBudget(allowed,ports);assert.equal(replay.value.status,'replay');assert.equal(replay.value.previousLimit,'1');
+    const staleCommand={...command,idempotencyKey:randomUUID(),newLimit:'3'};const stale=await api.changeBudget(staleCommand,ports);assert.equal(stale.value.status,'stale');assert.equal((await api.changeBudget(staleCommand,ports)).value.replayedStatus,'stale');
+    const changed=await api.changeBudget({...allowed,reasonReference:'changed'},ports);assert.equal(changed.error.code,'IDEMPOTENCY_CONFLICT');
+    assert.equal(prior.policyRevision,1);
+  }finally{await pool.end();}
+});
+
+function budgetLedgerEvent(scope,{amount='0.3',billableAttemptId=randomUUID(),logicalOperationId=randomUUID()}={}){
+  const id=randomUUID();const unknown=amount===null;
+  return {schemaVersion:'1.0.0',requestId:id,idempotencyKey:id,scope,eventId:id,correlationId:randomUUID(),producer:{module:'ci05a.synthetic.test',sourceRevision:'a'.repeat(40),buildRevision:'fixture-1'},occurredAt:'2026-10-12T03:00:00Z',observedAt:'2026-10-12T03:00:01Z',evidenceMode:'mocked',verificationStatus:'verified',eventType:'expense',classification:'direct_cost',valuation:unknown?'unknown':'provider_confirmed',settlementStatus:'unpaid',reconciliationStatus:'unmatched',reservationLifecycle:null,identities:{logicalOperationId,sourceObservationId:randomUUID(),reservationId:null},postingMapping:{schemaVersion:'1.0.0',sourceLineId:id,transportAttemptId:{status:'not_applicable'},providerAttemptId:{status:'not_applicable'},providerRequestId:{status:'not_applicable'},billableAttemptId:{status:'known',id:billableAttemptId}},sourceIdentity:{source:'ci05a-synthetic',sourceEventId:id,sourceObjectId:id,revisionSubjectId:id,sourceRevision:'fixture-1',revisionSequence:0,contentHash:`sha256:${'d'.repeat(64)}`},usage:{completeness:unknown?'unknown':'complete',missingFields:unknown?['amount']:[],units:unknown?[]:[{name:'tokens',quantity:'1',scale:0,relation:'standalone'}]},money:{amount,currency:'USD',scale:typeof amount==='string'?(amount.split('.')[1]?.length??0):0},sourceRefs:[],dimensions:{},pricing:null,fxEvidence:null,financialEffect:true,reservationAuthorizationEventId:null,supersedesEventId:null,reversesEventId:null};
+}
+test('effective ledger costs and reservation holds conserve spend, sum distinct economic source costs and never count settled portions twice',async()=>{
+  const pool=reservationPool();const scope=makeScope('ledger-capacity');const fixture=await fixturePromise;const ports=makePorts(pool,scope);
+  try{
+    await setBudgetLimit(pool,scope,'2');const req=reservationRequest(scope,fixture,{amount:'1'});const grant=await api.authorize(req,publicPorts(pool,scope));
+    for(const amount of ['0.2','0.3']){
+      const posted=await api.appendLedgerEvent(budgetLedgerEvent(scope,{amount,billableAttemptId:req.attemptBinding.billableAttemptId,logicalOperationId:req.attemptBinding.logicalOperationId}),ports);assert.equal(posted.ok,true,posted.ok?'':posted.error.safe_message);assert.equal(posted.value.status,'accepted');
+    }
+    let cap=await readCapacity(scope,'USD','joined',ports);assert.equal(cap.value.effectiveConsumedSpend,'0.5');assert.equal(cap.value.outstandingHolds,'0.5');assert.equal(cap.value.usedCapacity,'1');
+    const helpers=await import('./reservation-harness.mjs');const settlement=helpers.settleCommand(scope,grant.value.reservationId,1,{cumulativeAmount:'0.4',finality:'partial',attemptBinding:req.attemptBinding});assert.equal((await api.settleReservation(settlement,ports)).ok,true);
+    cap=await readCapacity(scope,'USD','joined-settled',ports);assert.equal(cap.value.usedCapacity,'1');assert.equal(cap.value.effectiveConsumedSpend,'0.5','two distinct source cost rows sum before comparison to cumulative reservation consumption');
+    const other=await api.appendLedgerEvent(budgetLedgerEvent(scope,{amount:'0.7'}),ports);assert.equal(other.value.status,'accepted');
+    cap=await readCapacity(scope,'USD','unlinked',ports);assert.equal(cap.value.usedCapacity,'1.7');
+    const denied=await api.authorize(reservationRequest(scope,fixture,{amount:'0.4'}),publicPorts(pool,scope));assert.equal(denied.value.status,'denied');
+    const unknown=await api.appendLedgerEvent(budgetLedgerEvent(scope,{amount:null}),ports);assert.equal(unknown.value.status,'accepted');
+    cap=await readCapacity(scope,'USD','unknown',ports);assert.equal(cap.value.unresolvedExposure,true);
+    const unavailable=await api.authorize(reservationRequest(scope,fixture,{amount:'0.1'}),publicPorts(pool,scope));assert.equal(unavailable.value.status,'unavailable','unknown ledger exposure cannot be treated as zero');
+  }finally{await pool.end();}
+});
+test('public authority bounds late connection and preserves denial-before-unavailable for missing host composition',async()=>{
+  const scope=makeScope('public-timeout');const req=await scriptedRequest(scope,{amount:'0.1'});const script=scriptedClient(partitionRows(POLICY,'2'));
+  const ports=publicPorts({connect:async()=>{await delay(80);return script.client;}},scope,{authorityWaitMs:20});
+  const result=await api.authorize(req,ports);assert.equal(result.value.status,'unavailable');assert.ok(result.value.retryAfterMs>0);await delay(100);assert.equal(script.wrote(),false);
+  const noBudget=publicPorts({connect:async()=>script.client},scope,{financeAuthority:{authorizeCurrent:async r=>({status:'denied',operation:r.operation,permission:r.permission})}});delete noBudget.budgets;const denied=await api.authorize(req,noBudget);assert.equal(denied.ok,false);assert.equal(denied.error.code,'FORBIDDEN_SCOPE');
+});
+
+test('current host/source refusal or never-resolving verification after the lock releases the transaction without late admission',async()=>{
+  const fixture=await fixturePromise;const pool=reservationPool();
+  try{
+    for(const mode of ['host_refused','host_never','source_refused','source_never']){
+      const scope=makeScope(`cleanup-${mode}`);await setBudgetLimit(pool,scope,'1');const req=reservationRequest(scope,fixture,{amount:'0.75'});const normal=makePorts(pool,scope);let hostCalls=0,sourceCalls=0;
+      const options={authorityWaitMs:150,reservationAuthority:{verifyCurrent:async query=>{hostCalls++;if(mode.startsWith('host')&&hostCalls===2)return mode.endsWith('never')?new Promise(()=>{}):null;return normal.reservationAuthority.verifyCurrent(query);}},budgetEvidence:{verifyCurrent:async query=>{sourceCalls++;if(mode.startsWith('source')&&sourceCalls===2)return mode.endsWith('never')?new Promise(()=>{}):null;return normal.budgetEvidence.verifyCurrent(query);}}};
+      const result=await api.authorize(req,publicPorts(pool,scope,options));
+      if(mode.endsWith('never'))assert.equal(result.value.status,'unavailable',mode);else assert.equal(result.error.code,'FORBIDDEN_SCOPE',mode);
+      assert.equal(mode.startsWith('host')?hostCalls:sourceCalls,2,`${mode} reaches the final check inside the transaction`);
+      await delay(30);assert.equal(await countEvents(pool,scope),0,`${mode} persists no authorization`);
+      const retry=await api.authorize(req,publicPorts(pool,scope,{authorityWaitMs:500}));assert.equal(retry.value.status,'authorized',`${mode} leaves the lock available for an identical-key retry`);assert.equal(await countEvents(pool,scope),1);
+    }
+  }finally{await pool.end();}
 });

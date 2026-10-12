@@ -1,3 +1,5 @@
+import { Value } from '@sinclair/typebox/value';
+import { budgetDigest, normalizedBudgetRequest, verifyBudgetSource, verifyReservationHost, CurrentReservationRequestSchema, PartialAcknowledgementRequestSchema, type BudgetEvidencePort, type BudgetReservationAuthorityPort, type BudgetReference, type CurrentReservationRequest, type PartialAcknowledgementRequest } from './authority.js';
 import { Type, type Static } from '@sinclair/typebox';
 import {
   authorizeFinanceOperation,
@@ -22,6 +24,7 @@ import {
   type ReleaseReservationCommand,
   type ReservationRequest,
   type SettleReservationCommand,
+  type ReservationSnapshot,
 } from './index.js';
 
 /* ------------------------------------------------------------------ *
@@ -81,6 +84,8 @@ export interface BudgetRuntimePorts {
   readonly financeAuthority?: FinanceAuthorizationPort;
   /** Bounded wait for the partition authority lock before returning unavailable. */
   readonly authorityWaitMs?: number;
+  readonly reservationAuthority?: BudgetReservationAuthorityPort;
+  readonly budgetEvidence?: BudgetEvidencePort;
 }
 
 const VersionedReferenceSchema = Type.Object({
@@ -104,18 +109,22 @@ export const BudgetPolicyChangeRequestSchema = Type.Object({
   actorReference: Type.String({ minLength: 1, maxLength: 200 }),
   reasonReference: Type.String({ minLength: 1, maxLength: 200 }),
   sourceAuthorityRef: VersionedReferenceSchema,
+  expectedLedgerRevision: Type.Optional(Type.Integer({ minimum: 0 })),
 }, { additionalProperties: false });
 export type BudgetPolicyChangeRequest = Static<typeof BudgetPolicyChangeRequestSchema>;
 
 export interface BudgetPolicyReceipt {
   readonly schemaVersion: '1.0.0';
   readonly requestId: string;
-  readonly status: 'applied' | 'replay' | 'stale' | 'conflict';
+  readonly status: 'applied' | 'denied' | 'replay' | 'stale' | 'conflict';
   readonly policyVersionId: string;
   readonly policyRevision: number;
   readonly currency: string;
   readonly effectiveLimit: string;
   readonly previousLimit: string;
+  readonly effectiveConsumedSpend: string;
+  readonly activeUnconsumedCommitments: string;
+  readonly replayedStatus?: 'denied' | 'stale';
   readonly decisionPolicyVersion: typeof BUDGET_DECISION_POLICY_VERSION;
   readonly policyRef: VersionedReference;
 }
@@ -152,6 +161,10 @@ export interface CapacitySnapshot {
   readonly reservationCount: number;
   /** Advisory read only; it never creates a reservation or authorizes dispatch. */
   readonly advisoryOnly: true;
+  readonly capacityState: 'unconfigured' | 'available' | 'near_limit' | 'exhausted' | 'over_limit';
+  readonly unresolvedExposure: boolean;
+  readonly policyWindow: 'project_lifetime';
+  readonly policyRef: VersionedReference;
 }
 
 /* -------------------------------- exact decimal helpers -------------------------------- */
@@ -244,6 +257,15 @@ class DeadlineGate {
   private readonly deadlineAt: number;
   constructor(waitMs: number) { this.deadlineAt = Date.now() + waitMs; }
   remainingMs(): number { return Math.max(1, Math.ceil(this.deadlineAt - Date.now())); }
+  async wait<T>(work: Promise<T>): Promise<T> {
+    this.checkpoint();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([work, new Promise<T>((_resolve,reject) => {
+        timer=setTimeout(()=>{this.expired=true;reject(new DeadlineExceeded('budget verifier deadline exceeded'));},this.remainingMs());
+      })]);
+    } finally { if(timer!==undefined)clearTimeout(timer); }
+  }
   checkpoint(): void { if (this.expired) throw new DeadlineExceeded('budget deadline exceeded'); }
   /** The commit is the point of no return: its outcome is unknown until acknowledged, and the deadline still applies. */
   beginCommit(): void { this.checkpoint(); this.committing = true; }
@@ -321,6 +343,8 @@ async function acquirePartitionLock(
 ): Promise<boolean> {
   gate.checkpoint();
   try {
+    // Existing ledger writers use this scope lock. Always lock ledger before the currency partition.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`ci02-ledger:${scope.tenantId}:${scope.projectId}:${scope.environment}:${scope.billingMode}`]);
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [partitionLockKey(scope, currency)]);
   } catch {
     return false;
@@ -336,6 +360,8 @@ interface PartitionCapacity {
   readonly used: bigint;
   readonly available: bigint;
   readonly reservationCount: number;
+  readonly unresolvedExposure: boolean;
+  readonly ledgerRevision: number;
   readonly policy: { id: string; revision: number; contentHash: string } | null;
 }
 
@@ -369,20 +395,36 @@ async function projectCapacity(
 ): Promise<PartitionCapacity> {
   const policy = await currentPolicy(client, scope, currency);
   const aggregate = await client.query(
-    `WITH per_reservation AS (
-       SELECT reservation_id,
-              sum(held_amount) AS hold,
-              sum(released_amount) AS released,
-              max(consumed_amount) AS consumed
+    `WITH effective_spend AS (
+       SELECT e.* FROM cost_intelligence.financial_ledger_events e
+       WHERE e.tenant_id=$1 AND e.project_id=$2 AND e.environment=$3 AND e.billing_mode=$4 AND e.currency=$5
+         AND e.financial_effect AND e.classification IN ('direct_cost','supplier_expense','operating_expense','payable_labor')
+         AND NOT EXISTS (SELECT 1 FROM cost_intelligence.financial_ledger_events n WHERE n.supersedes_event_id=e.event_id)
+     ), attempt_spend AS (
+       SELECT billable_attempt_id, greatest(coalesce(sum(amount),0),0) AS amount, bool_or(amount IS NULL) AS unknown
+       FROM effective_spend WHERE billable_attempt_id IS NOT NULL GROUP BY billable_attempt_id
+     ), per_reservation AS (
+       SELECT reservation_id, (array_agg(billable_attempt_id ORDER BY event_sequence))[1] AS attempt_id,
+              sum(held_amount) AS hold, sum(released_amount) AS released, max(consumed_amount) AS consumed,
+              (array_agg(usage_finality ORDER BY event_sequence DESC))[1] AS finality
        FROM cost_intelligence.budget_reservation_events
-       WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND currency = $5
-       GROUP BY reservation_id
+       WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4 AND currency=$5 GROUP BY reservation_id
+     ), joined AS (
+       SELECT r.*, greatest(r.consumed,coalesce(l.amount,0)) AS effective_consumed,
+              greatest(r.hold-r.released-greatest(r.consumed,coalesce(l.amount,0)),0) AS outstanding,
+              coalesce(l.unknown,false) OR (r.finality='unknown' AND r.consumed>0) AS unknown
+       FROM per_reservation r LEFT JOIN attempt_spend l ON l.billable_attempt_id=r.attempt_id
+     ), unmatched AS (
+       SELECT coalesce(sum(e.amount),0) AS amount, coalesce(bool_or(e.amount IS NULL),false) AS unknown
+       FROM effective_spend e WHERE e.billable_attempt_id IS NULL OR NOT EXISTS (SELECT 1 FROM per_reservation r WHERE r.attempt_id=e.billable_attempt_id)
      )
-     SELECT count(*)::int AS reservation_count,
-            coalesce(sum(consumed), 0)::text AS consumed,
-            coalesce(sum(greatest(hold - released - consumed, 0)), 0)::text AS outstanding_holds,
-            coalesce(sum(greatest(hold - released, consumed)), 0)::text AS used
-     FROM per_reservation`,
+     SELECT (SELECT count(*) FROM per_reservation)::int AS reservation_count,
+       (coalesce(sum(effective_consumed),0)+greatest((SELECT amount FROM unmatched),0))::text AS consumed,
+       coalesce(sum(outstanding),0)::text AS outstanding_holds,
+       (coalesce(sum(effective_consumed+outstanding),0)+greatest((SELECT amount FROM unmatched),0))::text AS used,
+       (coalesce(bool_or(unknown),false) OR (SELECT unknown FROM unmatched)) AS unresolved_exposure,
+       (SELECT count(*) FROM cost_intelligence.financial_ledger_events WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4)::int AS ledger_revision
+     FROM joined`,
     [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, currency],
   );
   const row = aggregate.rows[0] ?? {};
@@ -394,6 +436,7 @@ async function projectCapacity(
   return {
     limit, consumed, outstandingHolds, used, available,
     reservationCount: Number(row.reservation_count ?? 0),
+    unresolvedExposure: row.unresolved_exposure === true, ledgerRevision: Number(row.ledger_revision ?? 0),
     policy: policy ? { id: policy.id, revision: policy.revision, contentHash: policy.contentHash } : null,
   };
 }
@@ -417,7 +460,7 @@ export async function changeBudgetPolicy(
     return { ok: true, value: value as BudgetPolicyChangeRequest };
   })();
   if (!outer.ok) return failure(outer.error);
-  const request = outer.value;
+  const request = structuredClone(outer.value);
   const scope = request.scope as TrustedScope;
 
   const waitMs = resolveWaitMs(ports);
@@ -433,6 +476,8 @@ export async function changeBudgetPolicy(
       gate.checkpoint();
       if (authorizationError) return failure(authorizationError);
       if (!trustedNow(ports)) return failure(makeError('changeBudget', 'BUDGET_UNAVAILABLE', request.requestId, 'The trusted budget clock is unavailable.', true));
+      if (!ports.budgetEvidence) return unavailable();
+      if (!(await verifySource(ports, request as unknown as Record<string, unknown>, 'changeBudget', request.sourceAuthorityRef))) return failure(makeError('changeBudget', 'FORBIDDEN_SCOPE', request.requestId, 'Current authenticated budget policy source evidence is missing.'));
 
       client = await ports.database.connect();
       gate.checkpoint();
@@ -448,16 +493,18 @@ export async function changeBudgetPolicy(
 
       const replay = await client.query(
         `SELECT policy_version_id, policy_revision, currency, limit_amount::text AS limit_amount, content_hash,
-                actor_reference, reason_reference, source_authority_ref
+                actor_reference, reason_reference, source_authority_ref, change_request,
+                (SELECT limit_amount::text FROM cost_intelligence.budget_scope_policies previous WHERE previous.policy_version_id=budget_scope_policies.supersedes_policy_version_id) AS prior_limit
          FROM cost_intelligence.budget_scope_policies
          WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND idempotency_key = $5`,
         [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.idempotencyKey],
       );
       const existing = await currentPolicy(client, scope, request.currency);
+      const capacity = await projectCapacity(client, scope, request.currency);
       if (replay.rows.length) {
         const row = replay.rows[0] as Record<string, unknown>;
         // A replay must match the normalized original change; otherwise it is a typed conflict.
-        const identical = fromRow(row, 'currency') === request.currency
+        const identical = sameJson(row.change_request, normalizedBudgetRequest(request as unknown as Record<string, unknown>)) && fromRow(row, 'currency') === request.currency
           && fromRow(row, 'limit_amount') !== null
           && parseScaledDecimal(asString(row.limit_amount)) === parseScaledDecimal(request.limitAmount)
           && Number(row.policy_revision) - 1 === request.expectedPolicyRevision
@@ -477,27 +524,42 @@ export async function changeBudgetPolicy(
             schemaVersion: '1.0.0', requestId: request.requestId, status: 'replay',
             policyVersionId: asString(row.policy_version_id), policyRevision: Number(row.policy_revision), currency: request.currency,
             effectiveLimit: formatScaledDecimal(parseScaledDecimal(asString(row.limit_amount))),
-            previousLimit: existing ? formatScaledDecimal(existing.limit) : '0',
+            previousLimit: formatScaledDecimal(parseScaledDecimal(fromRow(row,'prior_limit') ?? '0')),
             decisionPolicyVersion: BUDGET_DECISION_POLICY_VERSION,
+            effectiveConsumedSpend: formatScaledDecimal(capacity.consumed), activeUnconsumedCommitments: formatScaledDecimal(capacity.outstandingHolds),
             policyRef: { contract: 'cost-intelligence.budget-policy', schema_version: '1.0.0', id: asString(row.policy_version_id), revision: Number(row.policy_revision), content_hash: asString(row.content_hash) },
           },
         };
       }
 
+      const priorDecision=await client.query(`SELECT command_request,command_receipt FROM cost_intelligence.budget_policy_decisions WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4 AND idempotency_key=$5`,[scope.tenantId,scope.projectId,scope.environment,scope.billingMode,request.idempotencyKey]);
+      if(priorDecision.rows[0]){
+        const prior=priorDecision.rows[0];if(!sameJson(prior.command_request,normalizedBudgetRequest(request as unknown as Record<string,unknown>))){await rollback(client);inTransaction=false;return failure(makeError('changeBudget','IDEMPOTENCY_CONFLICT',request.requestId,'This policy command key already binds another request.'));}
+        const receipt=prior.command_receipt as BudgetPolicyReceipt;gate.beginCommit();await client.query('COMMIT');inTransaction=false;
+        return {ok:true,value:{...receipt,requestId:request.requestId,status:'replay',...(receipt.status==='denied'||receipt.status==='stale'?{replayedStatus:receipt.status}:{})}};
+      }
       const currentRevision = existing?.revision ?? 0;
-      if (request.expectedPolicyRevision !== currentRevision) {
-        await rollback(client); inTransaction = false;
-        return {
-          ok: true,
-          value: {
+      if (request.expectedPolicyRevision !== currentRevision || (request.expectedLedgerRevision !== undefined && request.expectedLedgerRevision !== capacity.ledgerRevision)) {
+        const receipt: BudgetPolicyReceipt = {
             schemaVersion: '1.0.0', requestId: request.requestId, status: 'stale',
             policyVersionId: existing?.id ?? 'none', policyRevision: currentRevision, currency: request.currency,
             effectiveLimit: existing ? formatScaledDecimal(existing.limit) : '0',
             previousLimit: existing ? formatScaledDecimal(existing.limit) : '0',
             decisionPolicyVersion: BUDGET_DECISION_POLICY_VERSION,
-            policyRef: { contract: 'cost-intelligence.budget-policy', schema_version: '1.0.0', id: existing?.id ?? 'none', revision: currentRevision, content_hash: `sha256:${'0'.repeat(64)}` },
-          },
-        };
+            effectiveConsumedSpend: formatScaledDecimal(capacity.consumed), activeUnconsumedCommitments: formatScaledDecimal(capacity.outstandingHolds),
+            policyRef: decisionReference(existing),
+          };
+        await persistPolicyDecision(client,request,receipt);gate.beginCommit();await client.query('COMMIT');inTransaction=false;
+        return {ok:true,value:receipt};
+      }
+
+      if (parseScaledDecimal(request.limitAmount) < capacity.used || capacity.unresolvedExposure && existing !== null && parseScaledDecimal(request.limitAmount) < existing.limit) {
+        const receipt: BudgetPolicyReceipt = { schemaVersion: '1.0.0', requestId: request.requestId, status: 'denied', policyVersionId: existing?.id ?? 'none', policyRevision: currentRevision, currency: request.currency,
+          effectiveLimit: formatScaledDecimal(existing?.limit ?? 0n), previousLimit: formatScaledDecimal(existing?.limit ?? 0n),
+          effectiveConsumedSpend: formatScaledDecimal(capacity.consumed), activeUnconsumedCommitments: formatScaledDecimal(capacity.outstandingHolds),
+          decisionPolicyVersion: BUDGET_DECISION_POLICY_VERSION, policyRef: decisionReference(existing) };
+        await persistPolicyDecision(client,request,receipt);gate.beginCommit();await client.query('COMMIT');inTransaction=false;
+        return {ok:true,value:receipt};
       }
 
       const nextRevision = currentRevision + 1;
@@ -511,11 +573,11 @@ export async function changeBudgetPolicy(
         `INSERT INTO cost_intelligence.budget_scope_policies
           (policy_version_id, tenant_id, project_id, environment, billing_mode, currency, policy_revision,
            limit_amount, alert_threshold_percent, decision_policy_version, idempotency_key, actor_reference,
-           reason_reference, source_authority_ref, supersedes_policy_version_id, content_hash)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::numeric,80,$9,$10,$11,$12,$13::jsonb,$14,$15)`,
+           reason_reference, source_authority_ref, supersedes_policy_version_id, content_hash, change_request)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::numeric,80,$9,$10,$11,$12,$13::jsonb,$14,$15,$16::jsonb)`,
         [policyVersionId, scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.currency, nextRevision,
           request.limitAmount, BUDGET_DECISION_POLICY_VERSION, request.idempotencyKey, request.actorReference,
-          request.reasonReference, JSON.stringify(request.sourceAuthorityRef), existing?.id ?? null, contentHash],
+          request.reasonReference, JSON.stringify(request.sourceAuthorityRef), existing?.id ?? null, contentHash, JSON.stringify(normalizedBudgetRequest(request as unknown as Record<string,unknown>))],
       );
       gate.beginCommit();
       await client.query('COMMIT'); inTransaction = false;
@@ -527,6 +589,7 @@ export async function changeBudgetPolicy(
           effectiveLimit: formatScaledDecimal(parseScaledDecimal(request.limitAmount)),
           previousLimit: existing ? formatScaledDecimal(existing.limit) : '0',
           decisionPolicyVersion: BUDGET_DECISION_POLICY_VERSION,
+          effectiveConsumedSpend: formatScaledDecimal(capacity.consumed), activeUnconsumedCommitments: formatScaledDecimal(capacity.outstandingHolds),
           policyRef: { contract: 'cost-intelligence.budget-policy', schema_version: '1.0.0', id: policyVersionId, revision: nextRevision, content_hash: contentHash },
         },
       };
@@ -534,6 +597,7 @@ export async function changeBudgetPolicy(
       if (client && inTransaction) await rollback(client);
       return unavailable();
     } finally {
+      if(client&&inTransaction)await rollback(client);
       client?.release();
     }
   });
@@ -612,7 +676,7 @@ export async function authorizeReservation(
 ): Promise<ApiResult<AuthorizationDecision>> {
   const validated = validateReservationRequestBoundary(value);
   if (!validated.ok) return failure(validated.error);
-  const request = validated.value as ReservationRequest;
+  const request = structuredClone(validated.value) as ReservationRequest;
   const scope = request.scope as TrustedScope;
   const requestId = request.requestId;
   const waitMs = resolveWaitMs(ports);
@@ -630,6 +694,22 @@ export async function authorizeReservation(
       const now = trustedNow(ports);
       if (!now) return failure(makeError('authorize', 'BUDGET_UNAVAILABLE', requestId, 'The trusted budget clock is unavailable.', true));
 
+      if (!request.authorityBinding || !request.sourceAuthorityRef || !ports.reservationAuthority || !ports.budgetEvidence) return unavailable();
+      if (Date.parse(request.canonicalRequest.expires_at) <= now.getTime()) return failure(makeError('authorize', 'VALIDATION_ERROR', requestId, 'The financial reservation expiry is not current.'));
+      if (request.authorityBinding.budgetScopeId !== request.canonicalRequest.budget_scope_id || request.idempotencyKey !== request.canonicalRequest.idempotency_key
+        || request.attemptBinding.billableAttemptId !== request.canonicalRequest.billable_attempt_id || request.attemptBinding.logicalOperationId !== request.canonicalRequest.logical_operation_id) return failure(makeError('authorize', 'VALIDATION_ERROR', requestId, 'Canonical and Finance economic identity must match exactly.'));
+      if (request.authorityBinding.provider === 'openrouter' && currency !== 'USD') return failure(makeError('authorize', 'VALIDATION_ERROR', requestId, 'The OpenRouter authority mapping requires an exact USD partition.'));
+      const source = await verifySource(ports, request as unknown as Record<string, unknown>, 'authorize', request.sourceAuthorityRef);
+      if (!source) return failure(makeError('authorize', 'FORBIDDEN_SCOPE', requestId, 'Current authenticated estimate source evidence is missing.'));
+      const host = await verifyReservationHost(ports.reservationAuthority, { scope, billableAttemptId: request.attemptBinding.billableAttemptId, binding: request.authorityBinding, sourceAuthorityRef: request.sourceAuthorityRef, phase: 'admission' }, now);
+      gate.checkpoint();
+      if (!host) return failure(makeError('authorize', 'FORBIDDEN_SCOPE', requestId, 'The current host target grant or lease is unavailable or revoked.'));
+      let approvedMaximum: bigint | null = null;
+      if (request.estimate.completeness !== 'complete' && request.estimate.maximumPolicyRef && request.estimate.boundedConservativeMaximum && source.maximum
+        && sameJson(source.maximum.policyRef, request.estimate.maximumPolicyRef) && source.maximum.currency === currency
+        && sameAmount(source.maximum.authorizedCap, request.estimate.boundedConservativeMaximum)
+        && sameAmount(source.maximum.authorizedCap, request.canonicalRequest.requested.amount)
+        && parseScaledDecimal(source.maximum.authorizedCap) >= parseScaledDecimal(request.estimate.knownSubtotal)) approvedMaximum = parseScaledDecimal(source.maximum.authorizedCap);
       // Cross-currency pooling is forbidden without explicit policy, and the
       // canonical requested amount may not contradict the estimate.
       const bindingError = financialBindingError(request);
@@ -653,7 +733,7 @@ export async function authorizeReservation(
         `SELECT reservation_id, event_type, event_sequence, currency, held_amount::text AS held_amount,
                 partial_allowed_amount::text AS partial_allowed_amount, estimate_completeness,
                 known_subtotal::text AS known_subtotal, bounded_maximum::text AS bounded_maximum, allow_partial,
-                attempt_binding, policy_version_id, policy_ref, rate_card_ref
+                attempt_binding, policy_version_id, policy_ref, rate_card_ref, authorization_request, reservation_event_id, content_hash, authorized_cap::text AS authorized_cap
          FROM cost_intelligence.budget_reservation_events
          WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND idempotency_key = $5
          ORDER BY event_sequence ASC LIMIT 1`,
@@ -667,7 +747,8 @@ export async function authorizeReservation(
         const storedKnown = fromRow(row, 'known_subtotal');
         const storedMaximum = fromRow(row, 'bounded_maximum');
         const incomingMaximum = request.estimate.boundedConservativeMaximum;
-        const identical = (eventType === 'authorized' || eventType === 'partially_authorized')
+        const identical = sameJson(row.authorization_request, normalizedBudgetRequest(request as unknown as Record<string, unknown>))
+          && (eventType === 'authorized' || eventType === 'partially_authorized')
           && Number(row.event_sequence) === 1
           && fromRow(row, 'currency') === currency
           && fromRow(row, 'estimate_completeness') === request.estimate.completeness
@@ -695,11 +776,13 @@ export async function authorizeReservation(
             reservationId: asString(row.reservation_id), held, available: capacity.available,
             partialAllowed: partial === null ? null : parseScaledDecimal(partial),
             policyRef: storedPolicyRef!,
-            rateCardRef: parseRef(row.rate_card_ref),
+            rateCardRef: parseRef(row.rate_card_ref), evidenceRef: `ci05a:${asString(row.reservation_event_id)}`, evidenceHash: asString(row.content_hash), authorizedCap: parseScaledDecimal(fromRow(row,'authorized_cap') ?? '0'),
           }),
         };
       }
 
+      const acknowledgementKey=await client.query(`SELECT acknowledgement_id FROM cost_intelligence.budget_reservation_acknowledgements WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4 AND idempotency_key=$5`,[scope.tenantId,scope.projectId,scope.environment,scope.billingMode,request.idempotencyKey]);
+      if(acknowledgementKey.rows.length){await rollback(client);inTransaction=false;return failure(makeError('authorize','IDEMPOTENCY_CONFLICT',requestId,'The key already identifies a partial acknowledgement.'));}
       // No applicable budget policy means no configured authority: deny by default.
       if (!capacity.policy) {
         await rollback(client); inTransaction = false;
@@ -714,13 +797,17 @@ export async function authorizeReservation(
           'The reservation policy reference is not the currently applicable budget policy; re-read the policy and resubmit.'));
       }
 
-      const need = requiredHold(request);
+      const duplicateAttempt = await client.query(`SELECT reservation_id FROM cost_intelligence.budget_reservation_events WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4 AND billable_attempt_id=$5 AND event_sequence=1`, [scope.tenantId,scope.projectId,scope.environment,scope.billingMode,request.attemptBinding.billableAttemptId]);
+      if (duplicateAttempt.rows.length) { await rollback(client); inTransaction=false; return failure(makeError('authorize', 'IDEMPOTENCY_CONFLICT', requestId, 'This economic billable attempt already has a reservation; reuse its original key.')); }
+      const need = request.estimate.completeness === 'complete' ? requiredHold(request) : approvedMaximum;
+      if (capacity.unresolvedExposure) { await rollback(client);inTransaction=false;return unavailable(); }
       if (need === null) {
         // Unknown / unbounded pricing cannot auto-authorize.
         await rollback(client); inTransaction = false;
         return { ok: true, value: buildDecision({ requestId, request, currency, now, status: 'denied', reservationId: 'none', held: 0n, available: capacity.available, partialAllowed: null, policyRef: decisionReference(capacity.policy), rateCardRef: request.estimate.rateCardRef }) };
       }
 
+      if(request.workPlan && (parseScaledDecimal(request.workPlan.unitMaximumAmount)<=0n || parseScaledDecimal(request.workPlan.unitMaximumAmount)*BigInt(request.workPlan.requestedUnits)!==need))return failure(makeError('authorize','VALIDATION_ERROR',requestId,'The source-authenticated work plan must equal the requested conservative cap.'));
       const reservationId = globalThis.crypto.randomUUID();
       let status: AuthorizationDecision['status'];
       let hold: bigint;
@@ -728,7 +815,10 @@ export async function authorizeReservation(
       if (need <= capacity.available) {
         status = 'authorized'; hold = need;
       } else if (request.allowPartialAuthorization && capacity.available > 0n) {
-        status = 'partial'; hold = capacity.available; partialAllowed = capacity.available;
+        status = 'partial'; hold = capacity.available;
+        if (request.workPlan) { const unit = parseScaledDecimal(request.workPlan.unitMaximumAmount); if (unit <= 0n) return failure(makeError('authorize','VALIDATION_ERROR',requestId,'Partial work needs a positive conservative unit bound.')); hold = (hold / unit) * unit; }
+        if (hold <= 0n) status = 'denied';
+        partialAllowed = hold;
       } else {
         status = 'denied'; hold = 0n;
       }
@@ -738,9 +828,14 @@ export async function authorizeReservation(
         return { ok: true, value: buildDecision({ requestId, request, currency, now, status, reservationId: 'none', held: 0n, available: capacity.available, partialAllowed: null, policyRef: decisionReference(capacity.policy), rateCardRef: request.estimate.rateCardRef }) };
       }
 
+      const currentNow=trustedNow(ports);if(!currentNow)return unavailable();
+      const finalScope=await gate.wait(authorizeScope(scope,requestId,ports,'authorize','budgets.authorize'));gate.checkpoint();if(finalScope)return failure(finalScope);
+      const finalHost=await gate.wait(verifyReservationHost(ports.reservationAuthority,{scope,billableAttemptId:request.attemptBinding.billableAttemptId,binding:request.authorityBinding,sourceAuthorityRef:request.sourceAuthorityRef,phase:'admission'},currentNow));gate.checkpoint();
+      const finalSource=await gate.wait(verifySource(ports,request as unknown as Record<string,unknown>,'authorize',request.sourceAuthorityRef));gate.checkpoint();
+      if(!finalHost||!finalSource || approvedMaximum!==null && (!finalSource.maximum||!sameJson(finalSource.maximum.policyRef,request.estimate.maximumPolicyRef)||!sameAmount(finalSource.maximum.authorizedCap,formatScaledDecimal(approvedMaximum))||finalSource.maximum.currency!==currency))return failure(makeError('authorize','FORBIDDEN_SCOPE',requestId,'Current host or source authority changed during admission.'));
       const policyRef = decisionReference(capacity.policy);
       const eventId = globalThis.crypto.randomUUID();
-      const contentHash = await hashValue({ reservationId, idempotencyKey: request.idempotencyKey, hold: formatScaledDecimal(hold), status, currency });
+      const contentHash = await hashValue({ reservationId, request: normalizedBudgetRequest(request as unknown as Record<string, unknown>), hold: formatScaledDecimal(hold), authorizedCap: formatScaledDecimal(need), status, currency, host, source });
       gate.checkpoint();
       await client.query(
         `INSERT INTO cost_intelligence.budget_reservation_events
@@ -748,9 +843,9 @@ export async function authorizeReservation(
            event_type, decision_status, held_amount, consumed_amount, released_amount, estimate_completeness, known_subtotal,
            bounded_maximum, allow_partial, partial_allowed_amount, usage_finality, settlement_sequence, policy_version_id,
            rate_card_ref, policy_ref, idempotency_key, expected_revision, actor_reference, source_authority_ref,
-           attempt_binding, logical_operation_id, billable_attempt_id, content_hash)
+           attempt_binding, logical_operation_id, billable_attempt_id, content_hash, authorization_request, authority_binding, financial_expires_at, authorized_cap, authority_evidence)
          VALUES ($1,$2,$3,$4,$5,$6,$7,1,$8,$9,$10::numeric,0,0,$11,$12::numeric,$13::numeric,$14,$15,'unknown',NULL,$16,
-           $17::jsonb,$18::jsonb,$19,NULL,$20,$21::jsonb,$22::jsonb,$23,$24,$25)`,
+           $17::jsonb,$18::jsonb,$19,NULL,$20,$21::jsonb,$22::jsonb,$23,$24,$25,$26::jsonb,$27::jsonb,$28::timestamptz,$29::numeric,$30::jsonb)`,
         [eventId, scope.tenantId, scope.projectId, scope.environment, scope.billingMode, currency, reservationId,
           status === 'authorized' ? 'authorized' : 'partially_authorized', status,
           formatScaledDecimal(hold), request.estimate.completeness, request.estimate.knownSubtotal,
@@ -759,20 +854,22 @@ export async function authorizeReservation(
           partialAllowed === null ? null : formatScaledDecimal(partialAllowed), capacity.policy.id,
           request.estimate.rateCardRef === null ? null : JSON.stringify(request.estimate.rateCardRef),
           JSON.stringify(policyRef), request.idempotencyKey, scope.actorId,
-          JSON.stringify({ actorId: scope.actorId, authority: 'budget.reservation.authorize', policyVersionId: capacity.policy.id }),
-          JSON.stringify(request.attemptBinding), request.attemptBinding.logicalOperationId, request.attemptBinding.billableAttemptId, contentHash],
+          JSON.stringify(request.sourceAuthorityRef),
+          JSON.stringify(request.attemptBinding), request.attemptBinding.logicalOperationId, request.attemptBinding.billableAttemptId, contentHash, JSON.stringify(normalizedBudgetRequest(request as unknown as Record<string, unknown>)), JSON.stringify(request.authorityBinding), request.canonicalRequest.expires_at, formatScaledDecimal(need), JSON.stringify({host, source})],
       );
+      if (Date.parse(request.canonicalRequest.expires_at) <= (trustedNow(ports)?.getTime() ?? Infinity) || Date.parse(request.authorityBinding.leaseExpiresAt) <= (trustedNow(ports)?.getTime() ?? Infinity)) { await rollback(client); inTransaction=false; return unavailable(); }
       gate.beginCommit();
       await client.query('COMMIT'); inTransaction = false;
       const availableAfter = capacity.available - hold > 0n ? capacity.available - hold : 0n;
       return {
         ok: true,
-        value: buildDecision({ requestId, request, currency, now, status, reservationId, held: hold, available: availableAfter, partialAllowed, policyRef, rateCardRef: request.estimate.rateCardRef }),
+        value: buildDecision({ requestId, request, currency, now, status, reservationId, held: hold, available: availableAfter, partialAllowed, policyRef, rateCardRef: request.estimate.rateCardRef, evidenceRef: `ci05a:${eventId}`, evidenceHash: contentHash, authorizedCap: need }),
       };
     } catch {
       if (client && inTransaction) await rollback(client);
       return unavailable();
     } finally {
+      if(client&&inTransaction)await rollback(client);
       client?.release();
     }
   });
@@ -801,6 +898,7 @@ function buildDecision(args: {
   requestId: string; request: ReservationRequest; currency: string; now: Date;
   status: AuthorizationDecision['status']; reservationId: string; held: bigint; available: bigint;
   partialAllowed: bigint | null; policyRef: VersionedReference; rateCardRef: VersionedReference | null;
+  evidenceRef?: string; evidenceHash?: string; authorizedCap?: bigint;
 }): AuthorizationDecision {
   const { request } = args;
   return {
@@ -812,9 +910,10 @@ function buildDecision(args: {
     expiryEligibility: args.status === 'authorized' || args.status === 'partial' ? 'eligible_if_never_dispatched' : 'not_expired',
     attemptBinding: request.attemptBinding,
     partialAuthorization: args.status === 'partial' && args.partialAllowed !== null
-      ? { allowedAmount: formatScaledDecimal(args.partialAllowed), allowedWorkUnits: null, unit: null, callerAcknowledgementRequired: true, replanBeforeDispatch: true }
+      ? { allowedAmount: formatScaledDecimal(args.partialAllowed), allowedWorkUnits: request.workPlan ? (args.partialAllowed / parseScaledDecimal(request.workPlan.unitMaximumAmount)).toString() : null, unit: request.workPlan?.unit ?? null, callerAcknowledgementRequired: true, replanBeforeDispatch: true }
       : null,
     retryAfterMs: args.status === 'unavailable' ? DEFAULT_RETRY_AFTER_MS : null,
+    ...(request.authorityBinding && args.evidenceRef && args.evidenceHash && args.authorizedCap !== undefined ? { finance: financeEnvelope(request, args.reservationId, args.held, args.authorizedCap, args.evidenceRef, args.evidenceHash) } : {}),
   };
 }
 
@@ -836,6 +935,11 @@ interface ReservationState {
   readonly firstType: string;
   /** The attempt binding persisted with the authorization. */
   readonly originalBinding: unknown;
+  readonly authorizationRequest: ReservationRequest | null;
+  readonly financialExpiresAt: string | null;
+  readonly acknowledged: boolean;
+  readonly acknowledgementEvidence: unknown;
+  readonly dispatchEvidence: unknown;
 }
 
 async function loadReservation(client: BudgetTransactionPort, scope: TrustedScope, reservationId: string): Promise<ReservationState | null> {
@@ -847,7 +951,12 @@ async function loadReservation(client: BudgetTransactionPort, scope: TrustedScop
             (array_agg(usage_finality ORDER BY event_sequence DESC))[1] AS last_finality,
             bool_or(event_type = 'dispatched') AS ever_dispatched,
             (array_agg(event_type ORDER BY event_sequence ASC))[1] AS first_type,
-            (array_agg(attempt_binding ORDER BY event_sequence ASC))[1] AS original_binding
+            (array_agg(attempt_binding ORDER BY event_sequence ASC))[1] AS original_binding,
+            (array_agg(authorization_request ORDER BY event_sequence ASC))[1] AS authorization_request,
+            (array_agg(financial_expires_at::text ORDER BY event_sequence ASC))[1] AS financial_expires_at,
+            bool_or(event_type = 'partial_acknowledged') AS acknowledged,
+            (array_agg(command_evidence ORDER BY event_sequence DESC) FILTER (WHERE event_type='partial_acknowledged'))[1] AS acknowledgement_evidence,
+            (array_agg(command_evidence ORDER BY event_sequence DESC) FILTER (WHERE event_type='dispatched'))[1] AS dispatch_evidence
      FROM cost_intelligence.budget_reservation_events
      WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND reservation_id = $5
      GROUP BY currency, policy_version_id`,
@@ -855,22 +964,25 @@ async function loadReservation(client: BudgetTransactionPort, scope: TrustedScop
   );
   const row = result.rows[0];
   if (!row) return null;
+  const acknowledgements=await client.query(`SELECT event_sequence,command_request FROM cost_intelligence.budget_reservation_acknowledgements WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4 AND reservation_id=$5 ORDER BY event_sequence DESC LIMIT 1`,[scope.tenantId,scope.projectId,scope.environment,scope.billingMode,reservationId]);
+  const acknowledgement=acknowledgements.rows[0];const ackRevision=Number(acknowledgement?.event_sequence??0);
   const finalityRaw = fromRow(row, 'last_finality');
   return {
     exists: true, currency: asString(row.currency), policyVersionId: asString(row.policy_version_id),
     held: parseScaledDecimal(fromRow(row, 'held') ?? '0'), consumed: parseScaledDecimal(fromRow(row, 'consumed') ?? '0'),
-    released: parseScaledDecimal(fromRow(row, 'released') ?? '0'), revision: Number(row.revision),
-    lastType: asString(row.last_type),
+    released: parseScaledDecimal(fromRow(row, 'released') ?? '0'), revision: Math.max(Number(row.revision),ackRevision),
+    lastType: ackRevision>Number(row.revision)?'partial_acknowledged':asString(row.last_type),
     usageFinality: finalityRaw === 'partial' || finalityRaw === 'final' ? finalityRaw : 'unknown',
     everDispatched: row.ever_dispatched === true,
     firstType: fromRow(row, 'first_type') ?? '',
     originalBinding: row.original_binding ?? null,
+    authorizationRequest: row.authorization_request as ReservationRequest ?? null, financialExpiresAt: fromRow(row, 'financial_expires_at'), acknowledged: !!acknowledgement, acknowledgementEvidence: acknowledgement?.command_request ?? null, dispatchEvidence: row.dispatch_evidence ?? null,
   };
 }
 
 function stateFor(lastType: string, usageFinality: 'unknown' | 'partial' | 'final'): ReservationLifecycleState {
   switch (lastType) {
-    case 'authorized': case 'partially_authorized': return 'held';
+    case 'authorized': case 'partially_authorized': case 'partial_acknowledged': return 'held';
     case 'dispatched': return 'dispatched';
     case 'settled': return usageFinality === 'final' ? 'settled' : 'partially_settled';
     case 'released': return 'released';
@@ -892,11 +1004,11 @@ function outcomeFrom(requestId: string, status: ReservationCommandOutcome['statu
   };
 }
 
-type CommandKind = 'mark_dispatched' | 'settle' | 'release';
+type CommandKind = 'mark_dispatched' | 'settle' | 'release' | 'acknowledge_partial';
 
 /** The normalized identity of a lifecycle command, compared against the stored event on replay. */
 interface CommandIdentity {
-  readonly eventType: 'dispatched' | 'settled' | 'released';
+  readonly eventType: 'dispatched' | 'settled' | 'released' | 'partial_acknowledged';
   readonly consumed: bigint;
   readonly released: bigint;
   readonly usageFinality: 'unknown' | 'partial' | 'final' | null;
@@ -908,6 +1020,8 @@ async function applyCommand(args: {
   currency: string; actorReference: string; sourceAuthorityRef: VersionedReference; attemptBinding: Record<string, unknown>;
   logicalOperationId: string; billableAttemptId: string; kind: CommandKind; identity: CommandIdentity;
   ports: BudgetRuntimePorts; operation: string; authority: FinanceOperation;
+  command?: Record<string, unknown>;
+  validateCurrent?(state: ReservationState): Promise<ErrorEnvelope | null>;
   compute(state: ReservationState): { eventType: string; consumed: bigint; released: bigint; usageFinality: 'unknown' | 'partial' | 'final'; settlementSequence: number | null } | { reject: ErrorEnvelope };
 }): Promise<ApiResult<ReservationCommandOutcome>> {
   const { ports, scope, requestId } = args;
@@ -950,16 +1064,22 @@ async function applyCommand(args: {
 
       const replay = await client.query(
         `SELECT reservation_id, event_type, event_sequence, currency, consumed_amount::text AS consumed_amount,
-                released_amount::text AS released_amount, usage_finality, settlement_sequence, expected_revision, attempt_binding
+                released_amount::text AS released_amount, usage_finality, settlement_sequence, expected_revision, attempt_binding, actor_reference, source_authority_ref, command_evidence
          FROM cost_intelligence.budget_reservation_events
          WHERE tenant_id = $1 AND project_id = $2 AND environment = $3 AND billing_mode = $4 AND idempotency_key = $5
+         UNION ALL
+         SELECT reservation_id,'partial_acknowledged' AS event_type,event_sequence,currency,'0' AS consumed_amount,'0' AS released_amount,'unknown' AS usage_finality,NULL AS settlement_sequence,expected_revision,attempt_binding,actor_reference,source_authority_ref,command_request AS command_evidence
+         FROM cost_intelligence.budget_reservation_acknowledgements
+         WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4 AND idempotency_key=$5
          ORDER BY event_sequence ASC LIMIT 1`,
         [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, args.idempotencyKey],
       );
       if (replay.rows.length) {
         const row = replay.rows[0] as Record<string, unknown>;
         const identity = args.identity;
-        const identical = fromRow(row, 'reservation_id') === args.reservationId
+        const identical = fromRow(row,'actor_reference') === args.actorReference && sameJson(row.source_authority_ref,args.sourceAuthorityRef)
+          && (!args.command || sameJson(row.command_evidence, normalizedBudgetRequest(args.command)))
+          && fromRow(row, 'reservation_id') === args.reservationId
           && fromRow(row, 'event_type') === identity.eventType
           && fromRow(row, 'currency') === effectiveCurrency
           && Number(row.expected_revision) === args.expectedRevision
@@ -1002,25 +1122,30 @@ async function applyCommand(args: {
         return failure(computed.reject);
       }
 
+      if (args.validateCurrent) { const denied = await gate.wait(args.validateCurrent(state)); gate.checkpoint(); if (denied) { await rollback(client); inTransaction=false; return failure(denied); } }
       const nextSequence = state.revision + 1;
       const eventId = globalThis.crypto.randomUUID();
       const contentHash = await hashValue({ reservationId: args.reservationId, sequence: nextSequence, type: computed.eventType, idempotencyKey: args.idempotencyKey });
       gate.checkpoint();
+      if(args.kind==='acknowledge_partial'){
+        await client.query(`INSERT INTO cost_intelligence.budget_reservation_acknowledgements (acknowledgement_id,tenant_id,project_id,environment,billing_mode,currency,reservation_id,event_sequence,expected_revision,idempotency_key,actor_reference,source_authority_ref,attempt_binding,command_request,content_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15)`,[eventId,scope.tenantId,scope.projectId,scope.environment,scope.billingMode,effectiveCurrency,args.reservationId,nextSequence,args.expectedRevision,args.idempotencyKey,args.actorReference,JSON.stringify(args.sourceAuthorityRef),JSON.stringify(args.attemptBinding),JSON.stringify(normalizedBudgetRequest(args.command!)),contentHash]);
+      } else {
       await client.query(
         `INSERT INTO cost_intelligence.budget_reservation_events
           (reservation_event_id, tenant_id, project_id, environment, billing_mode, currency, reservation_id, event_sequence,
            event_type, decision_status, held_amount, consumed_amount, released_amount, estimate_completeness, known_subtotal,
            bounded_maximum, allow_partial, partial_allowed_amount, usage_finality, settlement_sequence, policy_version_id,
            rate_card_ref, policy_ref, idempotency_key, expected_revision, actor_reference, source_authority_ref,
-           attempt_binding, logical_operation_id, billable_attempt_id, content_hash)
+           attempt_binding, logical_operation_id, billable_attempt_id, content_hash, command_evidence)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,0,$10::numeric,$11::numeric,NULL,NULL,NULL,false,NULL,$12,$13,$14,
-           NULL,$15::jsonb,$16,$17,$18,$19::jsonb,$20::jsonb,$21,$22,$23)`,
+           NULL,$15::jsonb,$16,$17,$18,$19::jsonb,$20::jsonb,$21,$22,$23,$24::jsonb)`,
         [eventId, scope.tenantId, scope.projectId, scope.environment, scope.billingMode, effectiveCurrency, args.reservationId, nextSequence,
           computed.eventType, formatScaledDecimal(computed.consumed), formatScaledDecimal(computed.released), computed.usageFinality,
           computed.settlementSequence, state.policyVersionId, JSON.stringify(args.sourceAuthorityRef), args.idempotencyKey,
           args.expectedRevision, args.actorReference, JSON.stringify(args.sourceAuthorityRef), JSON.stringify(args.attemptBinding),
-          args.logicalOperationId, args.billableAttemptId, contentHash],
+          args.logicalOperationId, args.billableAttemptId, contentHash, args.command ? JSON.stringify(normalizedBudgetRequest(args.command)) : null],
       );
+      }
       const refreshed = await loadReservation(client, scope, args.reservationId);
       gate.beginCommit();
       await client.query('COMMIT'); inTransaction = false;
@@ -1029,6 +1154,7 @@ async function applyCommand(args: {
       if (client && inTransaction) await rollback(client);
       return unavailable();
     } finally {
+      if(client&&inTransaction)await rollback(client);
       client?.release();
     }
   });
@@ -1037,22 +1163,24 @@ async function applyCommand(args: {
 export async function markReservationDispatched(value: unknown, ports: BudgetRuntimePorts): Promise<ApiResult<ReservationCommandOutcome>> {
   const { Value } = requireValue();
   if (!Value.Check(markSchema(), value)) return failure(makeError('markDispatched', 'VALIDATION_ERROR', requestIdOf(value), 'The mark-dispatched command does not match the published schema.'));
-  const request = value as MarkDispatchedCommand;
+  const request = structuredClone(value) as MarkDispatchedCommand;
   return applyCommand({
     requestId: request.requestId, idempotencyKey: request.idempotencyKey, scope: request.scope as TrustedScope,
     reservationId: request.reservationId, expectedRevision: request.expectedRevision, currency: '',
     actorReference: request.actorReference, sourceAuthorityRef: request.sourceAuthorityRef as VersionedReference,
     attemptBinding: request.attemptBinding as unknown as Record<string, unknown>,
     logicalOperationId: request.attemptBinding.logicalOperationId, billableAttemptId: request.attemptBinding.billableAttemptId,
+    command: request as unknown as Record<string, unknown>,
+    validateCurrent: async state => validateDispatchEvidence(state, request, ports),
     kind: 'mark_dispatched', ports, operation: 'markDispatched', authority: 'budgets.markDispatched',
     identity: { eventType: 'dispatched', consumed: 0n, released: 0n, usageFinality: 'unknown', settlementSequence: null },
     compute(state) {
-      if (state.lastType !== 'authorized' && state.lastType !== 'partially_authorized') {
+      if (state.lastType !== 'authorized' && state.lastType !== 'partially_authorized' && state.lastType !== 'partial_acknowledged') {
         return { reject: makeError('markDispatched', 'VALIDATION_ERROR', request.requestId, 'Only a held reservation can be dispatched.') };
       }
       // A partial authorization needs validated caller acknowledgement/replan evidence. The
       // pinned MarkDispatched contract carries none, so dispatch stays unavailable (hold preserved).
-      if (state.lastType === 'partially_authorized' || state.firstType === 'partially_authorized') {
+      if (state.firstType === 'partially_authorized' && !state.acknowledged) {
         return { reject: makeError('markDispatched', 'BUDGET_UNAVAILABLE', request.requestId,
           'Dispatch of a partially authorized reservation is unavailable: no acknowledgement or replan evidence is defined at the approved boundary.') };
       }
@@ -1089,7 +1217,7 @@ function effectiveFinality(finality: 'partial' | 'final', completeness: 'unknown
 export async function settleReservation(value: unknown, ports: BudgetRuntimePorts): Promise<ApiResult<ReservationCommandOutcome>> {
   const validated = validateSettleReservationCommandBoundary(value);
   if (!validated.ok) return failure(validated.error);
-  const request = validated.value as SettleReservationCommand;
+  const request = structuredClone(validated.value) as SettleReservationCommand;
   const currency = request.settlement.currency;
   const cumulative = parseScaledDecimal(request.settlement.cumulativeAmount);
   const consumed = request.canonicalCommand.consumed;
@@ -1104,6 +1232,7 @@ export async function settleReservation(value: unknown, ports: BudgetRuntimePort
     actorReference: request.actorReference, sourceAuthorityRef: request.sourceAuthorityRef as VersionedReference,
     attemptBinding: request.attemptBinding as unknown as Record<string, unknown>,
     logicalOperationId: request.attemptBinding.logicalOperationId, billableAttemptId: request.attemptBinding.billableAttemptId,
+    command: request as unknown as Record<string,unknown>,
     kind: 'settle', ports, operation: 'settle', authority: 'budgets.settle',
     identity: { eventType: 'settled', consumed: cumulative, released: 0n, usageFinality: settledFinality, settlementSequence: request.settlement.sequence },
     compute(state) {
@@ -1126,7 +1255,7 @@ export async function settleReservation(value: unknown, ports: BudgetRuntimePort
 export async function releaseReservation(value: unknown, ports: BudgetRuntimePorts): Promise<ApiResult<ReservationCommandOutcome>> {
   const validated = validateReleaseReservationCommandBoundary(value);
   if (!validated.ok) return failure(validated.error);
-  const request = validated.value as ReleaseReservationCommand;
+  const request = structuredClone(validated.value) as ReleaseReservationCommand;
   const currency = request.release.currency;
   const releaseAmount = parseScaledDecimal(request.release.amount);
   // The pinned ReleaseRequest carries an economic currency but no amount; that currency must agree with the wrapper.
@@ -1139,6 +1268,7 @@ export async function releaseReservation(value: unknown, ports: BudgetRuntimePor
     actorReference: request.actorReference, sourceAuthorityRef: request.sourceAuthorityRef as VersionedReference,
     attemptBinding: request.attemptBinding as unknown as Record<string, unknown>,
     logicalOperationId: request.attemptBinding.logicalOperationId, billableAttemptId: request.attemptBinding.billableAttemptId,
+    command: request as unknown as Record<string,unknown>,
     kind: 'release', ports, operation: 'release', authority: 'budgets.release',
     identity: { eventType: 'released', consumed: 0n, released: releaseAmount, usageFinality: null, settlementSequence: null },
     compute(state) {
@@ -1206,13 +1336,14 @@ export async function readCapacity(
           schemaVersion: '1.0.0', requestId, scope, currency,
           limitAmount: formatScaledDecimal(capacity.limit), effectiveConsumedSpend: formatScaledDecimal(capacity.consumed),
           outstandingHolds: formatScaledDecimal(capacity.outstandingHolds), usedCapacity: formatScaledDecimal(capacity.used),
-          availableCapacity: formatScaledDecimal(capacity.available), reservationCount: capacity.reservationCount, advisoryOnly: true,
+          availableCapacity: formatScaledDecimal(capacity.available), reservationCount: capacity.reservationCount, advisoryOnly: true, capacityState: capacityState(capacity), unresolvedExposure: capacity.unresolvedExposure, policyWindow: 'project_lifetime', policyRef: decisionReference(capacity.policy),
         },
       };
     } catch {
       if (client && inTransaction) await rollback(client);
       return unavailable();
     } finally {
+      if(client&&inTransaction)await rollback(client);
       client?.release();
     }
   });
@@ -1230,4 +1361,153 @@ function requestIdOf(value: unknown): string {
     if (typeof id === 'string' && id.length > 0) return id;
   }
   return 'unavailable';
+}
+
+async function verifySource(ports: BudgetRuntimePorts, request: Record<string, unknown>, operation: string, sourceAuthorityRef: BudgetReference) {
+  const now = trustedNow(ports);
+  if (!now) return null;
+  const scope = request.scope as TrustedScope;
+  return verifyBudgetSource(ports.budgetEvidence, { operation, scope, actorId: scope.actorId, sourceAuthorityRef,
+    requestDigest: await budgetDigest(normalizedBudgetRequest(request)) }, now);
+}
+function capacityState(capacity: PartitionCapacity): CapacitySnapshot['capacityState'] {
+  if (!capacity.policy) return 'unconfigured';
+  if (capacity.used > capacity.limit) return 'over_limit';
+  if (capacity.used === capacity.limit) return 'exhausted';
+  return capacity.used * 100n >= capacity.limit * 80n ? 'near_limit' : 'available';
+}
+function financeEnvelope(request: ReservationRequest, reservationId: string, held: bigint, cap: bigint, evidenceRef: string, evidenceHash: string) {
+  const binding = request.authorityBinding!;
+  return { status: 'held' as const, revoked: false as const, reservation_ref: reservationId,
+    billable_attempt_id: request.attemptBinding.billableAttemptId, budget_scope_id: binding.budgetScopeId,
+    lease_ref: binding.leaseRef, grant_ref: binding.grantRef, tenant_id: request.scope.tenantId, project_id: request.scope.projectId,
+    account_ref: binding.accountRef, project_ref: binding.projectRef, provider: binding.provider, model: binding.model,
+    operation: binding.operation, target_binding_sha256: binding.targetBindingSha256,
+    held_amount: { amount: formatScaledDecimal(held), currency: request.estimate.currency },
+    authorized_cap: { amount: formatScaledDecimal(cap), currency: request.estimate.currency },
+    expires_at: new Date(Math.min(Date.parse(request.canonicalRequest.expires_at),Date.parse(binding.leaseExpiresAt))).toISOString(), evidence_ref: evidenceRef, evidence_sha256: evidenceHash };
+}
+export interface ReservationSnapshotRequest {
+  readonly schemaVersion: '1.0.0'; readonly requestId: string; readonly scope: TrustedScope; readonly reservationId: string;
+}
+const SnapshotRequestSchema = Type.Object({ schemaVersion: Type.Literal('1.0.0'), requestId: Type.String({ minLength: 1 }),
+  scope: BudgetPolicyChangeRequestSchema.properties.scope, reservationId: Type.String({ minLength: 1 }) }, { additionalProperties: false });
+async function snapshotFrom(client: BudgetTransactionPort, request: ReservationSnapshotRequest, state: ReservationState, now: Date): Promise<ReservationSnapshot | null> {
+  const original = state.authorizationRequest;
+  if (!original?.sourceAuthorityRef || !original.authorityBinding) return null;
+  const first = await client.query(`SELECT reservation_event_id, content_hash, authorized_cap::text AS cap FROM cost_intelligence.budget_reservation_events WHERE tenant_id=$1 AND project_id=$2 AND environment=$3 AND billing_mode=$4 AND reservation_id=$5 AND event_sequence=1`, [request.scope.tenantId,request.scope.projectId,request.scope.environment,request.scope.billingMode,request.reservationId]);
+  const row=first.rows[0]; if (!row) return null;
+  const expired = Date.parse(original.canonicalRequest.expires_at) <= now.getTime();
+  const lifecycle = stateFor(state.lastType,state.usageFinality);
+  const eligible = !expired && Date.parse(original.authorityBinding.leaseExpiresAt)>now.getTime() && (lifecycle==='held' || lifecycle==='dispatched') && (state.firstType!=='partially_authorized' || state.acknowledged);
+  const c=original.canonicalRequest;
+  const money = (amount: bigint) => { const value=formatScaledDecimal(amount); return {amount:value,currency:state.currency,scale:value.includes('.')?value.split('.')[1]!.length:0}; };
+  // Explicit projection of the pinned v1 representation. Local state retains richer lifecycle/partial semantics.
+  const canonical = { contract:'BudgetReservation', schema_version:'1.0.0', policy_version:c.policy_version,
+    event_id:request.reservationId, tenant_id:c.tenant_id,project_id:c.project_id,correlation_id:c.correlation_id,producer:c.producer,
+    occurred_at:c.occurred_at,observed_at:c.observed_at,ingested_at:c.ingested_at,environment:c.environment,billing_mode:c.billing_mode,source_refs:c.source_refs,
+    reservation_id:request.reservationId,budget_scope_id:c.budget_scope_id,logical_operation_id:c.logical_operation_id,billable_attempt_id:c.billable_attempt_id,
+    decision:'granted',lifecycle: lifecycle==='released'?'released':lifecycle==='settled'?'consumed':state.everDispatched?'uncertain_in_flight':expired?'expired':'held',
+    held:money(state.held),consumed:money(state.consumed),expires_at:c.expires_at,revision:state.revision,
+    execution_state:state.usageFinality==='final'?'finished':state.everDispatched?'in_flight':'not_dispatched',usage_completeness:state.usageFinality==='final'?'complete':'unknown',
+    idempotency_key:original.idempotencyKey,authority_ref:original.sourceAuthorityRef,settlement_ref:null };
+  return {schemaVersion:'1.0.0',requestId:request.requestId,asOf:now.toISOString(),reservation:canonical as ReservationSnapshot['reservation'],
+    state:expired && !state.everDispatched && lifecycle==='held'?'expired':lifecycle, heldAmount:formatScaledDecimal(state.held),effectiveConsumedAmount:formatScaledDecimal(state.consumed),releasedAmount:formatScaledDecimal(state.released),latestCumulativeSettlement:formatScaledDecimal(state.consumed),overrunAmount:formatScaledDecimal(state.consumed>state.held?state.consumed-state.held:0n),usageFinality:state.usageFinality,expectedRevision:state.revision,attemptBinding:original.attemptBinding,
+    dispatchEligible:eligible, ...(eligible ? {finance:financeEnvelope(original,request.reservationId,state.held-state.released-state.consumed>0n?state.held-state.released-state.consumed:0n,parseScaledDecimal(fromRow(row,'cap')??'0'),`ci05a:${asString(row.reservation_event_id)}`,asString(row.content_hash))}: {})};
+}
+/** Current scope-authorized read; historical authorization replay must never substitute for this operation. */
+export async function readReservationSnapshot(value: unknown, ports: BudgetRuntimePorts): Promise<ApiResult<ReservationSnapshot>> {
+  if (!Value.Check(SnapshotRequestSchema,value)) return failure(makeError('getReservationSnapshot','VALIDATION_ERROR',requestIdOf(value),'The current reservation request is invalid.'));
+  const request=structuredClone(value) as ReservationSnapshotRequest;
+  const wait=resolveWaitMs(ports);if(wait===null)return invalidWaitFailure('getReservationSnapshot',request.requestId);
+  const unavailable=()=>failure(makeError('getReservationSnapshot','BUDGET_UNAVAILABLE',request.requestId,'Current reservation state is unavailable.',true));
+  return runBounded<ApiResult<ReservationSnapshot>>(wait,unavailable,async gate=>{
+    let client:BudgetTransactionPort|undefined;let transaction=false;
+    try {
+      const denied=await authorizeScope(request.scope,request.requestId,ports,'getReservationSnapshot','budgets.readReservation');gate.checkpoint();if(denied)return failure(denied);
+      const now=trustedNow(ports);if(!now)return unavailable();
+      client=await ports.database.connect();gate.checkpoint();await client.query('BEGIN');transaction=true;await bindFinancialDatabaseScope(client,request.scope);await bindDeadline(client,gate);
+      const state=await loadReservation(client,request.scope,request.reservationId);if(!state){await rollback(client);transaction=false;return failure(makeError('getReservationSnapshot','FORBIDDEN_SCOPE',request.requestId,'The reservation is unavailable in this authorized scope.'));}
+      const snapshot=await snapshotFrom(client,request,state,now);gate.beginCommit();await client.query('COMMIT');transaction=false;
+      if(!snapshot)return unavailable();
+      const {finance, ...facts}=snapshot;
+      return {ok:true,value:{...facts,dispatchEligible:false}};
+    }catch{if(client&&transaction)await rollback(client);return unavailable();}finally{if(client&&transaction)await rollback(client);client?.release();}
+  });
+}
+export interface CurrentReservationAuthorization {
+  readonly schemaVersion:'1.0.0';readonly requestId:string;readonly status:'authorized'|'denied';readonly revoked:boolean;
+  readonly snapshot:ReservationSnapshot;readonly finance?:import('./authority.js').FinanceReservationAuthority;
+}
+/** Both consumer phases re-read durable state and independently resolve the current host/source/maximum/plan. */
+export async function revalidateReservation(value: unknown, ports: BudgetRuntimePorts): Promise<ApiResult<CurrentReservationAuthorization>> {
+  if(!Value.Check(CurrentReservationRequestSchema,value))return failure(makeError('revalidateReservation','VALIDATION_ERROR',requestIdOf(value),'The current authority query is invalid.'));
+  const request=structuredClone(value) as CurrentReservationRequest;
+  const wait=resolveWaitMs(ports);if(wait===null)return invalidWaitFailure('revalidateReservation',request.requestId);
+  const unavailable=()=>failure(makeError('revalidateReservation','BUDGET_UNAVAILABLE',request.requestId,'Current host or source verification is unavailable.',true));
+  return runBounded<ApiResult<CurrentReservationAuthorization>>(wait,unavailable,async gate=>{
+    let client:BudgetTransactionPort|undefined;let transaction=false;
+    try{
+      const denied=await authorizeScope(request.scope,request.requestId,ports,'revalidateReservation','budgets.readReservation');gate.checkpoint();if(denied)return failure(denied);
+      if(!ports.reservationAuthority||!ports.budgetEvidence)return unavailable();
+      client=await ports.database.connect();gate.checkpoint();await client.query('BEGIN');transaction=true;await bindFinancialDatabaseScope(client,request.scope);await bindDeadline(client,gate);
+      let state=await loadReservation(client,request.scope,request.reservationId);if(!state){await rollback(client);transaction=false;return failure(makeError('revalidateReservation','FORBIDDEN_SCOPE',request.requestId,'The reservation is unavailable in this authorized scope.'));}
+      if(!(await acquirePartitionLock(client,request.scope,state.currency,gate))){await rollback(client);transaction=false;return unavailable();}state=(await loadReservation(client,request.scope,request.reservationId))!;
+      const now=trustedNow(ports);if(!now)return unavailable();const original=state.authorizationRequest;
+      const snapshot=await snapshotFrom(client,request,state,now);if(!snapshot||!original?.sourceAuthorityRef||!original.authorityBinding)return unavailable();
+      let allowed=snapshot.dispatchEligible===true && sameJson(request.attemptBinding,original.attemptBinding) && sameJson(request.authorityBinding,original.authorityBinding) && (request.expectedRevision===undefined||request.expectedRevision===state.revision);
+      if(request.phase==='post_transport_ack'&&(!request.dispatchIntentRef||request.transportAttemptId!==original.attemptBinding.transportAttemptId||!state.everDispatched||!sameJson((state.dispatchEvidence as MarkDispatchedCommand|null)?.dispatchIntentRef,request.dispatchIntentRef)))allowed=false;
+      const host=await gate.wait(verifyReservationHost(ports.reservationAuthority,{scope:request.scope,billableAttemptId:original.attemptBinding.billableAttemptId,binding:original.authorityBinding,sourceAuthorityRef:original.sourceAuthorityRef,phase:request.phase,reservationId:request.reservationId,...(request.dispatchIntentRef?{dispatchIntentRef:request.dispatchIntentRef}:{}),...(request.transportAttemptId?{transportAttemptId:request.transportAttemptId}:{})},now));gate.checkpoint();
+      const source=await gate.wait(verifySource(ports,original as unknown as Record<string,unknown>,'authorize',original.sourceAuthorityRef));gate.checkpoint();
+      allowed=allowed&&!!host&&!!source;
+      if(original.estimate.completeness!=='complete')allowed=allowed&&!!source?.maximum&&sameJson(source.maximum.policyRef,original.estimate.maximumPolicyRef)&&sameAmount(source.maximum.authorizedCap,original.estimate.boundedConservativeMaximum??'0')&&source.maximum.currency===state.currency;
+      if(state.firstType==='partially_authorized'){
+        const ack=state.acknowledgementEvidence as PartialAcknowledgementRequest|null;
+        allowed=allowed&&!!ack&&!!(ack&&await gate.wait(verifySource(ports,ack as unknown as Record<string,unknown>,'acknowledgePartial',ack.sourceAuthorityRef)));gate.checkpoint();
+      }
+      const finalNow=trustedNow(ports);allowed=allowed&&!!finalNow&&Date.parse(original.canonicalRequest.expires_at)>(finalNow?.getTime()??Infinity)&&Date.parse(original.authorityBinding.leaseExpiresAt)>(finalNow?.getTime()??Infinity)&&!!host&&Date.parse(host.expiresAt)>(finalNow?.getTime()??Infinity)&&!!source&&Date.parse(source.expiresAt)>(finalNow?.getTime()??Infinity);
+      gate.beginCommit();await client.query('COMMIT');transaction=false;
+      const {finance: snapshotFinance, ...facts}=snapshot;
+      if(allowed&&snapshotFinance&&host&&source)snapshotFinance.expires_at=new Date(Math.min(Date.parse(snapshotFinance.expires_at),Date.parse(host.expiresAt),Date.parse(source.expiresAt))).toISOString();
+      return {ok:true,value:{schemaVersion:'1.0.0',requestId:request.requestId,status:allowed?'authorized':'denied',revoked:!allowed,snapshot:{...facts,dispatchEligible:allowed,...(allowed&&snapshotFinance?{finance:snapshotFinance}:{})},...(allowed&&snapshot.finance?{finance:snapshot.finance}:{})}};
+    }catch{if(client&&transaction)await rollback(client);return unavailable();}finally{if(client&&transaction)await rollback(client);client?.release();}
+  });
+}
+async function validateDispatchEvidence(state:ReservationState,request:MarkDispatchedCommand,ports:BudgetRuntimePorts):Promise<ErrorEnvelope|null>{
+  const original=state.authorizationRequest;const now=trustedNow(ports);
+  const refuse=()=>makeError('markDispatched','FORBIDDEN_SCOPE',request.requestId,'Current dispatch target, source, expiry, lease or revised plan evidence is missing.');
+  if(!original?.authorityBinding||!original.sourceAuthorityRef||!now||Date.parse(original.canonicalRequest.expires_at)<=now.getTime()||request.workerLeaseId!==original.authorityBinding.leaseRef||request.workerLeaseExpiresAt!==original.authorityBinding.leaseExpiresAt)return refuse();
+  if(!ports.reservationAuthority||!ports.budgetEvidence)return makeError('markDispatched','BUDGET_UNAVAILABLE',request.requestId,'Current host and source verification is not configured.',true);
+  const host=await verifyReservationHost(ports.reservationAuthority,{scope:request.scope,billableAttemptId:original.attemptBinding.billableAttemptId,binding:original.authorityBinding,sourceAuthorityRef:original.sourceAuthorityRef,phase:'dispatch',reservationId:request.reservationId,dispatchIntentRef:request.dispatchIntentRef,transportAttemptId:request.attemptBinding.transportAttemptId},now);
+  const source=await verifySource(ports,request as unknown as Record<string,unknown>,'markDispatched',request.sourceAuthorityRef);
+  if(!host||!source)return refuse();
+  const estimate=await verifySource(ports,original as unknown as Record<string,unknown>,'authorize',original.sourceAuthorityRef);
+  if(!estimate)return refuse();
+  if(original.estimate.completeness!=='complete'&&(!estimate.maximum||!sameJson(estimate.maximum.policyRef,original.estimate.maximumPolicyRef)||!sameAmount(estimate.maximum.authorizedCap,original.estimate.boundedConservativeMaximum??'0')||estimate.maximum.currency!==state.currency))return refuse();
+  if(state.firstType==='partially_authorized'){
+    const ack=state.acknowledgementEvidence as PartialAcknowledgementRequest|null;
+    if(!ack||!(await verifySource(ports,ack as unknown as Record<string,unknown>,'acknowledgePartial',ack.sourceAuthorityRef)))return refuse();
+  }
+  const finalNow=trustedNow(ports);if(!finalNow||Date.parse(original.canonicalRequest.expires_at)<=finalNow.getTime()||Date.parse(host.expiresAt)<=finalNow.getTime()||Date.parse(source.expiresAt)<=finalNow.getTime())return refuse();
+  return null;
+}
+/** Finance-local partial protocol, pending canonical GAP002 acceptance. No acknowledgement is inferred from opt-in. */
+export async function acknowledgePartialReservation(value:unknown,ports:BudgetRuntimePorts):Promise<ApiResult<ReservationCommandOutcome>>{
+  if(!Value.Check(PartialAcknowledgementRequestSchema,value))return failure(makeError('acknowledgePartial','VALIDATION_ERROR',requestIdOf(value),'The partial acknowledgement is invalid.'));
+  const request=structuredClone(value) as PartialAcknowledgementRequest;
+  return applyCommand({requestId:request.requestId,idempotencyKey:request.idempotencyKey,scope:request.scope,reservationId:request.reservationId,expectedRevision:request.expectedRevision,currency:'',actorReference:request.actorReference,sourceAuthorityRef:request.sourceAuthorityRef,attemptBinding:request.attemptBinding as Record<string,unknown>,logicalOperationId:(request.attemptBinding as MarkDispatchedCommand['attemptBinding']).logicalOperationId,billableAttemptId:(request.attemptBinding as MarkDispatchedCommand['attemptBinding']).billableAttemptId,kind:'acknowledge_partial',command:request as unknown as Record<string,unknown>,ports,operation:'acknowledgePartial',authority:'budgets.markDispatched',identity:{eventType:'partial_acknowledged',consumed:0n,released:0n,usageFinality:'unknown',settlementSequence:null},
+    validateCurrent:async state=>{
+      const now=trustedNow(ports);if(!now||!state.authorizationRequest||Date.parse(state.authorizationRequest.canonicalRequest.expires_at)<=now.getTime()||request.revisedPlanHash!==await budgetDigest(request.revisedPlan)||!(await verifySource(ports,request as unknown as Record<string,unknown>,'acknowledgePartial',request.sourceAuthorityRef)))return makeError('acknowledgePartial','FORBIDDEN_SCOPE',request.requestId,'Current authenticated replan evidence is unavailable.');return null;
+    },
+    compute(state){
+      if(state.firstType!=='partially_authorized'||state.lastType!=='partially_authorized'||!sameJson(state.originalBinding,request.attemptBinding))return{reject:makeError('acknowledgePartial','VALIDATION_ERROR',request.requestId,'Only the original held partial attempt can acknowledge a replan.')};
+      const original=state.authorizationRequest!;const plan=request.revisedPlan;const cap=state.held-state.released-state.consumed;
+      if(!original.workPlan||request.allowedWorkUnits!==plan.requestedUnits||request.unit!==plan.unit||request.unit!==original.workPlan.unit||request.allowedWorkUnits>original.workPlan.requestedUnits||parseScaledDecimal(plan.unitMaximumAmount)*BigInt(plan.requestedUnits)>cap||!sameAmount(request.allowedAmount,formatScaledDecimal(cap)))return{reject:makeError('acknowledgePartial','VALIDATION_ERROR',request.requestId,'The acknowledged work must fit the exact granted cap and original work bounds.')};
+      return{eventType:'partial_acknowledged',consumed:0n,released:0n,usageFinality:'unknown',settlementSequence:null};
+    }});
+}
+
+async function persistPolicyDecision(client:BudgetTransactionPort,request:BudgetPolicyChangeRequest,receipt:BudgetPolicyReceipt):Promise<void>{
+  const scope=request.scope;const normalized=normalizedBudgetRequest(request as unknown as Record<string,unknown>);
+  await client.query(`INSERT INTO cost_intelligence.budget_policy_decisions (decision_id,tenant_id,project_id,environment,billing_mode,currency,idempotency_key,actor_reference,source_authority_ref,command_request,command_receipt,content_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12)`,[crypto.randomUUID(),scope.tenantId,scope.projectId,scope.environment,scope.billingMode,request.currency,request.idempotencyKey,request.actorReference,JSON.stringify(request.sourceAuthorityRef),JSON.stringify(normalized),JSON.stringify(receipt),await budgetDigest({request:normalized,receipt})]);
 }

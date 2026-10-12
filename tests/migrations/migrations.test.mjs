@@ -129,7 +129,7 @@ async function verifyDurability(prefix) {
     assertDisposableMarker(marker.rows);
     const health = await client.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 8);
+    assert.equal(Number(health.rows[0].required_migrations_present), 9);
     await client.query('CREATE TABLE IF NOT EXISTS ci_test.foundation_durable_probe (probe_id uuid PRIMARY KEY, payload text NOT NULL)');
     await client.query('INSERT INTO ci_test.foundation_durable_probe(probe_id, payload) VALUES ($1, $2)', [probeId, `verified:${prefix}`]);
   } finally {
@@ -527,10 +527,11 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     { version: '0006_finance_security_roles', status: 'applied' },
     { version: '0007_accounting_projection_snapshots', status: 'applied' },
     { version: '0008_budget_reservations', status: 'applied' },
+    { version: '0009_budget_authority_bindings', status: 'applied' },
   ]);
 
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
-  assert.equal(names.length, 8, 'foundation migration suite must exercise fresh creation, an additive security upgrade, the additive accounting projection migration, and the additive CI-05A budget reservation migration');
+  assert.equal(names.length, 9, 'foundation migration suite must exercise fresh creation, an additive security upgrade, the additive accounting projection migration, and the additive CI-05A budget reservation migration');
   for (const prefix of ['CI_TEST_DB', 'CI_TEST_PREVIOUS_DB']) {
     const client = new Client(databaseConfigFromEnvironment(prefix));
     await client.connect();
@@ -839,7 +840,7 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
 test('0006 rejects pre-existing runtime role graphs and ACL escalation before a restricted-login upgrade', async () => {
   assert.ok(process.env.CI_TEST_DB_HOST, 'role-upgrade audit requires the disposable PostgreSQL harness');
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
-  assert.equal(names.length, 8);
+  assert.equal(names.length, 9);
   const migrationName = names[5];
   const { name, base, config } = await createPre0006Database();
   const admin = new Client(config);
@@ -2003,7 +2004,7 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
 
 test('legacy financial privacy upgrade preserves immutable economics and fails affected scopes closed', async () => {
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
-  assert.equal(names.length, 8);
+  assert.equal(names.length, 9);
   const { name, base, config } = await createPre0006Database();
   let admin;
   let seedPool;

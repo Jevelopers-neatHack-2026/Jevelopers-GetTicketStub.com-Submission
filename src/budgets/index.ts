@@ -1,3 +1,5 @@
+import { type CurrentReservationRequest, type PartialAcknowledgementRequest, ReservationAuthorityBindingSchema, ReservationWorkPlanSchema, BudgetReferenceSchema, FinanceReservationAuthoritySchema } from './authority.js';
+import { authorizeReservation, changeBudgetPolicy, markReservationDispatched, readReservationSnapshot, revalidateReservation, acknowledgePartialReservation, type BudgetRuntimePorts } from './reservation-store.js';
 import { Type, type Static } from '@sinclair/typebox';
 import { authorizeFinanceOperation, blockedBoundary, CurrencySchema, NonNegativeDecimalAmountSchema, errorEnvelope, failure, TrustedScopeSchema, validateRequest, type ApiResult, type FinanceOperation, type RuntimePorts, type Validation } from '../shared/contracts.js';
 import { validateCanonical, type SharedBudgetReservation, type SharedReleaseRequest, type SharedReserveRequest, type SharedSettleRequest } from '../shared/canonical.js';
@@ -24,6 +26,8 @@ export const ReservationRequestSchema = Type.Object({
   schemaVersion: Type.Literal('1.0.0'), requestId: Type.String({ minLength: 1 }), idempotencyKey: Type.String({ minLength: 1 }),
   scope: TrustedScopeSchema, canonicalRequest: Type.Unknown(), estimate: EstimateEvidenceSchema,
   allowPartialAuthorization: Type.Boolean(), attemptBinding: AttemptBindingSchema,
+  authorityBinding: Type.Optional(ReservationAuthorityBindingSchema), sourceAuthorityRef: Type.Optional(BudgetReferenceSchema),
+  workPlan: Type.Optional(ReservationWorkPlanSchema),
 }, { additionalProperties: false });
 export type ReservationRequest = Omit<Static<typeof ReservationRequestSchema>, 'canonicalRequest'> & { readonly canonicalRequest: SharedReserveRequest };
 
@@ -55,6 +59,7 @@ export const AuthorizationDecisionSchema = Type.Object({
     replanBeforeDispatch: Type.Literal(true),
   }, { additionalProperties: false })]),
   retryAfterMs: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+  finance: Type.Optional(FinanceReservationAuthoritySchema),
 }, { additionalProperties: false });
 export type AuthorizationDecision = Static<typeof AuthorizationDecisionSchema>;
 
@@ -140,6 +145,9 @@ export const ReservationSnapshotSchema = Type.Object({
   heldAmount: NonNegativeDecimalAmountSchema, effectiveConsumedAmount: NonNegativeDecimalAmountSchema, releasedAmount: NonNegativeDecimalAmountSchema,
   latestCumulativeSettlement: NonNegativeDecimalAmountSchema, overrunAmount: NonNegativeDecimalAmountSchema, usageFinality: Type.Union([Type.Literal('unknown'), Type.Literal('partial'), Type.Literal('final')]),
   expectedRevision: Type.Integer({ minimum: 0 }), attemptBinding: AttemptBindingSchema,
+  finance: Type.Optional(FinanceReservationAuthoritySchema),
+  dispatchEligible: Type.Optional(Type.Boolean()),
+  commandOutcome: Type.Optional(Type.Union([Type.Literal('applied'), Type.Literal('replay'), Type.Literal('stale_revision'), Type.Literal('conflict')])),
 }, { additionalProperties: false });
 export type ReservationSnapshot = Omit<Static<typeof ReservationSnapshotSchema>, 'reservation'> & { readonly reservation: SharedBudgetReservation };
 
@@ -157,6 +165,7 @@ export const BudgetChangeRequestSchema = Type.Object({
   scope: TrustedScopeSchema, newLimit: NonNegativeDecimalAmountSchema, currency: CurrencySchema,
   expectedPolicyRevision: Type.Integer({ minimum: 0 }), expectedLedgerRevision: Type.Integer({ minimum: 0 }),
   actorReference: Type.String({ minLength: 1, maxLength: 200 }), reasonReference: Type.String({ minLength: 1, maxLength: 200 }),
+  sourceAuthorityRef: Type.Optional(BudgetReferenceSchema),
 }, { additionalProperties: false });
 export type BudgetChangeRequest = Static<typeof BudgetChangeRequestSchema>;
 
@@ -166,6 +175,7 @@ export const BudgetChangeReceiptSchema = Type.Object({
   ]), requestedLimit: NonNegativeDecimalAmountSchema, previousLimit: NonNegativeDecimalAmountSchema, effectiveLimit: NonNegativeDecimalAmountSchema,
   effectiveConsumedSpend: NonNegativeDecimalAmountSchema, activeUnconsumedCommitments: NonNegativeDecimalAmountSchema,
   expectedPolicyRevision: Type.Integer({ minimum: 0 }), resultingPolicyRevision: Type.Integer({ minimum: 0 }),
+  replayedStatus: Type.Optional(Type.Union([Type.Literal('denied'), Type.Literal('stale')])),
   alertThresholdPercent: Type.Literal(80), decisionPolicyVersion: Type.Literal('ci-budget-policy-1.0.0'),
   decisionReference: VersionedReferenceSchema,
 }, { additionalProperties: false });
@@ -189,21 +199,17 @@ export const PostingReceiptSchema = Type.Object({
 }, { additionalProperties: false });
 export type PostingReceipt = Static<typeof PostingReceiptSchema>;
 
+function budgetPorts(ports: RuntimePorts): BudgetRuntimePorts | null {
+  return ports.budgets ? { ...ports.budgets, clock: ports.clock, trustedContext: ports.trustedContext, ...(ports.financeAuthority ? { financeAuthority: ports.financeAuthority } : {}) } : null;
+}
 export async function authorize(request: ReservationRequest, ports: RuntimePorts): Promise<ApiResult<AuthorizationDecision>> {
   const validation = validateReservationRequestBoundary(request);
   if (!validation.ok) return failure(validation.error);
-  const parsed = validation.value as ReservationRequest;
-  const authorization = await authorizeFinanceOperation({
-    module: 'budgets', requestOperation: 'authorize', operation: 'budgets.authorize',
-    scope: parsed.scope, requestId: parsed.requestId, clock: ports.clock,
-    financeAuthority: ports.financeAuthority,
-  });
-  if (!authorization.ok) {
-    if (authorization.error.code !== 'SOURCE_UNAVAILABLE') return failure(authorization.error);
-    return failure(errorEnvelope('budgets', 'authorize', 'BUDGET_UNAVAILABLE', parsed.requestId,
-      'Budget authorization is unavailable until current financial authority is configured.', true));
-  }
-  return failure(errorEnvelope('budgets', 'authorize', 'BUDGET_UNAVAILABLE', parsed.requestId, 'Atomic reservation is not available until the budget enforcement leaf is delivered.', true));
+  const engine = budgetPorts(ports);
+  if (engine) return authorizeReservation(validation.value, engine);
+  const auth = await authorizeFinanceOperation({ module: 'budgets', requestOperation: 'authorize', operation: 'budgets.authorize', scope: validation.value.scope, requestId: validation.value.requestId, clock: ports.clock, ...(ports.financeAuthority ? { financeAuthority: ports.financeAuthority } : {}) });
+  if (!auth.ok && auth.error.code !== 'SOURCE_UNAVAILABLE') return failure(auth.error);
+  return failure(errorEnvelope('budgets', 'authorize', 'BUDGET_UNAVAILABLE', request.requestId, 'The host has not configured the budget authority.', true));
 }
 
 async function reservationCommand(args: {
@@ -224,6 +230,13 @@ async function reservationCommand(args: {
 }
 
 export async function markDispatched(request: MarkDispatchedCommand, ports: RuntimePorts): Promise<ApiResult<ReservationSnapshot>> {
+  const engine = budgetPorts(ports);
+  if (engine) {
+    const result = await markReservationDispatched(request, engine);
+    if (!result.ok) return result;
+    const snapshot=await readReservationSnapshot({ schemaVersion: '1.0.0', requestId: request.requestId, scope: request.scope, reservationId: request.reservationId }, engine);
+    return snapshot.ok ? {ok:true,value:{...snapshot.value,commandOutcome:result.value.status}} : snapshot;
+  }
   return reservationCommand({ request, ports, operation: 'markDispatched', authorityOperation: 'budgets.markDispatched', expectedAction: 'mark_dispatched', schema: MarkDispatchedCommandSchema, validate: value => {
     const result = validateRequest(MarkDispatchedCommandSchema, value, 'budgets', 'markDispatched');
     return result.ok ? { ok: true, value: result.value } : result;
@@ -236,14 +249,45 @@ export async function release(request: ReleaseReservationCommand, ports: Runtime
   return reservationCommand({ request, ports, operation: 'release', authorityOperation: 'budgets.release', expectedAction: 'release', schema: ReleaseReservationCommandSchema, validate: value => validateReleaseReservationCommandBoundary(value) });
 }
 export async function changeBudget(request: BudgetChangeRequest, ports: RuntimePorts): Promise<ApiResult<BudgetChangeReceipt>> {
-  return blockedBoundary<BudgetChangeRequest, BudgetChangeReceipt>({ module: 'budgets', operation: 'changeBudget', authorityOperation: 'budgets.changeBudget', schema: BudgetChangeRequestSchema, request, ports, unavailableCode: 'BUDGET_UNAVAILABLE', safeMessage: 'Budget policy evaluation is not available until the budget enforcement leaf is delivered.', retryable: true });
+  const valid = validateRequest(BudgetChangeRequestSchema, request, 'budgets', 'changeBudget');
+  if (!valid.ok) return failure(valid.error);
+  const engine = budgetPorts(ports);
+  if (!engine) return blockedBoundary<BudgetChangeRequest, BudgetChangeReceipt>({ module: 'budgets', operation: 'changeBudget', authorityOperation: 'budgets.changeBudget', schema: BudgetChangeRequestSchema, request, ports, unavailableCode: 'BUDGET_UNAVAILABLE', safeMessage: 'The host has not configured the budget authority.', retryable: true });
+  const parsed=structuredClone(valid.value);
+  const { newLimit, ...rest } = parsed;
+  if (!rest.sourceAuthorityRef || !engine.budgetEvidence) return failure(errorEnvelope('budgets', 'changeBudget', 'BUDGET_UNAVAILABLE', request.requestId, 'Current policy source authority is not configured.', true));
+  const result = await changeBudgetPolicy({ ...rest, limitAmount: newLimit }, engine);
+  if (!result.ok) return result;
+  const r = result.value;
+  return { ok: true, value: { schemaVersion: '1.0.0', requestId: request.requestId, status: r.status,
+    requestedLimit: parsed.newLimit, previousLimit: r.previousLimit, effectiveLimit: r.effectiveLimit,
+    effectiveConsumedSpend: r.effectiveConsumedSpend, activeUnconsumedCommitments: r.activeUnconsumedCommitments,
+    expectedPolicyRevision: parsed.expectedPolicyRevision, resultingPolicyRevision: r.policyRevision,
+    alertThresholdPercent: 80, decisionPolicyVersion: 'ci-budget-policy-1.0.0', decisionReference: r.policyRef, ...(r.replayedStatus?{replayedStatus:r.replayedStatus}:{}) } };
 }
+
 export async function recordExpenseAdjustment(request: ExpenseAdjustmentRequest, ports: RuntimePorts): Promise<ApiResult<PostingReceipt>> {
   return blockedBoundary<ExpenseAdjustmentRequest, PostingReceipt>({ module: 'budgets', operation: 'recordExpenseAdjustment', authorityOperation: 'budgets.recordExpenseAdjustment', schema: ExpenseAdjustmentRequestSchema, request, ports, unavailableCode: 'SOURCE_UNAVAILABLE', safeMessage: 'Expense adjustment posting is not available until the accounting leaf is delivered.', retryable: true });
 }
 
-// CI-05A: the real PostgreSQL-backed atomic reservation engine. The RuntimePorts
-// boundaries above remain the published package surface and stay BUDGET_UNAVAILABLE
-// until a host wires this engine; the engine itself is exported for the budget
-// worker composition and its database-backed acceptance suites.
+// Explicit host composition connects the public CI05A facades to this engine.
+// CI05B public settlement/release remain unavailable pending accepted lifecycle evidence.
 export * from './reservation-store.js';
+export * from './authority.js';
+
+/** Host composition still supplies the separate genuine access grant; Finance never manufactures it. */
+export async function getReservationSnapshot(request: import('./reservation-store.js').ReservationSnapshotRequest, ports: RuntimePorts): Promise<ApiResult<ReservationSnapshot>> {
+  const engine=budgetPorts(ports);
+  if(!engine)return failure(errorEnvelope('budgets','getReservationSnapshot','BUDGET_UNAVAILABLE',request.requestId,'The host has not configured the budget authority.',true));
+  return readReservationSnapshot(request,engine);
+}
+export async function revalidateAuthorization(request: CurrentReservationRequest, ports: RuntimePorts) {
+  const engine=budgetPorts(ports);
+  if(!engine)return failure(errorEnvelope('budgets','revalidateAuthorization','BUDGET_UNAVAILABLE',request.requestId,'The host has not configured the budget authority.',true));
+  return revalidateReservation(request,engine);
+}
+export async function acknowledgePartial(request: PartialAcknowledgementRequest, ports: RuntimePorts) {
+  const engine=budgetPorts(ports);
+  if(!engine)return failure(errorEnvelope('budgets','acknowledgePartial','BUDGET_UNAVAILABLE',request.requestId,'The host has not configured the budget authority.',true));
+  return acknowledgePartialReservation(request,engine);
+}

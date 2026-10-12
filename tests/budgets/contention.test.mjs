@@ -88,3 +88,25 @@ test('CI-05A.4 concurrent identical idempotent retries create exactly one hold',
     await pool.end();
   }
 });
+
+test('one economic attempt raced under different keys/currencies creates exactly one hold',async()=>{
+  const pool=reservationPool();const scope=makeScope('attempt-unique');const fixture=await fixturePromise;
+  try{
+    await setBudgetLimit(pool,scope,'10','USD');await setBudgetLimit(pool,scope,'10','EUR');
+    const first=reservationRequest(scope,fixture,{amount:'1'});const second=structuredClone(first);second.requestId='different-key';second.idempotencyKey='different-key';second.canonicalRequest.idempotency_key='different-key';
+    const eur=structuredClone(second);eur.idempotencyKey='different-currency';eur.canonicalRequest.idempotency_key=eur.idempotencyKey;eur.estimate.currency='EUR';eur.canonicalRequest.currency='EUR';eur.canonicalRequest.requested.currency='EUR';
+    const {policyRefFor}=await import('./reservation-harness.mjs');eur.canonicalRequest.policy_ref=policyRefFor(scope,'EUR');
+    const results=await Promise.all([first,second,eur].map(r=>authorizeReservation(r,makePorts(pool,scope))));
+    assert.equal(results.filter(r=>r.ok&&r.value.status==='authorized').length,1);assert.equal(results.filter(r=>!r.ok&&r.error.code==='IDEMPOTENCY_CONFLICT').length,2);assert.equal(await countEvents(pool,scope),1);
+  }finally{await pool.end();}
+});
+test('approved budget reduction and admission serialize against the same commitments',async()=>{
+  const pool=reservationPool();const scope=makeScope('policy-admission-race');const fixture=await fixturePromise;
+  try{
+    await setBudgetLimit(pool,scope,'1');const req=reservationRequest(scope,fixture,{amount:'0.75'});
+    const [grant,change]=await Promise.all([authorizeReservation(req,makePorts(pool,scope)),changeBudgetPolicy(policyChange(scope,{limitAmount:'0.5',expectedPolicyRevision:1}),makePorts(pool,scope))]);
+    const cap=await readCapacity(scope,'USD','policy-race',makePorts(pool,scope));
+    assert.ok(toBig(cap.value.usedCapacity)<=toBig(cap.value.limitAmount));
+    if(grant.ok&&grant.value.status==='authorized'){assert.equal(change.value.status,'denied');assert.equal(cap.value.limitAmount,'1');}else{assert.equal(change.value.status,'applied');assert.equal(cap.value.usedCapacity,'0');}
+  }finally{await pool.end();}
+});

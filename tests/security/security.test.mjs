@@ -122,7 +122,7 @@ test('operation policy has explicit least-privilege grants, distinct read/action
   assert.equal(fixture.production_trust_root, false);
   const expectedOperations = [
     'metering.ingestUsage', 'pricing.estimate', 'pricing.estimateV2', 'pricing.registerPricingRuleV2',
-    'pricing.registerRateCardV2', 'pricing.registerFxRateV2', 'pricing.resolveEvidence', 'budgets.authorize',
+    'pricing.registerRateCardV2', 'pricing.registerFxRateV2', 'pricing.resolveEvidence', 'budgets.readReservation', 'budgets.authorize',
     'budgets.markDispatched', 'budgets.settle', 'budgets.release', 'budgets.changeBudget',
     'budgets.recordExpenseAdjustment', 'ledger.ingestFinancial', 'ledger.appendLedgerEvent',
     'ledger.rebuildLedgerProjection', 'ledger.resolveQuarantine', 'ledger.readSnapshot', 'reporting.querySummary',
