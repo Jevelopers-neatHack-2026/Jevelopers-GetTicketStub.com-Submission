@@ -32,7 +32,7 @@ npm run dev
 | --- | --- |
 | `lint` | ESLint with zero warnings allowed |
 | `typecheck` | `tsc --noEmit` |
-| `test` | Vitest (`tests/package`, `tests/components`); pass `-- --run` for a single run |
+| `test` | Vitest (`tests/package`, `tests/components`, `tests/access`); pass `-- --run` for a single run |
 | `build` | Vite library build, declarations, then `scripts/check-package.mjs` |
 | `check:contrast` | Contrast ratios for pinned token pairs in `src/styles/brand-tokens.css` (JSON output) |
 | `test:e2e` | Playwright `e2e` project (`tests/e2e/*.spec.ts`) |

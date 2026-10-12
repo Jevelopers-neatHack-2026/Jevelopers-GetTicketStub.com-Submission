@@ -7,3 +7,7 @@ const js = await readFile('dist/index.js', 'utf8');
 if (!js.includes('use client')) throw new Error('Client boundary directive missing.');
 if (/react.production|react.development|createRoot/.test(js)) throw new Error('React runtime or fixture root was bundled.');
 console.log('Package exports, declaration entry, stylesheet and client boundary verified.');
+const server = await readFile('dist/server.js', 'utf8');
+if (/use client|from ['"]react|react-dom|createElement|jsx-runtime/.test(server)) throw new Error('Server entry must not include the client directive or React.');
+if (!/createDashboardAuthorizer/.test(server)) throw new Error('Server entry is missing the trusted host authorizer.');
+console.log('Server entry is React-free and exports the trusted host authorizer.');

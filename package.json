@@ -20,6 +20,10 @@
       "types": "./dist/integration/index.d.ts",
       "import": "./dist/integration.js"
     },
+    "./server": {
+      "types": "./dist/src/server.d.ts",
+      "import": "./dist/server.js"
+    },
     "./style.css": {
       "types": "./dist/style.css.d.ts",
       "default": "./dist/team-dashboard.css"

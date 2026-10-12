@@ -26,6 +26,9 @@
       ],
       "@jevelopers/team-dashboard/integration": [
         "./integration/index.ts"
+      ],
+      "@jevelopers/team-dashboard/server": [
+        "./src/server.ts"
       ]
     }
   },
