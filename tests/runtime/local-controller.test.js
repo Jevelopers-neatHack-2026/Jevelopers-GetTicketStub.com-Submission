@@ -5358,6 +5358,165 @@ test('transaction clock keeps unchanged and forward-expired admission and comple
   }
 });
 
+test('a fresh controller completion survives a waited SQLite writer lock without accepting stale input', async t => {
+  const temporary = temporaryDatabase('bounded-completion-clock-contention-');
+  const store = openStore(temporary.databasePath, Date.now, 2_000);
+  let blocker = null;
+  t.after(async () => {
+    await blocker?.cleanup();
+    store.close();
+    temporary.cleanup();
+  });
+  const lease = createRunningWorkflow(store, 'completion-clock-contention');
+  makeAdmission(store, lease, SINGLE_PLAN, '{}', lease.workflowId + ':first-admission');
+  const originalComplete = store._localControllerComplete.bind(store);
+  const attempted = [];
+  let firstError = null;
+  let stateBeforeFirstAttempt = null;
+  let stateAfterRejectedAttempt = null;
+  store._localControllerComplete = (...args) => {
+    attempted.push(args[1]);
+    if (attempted.length === 1) {
+      stateBeforeFirstAttempt = snapshotDatabase(temporary.databasePath);
+      const stateBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 2);
+      const state = new Int32Array(stateBuffer);
+      const worker = new Worker(`
+        const { workerData } = require('node:worker_threads');
+        const { DatabaseSync } = require('node:sqlite');
+        const state = new Int32Array(workerData.stateBuffer);
+        let db;
+        try {
+          db = new DatabaseSync(workerData.databasePath, { timeout: 1000 });
+          db.exec('BEGIN IMMEDIATE');
+          Atomics.store(state, 0, 1);
+          Atomics.notify(state, 0);
+          Atomics.wait(state, 1, 0, workerData.holdMs);
+          db.exec('ROLLBACK');
+          db.close();
+          db = null;
+          Atomics.store(state, 0, 2);
+          Atomics.notify(state, 0);
+        } catch {
+          Atomics.store(state, 0, -1);
+          Atomics.notify(state, 0);
+          throw new Error('synthetic SQLite writer failed');
+        } finally {
+          try { if (db?.isTransaction) db.exec('ROLLBACK'); } catch {}
+          try { db?.close(); } catch {}
+        }
+      `, { eval: true, workerData: {
+        databasePath: temporary.databasePath, stateBuffer, holdMs: 320
+      } });
+      const exited = new Promise(resolve => worker.once('exit', resolve));
+      const deadline = Date.now() + 5_000;
+      while (Atomics.load(state, 0) !== 1) {
+        const current = Atomics.load(state, 0);
+        if (current === -1) throw new Error('The synthetic SQLite writer failed.');
+        const remaining = deadline - Date.now();
+        if (remaining <= 0 || Atomics.wait(state, 0, current, remaining) === 'timed-out') {
+          throw new Error('The synthetic SQLite writer exceeded its setup bound.');
+        }
+      }
+      blocker = { exited, cleanup: () => worker.terminate() };
+    }
+    try {
+      return originalComplete(...args);
+    } catch (error) {
+      if (attempted.length === 1) {
+        firstError = error;
+        stateAfterRejectedAttempt = snapshotDatabase(temporary.databasePath);
+      }
+      throw error;
+    }
+  };
+
+  const result = await runBoundedLocalPlan({
+    store,
+    workflowId: lease.workflowId,
+    ownerId: lease.ownerId,
+    fence: lease.fence
+  });
+  await blocker.exited;
+  assert.equal(result.status, 'completed', `The controller stopped with ${result.reason}.`);
+  assert.equal(attempted.length, 2, 'one exact completion refresh follows the waited writer lock');
+  assert.equal(firstError?.code, 'CONCURRENT_MODIFICATION');
+  assert.equal(firstError?.operation, '_localControllerComplete');
+  assert.equal(firstError?.retryable, true);
+  assert.equal(stateAfterRejectedAttempt, stateBeforeFirstAttempt,
+    'the typed stale-snapshot rejection rolls back without changing durable state');
+  assert.equal(attempted[0].eventId, attempted[1].eventId,
+    'the refreshed completion keeps the original event identity');
+  assert.equal(attempted[0].controllerState.completedResultsJson,
+    attempted[1].controllerState.completedResultsJson,
+    'the refreshed completion preserves the exact computed local result');
+  const checkpoint = store.getCheckpoint(lease.workflowId);
+  assert.equal(checkpoint.data.pendingStepId, null);
+  assert.equal(JSON.parse(checkpoint.data.completedResultsJson).only.output, 9);
+  assert.equal(store.listEvents({ workflowId: lease.workflowId })
+    .filter(event => event.type === 'private_local_step_completed').length, 1);
+  assert.equal(countRows(temporary.databasePath, 'operation_attempts'), 0);
+});
+
+test('unmarked stale completion clocks and caller marker injection are rejected without writes', async t => {
+  const temporary = temporaryDatabase('bounded-unmarked-completion-clock-');
+  const clock = mutableClock(60_000);
+  const store = openStore(temporary.databasePath, clock.read);
+  t.after(() => {
+    store.close();
+    temporary.cleanup();
+  });
+  const lease = createRunningWorkflow(store, 'unmarked-completion-clock');
+  const admission = makeAdmission(store, lease, SINGLE_PLAN, '{}', 'unmarked-clock:admit');
+  const completion = makeCompletion(store, lease, admission, 'unmarked-clock:complete');
+  const before = snapshotDatabase(temporary.databasePath);
+
+  clock.set(clock.read() + 251);
+  assert.throws(
+    () => store._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, completion.input),
+    error => error instanceof RuntimeError
+      && error.operation === '_localControllerComplete'
+      && error.code === 'INVALID_INPUT'
+  );
+  assert.equal(snapshotDatabase(temporary.databasePath), before,
+    'an old caller-built checkpoint without private provenance is rejected unchanged');
+
+  const suppliedStoreMarker = {
+    ...completion.input,
+    completionClockSample: { wallNowMs: clock.read(), monotonicNowNs: process.hrtime.bigint() }
+  };
+  assert.throws(
+    () => store._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, suppliedStoreMarker),
+    error => error instanceof RuntimeError
+      && error.operation === '_localControllerComplete'
+      && error.code === 'INVALID_INPUT'
+  );
+  const suppliedCheckpointMarker = {
+    ...completion.input,
+    controllerState: {
+      ...completion.controllerState,
+      completionClockSample: { wallNowMs: clock.read(), monotonicNowNs: process.hrtime.bigint() }
+    }
+  };
+  assert.throws(
+    () => store._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, suppliedCheckpointMarker),
+    error => error instanceof RuntimeError
+      && error.operation === '_localControllerComplete'
+      && error.code === 'INVALID_INPUT'
+  );
+  const controllerMarkerAttempt = await runBoundedLocalPlan({
+    store,
+    workflowId: lease.workflowId,
+    ownerId: lease.ownerId,
+    fence: lease.fence,
+    completionClockSample: { wallNowMs: clock.read(), monotonicNowNs: process.hrtime.bigint() }
+  });
+  assert.equal(controllerMarkerAttempt.reason, 'CONTROLLER_INPUT_INVALID');
+  assert.equal(snapshotDatabase(temporary.databasePath), before,
+    'store and controller inputs cannot carry or forge clock provenance');
+  assert.equal(store.getCheckpoint(lease.workflowId).data.pendingStepId, admission.stepId);
+  assert.equal(countRows(temporary.databasePath, 'operation_attempts'), 0);
+});
+
 test('the durable controller stops after final compute crosses the pinned elapsed deadline', async t => {
   const temporary = temporaryDatabase('bounded-final-compute-deadline-');
   t.after(() => temporary.cleanup());
@@ -5887,6 +6046,8 @@ test('private controller entrypoint is not exported and evidence never enables r
   const publicApi = await import('@jevelopers/agent-harness-runtime');
   assert.equal(publicApi.runBoundedLocalPlan, undefined);
   assert.equal(publicApi.inspectWorkflowRecovery, undefined);
+  assert.equal(publicApi.registerLocalControllerCompletionClockSample, undefined);
+  assert.equal(publicApi.consumeLocalCompletionClockStaleAfterConfirmedInactive, undefined);
   assert.equal(publicApi.INJECTED_DECISION_PORT, undefined);
 });
 

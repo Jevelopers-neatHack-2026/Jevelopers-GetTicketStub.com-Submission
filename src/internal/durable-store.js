@@ -38,6 +38,9 @@ const SAFE_PROVIDER_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const LOCAL_CHECKPOINT_KIND = 'agent-harness.private-bounded-local-checkpoint';
 const LOCAL_STEP_ID = /^[a-z][a-z0-9_-]{0,47}$/u;
 const CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS = new WeakSet();
+const LOCAL_COMPLETION_CLOCK_SAMPLES = new WeakMap();
+const LOCAL_COMPLETION_CLOCK_STALE_ERRORS = new WeakSet();
+const CONFIRMED_LOCAL_COMPLETION_CLOCK_STALE_ERRORS = new WeakSet();
 const CONFIRMED_LOCAL_ADMISSION_BUSY_ERRORS = new WeakSet();
 const OPERATIONS_ADMISSION_BUSY_DIAGNOSTICS = new WeakMap();
 const OPS_EVENT_RESERVATION = 96;
@@ -81,6 +84,23 @@ const requireBuiltin = createRequire(import.meta.url);
 
 export function consumeLocalCompletionBusyAfterConfirmedInactive(error) {
   return error instanceof RuntimeError && CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS.delete(error);
+}
+
+export function registerLocalControllerCompletionClockSample(capability, controllerState, wallNowMs, monotonicNowNs) {
+  if (capability !== LOCAL_CONTROLLER_STORAGE_CAPABILITY
+      || !isRecord(controllerState)
+      || !isRecord(controllerState.budget)
+      || !Number.isSafeInteger(wallNowMs)
+      || controllerState.budget.lastWallMs !== wallNowMs
+      || typeof monotonicNowNs !== 'bigint'
+      || monotonicNowNs < 1n) {
+    fail('_localControllerComplete', 'INVALID_INPUT', 'The private completion clock sample is invalid.');
+  }
+  LOCAL_COMPLETION_CLOCK_SAMPLES.set(controllerState, Object.freeze({ wallNowMs, monotonicNowNs }));
+}
+
+export function consumeLocalCompletionClockStaleAfterConfirmedInactive(error) {
+  return error instanceof RuntimeError && CONFIRMED_LOCAL_COMPLETION_CLOCK_STALE_ERRORS.delete(error);
 }
 
 export function consumeLocalAdmissionBusyAfterConfirmedInactive(error) {
@@ -339,7 +359,7 @@ function equalCheckpointData(left, right, operation) {
   return serializeCheckpoint(left, operation) === serializeCheckpoint(right, operation);
 }
 
-function assertLocalControllerTransactionClock(now, next, row, previous, operation) {
+function assertLocalControllerTransactionClock(now, next, row, previous, operation, transactionElapsedMs = null) {
   const persistedLastWallMs = Math.max(
     Number(row.updated_at_ms),
     previous?.budget.lastWallMs ?? next.budget.startedWallMs
@@ -348,7 +368,25 @@ function assertLocalControllerTransactionClock(now, next, row, previous, operati
   if (now < lowerBound) {
     fail(operation, 'CLOCK_ROLLBACK', 'The local controller clock moved backwards during a transaction.');
   }
-  if (now >= next.budget.deadlineWallMs || now - next.budget.lastWallMs > 250) {
+  if (now >= next.budget.deadlineWallMs) {
+    fail(operation, 'INVALID_INPUT', 'The local step clock snapshot is outside its supported boundary.');
+  }
+  const forwardMs = now - next.budget.lastWallMs;
+  if (forwardMs > 250) {
+    if (operation === '_localControllerComplete'
+        && transactionElapsedMs !== null
+        && transactionElapsedMs > 250
+        && Math.abs(forwardMs - transactionElapsedMs) <= 50) {
+      const error = runtimeError({
+        module: 'state',
+        operation,
+        code: 'CONCURRENT_MODIFICATION',
+        retryable: true,
+        safe_message: 'The local completion clock sample expired while waiting to enter its transaction.'
+      });
+      LOCAL_COMPLETION_CLOCK_STALE_ERRORS.add(error);
+      throw error;
+    }
     fail(operation, 'INVALID_INPUT', 'The local step clock snapshot is outside its supported boundary.');
   }
 }
@@ -771,6 +809,8 @@ export function inLocalCompletionTransaction(db, operation, callback) {
   } catch (primaryError) {
     const rawBusyPrimary = isRawSqliteBusyPrimary(primaryError);
     const mappedPrimary = mapStorageError(operation, primaryError);
+    const completionClockStale = LOCAL_COMPLETION_CLOCK_STALE_ERRORS.delete(primaryError)
+      || LOCAL_COMPLETION_CLOCK_STALE_ERRORS.delete(mappedPrimary);
     const inheritedEligibility = CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS.has(mappedPrimary);
     CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS.delete(mappedPrimary);
     let rollbackError = null;
@@ -813,6 +853,20 @@ export function inLocalCompletionTransaction(db, operation, callback) {
       && mappedPrimary.retryable === true
     ) {
       CONFIRMED_LOCAL_COMPLETION_BUSY_ERRORS.add(mappedPrimary);
+    }
+    if (
+      completionClockStale
+      && began
+      && startedFromInactive
+      && dispositionKnown
+      && inactive
+      && mappedPrimary instanceof RuntimeError
+      && mappedPrimary.module === 'state'
+      && mappedPrimary.operation === operation
+      && mappedPrimary.code === 'CONCURRENT_MODIFICATION'
+      && mappedPrimary.retryable === true
+    ) {
+      CONFIRMED_LOCAL_COMPLETION_CLOCK_STALE_ERRORS.add(mappedPrimary);
     }
     throw mappedPrimary;
   }
@@ -3941,6 +3995,8 @@ export class DurableWorkflowStore {
       'workflowId', 'ownerId', 'fence', 'expectedRevision', 'expectedCheckpointSequence',
       'stepId', 'eventId', 'controllerState'
     ], operation);
+    const clockSample = LOCAL_COMPLETION_CLOCK_SAMPLES.get(fields.controllerState) ?? null;
+    if (clockSample !== null) LOCAL_COMPLETION_CLOCK_SAMPLES.delete(fields.controllerState);
     expectString(fields.workflowId, 'workflowId', operation);
     expectString(fields.ownerId, 'ownerId', operation);
     expectInteger(fields.fence, 'fence', operation, 1);
@@ -3949,6 +4005,9 @@ export class DurableWorkflowStore {
     if (!LOCAL_STEP_ID.test(fields.stepId)) fail(operation, 'INVALID_INPUT', 'The local step identity is invalid.');
     expectString(fields.eventId, 'eventId', operation);
     const next = readLocalControllerState(fields.controllerState, operation);
+    if (clockSample !== null && clockSample.wallNowMs !== next.budget.lastWallMs) {
+      fail(operation, 'INVALID_INPUT', 'The private completion clock sample does not match its checkpoint.');
+    }
     if (next.workflowId !== fields.workflowId) {
       fail(operation, 'CHECKPOINT_CORRUPT', 'The private local checkpoint belongs to another workflow.');
     }
@@ -3958,6 +4017,17 @@ export class DurableWorkflowStore {
     return inLocalCompletionTransaction(this.#db, operation, () => {
       const row = this.#workflow(fields.workflowId, operation);
       const now = this.#assertLease(row, { ownerId: fields.ownerId, fence: fields.fence }, operation);
+      let transactionElapsedMs = null;
+      if (clockSample !== null) {
+        const transactionNowNs = process.hrtime.bigint();
+        if (transactionNowNs < clockSample.monotonicNowNs) {
+          fail(operation, 'INVALID_INPUT', 'The private completion clock sample is outside its supported boundary.');
+        }
+        transactionElapsedMs = Number(transactionNowNs - clockSample.monotonicNowNs) / 1_000_000;
+        if (!Number.isFinite(transactionElapsedMs)) {
+          fail(operation, 'INVALID_INPUT', 'The private completion clock sample is outside its supported boundary.');
+        }
+      }
       this.#assertMutable(row, operation);
       this.#assertRevision(row, fields.expectedRevision, operation);
       if (row.state !== 'running' || row.cancellation_requested) {
@@ -3981,7 +4051,7 @@ export class DurableWorkflowStore {
       if (!equalCheckpointData(previous, current.data, operation)) {
         fail(operation, 'CHECKPOINT_CORRUPT', 'The private local checkpoint changed while being read.');
       }
-      assertLocalControllerTransactionClock(now, next, row, previous, operation);
+      assertLocalControllerTransactionClock(now, next, row, previous, operation, transactionElapsedMs);
       assertCompletionBudget(previous, next, fields.stepId, operation);
 
       this.#assertEventAvailable(fields.eventId, operation);
