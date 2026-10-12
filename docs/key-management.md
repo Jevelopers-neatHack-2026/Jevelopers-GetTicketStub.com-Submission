@@ -25,14 +25,14 @@ A multi-version binary key set does not fit one environment variable, so this pa
 
 ## Owner decisions (2026-10-12)
 
-The owner delegated these decisions on 2026-10-12. Rows K1-K3 of [integration-evals decision 0003](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/decisions/0003-owner-delegated-decisions-2026-10-12.md) ([PR #39](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/39)) record them with rationale. They configure the **host**. This package still reads no environment variables, and its defaults and limits are unchanged.
+The owner delegated these decisions on 2026-10-12. Rows K1-K3 of integration-evals decision 0003 ([PR #39](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/39); `planning/decisions/0003-owner-delegated-decisions-2026-10-12.md` once merged; delegation recorded on [getticketstub.com#27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27#issuecomment-6116953222)) record them with rationale. They configure the **host**. This package still reads no environment variables, and its defaults and limits are unchanged.
 
 | Decision | Value |
 | --- | --- |
-| Tombstone retention | At most 7 years (2,555 days) after creation. **No approved legal or product tombstone retention policy existed** in fulfillment-connectors, shared-contracts or getticketstub.com, so the decision record picks and justifies this value. |
-| `retiredKeyRetentionMs` | `220838400000` (2,556 days: 7 years + 1 day, so that `maxRetainUntil = now + retention - maxClockSkewMs` still covers a full 7-year `retainUntil`). Other policy values stay at their defaults. Capacity: `ceil((2556 d + 5 min) / 90 d) + 2 = 31 <= 64`. |
+| Tombstone retention | At most 7 calendar years after creation. **No approved legal or product tombstone retention policy existed** in fulfillment-connectors, shared-contracts or getticketstub.com, so the decision record picks and justifies this value. The 7-year horizon is the decision's own conservative assumption, pending counsel review. |
+| `retiredKeyRetentionMs` | `221011200000` (2,558 days = ceil(7 x 365.25) + 1). Any calendar "+7 years" `retainUntil` is at most 2,557 days, so it stays under `maxRetainUntil = now + retention - maxClockSkewMs`. Other policy values stay at their defaults. Capacity: `ceil((2558 d + 5 min) / 90 d) + 2 = 29 + 2 = 31 <= 64`. |
 | Key source | GoDaddy Plus Launch environment secrets, separate for Preview and Publish. No external secret manager for launch: one would still need a bootstrap credential in the same environment. |
-| `.env` binding | `FULFILLMENT_TOMBSTONE_KEYSET`, reference `fulfillment/tombstone-fingerprint/keyset`. Versioned JSON `{"v":1,"keys":[{"keyVersion","state","activatedAt","retiredAt?","key":"<base64url, >=32 bytes>"}]}`. The host decodes each key to raw bytes before `load`, persists `highWaterGeneration` in its app DB, and adds the name to its own `.env.example`. |
+| `.env` binding | `FULFILLMENT_TOMBSTONE_KEYSET`, reference `fulfillment/tombstone-fingerprint/keyset`. Versioned JSON `{"v":1,"keys":[{"keyVersion","state","activatedAt","retiredAt?","key":"<base64url, >=32 bytes>"}]}`. The host decodes each key to raw bytes before `load`, persists `highWaterGeneration` in its app DB, and adds the name to its own `.env.example`. GoDaddy's per-variable size limit is unverified: about 31 versions is about 4 KB, which is an owner check. |
 
 Generating the first key and entering it in GoDaddy secrets remain owner actions.
 
