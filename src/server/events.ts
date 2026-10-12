@@ -28,6 +28,8 @@ export const EVENT_SPEC = {
   art_ready: { provider: ["procedural", "image", "simulated", "live"] },
   art_failed: { code: "code" },
   art_limit: { retryAt: "ts" },
+  agent_plan: { source: ["rules", "live"], outcome: ["ok", "repaired", "invalid_plan"], actions: "count" },
+  agent_action: { action: ["set_fact", "set_style", "set_material", "set_finish", "set_text", "remix_art", "show_back", "ask_user"], result: ["applied", "failed", "rejected"], code: "code" },
   version_selected: { version: "ref", versions: "count" },
   share_created: { share: "ref" },
   share_revoked: { revoked: "flag" },

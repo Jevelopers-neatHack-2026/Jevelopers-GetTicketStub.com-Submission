@@ -1,5 +1,5 @@
 // One entry point for the product checks, with evidence.
-//   npm run verify:product -- --suite <foundation|access|approval|order-auth|finance-context|research|creative|review|capabilities|messages|a11y|download|production|degraded|mail-off|backup-drill> --mode fixture --evidence-dir <dir>
+//   npm run verify:product -- --suite <foundation|access|approval|order-auth|finance-context|research|creative|review|capabilities|messages|a11y|agent|download|production|degraded|mail-off|backup-drill> --mode fixture --evidence-dir <dir>
 // (`accessibility` is an alias of `a11y`: GT-11 names the suite that way.)
 // Every suite runs offline: in fixture mode a preload (scripts/lib/fixture-network-guard.mjs) refuses any host but
 // loopback, and the server started here has no provider keys. A missing build or fixture, an unknown suite and
@@ -46,6 +46,8 @@ const SUITES = {
   messages: { server: false, needs: ["scripts/check-messages.mjs", "src/customer/feedback-messages/messages.ts"], run: () => script("scripts/check-messages.mjs") },
   // GT-11: axe-core, overflow, keyboard, dialog focus and reduced motion in a real headless Chrome (needs Chrome or Edge, or CHROME_PATH).
   a11y: { server: true, needs: [".next/BUILD_ID", "scripts/check-a11y.mjs", "scripts/lib/cdp.mjs", "scripts/lib/contrast.mjs", "node_modules/axe-core/axe.min.js"], run: (ctx) => script("scripts/check-a11y.mjs", [ctx.base, evidenceDir]) },
+  // GT-04: the agent proposes typed actions, the owner applies them, the result goes back; plus a forced failure and its recovery.
+  agent: { server: true, needs: [".next/BUILD_ID", "scripts/check-agent.mjs", "scripts/lib/cdp.mjs", "src/customer/studio/agent/protocol.ts"], run: (ctx) => script("scripts/check-agent.mjs", [ctx.base, evidenceDir]) },
   // The exact stub download (#16): the real Download button in headless Chrome, the PNG against the on-screen stub (needs Chrome or Edge, or CHROME_PATH).
   download: { server: true, needs: [".next/BUILD_ID", "scripts/check-download.mjs", "scripts/lib/cdp.mjs"], run: (ctx) => script("scripts/check-download.mjs", [ctx.base, evidenceDir]) },
   production: { server: true, needs: [".next/BUILD_ID", "scripts/smoke-production.mjs"], run: (ctx) => script("scripts/smoke-production.mjs", [], { SMOKE_BASE_URL: ctx.base }) },
