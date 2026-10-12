@@ -219,6 +219,30 @@ function consumerKey(): string | null {
 }
 
 /**
+ * Reads the body as UTF-8 text, counting bytes as they arrive and stopping (413 `too_large`) the moment more than `maxBytes` have been
+ * seen, so an absent or understated Content-Length can't make the server buffer more than the cap. The text is decoded exactly as
+ * `Request.text()` would (UTF-8, BOM stripped, malformed bytes replaced), so the signed raw text is unchanged.
+ */
+export async function readBoundedText(req: Request, maxBytes: number): Promise<string> {
+  const tooLarge = () => new HttpError(413, "too_large", "That's too much to send in one go.");
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder("utf-8").decode(Buffer.concat(chunks, total));
+}
+
+/**
  * Reads a consumer request: 503 `consumer_unavailable` when no key is configured (in every mode, not only live), 401 `consumer_unauthorized`
  * unless the signature over method, path and the exact body text verifies within five minutes, then the parsed JSON.
  */
@@ -227,8 +251,7 @@ export async function readConsumerJson(req: Request, maxBytes: number): Promise<
   if (!key) throw new HttpError(503, "consumer_unavailable", "The order authorization port isn't set up on this server.");
   const declared = Number(req.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maxBytes) throw new HttpError(413, "too_large", "That's too much to send in one go.");
-  const text = await req.text();
-  if (text.length > maxBytes) throw new HttpError(413, "too_large", "That's too much to send in one go.");
+  const text = await readBoundedText(req, maxBytes);
   const ok = verifyConsumerSignature(key, { timestamp: req.headers.get(CONSUMER_HEADERS.timestamp), signature: req.headers.get(CONSUMER_HEADERS.signature) }, req.method, new URL(req.url).pathname, text);
   if (!ok) throw new HttpError(401, "consumer_unauthorized", "That request isn't signed by a known consumer.");
   try {

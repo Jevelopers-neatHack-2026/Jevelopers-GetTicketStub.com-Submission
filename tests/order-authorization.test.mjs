@@ -221,3 +221,108 @@ test("the authorization gate: preview never passes in live, unavailable never pa
   assert.equal(authorizationGate(confirmed, "sandbox", "live").ok, false);
   assert.equal(authorizationGate({ ...confirmed, supplier: "SomeoneElse" }, "prodigi", "live").ok, false);
 });
+
+// readConsumerJson lives in a server module (server-only, "@/" aliases, TypeScript parameter properties), so this loads the real
+// source under plain Node with a resolve/load hook: no mocks, only module resolution and type stripping.
+async function loadReader() {
+  const { register } = await import("node:module");
+  const hook = `
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+const root = ${JSON.stringify(`${process.cwd()}/src/`)};
+export async function load(url, ctx, next) {
+  if (url.startsWith("file:") && url.endsWith(".ts")) return { format: "module", source: (await import("node:module")).stripTypeScriptTypes(readFileSync(fileURLToPath(url), "utf8"), { mode: "transform" }), shortCircuit: true };
+  return next(url, ctx);
+}
+export async function resolve(spec, ctx, next) {
+  if (spec === "server-only") return { url: "data:text/javascript,", shortCircuit: true };
+  if (spec === "next/server") return next("next/server.js", ctx);
+  let p = null;
+  if (spec.startsWith("@/")) p = root + spec.slice(2);
+  else if (spec.startsWith(".") && ctx.parentURL?.startsWith("file:")) p = fileURLToPath(new URL(spec, ctx.parentURL));
+  if (p) for (const c of [p + ".ts", p + ".tsx", p + "/index.ts"]) if (existsSync(c)) return next(pathToFileURL(c).href, ctx);
+  return next(spec, ctx);
+}`;
+  register(`data:text/javascript,${encodeURIComponent(hook)}`);
+  return import("../src/server/order-authorization.ts");
+}
+
+test("readConsumerJson bounds the body in UTF-8 bytes before parsing or verifying the signature, and keeps the signed raw text", async () => {
+  const { readConsumerJson } = await loadReader();
+  const key = "consumer-reader-key-not-a-secret-0000000000";
+  const saved = { k: process.env.ORDER_AUTH_CONSUMER_KEY, c: process.env.CONTEXT_SECRET };
+  process.env.ORDER_AUTH_CONSUMER_KEY = key;
+  delete process.env.CONTEXT_SECRET;
+  const path = "/api/order-authorizations/verify";
+  const enc = new TextEncoder();
+  // `chunks` of bytes with no Content-Length (a stream body), unless `headers` supplies one.
+  const stream = (bytes, size = 1024) => {
+    let i = 0;
+    const s = { pulled: 0 };
+    const body = new ReadableStream({
+      pull(c) {
+        if (i >= bytes.length) return c.close();
+        s.pulled += 1;
+        c.enqueue(bytes.slice(i, (i += size)));
+      },
+    });
+    return { body, s };
+  };
+  const call = (text, max, { sign = true, headers = {}, chunked = false } = {}) => {
+    const bytes = enc.encode(text);
+    const ts = Date.now();
+    const h = { ...(sign ? { "x-ticketstub-consumer-timestamp": String(ts), "x-ticketstub-consumer-signature": consumerSignature(key, ts, "POST", path, text) } : {}), ...headers };
+    const init = chunked ? { ...(() => { const { body } = stream(bytes, 7); return { body }; })(), duplex: "half" } : { body: bytes };
+    return readConsumerJson(new Request(`http://localhost${path}`, { method: "POST", headers: h, ...init }), max);
+  };
+  const tooLarge = (e) => e?.status === 413 && e.code === "too_large" && e.message === "That's too much to send in one go.";
+  const padded = (bytes, ch = "a") => {
+    const base = '{"a":""}'.length;
+    const n = bytes - base;
+    return `{"a":"${ch.repeat(n)}"}`;
+  };
+  try {
+    // exact boundary: accepted, and the parsed value comes from the signed text
+    const exact = padded(200);
+    assert.equal(enc.encode(exact).length, 200);
+    assert.deepEqual(await call(exact, 200), JSON.parse(exact));
+    assert.deepEqual(await call(exact, 200, { chunked: true }), JSON.parse(exact), "absent Content-Length, streamed in small chunks");
+    // one byte over: 413, with and without a Content-Length header
+    await assert.rejects(call(padded(201), 200), tooLarge);
+    await assert.rejects(call(padded(201), 200, { chunked: true }), tooLarge);
+    // multibyte: the string is short in UTF-16 units but over the cap in bytes (2-, 3- and 4-byte characters)
+    for (const ch of ["é", "€", "😀"]) {
+      const per = enc.encode(ch).length;
+      const text = `{"a":"${ch.repeat(Math.floor(192 / per))}"}`;
+      assert.ok(enc.encode(text).length <= 200 && enc.encode(text).length > 200 - per, `${ch}: fills the cap in bytes without passing it`);
+      const over = `{"a":"${ch.repeat(Math.floor(200 / per) + 1)}"}`;
+      assert.ok(over.length <= 200 && enc.encode(over).length > 200, `${ch}: short as a JS string, long in bytes`);
+      await assert.rejects(call(over, 200), tooLarge);
+      await assert.rejects(call(over, 200, { chunked: true }), tooLarge);
+      assert.deepEqual(await call(text, 200), JSON.parse(text), "multibyte body within the cap still verifies against its raw text");
+      assert.deepEqual(await call(text, 200, { chunked: true }), JSON.parse(text));
+    }
+    // an understated Content-Length can't widen the cap
+    await assert.rejects(call(padded(500), 200, { headers: { "content-length": "10" }, chunked: true }), tooLarge);
+    // an overstated one is refused up front
+    await assert.rejects(call(padded(50), 200, { headers: { "content-length": "201" } }), tooLarge);
+    // the size check comes before the signature check: an unsigned oversized body is 413, not 401
+    await assert.rejects(call(padded(201), 200, { sign: false }), tooLarge);
+    // overflow stops reading: a long stream is cancelled after the cap, not drained
+    const long = stream(enc.encode("x".repeat(1_000_000)), 100);
+    await assert.rejects(readConsumerJson(new Request(`http://localhost${path}`, { method: "POST", body: long.body, duplex: "half", headers: { "x-ticketstub-consumer-timestamp": "1", "x-ticketstub-consumer-signature": "00" } }), 200), tooLarge);
+    assert.ok(long.s.pulled < 20, `stream was cancelled early (pulled ${long.s.pulled} chunks)`);
+    // within the cap the existing semantics hold: unsigned 401, tampered text 401, unparseable 400, empty 400
+    await assert.rejects(call(padded(100), 200, { sign: false }), (e) => e.status === 401 && e.code === "consumer_unauthorized");
+    await assert.rejects(call("not json", 200), (e) => e.status === 400 && e.code === "bad_json");
+    await assert.rejects(call("", 200), (e) => e.status === 400 && e.code === "bad_json");
+    const ts = Date.now();
+    await assert.rejects(
+      readConsumerJson(new Request(`http://localhost${path}`, { method: "POST", body: padded(100, "b"), headers: { "x-ticketstub-consumer-timestamp": String(ts), "x-ticketstub-consumer-signature": consumerSignature(key, ts, "POST", path, padded(100)) } }), 200),
+      (e) => e.status === 401,
+    );
+  } finally {
+    if (saved.k === undefined) delete process.env.ORDER_AUTH_CONSUMER_KEY; else process.env.ORDER_AUTH_CONSUMER_KEY = saved.k;
+    if (saved.c !== undefined) process.env.CONTEXT_SECRET = saved.c;
+  }
+});
