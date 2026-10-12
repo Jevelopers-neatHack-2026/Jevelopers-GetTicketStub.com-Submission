@@ -23,6 +23,7 @@ import { compositionPreviewHash, snapshotCompositionBytesRecord, snapshotComposi
   createCompositionProductionEnvelope, validateCompositionProductionEnvelope,
   validateCompositionRevision } from "../contracts/composition-authority.mjs";
 import { imageProviderRoute } from "../models/image-routes.mjs";
+import { registerSqliteDatabaseConnection, runSqliteDatabaseOperationSync } from "../sqlite/admission.mjs";
 
 const STORAGE_VERSION = 13;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
@@ -1789,12 +1790,19 @@ export class CreativeVersionStore {
     if (this.databasePath !== ":memory:") rejectHardLinkAlias(this.databasePath);
     try {
       this.db = new DatabaseSync(this.databasePath);
-      makeSchema(this.db);
-      initializeCreativeBriefDatabase(this.db);
       if (this.databasePath !== ":memory:") {
         this.sqliteFileIdentity = registerSqliteFile(this.databasePath, this.objectRoot);
       }
+      this.releaseSqliteAdmission = registerSqliteDatabaseConnection(this.db, this.sqliteFileIdentity?.key);
+      runSqliteDatabaseOperationSync({ database: this.db, owner: this,
+        conflictError: () => new VersionStoreError("unavailable", "database", true),
+        work: () => {
+          makeSchema(this.db);
+          initializeCreativeBriefDatabase(this.db);
+        } });
     } catch (error) {
+      this.releaseSqliteAdmission?.();
+      this.releaseSqliteAdmission = null;
       if (this.sqliteFileIdentity) {
         unregisterSqliteFile(this.sqliteFileIdentity);
         this.sqliteFileIdentity = null;
@@ -1811,6 +1819,8 @@ export class CreativeVersionStore {
     if (this.closed) return;
     this.db.close();
     this.closed = true;
+    this.releaseSqliteAdmission?.();
+    this.releaseSqliteAdmission = null;
     unregisterSqliteFile(this.sqliteFileIdentity);
     this.sqliteFileIdentity = null;
   }
