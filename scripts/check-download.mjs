@@ -296,6 +296,52 @@ try {
       })()`);
       if (!info) return null;
       const { data } = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false, clip: { x: info.x, y: info.y, width: info.width, height: info.height, scale: 1 } });
+      // Diagnostics sample the existing DOM only AFTER the comparison capture.
+      // No canvas draw, extra decode, wait, retry or comparison substitution.
+      // Style/layout reads may affect later scheduling: a green probe run is
+      // not evidence that a preceding blank-image capture cause was corrected.
+      try {
+        info.paintProbe = await within(page.eval(`(() => {
+          const f = ${figure};
+          if (!f) return { status: "figure_unavailable", sampled_after_capture: true };
+          const finite = (n) => Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+          const bound = (value, size = 256) => String(value ?? "").replace(/url\\([^)]*\\)/gi, "url([redacted])").slice(0, size);
+          const rect = (e) => { const r = e.getBoundingClientRect(); return Object.fromEntries(["x", "y", "width", "height"].map((k) => [k, finite(r[k])])); };
+          const styles = (e) => {
+            const s = getComputedStyle(e);
+            return Object.fromEntries(["display", "visibility", "opacity", "position", "zIndex", "transform", "transformStyle", "perspective", "backfaceVisibility", "filter",
+              "mixBlendMode", "isolation", "contain", "contentVisibility", "overflow", "clipPath", "maskImage", "maskSize", "maskComposite", "objectFit", "objectPosition"]
+              .map((k) => [k, bound(s[k], k.startsWith("mask") || k === "clipPath" ? 1024 : 256)]));
+          };
+          const safeSource = (value) => {
+            try {
+              const u = new URL(value, location.href);
+              const known = ["/brand/mockup-art-glasgow.webp", "/brand/ts-stamp-mono-ink.svg"];
+              return u.origin === location.origin && known.includes(u.pathname) ? u.pathname : "[redacted source]";
+            } catch { return "[redacted source]"; }
+          };
+          const images = [...f.querySelectorAll("img")].slice(0, 8).map((img) => {
+            const ancestors = []; let e = img.parentElement;
+            for (let i = 0; e && i < 8; i += 1, e = e.parentElement) {
+              ancestors.push({ tag: e.tagName, className: bound(e.getAttribute("class")), ariaHidden: e.getAttribute("aria-hidden") === "true", rect: rect(e), style: styles(e) });
+              if (e === f) break;
+            }
+            const path = safeSource(img.currentSrc || img.src);
+            const resource = path.startsWith("/") ? performance.getEntriesByType("resource").filter((r) => safeSource(r.name) === path).at(-1) : null;
+            const r = img.getBoundingClientRect(); const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+            return { source: path, complete: img.complete, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, rect: rect(img), style: styles(img), ancestors,
+              centerHit: top ? { tag: top.tagName, className: bound(top.getAttribute("class")), withinFigure: f.contains(top) } : null,
+              resource: resource ? { path, responseStatus: finite(resource.responseStatus), transferSize: finite(resource.transferSize), encodedBodySize: finite(resource.encodedBodySize),
+                decodedBodySize: finite(resource.decodedBodySize), duration: finite(resource.duration) } : null };
+          });
+          return { status: "sampled", sampled_after_capture: true, style_reads_may_affect_later_scheduling: true, canvas_sampled: false, timestamp: finite(performance.now()),
+            visibility: document.visibilityState, viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio, scrollX: finite(scrollX), scrollY: finite(scrollY),
+              visual: visualViewport ? { width: finite(visualViewport.width), height: finite(visualViewport.height), offsetLeft: finite(visualViewport.offsetLeft), offsetTop: finite(visualViewport.offsetTop), scale: finite(visualViewport.scale) } : null },
+            figure: { rect: rect(f), style: styles(f) }, images,
+            svg: [...f.querySelectorAll("svg")].slice(0, 8).map((svg) => ({ rect: rect(svg), viewBox: bound(svg.getAttribute("viewBox")), style: styles(svg),
+              filters: svg.querySelectorAll("filter").length, masks: svg.querySelectorAll("mask").length, clips: svg.querySelectorAll("clipPath").length })) };
+        })()`), "the post-capture paint probe", 15000);
+      } catch { info.paintProbe = { status: "unavailable", sampled_after_capture: true }; }
       return { png: Buffer.from(data, "base64"), info };
     }
     const press = (side) =>
