@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "Existing illustrative assets retained for local review; release blocked",
-  "pageSha256": "72b2d9171203664dd513b899d0a0761d7e8ce4422cfa0ec06d5211847f573b65",
+  "pageSha256": "2bc1c248336d17ee0beb402882cc697925721a42f94b6e8f2fa187da36227a92",
   "source": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
     "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
@@ -659,8 +659,8 @@
   "recheckBy": "2026-11-12",
   "auditedSource": {
     "repository": "Jevelopers-neatHack-2026/landing-page-repo",
-    "revision": "4cc7cea5f879545f3758b05eaab9bc9f1d0b1324",
-    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/4cc7cea5f879545f3758b05eaab9bc9f1d0b1324/site/index.html"
+    "revision": "36c0a841d5b5c5f6e7c3870e65c541825026d214",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/36c0a841d5b5c5f6e7c3870e65c541825026d214/site/index.html"
   },
   "sourceNote": "source fields retain historical origins/proposals; auditedSource binds the current page bytes only. Local author audit is not owner approval.",
   "historicalSourceReferences": [
