@@ -1,0 +1,182 @@
+{
+  "schema": "ticketstub.local-validation-record/1",
+  "testedRevision": "bd490bb05ccb060a7d7dec16156c983e9d386adb",
+  "testedRevisionUrl": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/commit/bd490bb05ccb060a7d7dec16156c983e9d386adb",
+  "testedTree": "e368c0f262cb9e232dc317b568c859a5d94e7256",
+  "runtime": "v24.15.0",
+  "runtimeExecutable": "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+  "workingTreeBefore": "clean before this evidence directory was created",
+  "executionMode": "Local source/build checks and explicitly synthetic fixtures, including loopback HTTP tests. No font/CDN/provider responses fetched by these checks. The tested commit is reachable on GitHub; execution occurred locally.",
+  "scope": "Independent LP-06 code validation; no owner, visual, provider, consumer-contract or publication approval",
+  "records": [
+    {
+      "name": "tree-equality",
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "140fbc61bafd127544eff5e4473724c6126c5866",
+        "bd490bb05ccb060a7d7dec16156c983e9d386adb"
+      ],
+      "testedRevision": "bd490bb05ccb060a7d7dec16156c983e9d386adb",
+      "startedAt": "2026-10-12T16:39:05.623413+00:00",
+      "endedAt": "2026-10-12T16:39:05.625653+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "tree-equality.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        "stderr": {
+          "path": "tree-equality.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "build",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "scripts/build.mjs"
+      ],
+      "testedRevision": "bd490bb05ccb060a7d7dec16156c983e9d386adb",
+      "startedAt": "2026-10-12T16:39:05.626151+00:00",
+      "endedAt": "2026-10-12T16:39:05.751853+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "build.stdout.log",
+          "sha256": "c005ef06372299c25d7799129dbf09098a9aebb7deb7c2f3c034e0d67b0869b4",
+          "bytes": 35
+        },
+        "stderr": {
+          "path": "build.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "all-tests",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "--test",
+        "tests/brand.test.mjs",
+        "tests/content-proof.test.mjs",
+        "tests/cta.test.mjs",
+        "tests/foundation.test.mjs",
+        "tests/metadata.test.mjs",
+        "tests/privacy.test.mjs",
+        "tests/scroll.test.mjs",
+        "tests/ux.test.mjs"
+      ],
+      "testedRevision": "bd490bb05ccb060a7d7dec16156c983e9d386adb",
+      "startedAt": "2026-10-12T16:39:05.752389+00:00",
+      "endedAt": "2026-10-12T16:39:08.684934+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "all-tests.stdout.log",
+          "sha256": "a339ed2c088ff2ae1631cedf54fd3250b76edf82d1ace9cc0dadb57601ada023",
+          "bytes": 14284
+        },
+        "stderr": {
+          "path": "all-tests.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "brand-draft",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "scripts/validate-landing",
+        "--suite",
+        "brand",
+        "--mode",
+        "draft"
+      ],
+      "testedRevision": "bd490bb05ccb060a7d7dec16156c983e9d386adb",
+      "startedAt": "2026-10-12T16:39:08.685517+00:00",
+      "endedAt": "2026-10-12T16:39:08.912449+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "brand-draft.stdout.log",
+          "sha256": "24468f932cb05a5f9774b52a2f0133bc13a67ae57bd5b336188ca1b6dd8b4382",
+          "bytes": 208
+        },
+        "stderr": {
+          "path": "brand-draft.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "name": "brand-release",
+      "command": [
+        "/workspace/scratch/41d02a12a55b/task-state/toolchains/node24/node_modules/node/bin/node",
+        "scripts/validate-landing",
+        "--suite",
+        "brand",
+        "--mode",
+        "release"
+      ],
+      "testedRevision": "bd490bb05ccb060a7d7dec16156c983e9d386adb",
+      "startedAt": "2026-10-12T16:39:08.913194+00:00",
+      "endedAt": "2026-10-12T16:39:09.130804+00:00",
+      "exitCode": 1,
+      "outcome": "fail",
+      "logs": {
+        "stdout": {
+          "path": "brand-release.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        "stderr": {
+          "path": "brand-release.stderr.log",
+          "sha256": "470bb5711a9c2b2115db1c2dbb5c276a7eb08f455f3f881476e8a29be160c453",
+          "bytes": 198
+        }
+      },
+      "interpretation": "Actual release FAIL: empty upstream publishable subset and real owner inputs remain unavailable; no publication acceptance inferred."
+    },
+    {
+      "name": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+        "bd490bb05ccb060a7d7dec16156c983e9d386adb"
+      ],
+      "testedRevision": "bd490bb05ccb060a7d7dec16156c983e9d386adb",
+      "startedAt": "2026-10-12T16:39:09.131277+00:00",
+      "endedAt": "2026-10-12T16:39:09.135089+00:00",
+      "exitCode": 0,
+      "outcome": "pass",
+      "logs": {
+        "stdout": {
+          "path": "diff-check.stdout.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        "stderr": {
+          "path": "diff-check.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    }
+  ],
+  "artifactManifestSha256": "389e41ab3e2f32b9169cd70db129b01466a329dde74e1c6874ebbdba1df56470",
+  "historicalEvidence": "review/brand/validation/ec3d2d2 remains byte-for-byte unchanged and records earlier local executions, not executions of this published commit."
+}

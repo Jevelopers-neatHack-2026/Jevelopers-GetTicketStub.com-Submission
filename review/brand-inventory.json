@@ -1,0 +1,782 @@
+{
+  "schema": "ticketstub.landing-brand-inventory/1",
+  "status": "PROVISIONAL_UNAPPROVED",
+  "scope": "Local consumer observation of existing page bytes; no new import, brand conformance, rights, network or visual approval.",
+  "audit": {
+    "reviewedAt": "2026-10-12T16:20:14.762Z",
+    "recheckBy": "2026-11-12T00:00:00Z",
+    "reviewerRole": "Landing implementation author; not the brand/publication approver",
+    "recheckTriggers": [
+      "source-change",
+      "brand-release-or-revocation",
+      "font-policy-change",
+      "before-publication"
+    ]
+  },
+  "approvals": {
+    "brand": "PENDING",
+    "publication": "PENDING",
+    "consumerContract": "PENDING",
+    "visual": "PENDING"
+  },
+  "auditedSource": {
+    "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+    "revision": "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+    "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/034785cb30aca697af13b5e47cbeea6cb7a9c158/site/index.html",
+    "pageSha256": "2bc1c248336d17ee0beb402882cc697925721a42f94b6e8f2fa187da36227a92",
+    "binding": "The immutable page supplies a brand projection. Unrelated page changes are not certified by this brand-only check."
+  },
+  "upstream": {
+    "repository": "Jevelopers-neatHack-2026/brand-kit",
+    "revision": "3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4",
+    "approvedArtifact": null,
+    "consumerContract": null,
+    "observedAt": "2026-10-12T16:20:14.763Z",
+    "sources": [
+      {
+        "path": "provenance/allowlist.json",
+        "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4/provenance/allowlist.json",
+        "gitBlobSha": "95b87b7e07bf15f00b33544a4c6bb1d81ac0dde0",
+        "sha256": "40b7842c9c30972e95e81f9fe7151aa954bf802d486b0108e244bc0164d38524",
+        "bytes": 426
+      },
+      {
+        "path": "tokens/tokens.json",
+        "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4/tokens/tokens.json",
+        "gitBlobSha": "bdc4e0abdc58d815aa46f22e3a38b0cc46307d69",
+        "sha256": "649e570dc1397ef78bc00b28127ce166d640a4187eb2889fb2f57cc54054f228",
+        "bytes": 8345
+      },
+      {
+        "path": "tokens/tokens.css",
+        "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4/tokens/tokens.css",
+        "gitBlobSha": "71db82450fe5e476b3bc3559cc042eea2a8f273f",
+        "sha256": "a536e16aa1d25e45449a02e6ed46eeed376dfdbb71fa7c8a33cbc3a070f359b0",
+        "bytes": 3946
+      },
+      {
+        "path": "tokens/external-fonts-google.css",
+        "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4/tokens/external-fonts-google.css",
+        "gitBlobSha": "f764d8f50bd70efdf4f18476308b3e3e38971c9e",
+        "sha256": "e197c96f9db0463aee326cb5db657cd9b9952d47a08e60420de6c6db117ba458",
+        "bytes": 1394
+      },
+      {
+        "path": "docs/logo.md",
+        "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4/docs/logo.md",
+        "gitBlobSha": "bb109b6492a3434ad3ba16dd7aae68b7480639e9",
+        "sha256": "04aa94912718e8424b03ae7d98d5c1cbc03e2bfb3c664de368e967cd034b3dc3",
+        "bytes": 1799
+      },
+      {
+        "path": "docs/imagery.md",
+        "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4/docs/imagery.md",
+        "gitBlobSha": "9ccb69af5d46583390a6bd18b0a6ab7dc782687d",
+        "sha256": "fc38a8ab086e0e69bccfc656ba8e3a444d325e56c60c5c83e3c83ea1ffe05a2c",
+        "bytes": 2210
+      }
+    ],
+    "captureLimit": "Only the empty publication policy is retained as a byte-exact snapshot. Other hashes/value excerpts are read-only source observations, not independently fetched by this offline validator or distribution approval."
+  },
+  "importedBrandFiles": [],
+  "projection": {
+    "rootTokens": [
+      [
+        "--ink",
+        "#17140f"
+      ],
+      [
+        "--stock",
+        "#f4ecdd"
+      ],
+      [
+        "--stock-2",
+        "#e4d5b8"
+      ],
+      [
+        "--punch",
+        "#e4572e"
+      ],
+      [
+        "--foil",
+        "#7cc6d2"
+      ],
+      [
+        "--copper",
+        "#b4693e"
+      ],
+      [
+        "--moss",
+        "#26302a"
+      ],
+      [
+        "--foilgrad",
+        "linear-gradient(135deg,#b4693e 0%,#e4572e 45%,#7cc6d2 100%)"
+      ],
+      [
+        "--serif",
+        "\"Fraunces\",\"Iowan Old Style\",Georgia,serif"
+      ],
+      [
+        "--dur-quick",
+        "160ms"
+      ],
+      [
+        "--dur-base",
+        "240ms"
+      ],
+      [
+        "--dur-settle",
+        "380ms"
+      ],
+      [
+        "--dur-reveal",
+        "600ms"
+      ],
+      [
+        "--dur-shutter",
+        "320ms"
+      ],
+      [
+        "--dur-sweep",
+        "2600ms"
+      ],
+      [
+        "--ease-std",
+        "cubic-bezier(.2,.8,.2,1)"
+      ],
+      [
+        "--ease-enter",
+        "cubic-bezier(.16,1,.3,1)"
+      ],
+      [
+        "--ease-exit",
+        "cubic-bezier(.4,0,1,1)"
+      ],
+      [
+        "--ease-flip",
+        "cubic-bezier(.45,0,.55,1)"
+      ],
+      [
+        "--wall",
+        "#1a1712"
+      ],
+      [
+        "--display",
+        "\"Archivo\",\"Arial Black\",system-ui,sans-serif"
+      ],
+      [
+        "--cond",
+        "\"Big Shoulders Display\",\"Arial Narrow\",system-ui,sans-serif"
+      ],
+      [
+        "--mono",
+        "\"IBM Plex Mono\",ui-monospace,Menlo,monospace"
+      ],
+      [
+        "--body",
+        "\"Inter Tight\",system-ui,-apple-system,\"Segoe UI\",sans-serif"
+      ],
+      [
+        "--gutter",
+        "clamp(16px,3.2vw,48px)"
+      ]
+    ],
+    "declarations": [
+      [
+        "--ink",
+        "#17140f"
+      ],
+      [
+        "--stock",
+        "#f4ecdd"
+      ],
+      [
+        "--stock-2",
+        "#e4d5b8"
+      ],
+      [
+        "--punch",
+        "#e4572e"
+      ],
+      [
+        "--foil",
+        "#7cc6d2"
+      ],
+      [
+        "--copper",
+        "#b4693e"
+      ],
+      [
+        "--moss",
+        "#26302a"
+      ],
+      [
+        "--foilgrad",
+        "linear-gradient(135deg,#b4693e 0%,#e4572e 45%,#7cc6d2 100%)"
+      ],
+      [
+        "--serif",
+        "\"Fraunces\",\"Iowan Old Style\",Georgia,serif"
+      ],
+      [
+        "--dur-quick",
+        "160ms"
+      ],
+      [
+        "--dur-base",
+        "240ms"
+      ],
+      [
+        "--dur-settle",
+        "380ms"
+      ],
+      [
+        "--dur-reveal",
+        "600ms"
+      ],
+      [
+        "--dur-shutter",
+        "320ms"
+      ],
+      [
+        "--dur-sweep",
+        "2600ms"
+      ],
+      [
+        "--ease-std",
+        "cubic-bezier(.2,.8,.2,1)"
+      ],
+      [
+        "--ease-enter",
+        "cubic-bezier(.16,1,.3,1)"
+      ],
+      [
+        "--ease-exit",
+        "cubic-bezier(.4,0,1,1)"
+      ],
+      [
+        "--ease-flip",
+        "cubic-bezier(.45,0,.55,1)"
+      ],
+      [
+        "--wall",
+        "#1a1712"
+      ],
+      [
+        "--display",
+        "\"Archivo\",\"Arial Black\",system-ui,sans-serif"
+      ],
+      [
+        "--cond",
+        "\"Big Shoulders Display\",\"Arial Narrow\",system-ui,sans-serif"
+      ],
+      [
+        "--mono",
+        "\"IBM Plex Mono\",ui-monospace,Menlo,monospace"
+      ],
+      [
+        "--body",
+        "\"Inter Tight\",system-ui,-apple-system,\"Segoe UI\",sans-serif"
+      ],
+      [
+        "--gutter",
+        "clamp(16px,3.2vw,48px)"
+      ],
+      [
+        "--ts-ink",
+        "var(--ink)"
+      ],
+      [
+        "--ts-cream",
+        "var(--stock)"
+      ],
+      [
+        "--ts-orange",
+        "var(--punch)"
+      ]
+    ],
+    "fonts": [
+      "var(--body)",
+      "var(--mono)",
+      "var(--display)",
+      "var(--cond)",
+      "var(--display)",
+      "var(--mono)",
+      "var(--mono)",
+      "var(--mono)",
+      "var(--display)",
+      "var(--display)",
+      "var(--mono)",
+      "var(--display)",
+      "var(--display)",
+      "var(--mono)",
+      "var(--mono)",
+      "var(--cond)",
+      "var(--display)",
+      "var(--display)",
+      "var(--cond)",
+      "var(--display)",
+      "var(--mono)",
+      "var(--cond)",
+      "var(--display)",
+      "var(--display)",
+      "var(--cond)",
+      "var(--display)",
+      "var(--mono)",
+      "var(--display)",
+      "var(--display)",
+      "var(--cond)",
+      "var(--mono)",
+      "var(--mono)",
+      "var(--display)",
+      "var(--body)",
+      "var(--display)",
+      "var(--display)",
+      "var(--display)",
+      "var(--body)",
+      "var(--display)",
+      "var(--display)",
+      "var(--display)",
+      "var(--display)",
+      "var(--display)",
+      "var(--serif)",
+      "var(--serif)",
+      "var(--mono)",
+      "var(--display)",
+      "var(--display)"
+    ],
+    "symbols": [
+      {
+        "id": "tsWordmark",
+        "sha256": "a27d5467c460db6d09deb1bc46ebc00042603fae7999415795e788d8fad44bdb"
+      },
+      {
+        "id": "tsStamp",
+        "sha256": "dfb222cbc8c16900a7c201b58ffc675b52f3b20981ae930e3b78c6a3faf624bb"
+      }
+    ],
+    "symbolUses": [
+      "#tsStamp",
+      "#tsStamp",
+      "#tsStamp",
+      "#tsStamp",
+      "#tsStamp",
+      "#tsStamp",
+      "#tsStamp",
+      "#tsStamp",
+      "#tsWordmark"
+    ],
+    "resources": [
+      {
+        "kind": "link:preconnect",
+        "url": "https://fonts.googleapis.com",
+        "attributes": {
+          "rel": "preconnect",
+          "href": "https://fonts.googleapis.com"
+        }
+      },
+      {
+        "kind": "link:preconnect",
+        "url": "https://fonts.gstatic.com",
+        "attributes": {
+          "rel": "preconnect",
+          "href": "https://fonts.gstatic.com"
+        }
+      },
+      {
+        "kind": "link:stylesheet",
+        "url": "https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Abril+Fatface&family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter+Tight:wght@400..700&display=swap",
+        "attributes": {
+          "rel": "stylesheet",
+          "href": "https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Abril+Fatface&family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter+Tight:wght@400..700&display=swap"
+        }
+      },
+      {
+        "kind": "script",
+        "url": "https://cdn.jsdelivr.net/npm/motion@11.11.17/dist/motion.js",
+        "attributes": {
+          "src": "https://cdn.jsdelivr.net/npm/motion@11.11.17/dist/motion.js"
+        }
+      },
+      {
+        "kind": "import:three",
+        "url": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js"
+      },
+      {
+        "kind": "import:three/addons/",
+        "url": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    ]
+  },
+  "aliases": [
+    {
+      "local": "--ink",
+      "observedValue": "#17140f",
+      "upstreamPath": "color.ink",
+      "upstreamValue": "#17140F",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--stock",
+      "observedValue": "#f4ecdd",
+      "upstreamPath": "color.cream",
+      "upstreamValue": "#F4ECDD",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--stock-2",
+      "observedValue": "#e4d5b8",
+      "upstreamPath": null,
+      "upstreamValue": null,
+      "relationship": "local-only",
+      "note": "Existing landing-specific styling has no claimed canonical token. Keep as a reviewed consumer adaptation only after owner acceptance."
+    },
+    {
+      "local": "--punch",
+      "observedValue": "#e4572e",
+      "upstreamPath": "color.orange",
+      "upstreamValue": "#E4572E",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--foil",
+      "observedValue": "#7cc6d2",
+      "upstreamPath": "color.cyan",
+      "upstreamValue": "#7CC6D2",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--copper",
+      "observedValue": "#b4693e",
+      "upstreamPath": "color.copper",
+      "upstreamValue": "#B4693E",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--moss",
+      "observedValue": "#26302a",
+      "upstreamPath": "color.moss",
+      "upstreamValue": "#26302A",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--foilgrad",
+      "observedValue": "linear-gradient(135deg,#b4693e 0%,#e4572e 45%,#7cc6d2 100%)",
+      "upstreamPath": "gradient.foil",
+      "upstreamValue": "linear-gradient(135deg, #B4693E 0%, #E4572E 45%, #7CC6D2 100%)",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--serif",
+      "observedValue": "\"Fraunces\",\"Iowan Old Style\",Georgia,serif",
+      "upstreamPath": "font.family.display",
+      "upstreamValue": "'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif",
+      "relationship": "adapted",
+      "note": "Existing local fallback family/order differs; brand acceptance is pending."
+    },
+    {
+      "local": "--dur-quick",
+      "observedValue": "160ms",
+      "upstreamPath": "motion.duration.quick",
+      "upstreamValue": "160ms",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--dur-base",
+      "observedValue": "240ms",
+      "upstreamPath": "motion.duration.base",
+      "upstreamValue": "240ms",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--dur-settle",
+      "observedValue": "380ms",
+      "upstreamPath": "motion.duration.settle",
+      "upstreamValue": "380ms",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--dur-reveal",
+      "observedValue": "600ms",
+      "upstreamPath": "motion.duration.reveal",
+      "upstreamValue": "600ms",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--dur-shutter",
+      "observedValue": "320ms",
+      "upstreamPath": "motion.duration.shutter",
+      "upstreamValue": "320ms",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--dur-sweep",
+      "observedValue": "2600ms",
+      "upstreamPath": "motion.duration.print-sweep",
+      "upstreamValue": "2600ms",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--ease-std",
+      "observedValue": "cubic-bezier(.2,.8,.2,1)",
+      "upstreamPath": "motion.easing.standard",
+      "upstreamValue": "cubic-bezier(.2,.8,.2,1)",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--ease-enter",
+      "observedValue": "cubic-bezier(.16,1,.3,1)",
+      "upstreamPath": "motion.easing.enter",
+      "upstreamValue": "cubic-bezier(.16,1,.3,1)",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--ease-exit",
+      "observedValue": "cubic-bezier(.4,0,1,1)",
+      "upstreamPath": "motion.easing.exit",
+      "upstreamValue": "cubic-bezier(.4,0,1,1)",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--ease-flip",
+      "observedValue": "cubic-bezier(.45,0,.55,1)",
+      "upstreamPath": "motion.easing.flip",
+      "upstreamValue": "cubic-bezier(.45,0,.55,1)",
+      "relationship": "same-value",
+      "note": "Source values correspond; this is an observation, not an imported canonical token or approval."
+    },
+    {
+      "local": "--wall",
+      "observedValue": "#1a1712",
+      "upstreamPath": null,
+      "upstreamValue": null,
+      "relationship": "local-only",
+      "note": "Existing landing-specific styling has no claimed canonical token. Keep as a reviewed consumer adaptation only after owner acceptance."
+    },
+    {
+      "local": "--display",
+      "observedValue": "\"Archivo\",\"Arial Black\",system-ui,sans-serif",
+      "upstreamPath": null,
+      "upstreamValue": null,
+      "relationship": "local-only",
+      "note": "Existing landing-specific styling has no claimed canonical token. Keep as a reviewed consumer adaptation only after owner acceptance."
+    },
+    {
+      "local": "--cond",
+      "observedValue": "\"Big Shoulders Display\",\"Arial Narrow\",system-ui,sans-serif",
+      "upstreamPath": null,
+      "upstreamValue": null,
+      "relationship": "local-only",
+      "note": "Existing landing-specific styling has no claimed canonical token. Keep as a reviewed consumer adaptation only after owner acceptance."
+    },
+    {
+      "local": "--mono",
+      "observedValue": "\"IBM Plex Mono\",ui-monospace,Menlo,monospace",
+      "upstreamPath": null,
+      "upstreamValue": null,
+      "relationship": "local-only",
+      "note": "Existing landing-specific styling has no claimed canonical token. Keep as a reviewed consumer adaptation only after owner acceptance."
+    },
+    {
+      "local": "--body",
+      "observedValue": "\"Inter Tight\",system-ui,-apple-system,\"Segoe UI\",sans-serif",
+      "upstreamPath": "font.family.ui",
+      "upstreamValue": "'Inter Tight', 'Segoe UI', system-ui, -apple-system, sans-serif",
+      "relationship": "adapted",
+      "note": "Existing local fallback family/order differs; brand acceptance is pending."
+    },
+    {
+      "local": "--gutter",
+      "observedValue": "clamp(16px,3.2vw,48px)",
+      "upstreamPath": null,
+      "upstreamValue": null,
+      "relationship": "local-only",
+      "note": "Existing landing-specific styling has no claimed canonical token. Keep as a reviewed consumer adaptation only after owner acceptance."
+    }
+  ],
+  "inlineMarks": [
+    {
+      "id": "tsWordmark",
+      "permission": "UNCONFIRMED",
+      "originMatch": "UNVERIFIED",
+      "referenceSource": "logo/wordmark.svg",
+      "note": "Existing inline symbol, hash pinned to landing source. Candidate upstream source path is a review pointer; no byte equality, derivation or rights is asserted."
+    },
+    {
+      "id": "tsStamp",
+      "permission": "UNCONFIRMED",
+      "originMatch": "UNVERIFIED",
+      "referenceSource": "logo/ts-stamp-currentcolor.svg",
+      "note": "Existing inline symbol, hash pinned to landing source. Candidate upstream source path is a review pointer; no byte equality, derivation or rights is asserted."
+    }
+  ],
+  "retainedLandingAssets": [
+    {
+      "path": "assets/ballet-clean.webp",
+      "sha256": "2195943b492e4cd54d082bb09804e20e2317e5b8866d346a1440a1417f1e22d4",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/ballet-clean.webp"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    },
+    {
+      "path": "assets/fan-clean.webp",
+      "sha256": "a28d2a81943ea441c259faa4d23027c05dc094c4be279e5cf2437a67b2166a48",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/fan-clean.webp"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    },
+    {
+      "path": "assets/flight.json",
+      "sha256": "8a69e3e289014de675a6249b004c28e1ffe4e603f550678ab5a95c1a161d9e15",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/flight.json"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    },
+    {
+      "path": "assets/hockey-clean.webp",
+      "sha256": "314e749eda387b3b0426238965ecd8350135fc9257f9c083e8f85d9bb92107cc",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/hockey-clean.webp"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    },
+    {
+      "path": "assets/hoops-clean.webp",
+      "sha256": "dc58c6f5f79a3625bad5e7337f865593073b55af780d1dfd01c242f70cfc230c",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/hoops-clean.webp"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    },
+    {
+      "path": "assets/keeper-clean.webp",
+      "sha256": "a14ee8df327cffae8ff3de4ff70f18f7b1beedf799ac84026f1992b7ee541cab",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/keeper-clean.webp"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    },
+    {
+      "path": "assets/pitcher-clean.webp",
+      "sha256": "d870f2afa43831cc1ad1eb7c7175d8f699c8b0244dc16e47042f91c81e310b07",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/pitcher-clean.webp"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    },
+    {
+      "path": "assets/qb-clean.webp",
+      "sha256": "cb361142ff8821cf1df6610e9a2e958edfcd6683fb15eb493c1d1dbdaaf328cd",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/qb-clean.webp"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    },
+    {
+      "path": "assets/singer-clean.webp",
+      "sha256": "e87628c1117385dff1463e03663f26f6b82ea56a2a6b5bebabd56ec1cd5e398e",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/singer-clean.webp"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    },
+    {
+      "path": "assets/ticketstub.gltf.json",
+      "sha256": "c36b5d0af494390fd2fdd18d581033e60dc156b45604c00060b0dd6bd8153936",
+      "permission": "UNCONFIRMED",
+      "source": {
+        "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+        "revision": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+        "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/1d8379d1c5b0cb89ef869ea2cc7358886c9cf274/site/index.html",
+        "path": "site/assets/ticketstub.gltf.json"
+      },
+      "note": "Retained local illustration/3D input; rights and visual sanitization remain owned by LP-04 and brand review."
+    }
+  ],
+  "fontPolicy": {
+    "selfHosted": false,
+    "providerApproval": "PENDING",
+    "provider": "Existing browser Google Fonts CSS/font requests; not an approved delivery choice",
+    "ownerConstraintSource": "https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/14#issuecomment-6118157033",
+    "notice": "No fonts or runtime assets were downloaded or imported for this audit. Existing font/CDN response bytes and subresource URLs are not pinned, fetched or certified.",
+    "networkResponseSha256": null,
+    "upstreamOptIn": "tokens/external-fonts-google.css uses Fraunces + Inter Tight only; this landing independently requests six families and different axes/weights. Keep the mismatch pending consumer/font-owner review."
+  },
+  "withdrawn": {
+    "localPaths": [],
+    "resourceUrls": []
+  },
+  "blockers": [
+    {
+      "issue": "https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/14",
+      "ownerRole": "Brand-kit maintainer",
+      "input": "Exact approved distribution artifact, export allowlist/rights, font provider/families/axes/CSP/privacy/fallback policy; upstream export subset is currently empty."
+    },
+    {
+      "issue": "https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/15",
+      "ownerRole": "Brand-kit maintainer and Landing Product/frontend consumer",
+      "input": "Accepted import/version migration/rollback contract and exact rendered consumer acceptance."
+    },
+    {
+      "issue": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/8",
+      "ownerRole": "Brand/identity reviewer",
+      "input": "Representative mobile/desktop logo/type/image review; known inline/local styles are provisional and may require changes."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "schema": "ticketstub.reviewed-tree-transfer/1",
+  "repository": "Jevelopers-neatHack-2026/landing-page-repo",
+  "localReviewedCommit": "140fbc61bafd127544eff5e4473724c6126c5866",
+  "localReviewedTree": "e368c0f262cb9e232dc317b568c859a5d94e7256",
+  "publishedCommit": "bd490bb05ccb060a7d7dec16156c983e9d386adb",
+  "publishedCommitUrl": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/commit/bd490bb05ccb060a7d7dec16156c983e9d386adb",
+  "publishedTree": "e368c0f262cb9e232dc317b568c859a5d94e7256",
+  "publishedParent": "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+  "remoteCommitMetadataObservedAt": "2026-10-12",
+  "remoteCommitMetadataSource": "https://api.github.com/repos/Jevelopers-neatHack-2026/landing-page-repo/git/commits/bd490bb05ccb060a7d7dec16156c983e9d386adb",
+  "verification": [
+    "GitHub Git-data commit metadata reports the recorded published tree and parent.",
+    "The fetched detached worktree HEAD and local-reviewed commit resolve to the identical full Git tree ID.",
+    "git diff --exit-code 140fbc61bafd127544eff5e4473724c6126c5866 bd490bb05ccb060a7d7dec16156c983e9d386adb exited 0.",
+    "Tree identity covers all tracked paths, file bytes and Git modes; commit metadata/ancestry is intentionally different."
+  ],
+  "unchangedAuditPins": {
+    "brandSource": "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+    "copyProofAndPrivacySource": "36c0a841d5b5c5f6e7c3870e65c541825026d214",
+    "historicalCopySource": "1d8379d1c5b0cb89ef869ea2cc7358886c9cf274",
+    "availability": "All are existing ancestors of the published parent and available to a full-history clone. No unpublished brand/governance implementation SHA is required by active validators."
+  },
+  "historicalEvidence": "Previous local execution records and outcomes remain unchanged. This record establishes tree equivalence; it does not turn any earlier local execution into an execution of the published commit.",
+  "execution": "The commands in commands.json were newly executed locally against the fetched published commit; they are not GitHub Actions or provider runs.",
+  "approvalBoundary": "Scoped independent code review only; no brand/visual/consumer/publication acceptance."
+}
