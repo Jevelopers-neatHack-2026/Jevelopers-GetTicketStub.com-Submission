@@ -1,8 +1,8 @@
 # `shared-contracts`
 
-**Repository status:** Verified existing on GitHub, public, October 10, 2026. Repository visibility is unchanged by this foundation.
-**Proposed owner:** Agent and research.
-**Delivery state:** Local package 0.5.0 supplies 45 candidate wire exports, generated bindings and offline fixtures. Named owners, accepted producer/consumer pins, pending API proposals and four finance correctness findings remain release blockers. Public GitHub visibility is distinct from npm's private/unreleased package setting.
+**Repository status:** Public GitHub repository, checked 2026-10-12 against [main at `91736a026c02a3206cb7666ebfbe6134692e5a24`](https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/91736a026c02a3206cb7666ebfbe6134692e5a24). This visibility check documents repository metadata; it does not change visibility or imply publication.
+**Proposed owner:** Agent and research (repository role; named contract owners and reviewers remain unassigned).
+**Delivery state:** Private candidate package 0.10.2 supplies 77 wire names across 88 schema versions, generated consumer bindings, standalone validators and offline fixtures alongside the receipt metadata checker and isolated reporting proposal. Named owner/reviewer acknowledgements, accepted consumer pins and release obligations remain separate. See [MVP readiness](../mvp-readiness.md); individual issue and PR records remain authoritative.
 
 ## Responsibility
 
@@ -19,11 +19,13 @@ The shared package should remain dependency-light. It may distribute generated t
 - `fixtures/`: Valid, invalid, and compatibility examples.
 - `compatibility/`: Version policy and consumer impact records.
 
+The JSON Schemas and synthetic fixtures under [`proposals/reporting-v1/`](../../proposals/reporting-v1/README.md) remain an isolated Finance-review proposal. They are not promoted into the canonical contract set. The receipt checker is governance tooling for recording and shape-checking evidence.
+
 ## Dependencies and handoff
 
 Collect requirements from every producer and consumer. Each contract names its authoritative owner, schema version, required identifiers, and compatibility behavior. Distinguish a customer operation, execution attempt, provider request, and repeated observation so retries can be reconciled correctly.
 
-## P0 demo slice
+## P0 demo slice (planned)
 
 Agree the minimum contracts for one customer journey: request, research package, design version, production bundle, quote, authorization, usage observation, and financial summary. Pin a compatible contract version across the integration workspace.
 
@@ -38,7 +40,9 @@ Local fixture/schema results are contribution evidence. [Consumer handoff](../co
 - [ ] Validation rejects malformed input at agreed trust boundaries.
 - [ ] Generated outputs are reproducible from the canonical definitions.
 
-[Architecture](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) · [Acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
+The unchecked items above are local planning prompts, not the status of the global checklist. See the [acceptance view](ACCEPTANCE.md) for the selected global criteria and [integration-evals' master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md) for authoritative IDs, owners, states, and evidence.
+
+[Historical architecture intent](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/docs/architecture.md) · [Acceptance checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
 
 ## Acceptance and contributor handoff
 

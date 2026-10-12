@@ -33,21 +33,21 @@
     "compatibility/version-policy.json": "sha256:e8c3193c282d0755d5e224d63a20ff7b918a275c01f22a210c50c1993deb2bf1",
     "docs/acceptance-criteria.json": "sha256:cb539b090217fb2c077ee8af7abb9bdce025d854c3ee3304c46d396c8422fe16",
     "docs/adr/0001-canonical-schemas.md": "sha256:97be5ff166a51e5de5192cc8614a1837ed46e48a2598c766611e91bb4ce8db93",
-    "docs/architecture/ACCEPTANCE.md": "sha256:2f9c49e85cddad18957a7d6fb1e70e5d7c5fadb5ccb6e6dadbf244eb46b6bb8b",
-    "docs/architecture/OWNERSHIP.md": "sha256:5f53c8e15c017e73783d997ce228a3b0528521198f026c0618d5f2b8aa3d7e60",
+    "docs/architecture/ACCEPTANCE.md": "sha256:77c26b96339c8ef037ea4d42c23d9a52a59bd2ec2b71f6abcc3454beb4a5c8fe",
+    "docs/architecture/OWNERSHIP.md": "sha256:5e8a10d6f9f29b0f600dba879420a955bbee904919b363f107d84d66497343d8",
     "docs/assets/readme/banner-day.svg": "sha256:2460f927f4286c5f7e22738153af87ddc4811e40cb0a7d1392b7bc537ebaba8f",
     "docs/assets/readme/banner-night.svg": "sha256:7cc465c0fb825c1cc67434770c8f762d35e923fb8b94ce9754c5ba689dd9dabf",
     "docs/authority-dependencies.json": "sha256:d4bed3cb91e46fa0e13fb50981f6cbb7f63a6aaab23494089cb94e48f44b5293",
     "docs/capability-contracts.md": "sha256:073d6cfb36d5d311146fcce1e26775f2b3715ed68f84b35ffa28c55d1d33b311",
     "docs/commerce-evidence-contracts.md": "sha256:6a0d0d0a0282197d3afff9ad39dd1d372b47d5e11f88178d39f75b0ae6dec460",
-    "docs/consumer-acceptance-receipt.md": "sha256:1cc14202ad93dbd654242f4421a554568543112791998319b95e92fff21c0144",
+    "docs/consumer-acceptance-receipt.md": "sha256:784a3ac5b6f0e42eec73a5e4bb108e38541bbdbed6ba34672792beea95809e92",
     "docs/consumer-handoff.md": "sha256:9e2e82f4f0cf1ca12086fcea49bcd9895b440e158af4e1a9ce6f2299c27661cb",
-    "docs/contract-catalog.md": "sha256:64c061faaa83b4b2add737a5b6eeb0d72c8c6bd4cbc321ce93298a3e0f6eaa82",
+    "docs/contract-catalog.md": "sha256:e3e18ca694099eaafd414cd42380defaf8f4903f6a68f8d438cb62a0dd9fa409",
     "docs/dependency-handoff.md": "sha256:dcce9e3b26d6f92aa03081da58521e1a16cbacadcb75f61014c385c13a40445c",
     "docs/finance-v2-contracts.md": "sha256:9e8a893e62b4b97cb7c1edc86587e4d99f2daed726f857a5124fb721d0092343",
     "docs/fixture-harness.md": "sha256:6c3a34040da6492540affe3044e74d40617a6f7347083655e05b4e8227688d80",
     "docs/identity-policy.md": "sha256:2cab79442634f7b07db6d8e9a347fda148f52181a893236eb28c0c7a7699deb3",
-    "docs/mvp-readiness.md": "sha256:c6ff15c1b6e90a2c36021a9fd985cd3b01a418d0b625e6b613269e0c17dd0815",
+    "docs/mvp-readiness.md": "sha256:d821c7f05b297db16a1b3e79dc950887f5f0f06345d00a37c376eaeceb1675a2",
     "docs/operations-contracts.md": "sha256:511575b694f86c2b2cd1c91113c67f41aa8e846fd3c4a211255f7f329fa8115c",
     "docs/privacy-policy.md": "sha256:4a3558cf94c21a176f1ef6cd735562064af5a05b9d8df86ec6116b93f97e42c6",
     "docs/production-contracts.md": "sha256:24fe801fbd338f2cfe1d90de42347e1cbaaecff35afe704f141f2e89655f18fd",
@@ -380,5 +380,5 @@
     "tooling/runtime.mjs": "sha256:33f32454e7ce8a8200dfa7ed7f2afc2c2a9c4c3d3c2d49d2179c8f650b04d892",
     "tooling/usage-reported-unsettled.mjs": "sha256:51278762dfbe24cd901a036e7c8075f8c005418b542dabe62fa149114d538ad0"
   },
-  "digest": "sha256:3ea727e32820b51f7a4bd8324439338a4c25f5ac1f4adf3bbc3658377049ab6d"
+  "digest": "sha256:61cf21ae7c883680ddc46341657715b1bdafe9459aac9f61b83fe559047edd71"
 }
