@@ -1,0 +1,92 @@
+{
+  "checked_date": "2026-10-12",
+  "history_import_commit": "442f4bcbc1c37f8d46470feee7e669b4f52620a4",
+  "scope": "One original commit per distinct author-name/email pair; GitHub account matching is reported, not inferred. Original identities were not changed.",
+  "source_commit_count": 1944,
+  "records": [
+    {
+      "recorded_name": "Timothy Wayne Gregg",
+      "commit": "a75faec02ebf30b896a6003d431e0279a9f93bed",
+      "github_login": "CompleteDotTech",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/a75faec02ebf30b896a6003d431e0279a9f93bed"
+    },
+    {
+      "recorded_name": "Zachary Wright",
+      "commit": "cd961246234f8666303f306ac349c69b8b3236cd",
+      "github_login": "zwright8",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/cd961246234f8666303f306ac349c69b8b3236cd"
+    },
+    {
+      "recorded_name": "Zach Wright",
+      "commit": "463357726e9825f7e55fbbed54cdcde8129559bf",
+      "github_login": "zwright8",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/463357726e9825f7e55fbbed54cdcde8129559bf"
+    },
+    {
+      "recorded_name": "Timothy Wayne Gregg",
+      "commit": "f0f36c936bfa7c684a5ab00158e0bfef28180fcc",
+      "github_login": "zwright8",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/f0f36c936bfa7c684a5ab00158e0bfef28180fcc"
+    },
+    {
+      "recorded_name": "Timothy Gregg",
+      "commit": "aaf664d4fea79ee60c58c1a57ad80a3ff299ee40",
+      "github_login": "CompleteDotTech",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/aaf664d4fea79ee60c58c1a57ad80a3ff299ee40"
+    },
+    {
+      "recorded_name": "Lars",
+      "commit": "8a1bf549c61b50d5d284c8851c7479c5c7ba13d6",
+      "github_login": "lmvdz",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/8a1bf549c61b50d5d284c8851c7479c5c7ba13d6"
+    },
+    {
+      "recorded_name": "Codex",
+      "commit": "a1d45275a50ee69d66603ded2eddb8306a3cb66c",
+      "github_login": "codex",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/a1d45275a50ee69d66603ded2eddb8306a3cb66c"
+    },
+    {
+      "recorded_name": "Timothy Gregg",
+      "commit": "a101e4d940cede398c0a3c48d229da1f06cb4fc6",
+      "github_login": null,
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/a101e4d940cede398c0a3c48d229da1f06cb4fc6"
+    },
+    {
+      "recorded_name": "Codex integration",
+      "commit": "6e161faa9dbbf515e7171cc6b23f72de964c4010",
+      "github_login": "codex",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/6e161faa9dbbf515e7171cc6b23f72de964c4010"
+    },
+    {
+      "recorded_name": "Lars van der Zande",
+      "commit": "c74a52549773303a10154f9d232732cda1edec17",
+      "github_login": "lmvdz",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/c74a52549773303a10154f9d232732cda1edec17"
+    },
+    {
+      "recorded_name": "lajefahemp-collab",
+      "commit": "9fec9e5747a2974c4152cd22a6c57fb8be7ba5f2",
+      "github_login": "lajefahemp-collab",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/9fec9e5747a2974c4152cd22a6c57fb8be7ba5f2"
+    },
+    {
+      "recorded_name": "Claude",
+      "commit": "fa2bcef44c90c39618cd13007651527af977875f",
+      "github_login": "claude",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/fa2bcef44c90c39618cd13007651527af977875f"
+    },
+    {
+      "recorded_name": "github-actions[bot]",
+      "commit": "ade78ec0024e43485379fd3e6391521d5e8320a2",
+      "github_login": "github-actions[bot]",
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/ade78ec0024e43485379fd3e6391521d5e8320a2"
+    },
+    {
+      "recorded_name": "Codex",
+      "commit": "cd4c8ddba92cac3d202c7ea4e110112964cacec1",
+      "github_login": null,
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/cd4c8ddba92cac3d202c7ea4e110112964cacec1"
+    }
+  ]
+}

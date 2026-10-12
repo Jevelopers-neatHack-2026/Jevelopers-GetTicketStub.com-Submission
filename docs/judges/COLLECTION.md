@@ -24,7 +24,7 @@ Commit totals are summed per repository. Shared history can count more than once
 
 They show the size of the public collection. They do not measure effort, usefulness, test coverage, or quality. They do not show that all code was first written during the event. [Eligibility still needs review](EVIDENCE.md#code-history).
 
-The submission repo has its own history of snapshots and presentation changes. That history is separate from development in the source repos. Private repositories and checkpoint contents are excluded.
+The submission repo adds snapshot and presentation commits, and now imports unchanged original source commits as merge parents. [Contributor credit](CONTRIBUTORS.md) explains author preservation and GitHub account matching. Private repositories and checkpoint contents are excluded.
 
 ## Refresh and reproduce
 

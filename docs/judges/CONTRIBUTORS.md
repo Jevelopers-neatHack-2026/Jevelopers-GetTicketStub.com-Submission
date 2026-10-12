@@ -14,4 +14,12 @@ GitHub links authors to profiles when their commit email is attached to the matc
 
 The current file snapshots and the imported history both undergo secret scans. New findings block publication until reviewed. Original history includes older file versions; the scan does not establish hackathon eligibility.
 
-**Rollout status:** implemented locally; all 16 sync tests pass. The first import is waiting for enough local disk space and successful historical secret review. Original histories have not yet been published into submission `main`.
+## Published and checked October 12, 2026
+
+[History import merge](https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/442f4bcbc1c37f8d46470feee7e669b4f52620a4) connects all **1,944 original source commits** from the 14 collected repositories to submission `main`. All source tips are ancestors of the merge. All 14 copied file trees still match their source trees. The merge has 15 parents: the prior submission commit and the 14 source tips.
+
+GitHub's contributors API now lists **CompleteDotTech, zwright8, lmvdz, and lajefahemp-collab**, alongside bot and agent account entries. [View contributors on GitHub](https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/graphs/contributors).
+
+We checked one commit for each of the 14 distinct original author-name/email pairs through GitHub's commit API. All retained their original author fields. Two pairs have no linked GitHub profile. One record named Timothy Wayne Gregg resolves to zwright8 through its recorded email. We preserved these records; we did not infer ownership or rewrite identities. [Exact checked commits and GitHub responses](CONTRIBUTOR-PROVENANCE.json) omit email addresses and record returned profile links.
+
+All 16 sync tests pass. Snapshot and history scans passed after review of 181 historical findings and one changed current test fixture. Historical sample-token signatures matched documented public test keys. Exceptions remain tied to exact file hashes and finding locations.

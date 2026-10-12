@@ -89,4 +89,4 @@ Open the local address printed in the terminal. Choose **The Pale Hours**, confi
 
 [Judge scorecard](docs/judges/EVIDENCE.md#follow-the-scorecard) · [Repo, line, and commit counts](REPOSITORIES.md#collection-at-a-glance) · [Code versions and dates](docs/judges/EVIDENCE.md#code-history) · [Refresh the collection](docs/judges/SYNC.md)
 
-The source repos keep the original history. Each code copy links to its commit—a saved version of code. Newer copies may go beyond the tested evidence.
+The original commits also live here, with [contributor credit preserved](docs/judges/CONTRIBUTORS.md). Each code copy links to its saved version. Newer copies may go beyond the tested evidence.

@@ -95,7 +95,7 @@ The [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](
 
 [Repository, file, line, and source-commit counts](../../REPOSITORIES.md#collection-at-a-glance) describe the pinned collection. [Counting rules](COLLECTION.md) separate source history from submission snapshots and explain included tests, generated code, and pre-event history.
 
-[Source provenance](SOURCE-PROVENANCE.json) records the inspected original commits, GitHub account attribution, and author/committer dates. All 14 inspected source tips are dated October 12. Original histories remain in those public repositories; the submission repository records snapshots.
+[Source provenance](SOURCE-PROVENANCE.json) records the inspected original commits, GitHub account attribution, and author/committer dates. All 14 inspected source tips are dated October 12. Original histories remain in those public repositories and are now also connected to submission main. [Contributor verification](CONTRIBUTORS.md) records the import and GitHub author checks.
 
 Examples: [studio commit](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commit/6daafba1a3384b20ad181b957fd5d5715da29153), [integration-evals commit](https://github.com/Jevelopers-neatHack-2026/integration-evals/commit/89141b4e9237d7cc1548254b99dbd0f01589eaa4). Every current snapshot also has an exact source commit and tree in [sources.json](../../sources.json).
 
