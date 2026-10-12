@@ -68,5 +68,5 @@ The layout follows `references/back-side/`: the setlist at the top left with a s
 |---|---|
 | Digital $9 | Animated foil in the share card and wallet pass |
 | Card $29 | Matte stock, one foil element |
-| Print $49 | Choice of stock, foil title, spot holo |
-| Framed $89 | Print plus holographic stock option, mat and frame |
+| Print $49 | Choice of stock, foil title. Holo is a screen preview only and is not printed, see [capabilities](../product/capabilities.md) |
+| Framed $89 | Print plus mat and frame. Holo is a screen preview only and is not printed, see [capabilities](../product/capabilities.md) |

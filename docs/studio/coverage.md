@@ -1,6 +1,6 @@
 # Wireframe coverage
 
-Every scenario decided in `product-spec.md` and `alignment.md`, and the wireframe screens that blueprint it. All screens are lo-fi and mobile first, with a desktop version of each (organizer mode is the one deliberate desktop-first exception). They live on the [Ticket Studio Editor Wireframe](https://claude.ai/artifact/UtqYmCtBT1Chnh9bGEJ2d9) canvas, which is private until shared.
+Every scenario decided in `product-spec.md` and `alignment.md`, and the wireframe screens that blueprint it. All screens are lo-fi and mobile first, with a desktop version of each (organizer mode is the one deliberate desktop-first exception). They live on the [Ticket Studio Editor Wireframe](https://claude.ai/artifact/UtqYmCtBT1Chnh9bGEJ2d9) canvas (private link; needs team access).
 
 On that canvas, **0 · Flow map** shows every screen and the gesture or event that connects it. Screens with a Play button are linked into a clickable prototype: start at *Link input* (phone) or *Link input, desktop*.
 

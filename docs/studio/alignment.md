@@ -36,4 +36,4 @@ How the ticket studio design (`product-spec.md`, `flow.md`, `stub-system.md`) fi
 
 ## Wireframes
 
-Lo-fi, mobile first with a desktop version of every screen: drop zone, printing reveal, editor (rest, selected, back), tear, wall, memory page, buy-now and cart, and organizer. Canvas: [Ticket Studio Editor Wireframe](https://claude.ai/artifact/UtqYmCtBT1Chnh9bGEJ2d9) (private until shared).
+Lo-fi, mobile first with a desktop version of every screen: drop zone, printing reveal, editor (rest, selected, back), tear, wall, memory page, buy-now and cart, and organizer. Canvas: [Ticket Studio Editor Wireframe](https://claude.ai/artifact/UtqYmCtBT1Chnh9bGEJ2d9) (private link; needs team access).

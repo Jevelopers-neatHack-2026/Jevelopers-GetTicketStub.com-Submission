@@ -2,7 +2,7 @@
 
 The customer-facing studio. Give it an event link, watch the agent research the night, then shuffle styles, edit, tilt the foil, tear the stub off and pin it to your wall.
 
-Design docs, wireframes and the coverage matrix are in `docs/studio/` (PR "Add ticket studio design docs"). Brand assets come from the `brand-kit` repo (`src/brand/tokens.css`, `public/brand/`).
+Design docs, wireframes and the coverage matrix are in [`docs/studio/`](../../../docs/studio/README.md). Brand assets come from the `brand-kit` repo (`src/brand/tokens.css`, `public/brand/`).
 
 ## Run it
 
