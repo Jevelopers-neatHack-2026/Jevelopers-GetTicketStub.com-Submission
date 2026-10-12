@@ -80,6 +80,7 @@ def contained_command(
                 "/dev",
                 "--proc",
                 "/proc",
+                *(("--remount-ro", "/") if settings.offline else ()),
                 "--",
                 *command,
             )
