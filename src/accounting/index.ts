@@ -173,6 +173,10 @@ function sourcePayloadKey(event: AccountingEvent): string {
   return canonicalJson(payload);
 }
 
+function sourceSubjectKey(event: AccountingEvent): string {
+  return JSON.stringify([event.source.name, event.source.sourceEventId]);
+}
+
 function matrixKey(event: AccountingEvent): string {
   if (event.classification === 'refund') return `refund:${event.links?.refundKind ?? 'sale'}`;
   return event.classification;
@@ -218,6 +222,27 @@ export function projectAccounting(events: readonly AccountingEvent[], options: P
   const incomplete: IncompleteRecord[] = [];
   const duplicateEventIds: string[] = [];
 
+  // Preserve source-subject conflict evidence before identity dedupe. The
+  // identity pass below intentionally drops a same-identity conflict group;
+  // without this taint, another hash or an older revision for the same source
+  // subject could then be mistaken for its authoritative event.
+  const revisionGroups = new Map<string, AccountingEvent[]>();
+  for (const event of events) {
+    const key = JSON.stringify([
+      event.source.name, event.source.sourceEventId, event.source.revision,
+    ]);
+    const group = revisionGroups.get(key) ?? [];
+    group.push(event);
+    revisionGroups.set(key, group);
+  }
+  const conflictedSubjects = new Set<string>();
+  for (const group of revisionGroups.values()) {
+    const first = group[0];
+    if (first && new Set(group.map(sourcePayloadKey)).size > 1) {
+      conflictedSubjects.add(sourceSubjectKey(first));
+    }
+  }
+
   // 1. Dedupe by trusted source identity (handles replay / reorder).
   const identityGroups = new Map<string, AccountingEvent[]>();
   for (const event of events) {
@@ -243,7 +268,7 @@ export function projectAccounting(events: readonly AccountingEvent[], options: P
   //    or repeated source updates cannot double-apply.
   const subjectGroups = new Map<string, AccountingEvent[]>();
   for (const event of byIdentity.values()) {
-    const subjectKey = JSON.stringify([event.source.name, event.source.sourceEventId]);
+    const subjectKey = sourceSubjectKey(event);
     const group = subjectGroups.get(subjectKey) ?? [];
     group.push(event);
     subjectGroups.set(subjectKey, group);
@@ -256,7 +281,8 @@ export function projectAccounting(events: readonly AccountingEvent[], options: P
       revisions.push(event);
       byRevision.set(event.source.revision, revisions);
     }
-    const hasConflict = [...byRevision.values()].some(revisions => new Set(revisions.map(sourcePayloadKey)).size > 1);
+    const hasConflict = conflictedSubjects.has(subjectKey)
+      || [...byRevision.values()].some(revisions => new Set(revisions.map(sourcePayloadKey)).size > 1);
     if (hasConflict) {
       for (const event of group) incomplete.push({ eventId: event.eventId, reason: 'source_revision_conflict' });
       continue;

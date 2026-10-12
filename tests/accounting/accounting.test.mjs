@@ -26,6 +26,13 @@ function shuffle(items, seed) {
   return copy;
 }
 
+function permutations(items) {
+  if (items.length <= 1) return [items];
+  return items.flatMap((item, index) => permutations([
+    ...items.slice(0, index), ...items.slice(index + 1),
+  ]).map(rest => [item, ...rest]));
+}
+
 test('CI-06.1 every classification maps to a documented sign-matrix entry and policy is flagged pending sign-off', () => {
   assert.equal(accounting.ACCOUNTING_DEFINITIONS_STATUS, 'PENDING FINANCE-OWNER SIGN-OFF');
   const keys = Object.keys(accounting.ACCOUNTING_SIGN_MATRIX);
@@ -128,6 +135,52 @@ test('conflicting source facts for one revision are excluded deterministically',
     assert.equal(forward.grossSales, '0.00');
     assert.deepEqual(forward.incomplete.map(record => record.reason), ['source_revision_conflict', 'source_revision_conflict']);
     assert.equal(forward.projectionHash, reverse.projectionHash, 'input order must not select a conflicting source fact');
+  }
+});
+
+test('a conflicting source revision taints its whole subject before identity deduplication', () => {
+  const sale = golden.events.find(event => event.eventId === 'S1');
+  const candidate = (eventId, amount, revision, contentHash) => ({
+    ...sale,
+    eventId,
+    amount,
+    source: {
+      ...sale.source, name: 'conflicting-source', sourceEventId: 'tainted-subject',
+      revision, contentHash: 'sha256:' + contentHash,
+    },
+  });
+  const scenarios = [
+    {
+      label: 'a different hash cannot hide a same-hash conflict at that revision',
+      events: [
+        candidate('TAINT-HASH-A', '1.00', 8, 'a'.repeat(64)),
+        candidate('TAINT-HASH-B', '90.00', 8, 'a'.repeat(64)),
+        candidate('TAINT-HASH-C', '40.00', 8, 'b'.repeat(64)),
+      ],
+    },
+    {
+      label: 'a conflict at the latest revision cannot expose an obsolete revision',
+      events: [
+        candidate('TAINT-OLD', '5.00', 7, 'c'.repeat(64)),
+        candidate('TAINT-LATEST-A', '1.00', 8, 'd'.repeat(64)),
+        candidate('TAINT-LATEST-B', '90.00', 8, 'd'.repeat(64)),
+      ],
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const projections = permutations(scenario.events).map(events =>
+      accounting.projectAccounting(events, { asOf: golden.asOf }));
+    const expectedIds = scenario.events.map(event => event.eventId).sort();
+    const expectedIncomplete = expectedIds.map(eventId => ({ eventId, reason: 'source_revision_conflict' }));
+
+    for (const projection of projections) {
+      assert.equal(projection.recognizedEventCount, 0, scenario.label);
+      assert.equal(projection.grossSales, '0.00', scenario.label);
+      assert.deepEqual(projection.incomplete, expectedIncomplete, scenario.label);
+    }
+    assert.equal(new Set(projections.map(projection => projection.projectionHash)).size, 1,
+      `${scenario.label}: input order must not change the projection`);
   }
 });
 
