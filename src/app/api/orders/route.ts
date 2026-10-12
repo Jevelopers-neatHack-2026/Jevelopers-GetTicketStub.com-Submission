@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { Order } from "@/customer/pages/commerce";
 import { CAPABILITY_VERSION, orderGate, runtimeMode, variantFor } from "@/customer/pages/capabilities";
 import { accountOf, getRequestContext, requireCapability } from "@/server/context";
@@ -8,16 +8,14 @@ import { getStorage, requireStorage } from "@/server/index";
 import { refOf } from "@/server/events";
 import { sendReceipt } from "@/server/receipt";
 import { parseEmail, parseText } from "@/server/validate";
-import { DodoError, createCheckout as createDodoCheckout, dodoConfig } from "@/server/payments/dodo";
-import { StripeError, createCheckout as createStripeCheckout, stripeConfig } from "@/server/payments/stripe";
-import { allOrderable, isDigitalOnly, verifiedTotalMinor } from "@/server/payments/pricing";
+import { PaymentError } from "@/server/payments/fetch";
+import { verifiedTotalMinor } from "@/server/payments/pricing";
+import { providerFor } from "@/server/payments/provider";
 
 const MATERIALS = ["digital", "card", "print", "framed"];
 const FINISHES = ["matte", "foil", "holo"];
 const SIZES = ["classic", "stamp", "framed", "file"];
 const METHODS = ["apple-pay", "google-pay", "card", "gift-print", "organizer-print"];
-/** Methods a hosted provider checkout collects. Gift and organizer prints are not paid this way. */
-const PAID_METHODS = new Set(["apple-pay", "google-pay", "card"]);
 const bad = (m: string) => new HttpError(400, "bad_request", m);
 const minor = (v: unknown, what: string) => {
   if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 100_000_000) throw bad(`${what} is not a valid amount.`);
@@ -62,6 +60,31 @@ function parseOrder(v: unknown): Omit<Order, "id" | "mode" | "createdAt"> {
   return out;
 }
 
+/** Where the provider sends the buyer back. A live charge is only ever sent to APP_URL, never to a host the request names. */
+function returnOrigin(req: Request, environment: "test_mode" | "live_mode"): string {
+  if (environment === "live_mode" && !process.env.APP_URL?.trim()) {
+    console.error("[payments] live payments need APP_URL; checkout refused");
+    throw unavailable();
+  }
+  return appOrigin(req);
+}
+
+const unavailable = () => new HttpError(502, "payment_unavailable", "We couldn't start the payment. Nothing was charged. Try again in a moment.");
+
+/** The browser's id for one checkout attempt: generated once, resent on every retry. Bounded so it is safe to hash and log. */
+function parseAttemptId(v: unknown): string | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v !== "string" || !/^[A-Za-z0-9_-]{16,64}$/.test(v)) throw bad("The checkout attempt id is not valid.");
+  return v;
+}
+
+/**
+ * The order id follows from who is ordering, the attempt and what is in it, so a double submit or a retry of the same
+ * attempt lands on the same order (and the same provider idempotency key) instead of creating a second one.
+ */
+const orderIdFor = (attemptId: string, owner: string, order: Pick<Order, "stubIds" | "totalMinor">) =>
+  `ord_${createHash("sha256").update(JSON.stringify([attemptId, owner, order.stubIds, order.totalMinor])).digest("base64url").slice(0, 12)}`;
+
 export const POST = route(async (req: Request) => {
   requireStorage();
   checkOrigin(req);
@@ -75,46 +98,55 @@ export const POST = route(async (req: Request) => {
     if (e instanceof HttpError && e.code === "variant_not_orderable") await recordEvent(req, "order_blocked", { code: e.code });
     throw e;
   }
+  const attemptId = parseAttemptId(body.attemptId);
   const ctx = await getRequestContext(req);
   requireCapability(ctx, "order.create");
   const account = ctx.actor.kind === "account" ? await accountOf(ctx) : null;
   // A guest order needs an email for the receipt. A signed-in order always uses the account's email.
   if (!account && !parsed.email) throw new HttpError(401, "unauthorized", "Add your email or sign in to place an order.");
   const email = account?.email ?? (parsed.email as string);
-  const order: Order = {
-    ...parsed,
-    email,
-    id: `ord_${randomBytes(9).toString("base64url")}`,
-    mode: "sandbox",
-    createdAt: new Date().toISOString(),
+  const provider = providerFor({ lines: parsed.lines, method: parsed.method });
+  if (provider && !attemptId) throw bad("Send the checkout attempt id with a paid order.");
+  const id = attemptId ? orderIdFor(attemptId, account?.id ?? email.toLowerCase(), parsed) : `ord_${randomBytes(9).toString("base64url")}`;
+  // The same attempt again: answer with the order (and its open checkout) the first request made.
+  const replay = async () => {
+    const found = attemptId ? await getStorage().getOrder(id) : null;
+    if (!found || found.accountId !== (account?.id ?? null)) return null;
+    const open = found.order.payment?.status === "pending" ? found.order.payment.checkoutUrl : undefined;
+    return json(open ? { order: found.order, checkoutUrl: open } : { order: found.order });
   };
-  // A card or wallet order whose variants are all orderable is charged: all-digital through Dodo (which only takes
-  // digital goods), anything with a physical line through Stripe (#64). Each provider is on only when configured.
-  // Anything else (a preview variant such as an unconfirmed print SKU or digital holo, a gift or organizer print)
-  // stays a sandbox order. Nothing is stored when a checkout can't be started.
-  const chargeable = allOrderable(order) && PAID_METHODS.has(order.method);
-  const dodo = chargeable && isDigitalOnly(order) ? dodoConfig() : null;
-  const stripe = chargeable && !isDigitalOnly(order) ? stripeConfig() : null;
+  const again = await replay();
+  if (again) return again;
+  const order: Order = { ...parsed, email, id, mode: "sandbox", createdAt: new Date().toISOString() };
+  // Nothing is stored when a checkout can't be started.
   let checkoutUrl: string | undefined;
-  if (dodo || stripe) {
+  if (provider) {
     const amountMinor = verifiedTotalMinor(order);
-    const returnUrl = `${appOrigin(req)}/payment/return?order=${encodeURIComponent(order.id)}`;
+    const returnUrl = `${returnOrigin(req, provider.environment)}/payment/return?order=${encodeURIComponent(order.id)}`;
     try {
-      const c = dodo
-        ? await createDodoCheckout(dodo, { orderId: order.id, amountMinor, email, returnUrl })
-        : await createStripeCheckout(stripe!, { orderId: order.id, amountMinor, email, returnUrl, description: `TicketStub order · ${order.lines.length} ${order.lines.length === 1 ? "item" : "items"}` });
-      order.payment = { provider: dodo ? "dodo" : "stripe", environment: (dodo ?? stripe)!.environment, status: "pending", amountMinor, currency: "USD", checkoutSessionId: c.sessionId, updatedAt: new Date().toISOString() };
+      const c = await provider.create({ orderId: order.id, amountMinor, email, returnUrl, description: `TicketStub order · ${order.lines.length} ${order.lines.length === 1 ? "item" : "items"}` });
+      order.payment = { provider: provider.name, environment: provider.environment, status: "pending", amountMinor, currency: "USD", checkoutSessionId: c.sessionId, checkoutUrl: c.checkoutUrl, updatedAt: new Date().toISOString() };
       checkoutUrl = c.checkoutUrl;
     } catch (e) {
-      if (!(e instanceof DodoError || e instanceof StripeError)) throw e;
-      console.error(`[payments] ${dodo ? "dodo" : "stripe"} checkout failed: ${e.status}`);
-      throw new HttpError(502, "payment_unavailable", "We couldn't start the payment. Nothing was charged. Try again in a moment.");
+      // A provider that answered badly, or couldn't be reached at all (a network failure or the timeout)
+      if (!(e instanceof PaymentError)) throw e;
+      console.error(`[payments] ${e.provider} checkout failed: ${e.status}`);
+      throw unavailable();
     }
   }
-  await getStorage().createOrder(order, account?.id ?? null, email);
+  try {
+    await getStorage().createOrder(order, account?.id ?? null, email);
+  } catch (e) {
+    // A concurrent request for the same attempt stored it first
+    const won = await replay();
+    if (won) return won;
+    throw e;
+  }
   // A paid order's receipt is sent once its payment is confirmed (see the provider webhooks), not now.
   if (!checkoutUrl) await sendReceipt(order, account?.id ?? null, email, appOrigin(req));
-  await recordEvent(req, "order_placed", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor }, { ctx });
+  // A started checkout is not an order yet: it counts as paid only when the provider's webhook says so (order_paid).
+  if (provider && checkoutUrl) await recordEvent(req, "checkout_started", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor, provider: provider.name }, { ctx });
+  else await recordEvent(req, "order_placed", { order: refOf(order.id), lines: order.lines.length, totalMinor: order.totalMinor }, { ctx });
   return json(checkoutUrl ? { order, checkoutUrl } : { order });
 });
 

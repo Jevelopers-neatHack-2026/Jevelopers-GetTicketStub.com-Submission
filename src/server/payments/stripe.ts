@@ -1,5 +1,6 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { PaymentError, providerFetch } from "./fetch";
 
 // Stripe: hosted Checkout for orders with a physical line (Dodo only takes digital goods). Link and cards come from
 // the account's payment method configuration, so no method list is pinned here. Server-only; no SDK, plain REST.
@@ -24,14 +25,8 @@ export function stripeConfig(env: Record<string, string | undefined> = process.e
   return { secretKey, webhookSecret, environment: mode === "live" ? "live_mode" : "test_mode" };
 }
 
-export class StripeError extends Error {
-  constructor(readonly status: number) {
-    super(`Stripe answered ${status}.`);
-  }
-}
-
-async function call<T>(cfg: StripeConfig, method: "GET" | "POST", path: string, form?: Record<string, string>, idempotencyKey?: string): Promise<T> {
-  const res = await fetch(`https://api.stripe.com/v1${path}`, {
+const call = <T>(cfg: StripeConfig, method: "GET" | "POST", path: string, form?: Record<string, string>, idempotencyKey?: string) =>
+  providerFetch<T>("stripe", `https://api.stripe.com/v1${path}`, {
     method,
     headers: {
       authorization: `Bearer ${cfg.secretKey}`,
@@ -39,16 +34,12 @@ async function call<T>(cfg: StripeConfig, method: "GET" | "POST", path: string, 
       ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
     },
     body: form ? new URLSearchParams(form).toString() : undefined,
-    signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) throw new StripeError(res.status);
-  return (await res.json()) as T;
-}
 
 /**
  * One hosted Checkout for one order, charging the server-verified total as a single USD line. Stripe collects the
- * shipping address, so the app never stores it. The order id is the idempotency key: a retried request can't open a
- * second session for the same order.
+ * shipping address, so the app never stores it. The order id is the idempotency key. The orders route derives it from
+ * the browser's per-attempt id, so a retried or double-submitted attempt can't open a second session.
  */
 export async function createCheckout(cfg: StripeConfig, input: { orderId: string; amountMinor: number; email: string; returnUrl: string; description: string }): Promise<{ sessionId: string; checkoutUrl: string }> {
   const ret = (status: string) => `${input.returnUrl}${input.returnUrl.includes("?") ? "&" : "?"}status=${status}`;
@@ -72,7 +63,7 @@ export async function createCheckout(cfg: StripeConfig, input: { orderId: string
     },
     `checkout-${input.orderId}`,
   );
-  if (!out.id || !out.url) throw new StripeError(502);
+  if (!out.id || !out.url) throw new PaymentError(502, "stripe");
   return { sessionId: out.id, checkoutUrl: out.url };
 }
 
@@ -85,10 +76,11 @@ export interface StripeSession {
   currency?: string | null;
   client_reference_id?: string | null;
   metadata?: Record<string, string> | null;
-  payment_intent?: string | { id: string } | null;
+  /** Expanded by `getSession`: its status tells a delayed method still processing from one that failed. */
+  payment_intent?: string | { id: string; status?: string } | null;
 }
 
-export const getSession = (cfg: StripeConfig, id: string) => call<StripeSession>(cfg, "GET", `/checkout/sessions/${encodeURIComponent(id)}`);
+export const getSession = (cfg: StripeConfig, id: string) => call<StripeSession>(cfg, "GET", `/checkout/sessions/${encodeURIComponent(id)}?expand[]=payment_intent`);
 
 const TOLERANCE_S = 5 * 60;
 

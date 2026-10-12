@@ -1,8 +1,9 @@
 import type { OrderPayment } from "@/customer/pages/commerce";
-import { HttpError, appOrigin, isObject, json, route } from "@/server/http";
+import { HttpError, isObject, json, readBody, route } from "@/server/http";
 import { requireStorage } from "@/server/index";
 import { settlePayment } from "@/server/payments/settle";
-import { StripeError, getSession, stripeConfig, verifyWebhook, type StripeSession } from "@/server/payments/stripe";
+import { PaymentError } from "@/server/payments/fetch";
+import { getSession, stripeConfig, verifyWebhook, type StripeSession } from "@/server/payments/stripe";
 
 // Stripe webhook. Only a signed delivery is read, and only the Checkout Session fetched back from Stripe's API is
 // trusted: the body says which session changed, never what it is. settlePayment applies it forward-only.
@@ -10,11 +11,16 @@ import { StripeError, getSession, stripeConfig, verifyWebhook, type StripeSessio
 const MAX_BODY = 512 * 1024;
 const SESSION_EVENTS = new Set(["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed", "checkout.session.expired"]);
 
-function statusOf(type: string, s: StripeSession): OrderPayment["status"] {
+/**
+ * The order's payment status, from the session fetched back and never from the event type, so a redelivered older
+ * event can't change the answer. A complete session that is unpaid is either still processing (a bank debit in flight)
+ * or failed: the payment intent says which, because a failed one is back to needing a payment method.
+ */
+function statusOf(s: StripeSession): OrderPayment["status"] {
   if (s.payment_status === "paid") return "paid";
   if (s.status === "expired") return "cancelled";
-  // A delayed method (a bank debit) that finally failed: the session is complete but was never paid.
-  if (type === "checkout.session.async_payment_failed" && s.status === "complete") return "failed";
+  const intent = typeof s.payment_intent === "object" && s.payment_intent !== null ? s.payment_intent.status : undefined;
+  if (s.status === "complete" && intent === "requires_payment_method") return "failed";
   return "pending";
 }
 
@@ -22,8 +28,7 @@ export const POST = route(async (req: Request) => {
   const stripe = stripeConfig();
   if (!stripe) throw new HttpError(503, "payments_off", "Payments are not configured.");
   requireStorage();
-  const raw = await req.text();
-  if (raw.length > MAX_BODY) throw new HttpError(413, "too_large", "That webhook is too large.");
+  const raw = (await readBody(req, MAX_BODY)).toString("utf8");
   if (!verifyWebhook(stripe.webhookSecret, req.headers.get("stripe-signature"), raw)) throw new HttpError(401, "bad_signature", "The webhook signature is not valid.");
 
   let event: unknown;
@@ -42,8 +47,8 @@ export const POST = route(async (req: Request) => {
   try {
     session = await getSession(stripe, sessionId);
   } catch (e) {
-    if (!(e instanceof StripeError)) throw e;
-    // A 5xx answer makes Stripe retry later.
+    if (!(e instanceof PaymentError)) throw e;
+    // A 5xx answer makes Stripe retry later, including when Stripe could not be reached at all.
     throw new HttpError(502, "provider_unavailable", "Stripe could not be reached.");
   }
   const orderId = session.metadata?.order_id ?? session.client_reference_id ?? "";
@@ -56,10 +61,10 @@ export const POST = route(async (req: Request) => {
       orderId,
       sessionId: session.id,
       paymentId: intent,
-      status: statusOf(type, session),
+      status: statusOf(session),
       charged: { currency: session.currency ?? "", amountsMinor: typeof session.amount_total === "number" ? [session.amount_total] : [] },
     },
-    appOrigin(req),
+    req,
   );
   return json({ ok: true, ...settled });
 });

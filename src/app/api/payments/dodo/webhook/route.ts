@@ -1,7 +1,8 @@
 import type { OrderPayment } from "@/customer/pages/commerce";
-import { HttpError, appOrigin, isObject, json, route } from "@/server/http";
+import { HttpError, isObject, json, readBody, route } from "@/server/http";
 import { requireStorage } from "@/server/index";
-import { DodoError, dodoConfig, getPayment, verifyWebhook, type DodoPayment } from "@/server/payments/dodo";
+import { PaymentError } from "@/server/payments/fetch";
+import { dodoConfig, getPayment, verifyWebhook, type DodoPayment } from "@/server/payments/dodo";
 import { settlePayment } from "@/server/payments/settle";
 
 // Dodo Payments webhook. Only a signed delivery is read, and only the payment fetched back from Dodo's API is trusted:
@@ -26,8 +27,7 @@ export const POST = route(async (req: Request) => {
   const dodo = dodoConfig();
   if (!dodo) throw new HttpError(503, "payments_off", "Payments are not configured.");
   requireStorage();
-  const raw = await req.text();
-  if (raw.length > MAX_BODY) throw new HttpError(413, "too_large", "That webhook is too large.");
+  const raw = (await readBody(req, MAX_BODY)).toString("utf8");
   if (!verifyWebhook(dodo.webhookKey, req.headers, raw)) throw new HttpError(401, "bad_signature", "The webhook signature is not valid.");
 
   let event: unknown;
@@ -45,8 +45,8 @@ export const POST = route(async (req: Request) => {
   try {
     payment = await getPayment(dodo, paymentId);
   } catch (e) {
-    if (!(e instanceof DodoError)) throw e;
-    // A 5xx answer makes Dodo retry later.
+    if (!(e instanceof PaymentError)) throw e;
+    // A 5xx answer makes Dodo retry later, including when Dodo could not be reached at all.
     throw new HttpError(502, "provider_unavailable", "Dodo Payments could not be reached.");
   }
   const orderId = typeof payment.metadata?.order_id === "string" ? payment.metadata.order_id : "";
@@ -62,7 +62,7 @@ export const POST = route(async (req: Request) => {
       // any tax Dodo adds as merchant of record is on top of the asked amount
       charged: { currency: payment.currency, amountsMinor: [payment.total_amount, payment.total_amount - (payment.tax ?? 0)] },
     },
-    appOrigin(req),
+    req,
   );
   return json({ ok: true, ...settled });
 });

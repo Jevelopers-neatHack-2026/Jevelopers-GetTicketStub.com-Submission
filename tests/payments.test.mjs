@@ -111,9 +111,17 @@ test("accepts only a current, correctly signed webhook", () => {
 
 // The Dodo API as the webhook route sees it: GET /payments/:id answers with whatever the test sets.
 let remote = {};
-globalThis.fetch = async (url) => {
+// POSTs open a checkout and are recorded in `calls`; `netFail` makes every call throw, as a network failure or timeout does.
+const calls = [];
+let netFail = null;
+globalThis.fetch = async (url, init = {}) => {
   const u = String(url);
-  const id = decodeURIComponent((u.includes("/checkout/sessions/") ? u.split("/checkout/sessions/")[1] : u.split("/payments/")[1]) ?? "");
+  calls.push({ url: u, method: init.method ?? "GET", headers: init.headers ?? {}, body: init.body });
+  if (netFail) throw netFail;
+  if (init.method === "POST") {
+    return Response.json(u.includes("/checkout/sessions") ? { id: `cs_test_${calls.length}`, url: `https://checkout.stripe.test/c/${calls.length}` } : { session_id: `cks_${calls.length}`, checkout_url: `https://checkout.dodo.test/c/${calls.length}` });
+  }
+  const id = decodeURIComponent((u.includes("/checkout/sessions/") ? u.split("/checkout/sessions/")[1].split("?")[0] : u.split("/payments/")[1]) ?? "");
   const p = remote[id];
   return p ? new Response(JSON.stringify(p), { status: 200 }) : new Response("{}", { status: 404 });
 };
@@ -151,14 +159,10 @@ test("marks an order paid only from the payment fetched back from Dodo, once, an
   assert.equal(await statusOf("ord_a"), "paid");
 });
 
-test("ignores the webhook body's claims and refuses a mismatched charge", async () => {
+test("ignores the webhook body's claims and another checkout session's payment", async () => {
   await placePending("ord_b", 1800);
-  // the API says the charge was smaller than the order: it stays unpaid
-  remote.pay_b = { payment_id: "pay_b", status: "succeeded", total_amount: 100, currency: "USD", checkout_session_id: "cks_ord_b", metadata: { order_id: "ord_b" } };
-  assert.equal((await deliver("payment.succeeded", "pay_b")).json.handled, false);
-  assert.equal(await statusOf("ord_b"), "pending");
   // another checkout session for the same order id is not this order's payment
-  remote.pay_b = { ...remote.pay_b, total_amount: 1800, checkout_session_id: "cks_other" };
+  remote.pay_b = { payment_id: "pay_b", status: "succeeded", total_amount: 1800, currency: "USD", checkout_session_id: "cks_other", metadata: { order_id: "ord_b" } };
   assert.equal((await deliver("payment.succeeded", "pay_b")).json.handled, false);
   assert.equal(await statusOf("ord_b"), "pending");
   // tax added on top of the asked amount is accepted
@@ -226,12 +230,12 @@ test("trusts the fetched Stripe session, not the event body, and maps expiry and
   remote.cs_test_ord_s2 = { id: "cs_test_ord_s2", status: "complete", payment_status: "unpaid", amount_total: 6100, currency: "usd", metadata: { order_id: "ord_s2" } };
   assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_s2")).json.handled, false);
   assert.equal(await statusOf("ord_s2"), "pending");
-  // paid but for a different amount: refused
-  remote.cs_test_ord_s2 = { ...remote.cs_test_ord_s2, payment_status: "paid", amount_total: 100 };
-  assert.equal((await deliverStripe("checkout.session.async_payment_succeeded", "cs_test_ord_s2")).json.handled, false);
+  // a bank debit still processing is pending, whatever the event type says
+  remote.cs_test_ord_s2 = { ...remote.cs_test_ord_s2, payment_intent: { id: "pi_2", status: "processing" } };
+  assert.equal((await deliverStripe("checkout.session.async_payment_failed", "cs_test_ord_s2")).json.handled, false);
   assert.equal(await statusOf("ord_s2"), "pending");
-  // a bank debit that finally failed
-  remote.cs_test_ord_s2 = { ...remote.cs_test_ord_s2, payment_status: "unpaid", amount_total: 6100 };
+  // a bank debit that finally failed: the fetched session says so
+  remote.cs_test_ord_s2 = { ...remote.cs_test_ord_s2, payment_intent: { id: "pi_2", status: "requires_payment_method" } };
   assert.equal((await deliverStripe("checkout.session.async_payment_failed", "cs_test_ord_s2")).json.status, "failed");
   await placePending("ord_s3", 6100, "stripe");
   remote.cs_test_ord_s3 = { id: "cs_test_ord_s3", status: "expired", payment_status: "unpaid", amount_total: 6100, currency: "usd", client_reference_id: "ord_s3" };
@@ -247,4 +251,211 @@ test("refuses bad Stripe signatures and acknowledges unrelated events", async ()
   assert.equal((await deliverStripe("checkout.session.completed", "cs_x", "t=1,v1=00")).status, 401);
   assert.deepEqual((await deliverStripe("charge.refunded", "ch_1")).json, { ok: true, handled: false });
   assert.equal((await deliverStripe("checkout.session.completed", "cs_missing")).status, 502);
+});
+
+const eventsOf = async (type) => (await getStorage().listEvents({ limit: 200 })).filter((e) => e.type === type);
+
+test("holds a charge that isn't the asked amount or currency for review, with an event and an order ref, and never overwrites it", async () => {
+  const { refOf } = await import("../src/server/events.ts");
+  await placePending("ord_m", 1800);
+  // the API says the charge was smaller than the order: a real charge, so it is not left pending
+  remote.pay_m = { payment_id: "pay_m", status: "succeeded", total_amount: 100, currency: "USD", checkout_session_id: "cks_ord_m", metadata: { order_id: "ord_m" } };
+  const r = await deliver("payment.succeeded", "pay_m");
+  assert.deepEqual([r.status, r.json.status], [200, "needs_review"]);
+  assert.equal(await statusOf("ord_m"), "needs_review");
+  const [ev] = (await eventsOf("payment_needs_review")).filter((e) => e.fields.order === refOf("ord_m"));
+  assert.deepEqual([ev.fields.provider, ev.fields.reason], ["dodo", "amount"]);
+  // a later, correct-looking delivery cannot talk it into paid
+  remote.pay_m = { ...remote.pay_m, total_amount: 1800 };
+  assert.equal((await deliver("payment.succeeded", "pay_m")).json.handled, false);
+  assert.equal(await statusOf("ord_m"), "needs_review");
+  // a wrong currency is held too
+  await placePending("ord_n");
+  remote.pay_n = { payment_id: "pay_n", status: "succeeded", total_amount: 900, currency: "EUR", checkout_session_id: "cks_ord_n", metadata: { order_id: "ord_n" } };
+  assert.equal((await deliver("payment.succeeded", "pay_n")).json.status, "needs_review");
+  assert.ok((await eventsOf("payment_needs_review")).some((e) => e.fields.reason === "currency"));
+});
+
+test("records order_paid once, on the transition to paid, with what was charged", async () => {
+  const { refOf } = await import("../src/server/events.ts");
+  await placePending("ord_p");
+  remote.pay_p = { payment_id: "pay_p", status: "succeeded", total_amount: 1050, tax: 150, currency: "USD", checkout_session_id: "cks_ord_p", metadata: { order_id: "ord_p" } };
+  await deliver("payment.succeeded", "pay_p");
+  await deliver("payment.succeeded", "pay_p");
+  const paid = (await eventsOf("order_paid")).filter((e) => e.fields.order === refOf("ord_p"));
+  assert.equal(paid.length, 1);
+  assert.deepEqual([paid[0].fields.totalMinor, paid[0].fields.provider], [1050, "dodo"]);
+  assert.equal((await getStorage().getOrder("ord_p")).order.payment.chargedMinor, 1050);
+});
+
+test("the receipt prints what was charged, tax included", async () => {
+  const { receiptMail } = await import("../src/server/templates.ts");
+  const order = { id: "ord_r", mode: "sandbox", createdAt: "x", stubIds: [], lines: [line("digital", "matte", 900)], totalMinor: 900, currency: "USD", method: "card",
+    payment: { provider: "dodo", environment: "test_mode", status: "paid", amountMinor: 900, chargedMinor: 1050, currency: "USD", checkoutSessionId: "c", updatedAt: "x" } };
+  const mail = receiptMail(order, "https://getticketstub.test/wall", "");
+  assert.match(mail.text, /Tax: \$1\.5\n/);
+  assert.match(mail.text, /Total: \$10\.5\n/);
+  assert.match(receiptMail({ ...order, payment: undefined }, "https://getticketstub.test/wall", "").text, /Total: \$9\n/);
+});
+
+test("caps the webhook body while it streams, before anything is parsed", async () => {
+  const big = "x".repeat(300 * 1024);
+  // no content-length (a chunked body), so only the streaming cap can refuse it
+  const stream = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(big)); c.close(); } });
+  const req = new Request("https://getticketstub.test/api/payments/dodo/webhook", { method: "POST", headers: sign(big), body: stream, duplex: "half" });
+  const res = await POST(req);
+  assert.equal(res.status, 413);
+});
+
+const eventsOf2 = async (type) => (await getStorage().listEvents({ limit: 500 })).filter((e) => e.type === type);
+
+test("failed, cancelled and needs_review are final: later deliveries never move them", async () => {
+  await placePending("ord_t1", 6100, "stripe");
+  remote.cs_test_ord_t1 = { id: "cs_test_ord_t1", status: "complete", payment_status: "unpaid", amount_total: 6100, currency: "usd", metadata: { order_id: "ord_t1" }, payment_intent: { id: "pi_t1", status: "requires_payment_method" } };
+  assert.equal((await deliverStripe("checkout.session.async_payment_failed", "cs_test_ord_t1")).json.status, "failed");
+  // the same session redelivered as "completed" is still failed, and an out-of-order success is ignored too
+  assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_t1")).json.handled, false);
+  remote.cs_test_ord_t1 = { ...remote.cs_test_ord_t1, payment_status: "paid" };
+  assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_t1")).json.handled, false);
+  assert.equal(await statusOf("ord_t1"), "failed");
+  // ... but a charge that lands after a failure is flagged for staff
+  const { refOf } = await import("../src/server/events.ts");
+  assert.ok((await eventsOf2("payment_needs_review")).some((e) => e.fields.order === refOf("ord_t1") && e.fields.reason === "late"));
+  await placePending("ord_t2", 6100, "stripe");
+  remote.cs_test_ord_t2 = { id: "cs_test_ord_t2", status: "expired", payment_status: "unpaid", amount_total: 6100, currency: "usd", metadata: { order_id: "ord_t2" } };
+  assert.equal((await deliverStripe("checkout.session.expired", "cs_test_ord_t2")).json.status, "cancelled");
+  remote.cs_test_ord_t2 = { ...remote.cs_test_ord_t2, status: "open" };
+  assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_t2")).json.handled, false);
+  assert.equal(await statusOf("ord_t2"), "cancelled");
+});
+
+test("holds a Stripe charge of the wrong amount for review, with an event, and keeps it there", async () => {
+  const { refOf } = await import("../src/server/events.ts");
+  await placePending("ord_s5", 6100, "stripe");
+  remote.cs_test_ord_s5 = { id: "cs_test_ord_s5", status: "complete", payment_status: "paid", amount_total: 100, currency: "usd", metadata: { order_id: "ord_s5" }, payment_intent: "pi_5" };
+  const r = await deliverStripe("checkout.session.completed", "cs_test_ord_s5");
+  assert.deepEqual([r.status, r.json.status], [200, "needs_review"]);
+  const order = (await getStorage().getOrder("ord_s5")).order;
+  assert.deepEqual([order.payment.status, order.payment.chargedMinor], ["needs_review", 100]);
+  const ev = (await eventsOf2("payment_needs_review")).find((e) => e.fields.order === refOf("ord_s5"));
+  assert.deepEqual([ev.fields.provider, ev.fields.reason], ["stripe", "amount"]);
+  remote.cs_test_ord_s5 = { ...remote.cs_test_ord_s5, amount_total: 6100 };
+  assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_s5")).json.handled, false);
+  assert.equal(await statusOf("ord_s5"), "needs_review");
+});
+
+test("answers 502 when a provider can't be reached, so the webhook is retried", async () => {
+  await placePending("ord_net", 6100, "stripe");
+  netFail = new TypeError("fetch failed");
+  try {
+    assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_net")).status, 502);
+    assert.equal((await deliver("payment.succeeded", "pay_net")).status, 502);
+    netFail = new DOMException("The operation timed out.", "TimeoutError");
+    assert.equal((await deliverStripe("checkout.session.completed", "cs_test_ord_net")).status, 502);
+  } finally {
+    netFail = null;
+  }
+  assert.equal(await statusOf("ord_net"), "pending");
+});
+
+// ---- POST /api/orders ----
+const { POST: ORDERS } = await import("../src/app/api/orders/route.ts");
+const { providerFor } = await import("../src/server/payments/provider.ts");
+
+const orderBody = (material, attemptId, extra = {}) => ({
+  order: {
+    stubIds: ["stub_1"], lines: [{ ...line(material, "matte", 900) }], capabilityVersion: "x", totalMinor: 900, currency: "USD", method: "card", email: "buyer@example.test",
+    ...extra,
+  },
+  ...(attemptId ? { attemptId } : {}),
+});
+async function postOrder(body) {
+  const res = await ORDERS(new Request("https://getticketstub.test/api/orders", { method: "POST", headers: { origin: "https://getticketstub.test", "content-type": "application/json" }, body: JSON.stringify(body) }));
+  return { status: res.status, json: await res.json() };
+}
+const posts = () => calls.filter((c) => c.method === "POST");
+
+test("picks one provider for an order: Dodo for digital, Stripe for a physical line, none for previews and prints", () => {
+  const lines = (material, variantStatus = "orderable") => [{ ...line(material, "matte", 900), variantStatus }];
+  assert.equal(providerFor({ lines: lines("digital"), method: "card" })?.name, "dodo");
+  assert.equal(providerFor({ lines: lines("print"), method: "apple-pay" })?.name, "stripe");
+  assert.equal(providerFor({ lines: [...lines("digital"), ...lines("card")], method: "google-pay" })?.name, "stripe", "any physical line goes to Stripe");
+  assert.equal(providerFor({ lines: lines("print", "preview"), method: "card" }), null, "a preview is never charged");
+  assert.equal(providerFor({ lines: lines("digital"), method: "gift-print" }), null);
+  assert.equal(providerFor({ lines: lines("digital"), method: "organizer-print" }), null);
+});
+
+test("a physical order that is only a preview stays a sandbox order, with no provider call", async () => {
+  const before = posts().length;
+  const r = await postOrder(orderBody("print", "attempt-sandbox-0001", { lines: [line("print", "matte", 4900)], totalMinor: 5500 }));
+  assert.equal(r.status, 200);
+  assert.equal(r.json.checkoutUrl, undefined);
+  assert.equal(r.json.order.payment, undefined);
+  assert.equal(posts().length, before);
+});
+
+test("starts a Dodo checkout for a digital order, stores the payment, and answers a repeat of the attempt with the same order", async () => {
+  const before = posts().length;
+  const r = await postOrder(orderBody("digital", "attempt-digital-0001"));
+  assert.equal(r.status, 200);
+  assert.match(r.json.checkoutUrl, /^https:\/\/checkout\.dodo\.test\//);
+  const { payment } = r.json.order;
+  assert.deepEqual([payment.provider, payment.status, payment.amountMinor], ["dodo", "pending", 900]);
+  assert.equal((await getStorage().getOrder(r.json.order.id)).order.payment.checkoutSessionId, payment.checkoutSessionId);
+  // the retry (a double press, or a client retry) gets the same order and the same checkout; nothing new opens
+  const again = await postOrder(orderBody("digital", "attempt-digital-0001"));
+  assert.deepEqual([again.json.order.id, again.json.checkoutUrl], [r.json.order.id, r.json.checkoutUrl]);
+  assert.equal(posts().length, before + 1);
+  // another attempt is another order
+  const other = await postOrder(orderBody("digital", "attempt-digital-0002"));
+  assert.notEqual(other.json.order.id, r.json.order.id);
+  assert.equal(posts().length, before + 2);
+});
+
+test("needs a well-formed attempt id for a paid order, and refuses a malformed one", async () => {
+  const before = posts().length;
+  assert.equal((await postOrder(orderBody("digital"))).status, 400, "a paid order has to carry its attempt id");
+  for (const bad of ["short", "has spaces in it, 16+ chars", "x".repeat(65), 12345678901234567890]) assert.equal((await postOrder(orderBody("digital", bad))).status, 400);
+  assert.equal(posts().length, before);
+});
+
+test("answers 502 payment_unavailable, and stores nothing, when the provider can't be reached", async () => {
+  netFail = new TypeError("fetch failed");
+  try {
+    const r = await postOrder(orderBody("digital", "attempt-offline-0001"));
+    assert.deepEqual([r.status, r.json.error.code], [502, "payment_unavailable"]);
+  } finally {
+    netFail = null;
+  }
+  // the same attempt, retried once the provider is back, opens the checkout
+  const r = await postOrder(orderBody("digital", "attempt-offline-0001"));
+  assert.equal(r.status, 200);
+  assert.ok(r.json.checkoutUrl);
+});
+
+test("opens a Stripe Checkout with a form-encoded payload the webhook can match, keyed by the attempt's order", async () => {
+  const provider = providerFor({ lines: [{ ...line("print", "matte", 5500), variantStatus: "orderable" }], method: "card" });
+  const before = calls.length;
+  const c = await provider.create({ orderId: "ord_form", amountMinor: 6100, email: "buyer@example.test", returnUrl: "https://getticketstub.test/payment/return?order=ord_form", description: "TicketStub order · 1 item" });
+  assert.match(c.checkoutUrl, /^https:\/\/checkout\.stripe\.test\//);
+  const call = calls[before];
+  assert.deepEqual([call.method, call.url], ["POST", "https://api.stripe.com/v1/checkout/sessions"]);
+  assert.equal(call.headers["content-type"], "application/x-www-form-urlencoded");
+  assert.equal(call.headers["idempotency-key"], "checkout-ord_form");
+  assert.match(call.headers.authorization, /^Bearer sk_test_/);
+  const form = Object.fromEntries(new URLSearchParams(call.body));
+  assert.deepEqual(form, {
+    mode: "payment",
+    "line_items[0][quantity]": "1",
+    "line_items[0][price_data][currency]": "usd",
+    "line_items[0][price_data][unit_amount]": "6100",
+    "line_items[0][price_data][product_data][name]": "TicketStub order · 1 item",
+    customer_email: "buyer@example.test",
+    client_reference_id: "ord_form",
+    "metadata[order_id]": "ord_form",
+    "payment_intent_data[metadata][order_id]": "ord_form",
+    "shipping_address_collection[allowed_countries][0]": "US",
+    success_url: "https://getticketstub.test/payment/return?order=ord_form&status=succeeded",
+    cancel_url: "https://getticketstub.test/payment/return?order=ord_form&status=cancelled",
+  });
 });

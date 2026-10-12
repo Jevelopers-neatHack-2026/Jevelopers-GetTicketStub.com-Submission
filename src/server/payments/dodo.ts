@@ -1,5 +1,6 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { PaymentError, providerFetch } from "./fetch";
 
 // Dodo Payments: hosted checkout for all-digital orders (Dodo is a merchant of record for digital goods only).
 // Server-only. The API key and webhook key never leave the server. https://docs.dodopayments.com
@@ -29,22 +30,12 @@ export function dodoConfig(env: Record<string, string | undefined> = process.env
   return { apiKey, webhookKey, productId, environment, baseUrl };
 }
 
-export class DodoError extends Error {
-  constructor(readonly status: number) {
-    super(`Dodo Payments answered ${status}.`);
-  }
-}
-
-async function call<T>(cfg: DodoConfig, method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${cfg.baseUrl}${path}`, {
+const call = <T>(cfg: DodoConfig, method: "GET" | "POST", path: string, body?: unknown) =>
+  providerFetch<T>("dodo", `${cfg.baseUrl}${path}`, {
     method,
     headers: { authorization: `Bearer ${cfg.apiKey}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) throw new DodoError(res.status);
-  return (await res.json()) as T;
-}
 
 /** One hosted checkout for one order. The amount is the server-verified total, in cents, on a pay-what-you-want product. */
 export async function createCheckout(cfg: DodoConfig, input: { orderId: string; amountMinor: number; email: string; returnUrl: string }): Promise<{ sessionId: string; checkoutUrl: string }> {
@@ -54,7 +45,7 @@ export async function createCheckout(cfg: DodoConfig, input: { orderId: string; 
     return_url: input.returnUrl,
     metadata: { order_id: input.orderId },
   });
-  if (!out.session_id || !out.checkout_url) throw new DodoError(502);
+  if (!out.session_id || !out.checkout_url) throw new PaymentError(502, "dodo");
   return { sessionId: out.session_id, checkoutUrl: out.checkout_url };
 }
 
