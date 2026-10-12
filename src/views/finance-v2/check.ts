@@ -14,6 +14,9 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 const text = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 const count = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const nullableText = (value: unknown): boolean => value === null || text(value);
+/** `FinancialSummaryQueryV2.cursor` is `minLength: 1, maxLength: 2048`. A cursor is an opaque string: it is measured, never parsed. */
+export const FINANCE_V2_CURSOR_MAX_LENGTH = 2048;
+export const validCursor = (value: unknown): value is string => typeof value === 'string' && value.length >= 1 && value.length <= FINANCE_V2_CURSOR_MAX_LENGTH;
 const refuse = (code: FinanceV2RefusalCode, path: string): FinanceV2Check => ({ ok: false, code, path });
 
 function amountPath(value: unknown, path: string): string | undefined {
@@ -184,9 +187,86 @@ export function checkFinanceV2Page(raw: unknown, expectedScope: OpaqueProductSco
   for (const [index, detail] of raw.details.entries()) { const worse = detailPath(detail, index, currencies); if (worse) return refuse(worse.code, worse.path); }
   if (!count(raw.detailCount)) return refuse('INVALID_SHAPE', '/detailCount');
   if (typeof raw.hasMore !== 'boolean') return refuse('INVALID_SHAPE', '/hasMore');
-  if (raw.nextCursor !== null && typeof raw.nextCursor !== 'string') return refuse('INVALID_SHAPE', '/nextCursor');
+  // The cursor is opaque and is never decoded: only its presence is tied to `hasMore`, and its length to the pinned query schema.
+  if (raw.hasMore ? !validCursor(raw.nextCursor) : raw.nextCursor !== null) return refuse('INVALID_SHAPE', '/nextCursor');
   if (!Array.isArray(raw.canonicalSummaries)) return refuse('INVALID_SHAPE', '/canonicalSummaries');
   if (raw.canonicalMappingStatus !== 'proposal_only_owner_ack_pending' && raw.canonicalMappingStatus !== 'unsupported_opaque_scope') return refuse('INVALID_SHAPE', '/canonicalMappingStatus');
   if (expected.references !== undefined) { const mismatch = referencePath(raw.canonicalSummaries, expected.references); if (mismatch) return refuse('REFERENCE_MISMATCH', mismatch); }
   return { ok: true, page: raw as unknown as FinanceV2Page };
+}
+
+/** One step of the page history: the opaque cursor that fetched a page, and the detail ids of the page it was taken from. */
+export type FinanceV2TrailEntry = Readonly<{ cursor: string; fromDetailIds: readonly string[]; linked: boolean }>;
+export type FinanceV2PageTrail = readonly FinanceV2TrailEntry[];
+
+/** Members that legitimately vary per read: everything else on a page is the immutable public snapshot envelope. */
+const PER_READ_KEYS: ReadonlySet<string> = new Set(['requestId', 'details', 'hasMore', 'nextCursor']);
+/** Key of the cursorless first page in the evidence; a real cursor is never empty (`minLength: 1`). */
+const FIRST_PAGE = '';
+
+/** Structural equality of delivered JSON values, insensitive to object key order. Compares values only; nothing is hashed, parsed or computed. */
+export function sameDeliveredValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((item, index) => sameDeliveredValue(item, b[index]));
+  if (!record(a) || !record(b)) return false;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && sameDeliveredValue(a[key], b[key]));
+}
+
+/**
+ * What this identity generation has independently observed: the immutable public envelope of the first accepted page, and for every request cursor the
+ * page it was answered with (an immutable deep copy of the accepted details in order,`hasMore`, `nextCursor`). Held only for one scope/snapshot/authorization/filter generation and
+ * never persisted. It survives Previous, retry and revisits, so it is not erased by trail truncation. Deep-linked pages can be compared only against
+ * pages observed from the first one onward; an unseen preceding page cannot be checked.
+ */
+export type FinanceV2Evidence = Readonly<{
+  envelope: Readonly<Record<string, unknown>> | null;
+  pages: ReadonlyMap<string, Readonly<{ details: readonly FinanceV2Page['details'][number][]; hasMore: boolean; nextCursor: string | null }>>;
+}>;
+export const NO_EVIDENCE: FinanceV2Evidence = { envelope: null, pages: new Map() };
+
+/** Compares a structurally accepted page, answered for `requestCursor` (undefined = first page), with the evidence. Only delivered strings and values are compared. */
+export function checkFinanceV2Evidence(page: FinanceV2Page, requestCursor: string | undefined, evidence: FinanceV2Evidence): FinanceV2Check {
+  const at = requestCursor ?? FIRST_PAGE;
+  if (evidence.envelope !== null) {
+    const raw = page as unknown as Record<string, unknown>;
+    for (const key of Object.keys(evidence.envelope)) if (!sameDeliveredValue(evidence.envelope[key], raw[key])) return refuse('SNAPSHOT_MISMATCH', `/${key}`);
+  }
+  const ids = page.details.map((detail) => detail.detailId);
+  for (const [other, seen] of evidence.pages) {
+    if (other === at) continue;
+    const clash = ids.findIndex((id) => seen.details.some((detail) => detail.detailId === id));
+    if (clash >= 0) return refuse('PAGE_REPLAY', `/details/${clash}/detailId`);
+  }
+  const known = evidence.pages.get(at);
+  if (known !== undefined) {
+    if (known.details.length !== ids.length || known.details.some((detail, index) => detail.detailId !== ids[index])) return refuse('PAGE_REPLAY', '/details');
+    // Same ids are not enough: every delivered value of a previously accepted detail must be unchanged (key order ignored). Values are only compared.
+    const changed = known.details.findIndex((detail, index) => !sameDeliveredValue(detail, page.details[index]));
+    if (changed >= 0) return refuse('PAGE_REPLAY', `/details/${changed}`);
+    if (known.hasMore !== page.hasMore || known.nextCursor !== page.nextCursor) return refuse('PAGE_REPLAY', '/nextCursor');
+  }
+  return { ok: true, page };
+}
+
+/** Records an accepted page. The envelope is taken from the first accepted page of the generation and never replaced. */
+export function recordFinanceV2Evidence(page: FinanceV2Page, requestCursor: string | undefined, evidence: FinanceV2Evidence): FinanceV2Evidence {
+  const pages = new Map(evidence.pages);
+  pages.set(requestCursor ?? FIRST_PAGE, { details: structuredClone(page.details), hasMore: page.hasMore, nextCursor: page.nextCursor });
+  const envelope = evidence.envelope ?? structuredClone(Object.fromEntries(Object.entries(page).filter(([key]) => !PER_READ_KEYS.has(key))));
+  return { envelope, pages };
+}
+
+/**
+ * Replay guard for a page shown after other pages of the same snapshot: a detail id already delivered (on this page or on an earlier page of
+ * the trail), or a `nextCursor` that points back into the trail, is refused. Only strings are compared; nothing is recomputed or summed.
+ */
+export function checkFinanceV2Continuation(page: FinanceV2Page, trail: FinanceV2PageTrail): FinanceV2Check {
+  const seen = new Set<string>(trail.flatMap((entry) => entry.fromDetailIds));
+  for (const [index, detail] of page.details.entries()) {
+    if (seen.has(detail.detailId)) return refuse('PAGE_REPLAY', `/details/${index}/detailId`);
+    seen.add(detail.detailId);
+  }
+  if (page.nextCursor !== null && trail.some((entry) => entry.cursor === page.nextCursor)) return refuse('PAGE_REPLAY', '/nextCursor');
+  return { ok: true, page };
 }

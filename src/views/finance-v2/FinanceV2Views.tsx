@@ -2,6 +2,7 @@ import { useId, useState, type MouseEvent, type ReactNode } from 'react';
 import { AmountText, type AmountDisplay } from '../../components/AmountText';
 import { FilterSelect } from '../../components/FilterSelect';
 import { MetricCard } from '../../components/MetricCard';
+import { Pagination } from '../../components/Pagination';
 import { ScopeContext } from '../../components/ScopeContext';
 import { StateBadge } from '../../components/StateBadge';
 import { TableScroll } from '../../components/TableScroll';
@@ -42,6 +43,11 @@ export type FinanceV2ViewProps = Readonly<{
    */
   filters?: FinanceV2TransactionFilters;
   onFiltersChange?: (next: FinanceV2TransactionFilters) => void;
+  /**
+   * Page controls for the transaction list, supplied only by the connected view that owns the read. Without it the list states that more rows exist and fetches nothing.
+   * `onNavigate` must be a real cursor request of the same snapshot; this view never decides what a cursor means.
+   */
+  paging?: Readonly<{ pageLabel: string; hasPrevious: boolean; hasNext: boolean; onNavigate: (direction: 'previous' | 'next') => void }>;
 }>;
 
 const known = (text: string, currency: string): AmountDisplay => ({ status: 'available', text, currency });
@@ -212,29 +218,37 @@ function Anchor({ href, onNavigate, children }: { href: string; onNavigate: ((hr
     event.preventDefault(); onNavigate(href);
   }}>{children}</a>;
 }
-function TransactionList({ page, detailHref, onNavigate, filters, onFiltersChange }: { page: FinanceV2Page } & Nav & Pick<FinanceV2ViewProps, 'filters' | 'onFiltersChange'>) {
+function TransactionList({ page, detailHref, onNavigate, filters, onFiltersChange, paging }: { page: FinanceV2Page | undefined } & Nav & Pick<FinanceV2ViewProps, 'filters' | 'onFiltersChange' | 'paging'>) {
   const [local, setLocal] = useState<FinanceV2TransactionFilters>({ valuation: 'all', currency: 'all' });
-  const currencies = page.summary.currencies.map((entry) => entry.currency);
   const hostOwned = filters !== undefined && onFiltersChange !== undefined;
   const selected = hostOwned ? filters : local;
+  // While a read is in flight (`page` undefined) only the host's own selection is offered: no currency, row or amount of an earlier page is kept.
+  const currencies = page ? page.summary.currencies.map((entry) => entry.currency) : selected.currency === 'all' ? [] : [selected.currency];
   const valuation = (VALUATION_FILTERS as readonly string[]).includes(selected.valuation) ? selected.valuation : 'all';
   const currency = selected.currency === 'all' || currencies.includes(selected.currency) ? selected.currency : 'all';
   const setValuation = (next: string) => { const value = { valuation: next, currency }; if (hostOwned) onFiltersChange(value); else setLocal(value); };
   const setCurrency = (next: string) => { const value = { valuation, currency: next }; if (hostOwned) onFiltersChange(value); else setLocal(value); };
+  // The filters are the first child in both branches, so the focused native select stays mounted across ready -> loading -> ready and keeps keyboard focus and its arrow-key navigation.
+  const filtersSection = <Section label="Transaction filters" title="Filters">
+    <div className="td-filters">
+      <FilterSelect label="Valuation" value={valuation} onChange={setValuation} options={[{ value: 'all', label: 'All valuations' }, { value: 'estimated', label: 'Estimated' }, { value: 'provider_confirmed', label: 'Provider confirmed' }, { value: 'unknown', label: 'Unknown' }]} />
+      <FilterSelect label="Currency" value={currency} onChange={setCurrency} options={[{ value: 'all', label: 'All currencies' }, ...currencies.map((code) => ({ value: code, label: code }))]} />
+    </div>
+  </Section>;
+  if (!page) return <>{filtersSection}<p role="status" aria-busy="true">Loading the report. No amounts are shown until it is verified.</p></>;
   const shown = page.details.filter((detail) => (valuation === 'all' || detail.valuation === valuation) && (currency === 'all' || detail.currency === currency));
   return <>
-    <Section label="Transaction filters" title="Filters">
-      <div className="td-filters">
-        <FilterSelect label="Valuation" value={valuation} onChange={setValuation} options={[{ value: 'all', label: 'All valuations' }, { value: 'estimated', label: 'Estimated' }, { value: 'provider_confirmed', label: 'Provider confirmed' }, { value: 'unknown', label: 'Unknown' }]} />
-        <FilterSelect label="Currency" value={currency} onChange={setCurrency} options={[{ value: 'all', label: 'All currencies' }, ...currencies.map((code) => ({ value: code, label: code }))]} />
-      </div>
-    </Section>
+    {filtersSection}
     <Section label="Transaction list" title="Transaction list">
       <dl>
         <Row term="Detail count (producer)">{page.detailCount}</Row>
-        <Row term="More rows exist">{page.hasMore ? 'Yes. Only the delivered page is shown; no further page is fetched here.' : 'No'}</Row>
-        <Row term="Next cursor">{page.nextCursor === null ? 'None' : page.nextCursor}</Row>
+        <Row term="More rows exist">{page.hasMore ? (paging ? 'Yes. Use Next page to request the next page of this same snapshot.' : 'Yes. Only the delivered page is shown; no further page is fetched here.') : 'No'}</Row>
+        <Row term="Next cursor">{page.nextCursor === null ? 'None' : paging ? 'Held opaque for the next request; not shown or decoded' : page.nextCursor}</Row>
       </dl>
+      {paging && <>
+        <p>Rows on this page only. Summary totals are the ones delivered for this snapshot; no total is calculated for a page. Changing a filter returns to the first page.</p>
+        <Pagination label="Transaction pages" pageLabel={paging.pageLabel} hasPrevious={paging.hasPrevious} hasNext={paging.hasNext} onNavigate={paging.onNavigate} />
+      </>}
       <TableScroll caption="Transaction details"><table className="td-table"><caption>Transaction details</caption>
         <thead><tr><th scope="col">Detail</th><th scope="col">Occurred</th><th scope="col">Event type</th><th scope="col">Classification</th><th scope="col">Valuation</th><th scope="col">Reconciliation</th><th scope="col">Settlement</th><th scope="col">Status</th><th scope="col">Amount</th></tr></thead>
         <tbody>{shown.map((detail) => <tr key={detail.detailId}>
@@ -293,10 +307,14 @@ const HEADINGS: Readonly<Record<FinanceV2ViewName, string>> = { budget: 'Budget 
  */
 export function FinanceV2View(props: FinanceV2ViewProps) {
   const headingId = useId();
-  const { view, input, expectedScope, expectedSnapshotId, expectedQueryContentHash, expectedSummaryContentHash, expectedReferences, detailId, detailHref, listHref, onNavigate, filters, onFiltersChange } = props;
+  const { view, input, expectedScope, expectedSnapshotId, expectedQueryContentHash, expectedSummaryContentHash, expectedReferences, detailId, detailHref, listHref, onNavigate, filters, onFiltersChange, paging } = props;
   const wrap = (body: ReactNode) => <section className="td-component-stack" aria-labelledby={headingId}><h2 id={headingId}>{HEADINGS[view] ?? 'Finance v2'}</h2>{body}</section>;
   if (props.mode !== 'SYNTHETIC_PROPOSAL') return wrap(<Notice alert title="Unsupported mode">This presentation only renders in explicit SYNTHETIC_PROPOSAL mode. Nothing is shown. Code UNSUPPORTED_MODE.</Notice>);
   if (!input || typeof input !== 'object') return wrap(<Notice title="Finance state unknown">The state of this report could not be determined. No amounts are shown.</Notice>);
+  // Only the connected view sends `loading` here, and only with host-owned filters: the generic controls stay mounted (the children keep the positions they have in the ready tree) and nothing else is shown.
+  if (input.status === 'loading' && view === 'transactions' && filters !== undefined && onFiltersChange !== undefined) {
+    return wrap(<>{null}{false}{false}<TransactionList page={undefined} filters={filters} onFiltersChange={onFiltersChange} /></>);
+  }
   if (input.status === 'missing') return wrap(<Notice title="No report delivered">No Finance v2 report has been delivered for this scope. No amounts are shown.</Notice>);
   if (input.status === 'restricted') return wrap(<Notice title="Report restricted">This report is restricted for your access. No amounts are shown.</Notice>);
   if (input.status === 'unauthorized') return wrap(<Notice alert title="Not authorized">You are not authorized to view this report. No amounts are shown.</Notice>);
@@ -316,7 +334,7 @@ export function FinanceV2View(props: FinanceV2ViewProps) {
     <Banner page={page} />
     {view === 'budget' && <BudgetView page={page} />}
     {view === 'breakdown' && <BreakdownView page={page} />}
-    {view === 'transactions' && <TransactionList page={page} {...(detailHref ? { detailHref } : {})} {...(onNavigate ? { onNavigate } : {})} {...(filters ? { filters } : {})} {...(onFiltersChange ? { onFiltersChange } : {})} />}
+    {view === 'transactions' && <TransactionList page={page} {...(detailHref ? { detailHref } : {})} {...(onNavigate ? { onNavigate } : {})} {...(filters ? { filters } : {})} {...(onFiltersChange ? { onFiltersChange } : {})} {...(paging ? { paging } : {})} />}
     {view === 'transaction-detail' && <DetailView page={page} detailId={detailId} {...(listHref ? { listHref } : {})} {...(onNavigate ? { onNavigate } : {})} />}
   </>);
 }

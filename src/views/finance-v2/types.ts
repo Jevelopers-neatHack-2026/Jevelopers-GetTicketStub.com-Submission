@@ -79,8 +79,8 @@ export type FinanceV2Result =
   | Readonly<{ status: 'missing' | 'restricted' | 'unauthorized' | 'unknown' }>;
 
 /** What a host hands the view: the same states as `FinanceV2Result`, but a ready page is `unknown` until `checkFinanceV2Page` has accepted it. */
-export type FinanceV2Input = Readonly<{ status: 'ready'; page: unknown }> | Readonly<{ status: 'missing' | 'restricted' | 'unauthorized' | 'unknown' }>;
+export type FinanceV2Input = Readonly<{ status: 'ready'; page: unknown }> | Readonly<{ status: 'missing' | 'restricted' | 'unauthorized' | 'unknown' | 'loading' }>;
 /** The only mode this slice accepts. Anything else renders nothing financial. */
 export type FinanceV2Mode = 'SYNTHETIC_PROPOSAL';
-export type FinanceV2RefusalCode = 'INVALID_SHAPE' | 'LEGACY_PROPOSAL_SHAPE' | 'SCOPE_MISMATCH' | 'UNSUPPORTED_VERSION' | 'SNAPSHOT_MISMATCH' | 'QUERY_HASH_MISMATCH' | 'SUMMARY_HASH_MISMATCH' | 'REFERENCE_MISMATCH' | 'UNSUPPORTED_MODE';
+export type FinanceV2RefusalCode = 'INVALID_SHAPE' | 'LEGACY_PROPOSAL_SHAPE' | 'SCOPE_MISMATCH' | 'UNSUPPORTED_VERSION' | 'SNAPSHOT_MISMATCH' | 'QUERY_HASH_MISMATCH' | 'SUMMARY_HASH_MISMATCH' | 'REFERENCE_MISMATCH' | 'PAGE_REPLAY' | 'UNSUPPORTED_MODE';
 export type FinanceV2Check = Readonly<{ ok: true; page: FinanceV2Page }> | Readonly<{ ok: false; code: FinanceV2RefusalCode; path: string }>;

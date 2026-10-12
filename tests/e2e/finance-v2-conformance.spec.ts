@@ -90,7 +90,11 @@ test('conformance-base keeps two currencies separate and shows 18-digit and nega
 test('conformance-base transactions show the producer count and only the delivered page, and a detail opens by keyboard with intentional focus', async ({ page }) => {
   await open(page, 'transactions', 'conformance-base');
   await expect(region(page, 'Transaction list')).toContainText('Detail count (producer)6');
-  await expect(region(page, 'Transaction list')).toContainText('Yes. Only the delivered page is shown');
+  // The connected view owns the read, so the list offers the next page of the same snapshot; the producer count (6) stays distinct from the rows on this page.
+  await expect(region(page, 'Transaction list')).toContainText('Yes. Use Next page to request the next page of this same snapshot.');
+  await expect(region(page, 'Transaction list')).toContainText('Rows on this page only');
+  await expect(region(page, 'Transaction list')).toContainText('Held opaque for the next request; not shown or decoded');
+  await expect(page.getByRole('table', { name: 'Transaction details' }).getByRole('rowheader')).toHaveCount(2);
   const link = page.getByRole('table', { name: 'Transaction details' }).getByRole('link', { name: /^sha256:/u }).first();
   await scan(page, 'conformance-base-transactions');
   await tabTo(page, link);
