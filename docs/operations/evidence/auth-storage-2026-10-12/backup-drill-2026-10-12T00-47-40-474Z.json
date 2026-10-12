@@ -1,0 +1,193 @@
+{
+  "suite": "backup-drill",
+  "mode": "fixture",
+  "command": "npm run verify:product -- --suite backup-drill --mode fixture --evidence-dir <scratch>",
+  "exitCode": 0,
+  "counts": {
+    "passed": 29,
+    "failed": 0,
+    "skipped": 0
+  },
+  "startedAt": "2026-10-12T00:47:40.474Z",
+  "finishedAt": "2026-10-12T00:47:42.548Z",
+  "gitSha": "5b5c8f29f186542cb4b8aceaa020761b30603f0a",
+  "gitDirty": false,
+  "node": "v22.23.3",
+  "blockedNetwork": [],
+  "drill": {
+    "backupId": "20261012T004741Z-8a2ee5",
+    "manifest": {
+      "ok": true,
+      "integrity": "ok",
+      "databaseBytes": 155648,
+      "databaseSha256": "2e287f4ee8123324a02a6ffb9849356bf0a609119fdf79d89e4ce2a2064660f7",
+      "tables": {
+        "_probe": 0,
+        "accounts": 2,
+        "art_usage": 0,
+        "claims": 2,
+        "events": 6,
+        "gifts": 0,
+        "login_links": 2,
+        "orders": 1,
+        "organizer_events": 1,
+        "sessions": 2,
+        "shares": 2,
+        "wall_stubs": 2
+      },
+      "files": [
+        {
+          "sha256": "868b04b7fd3645f960fc478c1eaa8799a5e702fd80f6be1cb60ee0d899e8f25d",
+          "bytes": 78
+        },
+        {
+          "sha256": "df317376ab8fb6a6b194faa7cebd18b4304b92125b1d3e8b053c1423f46d6da8",
+          "bytes": 78
+        }
+      ],
+      "downloadable": true,
+      "missing": 0
+    },
+    "restored": {
+      "integrity": "ok",
+      "databaseSha256": "2e287f4ee8123324a02a6ffb9849356bf0a609119fdf79d89e4ce2a2064660f7",
+      "tables": {
+        "_probe": 0,
+        "accounts": 2,
+        "art_usage": 0,
+        "claims": 2,
+        "events": 6,
+        "gifts": 0,
+        "login_links": 2,
+        "orders": 1,
+        "organizer_events": 1,
+        "sessions": 2,
+        "shares": 2,
+        "wall_stubs": 2
+      },
+      "filesMatching": 2,
+      "restoreScriptChecksPassed": 19
+    },
+    "liveAfterBackup": {
+      "wall_stubs": 3
+    }
+  },
+  "steps": [
+    {
+      "name": "fixture mode refuses outbound network",
+      "ok": true
+    },
+    {
+      "name": "member signs in through the confirm tap",
+      "ok": true
+    },
+    {
+      "name": "wall sync stores two stubs and moves the art to a file",
+      "ok": true
+    },
+    {
+      "name": "the wall is made public",
+      "ok": true
+    },
+    {
+      "name": "a share (with its own art file) is created",
+      "ok": true
+    },
+    {
+      "name": "a sandbox order is placed",
+      "ok": true
+    },
+    {
+      "name": "an organizer event with two claims is created",
+      "ok": true
+    },
+    {
+      "name": "a non-staff POST /api/admin/backup is a 404",
+      "ok": true
+    },
+    {
+      "name": "an anonymous POST /api/admin/backup is a 404",
+      "ok": true
+    },
+    {
+      "name": "staff POST /api/admin/backup is 201 with an ok manifest",
+      "ok": true
+    },
+    {
+      "name": "the manifest holds counts and hashes, never row contents",
+      "ok": true
+    },
+    {
+      "name": "the backup holds both art files and is downloadable",
+      "ok": true
+    },
+    {
+      "name": "GET /api/admin/backup lists it",
+      "ok": true
+    },
+    {
+      "name": "a stub written after the backup is accepted",
+      "ok": true
+    },
+    {
+      "name": "after a restart the public wall still has all three stubs",
+      "ok": true
+    },
+    {
+      "name": "after a restart the art file serves and re-hashes to its name",
+      "ok": true
+    },
+    {
+      "name": "restore refuses a target that overlaps the live storage",
+      "ok": true
+    },
+    {
+      "name": "restore-backup.mjs exits 0 with every check passing",
+      "ok": true
+    },
+    {
+      "name": "restore refuses a target that isn't empty",
+      "ok": true
+    },
+    {
+      "name": "restored database integrity_check is ok",
+      "ok": true
+    },
+    {
+      "name": "restored row counts equal the manifest, table by table",
+      "ok": true
+    },
+    {
+      "name": "restored database bytes hash to the manifest",
+      "ok": true
+    },
+    {
+      "name": "every restored art file hashes to the manifest and its name",
+      "ok": true
+    },
+    {
+      "name": "the snapshot is point in time: the later stub is not in it",
+      "ok": true
+    },
+    {
+      "name": "a server on the restored copy is healthy with storage ok",
+      "ok": true
+    },
+    {
+      "name": "the restored public wall has the two stubs from the backup",
+      "ok": true
+    },
+    {
+      "name": "the restored share resolves",
+      "ok": true
+    },
+    {
+      "name": "the restored art files serve byte for byte",
+      "ok": true
+    },
+    {
+      "name": "no outbound network attempted",
+      "ok": true
+    }
+  ]
+}

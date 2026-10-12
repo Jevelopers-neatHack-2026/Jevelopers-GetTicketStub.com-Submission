@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { generateImage, providerFailure } from "@/server/ai/providers";
 import { buildArtPrompt } from "@/customer/studio/research/artPrompt";
-import type { ArtLayer, Edition, EventData } from "@/customer/studio/types";
+import type { ArtLayer, Edition, EventData, EventType, Fact } from "@/customer/studio/types";
 import { ensureDevice, getRequestContext, requireCapability } from "@/server/context";
 import { requestIdOf } from "@/server/events";
 import { hashToken } from "@/server/crypto";
 import { recordEvent } from "@/server/event-log";
 import { HttpError, clientIp, errorJson, errorResponse, foreignOrigin } from "@/server/http";
 import { getStorage, storageAvailable } from "@/server/index";
+import { annotate, observeRoute, providerObserver } from "@/server/observability/measure";
 import type { ArtQuota } from "@/server/storage";
 
 // Daily caps on OpenAI art: per account, per device (an httpOnly cookie) and per IP as a backstop.
@@ -30,29 +31,57 @@ interface ArtRequest {
   first?: boolean;
 }
 
+const EVENT_TYPES = new Set<EventType>(["concert", "game", "show", "generic"]);
+const str = (v: unknown, max = 300): string | undefined => (typeof v === "string" && v.trim() ? v.slice(0, max) : undefined);
+
+/** The validated subset of a request event that buildArtPrompt reads; anything malformed is dropped, not thrown on. */
+function promptEvent(raw: EventData): EventData {
+  const facts = Array.isArray(raw.facts)
+    ? raw.facts.filter((f): f is Fact => !!f && typeof f === "object" && typeof f.id === "string" && typeof f.label === "string" && typeof f.value === "string").slice(0, 200)
+    : [];
+  return {
+    type: EVENT_TYPES.has(raw.type) ? raw.type : "generic",
+    title: raw.title.slice(0, 300),
+    venue: str(raw.venue),
+    city: str(raw.city),
+    dateISO: str(raw.dateISO, 32),
+    facts,
+  };
+}
+
 function freshSeed(): number {
   return Math.floor(Math.random() * 2_147_483_647);
 }
 
-export async function POST(req: Request) {
+export const POST = observeRoute("art", async (req: Request) => {
+  annotate({ operation: "art_generate" });
   // Guests make art too, so a missing Origin passes (no cookie is needed to call it); a foreign one doesn't.
-  if (foreignOrigin(req)) return errorResponse(new HttpError(403, "bad_origin", "This request didn't come from TicketStub."));
+  if (foreignOrigin(req)) {
+    annotate({ code: "bad_origin" });
+    return errorResponse(new HttpError(403, "bad_origin", "This request didn't come from TicketStub."));
+  }
   const rc = await getRequestContext(req);
   try {
     requireCapability(rc, "art.generate");
   } catch (e) {
+    annotate({ code: e instanceof HttpError ? e.code : "internal" });
     return errorResponse(e);
   }
   let body: ArtRequest;
   try {
     body = (await req.json()) as ArtRequest;
   } catch {
+    annotate({ code: "bad_request" });
     return errorJson(400, "bad_request", "Send the event to remix.");
   }
-  if (!body.event || typeof body.event.title !== "string") {
+  if (!body || typeof body !== "object" || !body.event || typeof body.event !== "object" || typeof body.event.title !== "string") {
+    annotate({ code: "bad_request" });
     return errorJson(400, "bad_request", "Send the event to remix.");
   }
 
+  // Only the fields the art prompt reads, each checked, so a malformed request field can't break the prompt build
+  // (and spend the art allowance) before the image call.
+  const event = promptEvent(body.event);
   const vibe = typeof body.vibe === "string" && body.vibe.trim() ? body.vibe.trim().slice(0, 120) : undefined;
   const seed = typeof body.seed === "number" && Number.isFinite(body.seed) ? Math.floor(body.seed) : freshSeed();
 
@@ -73,7 +102,9 @@ export async function POST(req: Request) {
   // Storage off: no counters to spend, so fail open to procedural art and never call a provider.
   const saving = storageAvailable();
   const quota = saving ? await getStorage().useArtQuota(quotas, Date.now(), imageProvider) : { ok: true as const };
+  annotate({ quota: !saving ? "storage_off" : quota.ok ? "ok" : "limited" });
   if (!quota.ok) {
+    annotate({ code: "art_limit", dependency: "procedural", fallback: "procedural" });
     // Over the cap: say so, and hand back procedural art so the caller never has to show a broken stub.
     const art: ArtLayer = { kind: "procedural", seed, vibe, provenance: "simulated" };
     await recordEvent(req, "art_limit", { retryAt: quota.retryAt }, { ctx: rc });
@@ -85,8 +116,9 @@ export async function POST(req: Request) {
 
   if (saving) {
     try {
-      const result = await generateImage(buildArtPrompt(body.event, vibe), req.signal);
+      const result = await generateImage(buildArtPrompt(event, vibe), req.signal, providerObserver());
       if (result) {
+        annotate({ dependency: "provider" });
         const art: ArtLayer = { kind: "image", src: result.value, seed, vibe, provenance: "live", providerMetadata: result.metadata };
         await recordEvent(req, "art_ready", { provider: "live" }, { ctx: rc });
         return reply(art);
@@ -94,7 +126,9 @@ export async function POST(req: Request) {
     } catch (error) {
       const failure = providerFailure(error);
       if (failure) await recordEvent(req, "art_failed", { code: failure.body.code }, { ctx: rc });
+      annotate({ code: failure?.body.code ?? "internal" });
       if (failure && (process.env.TICKETSTUB_ART_PROVIDER === "openrouter" || failure.body.code === "invalid_provider_configuration")) {
+        annotate({ dependency: "provider" });
         return reply({ error: { code: failure.body.code, message: failure.body.error } }, failure.status);
       }
     }
@@ -102,11 +136,13 @@ export async function POST(req: Request) {
 
   if (body.first && body.edition === "researched" && !vibe) {
     const art: ArtLayer = { kind: "image", src: "/brand/mockup-art-glasgow.webp", seed, provenance: "simulated" };
+    annotate({ dependency: "fixture", fallback: "simulated" });
     await recordEvent(req, "art_ready", { provider: "simulated" }, { ctx: rc });
     return reply(art);
   }
 
   const art: ArtLayer = { kind: "procedural", seed, vibe, provenance: "simulated" };
+  annotate({ dependency: "procedural", fallback: "procedural" });
   await recordEvent(req, "art_ready", { provider: "procedural" }, { ctx: rc });
   return reply(art);
-}
+});
