@@ -3,7 +3,7 @@
   "packageVersion": "v0.1.0-rehearsal",
   "releaseClass": "draft_rehearsal_only",
   "lifecycleState": "draft_rehearsal_only",
-  "candidateSourceCommitAtGeneration": "c32ba6afc24b37da3e1a26d4aefe78b38d76ebb2",
+  "candidateSourceCommitAtGeneration": "abe783cb90ca00e31a39e8831bb64a3a55b92f07",
   "manifestGenerationTime": "Not self-certified; if needed, record the execution time in the separate release review record after this manifest is committed.",
   "contentAddresses": {
     "algorithm": "SHA-256",
@@ -7906,7 +7906,7 @@
     {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "012632be93c03162b71293dc47a0f6a5f723750d1330110ba7f0bdec7bacc872",
+      "sha256": "568793885aadb0e4376429b7e46e00512cc714e22a2260341415e884a02cecd8",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7940,7 +7940,7 @@
     {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "66f08fdfcfd1a126b82b5c9999ebdd5de0cc8b982658380a707714eaa466b61a",
+      "sha256": "9046d99653ab71b3fe5fed18ea1829ec7c4dfbe71efb0d84da97bbfcb91bc34c",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -8122,7 +8122,7 @@
     "docs/collateral-inventory.json": {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "012632be93c03162b71293dc47a0f6a5f723750d1330110ba7f0bdec7bacc872",
+      "sha256": "568793885aadb0e4376429b7e46e00512cc714e22a2260341415e884a02cecd8",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -8156,7 +8156,7 @@
     "review/provenance.json": {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "66f08fdfcfd1a126b82b5c9999ebdd5de0cc8b982658380a707714eaa466b61a",
+      "sha256": "9046d99653ab71b3fe5fed18ea1829ec7c4dfbe71efb0d84da97bbfcb91bc34c",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {

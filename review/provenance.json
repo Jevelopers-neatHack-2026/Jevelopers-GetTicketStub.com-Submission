@@ -6736,7 +6736,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-inventory.json",
-        "revision": "sha256:c8a96ed09f3611971256d7c351edcdda02b3ce85aec7b84077b6b7c43b15eff0",
+        "revision": "sha256:6618a458f533724319274f5b20c1f4c483575fc5e9cc9392a46222460e4ed470",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -6794,7 +6794,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "c8a96ed09f3611971256d7c351edcdda02b3ce85aec7b84077b6b7c43b15eff0",
+        "value": "6618a458f533724319274f5b20c1f4c483575fc5e9cc9392a46222460e4ed470",
         "status": "Exact SHA-256 content digest of current inventory bytes; the register is external to this source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -8850,7 +8850,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "release/v0.1.0-rehearsal/manifest.json",
-        "revision": "sha256:1988234ee22beb16ca8efc9d08e26c774bd0d810b5a15e3bb0e0b79fd5a6c951",
+        "revision": "sha256:b279a99be5905c70e232a2161fe4a0e2dd777efbc7214e683aa3491e0ab6f854",
         "revisionKind": "git_commit",
         "url": null,
         "restrictedOriginalReference": null
@@ -8908,7 +8908,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "1988234ee22beb16ca8efc9d08e26c774bd0d810b5a15e3bb0e0b79fd5a6c951",
+        "value": "b279a99be5905c70e232a2161fe4a0e2dd777efbc7214e683aa3491e0ab6f854",
         "status": "Computed from exact current bytes; source pin is the immutable commit containing these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -28224,7 +28224,8 @@
         "This record preserves prior draft manifest bytes and grants no external destination permission.",
         "The archived draft is not an approved release or submission artifact."
       ]
-    },    {
+    },
+    {
       "assetId": "PROV-FILE-075BF6C5DC39",
       "kind": "internal_package_control",
       "source": {
