@@ -33,6 +33,8 @@ export const EVENT_SPEC = {
   version_selected: { version: "ref", versions: "count" },
   share_created: { share: "ref" },
   share_revoked: { revoked: "flag" },
+  approval_issued: { purpose: ["print.compose", "artifact.download"], approval: "ref", reissued: "flag" },
+  approval_revoked: { approval: "ref", already: "flag" },
   gift_created: { share: "ref", messageChars: "count" },
   order_placed: { order: "ref", lines: "count", totalMinor: "count" },
   order_blocked: { code: "code" },
