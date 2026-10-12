@@ -16,7 +16,7 @@
 | Use cfo.ai; include its business plan | **Verified** | [Saved narrative and reviewer workbook](EVIDENCE.md#cfoai). Hypothetical forecasts; export caveats remain. |
 | Public code with event-period commits | **Verified** | [14 source commit records](SOURCE-PROVENANCE.json). Each inspected tip is dated October 12. Full code eligibility is a separate open check below. |
 | All code written in the allowed window | **Needs verification** | Website start: October 10, 12:30 PM IST. Tip dates alone cannot prove when every file was written. Review original history and any earlier planning/brand assets; ask organizers about uncertain material. |
-| Video at most three minutes; covers all three tools | **Needs verification** | [Posted video](DEMO.md): X displays 2:56. Full content, audio, and all-three-tool coverage have not been reviewed. |
+| Video at most three minutes; covers all three tools | **Needs verification** | [Posted video](DEMO.md): X displays 2:56. Earlier review reports all three tools; full playback was not independently rechecked. Captions and signed-out playback still need checking. |
 | Public quote-post of the official launch post, with demo and all three tags | **Verified** | [Timothy’s post](https://x.com/CompleteTechLLC/status/2109758479720231135) quotes the exact launch, has an attached video, and links @neatlogs, @EntireHQ, @arithecfo. [Scope and timing caveat](PUBLIC-POSTS.md): this verifies post elements, not deadline acceptance or signed-out playback. |
 | Complete and confirm the official form | **Missing** | The public form was inspected. No team submission was made here and no confirmation is retained. A draft is not a submitted entry. |
 

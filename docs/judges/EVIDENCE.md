@@ -91,7 +91,7 @@ Timothy's [searchable report and complete CSV bundle](USAGE.md#explore-the-repor
 
 The [source repositories](../../REPOSITORIES.md), [telemetry implementation PR](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46), and [Entire graph Actions run](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087) also expose work and discussion.
 
-**Now linked:** [Timothy’s launch quote-post](https://x.com/CompleteTechLLC/status/2109758479720231135) includes a video shown as 2:56 and all three required tags. Clicking its quoted card reached the exact official launch. Lars also posted a matching launch quote; Crystal posted a standalone video. [Exact links, review scope, and timing caveat](PUBLIC-POSTS.md). Full video coverage, deadline eligibility, and form confirmation remain unverified. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. No engagement or customer-demand score is claimed here.
+**Now linked:** [Timothy’s launch quote-post](https://x.com/CompleteTechLLC/status/2109758479720231135) includes a video shown as 2:56 and all three required tags. Clicking its quoted card reached the exact official launch. Lars also posted a matching launch quote; Crystal posted a standalone video. [Exact links, review scope, and timing caveat](PUBLIC-POSTS.md). The earlier merged review reports footage of all three tools; see the [demo review history](DEMO.md). Full playback was not independently rechecked in this pass. Deadline eligibility and form confirmation remain unverified. The [marketing copy](../../repositories/marketing-material/launch/announcement-copy.md) remains a draft. No engagement or customer-demand score is claimed here.
 
 ## Code history
 

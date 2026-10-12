@@ -4,7 +4,7 @@
 
 **[Watch the posted TicketStub video on X](https://x.com/CompleteTechLLC/status/2109758479720231135).** Checked October 12, 2026: X displayed an attached video lasting **2:56**. The post quotes the required launch and tags all three sponsors. [Post checks and timing caveat](PUBLIC-POSTS.md).
 
-The full video and audio have not been reviewed here. Coverage of all three tools, accurate claims, captions, and signed-out playback still need checking. We have no verified timestamps for this posted video. A posted video does not prove form completion.
+The earlier [merged review](https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/9cf0c9da) reports that the video shows neatlogs traces, the Entire code graph, and the cfo.ai plan, using the sample flow. This follow-up verified the post and displayed duration, but did not independently replay the full video and audio. Accurate claims, captions, and signed-out playback still need checking. We have no verified timestamps for this posted video. A posted video does not prove form completion.
 
 ## Earlier planning placeholder
 
