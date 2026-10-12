@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { types as utilTypes } from 'node:util';
 import { SafeFetcher, RetrievalError } from '../security/controlled-fetch.mjs';
 import {
   createControlledSvgIngestWitness,
@@ -13,10 +14,12 @@ import { parseAndValidateUrl } from '../security/url-policy.mjs';
 import { inspectSafeAssetBytes, SAFE_ASSET_POLICY_VERSION, SAFE_ASSET_LIMITS } from '../security/assets/inspect.mjs';
 import {
   createPrivateAssetReleaseAuthority as createReleaseAuthorityState,
+  hasThenableBehavior,
   isPrivateAssetReleaseController,
   privateAssetReleaseAuthorityForController,
   privateAssetReleaseControllerMatches,
   revokePrivateAssetReleaseController,
+  subscribeToSupportedNativePromise,
 } from './private-asset-release.mjs';
 
 const PRIVATE_DRAFT_SCHEMA = 'ei-private-retrieval-draft/v1';
@@ -154,11 +157,6 @@ function urlHasSensitiveMaterial(value) {
   } catch {
     return true;
   }
-}
-
-function hasThenableBehavior(value) {
-  if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return false;
-  try { return typeof value.then === 'function'; } catch { return true; }
 }
 
 function snapshotRunInput(value) {
@@ -404,6 +402,62 @@ async function awaitAbortableOperation(operation, signal, abortError) {
 
 async function awaitAbortableHostCallback(callback, args, signal, abortError) {
   return awaitAbortableOperation(() => callback(...args), signal, abortError);
+}
+
+async function awaitControlledAssetPreparation(operation, signal, abortError, onLateSuccess) {
+  if (signalAborted(signal)) throw abortError();
+  let abandoned = false;
+  let onAbort;
+  const preparation = new Promise((resolve) => {
+    let pending;
+    try { pending = operation(); }
+    catch (error) { resolve({ kind: 'rejected', error }); return; }
+    const fulfilled = (value) => {
+      try {
+        if (abandoned || signalAborted(signal)) {
+          abandoned = true;
+          try { onLateSuccess(value); } catch { /* Revocation remains fail-closed. */ }
+          resolve({ kind: 'late_success' });
+          return;
+        }
+        resolve({ kind: 'resolved', value });
+      } catch (error) {
+        resolve({ kind: 'rejected', error });
+      }
+    };
+    const rejected = (error) => {
+      try {
+        resolve({ kind: abandoned || signalAborted(signal) ? 'late_rejection' : 'rejected', error });
+      } catch (signalError) {
+        resolve({ kind: 'rejected', error: signalError });
+      }
+    };
+    if (!subscribeToSupportedNativePromise(pending, fulfilled, rejected)) resolve({ kind: 'invalid' });
+  });
+  const aborted = new Promise((resolve) => {
+    onAbort = () => {
+      abandoned = true;
+      resolve({ kind: 'aborted' });
+    };
+    addAbortListener(signal, onAbort);
+    if (signalAborted(signal)) onAbort();
+  });
+  try {
+    const outcome = await Promise.race([preparation, aborted]);
+    if (outcome.kind === 'aborted') throw abortError();
+    if (outcome.kind === 'rejected') throw outcome.error;
+    if (outcome.kind !== 'resolved') throw new RetrievalError('EVIDENCE_INVALID');
+    if (signalAborted(signal)) {
+      abandoned = true;
+      try { onLateSuccess(outcome.value); } catch { /* Revocation remains fail-closed. */ }
+      throw abortError();
+    }
+    // Keep the opaque result nested so promise resolution never adopts a value
+    // returned by the host adapter.
+    return Object.freeze({ value: outcome.value });
+  } finally {
+    removeAbortListener(signal, onAbort);
+  }
 }
 
 async function awaitBoundedCleanup(operation, timeoutMs = 250) {
@@ -996,6 +1050,8 @@ export async function runPrivateRetrieval(value) {
   let stopCause = null;
   let deadlineStopStarted = false;
   let runFailure = null;
+  let assetReleaseAuthorityRevoked = false;
+  const discardedAssetReleaseChecks = new WeakSet();
   const abortError = () => new RetrievalError(stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : 'CANCELED');
   const persistStop = (reason) => {
     if (!runCreated) return;
@@ -1008,13 +1064,38 @@ export async function runPrivateRetrieval(value) {
       });
     localStopPromise = Promise.all([localStopPromise, pending]).then(() => undefined);
   };
+  const revokeAssetReleaseAuthority = (reason) => {
+    if (!assetReleaseController || assetReleaseAuthorityRevoked) return;
+    assetReleaseAuthorityRevoked = true;
+    revokePrivateAssetReleaseController(assetReleaseController, reason);
+  };
+  const releaseCheckFromPreparation = (value) => {
+    try {
+      if (!value || typeof value !== 'object' || utilTypes.isProxy(value)) return null;
+      const record = plainDataRecord(value, new Set(['releaseCheck', 'candidateIds']));
+      if (!record || !Object.hasOwn(record, 'releaseCheck')) return null;
+      const check = record.releaseCheck;
+      return check && typeof check === 'object' ? check : null;
+    } catch { return null; }
+  };
+  const discardAssetReleaseCheck = (releaseCheck) => {
+    if (!releaseCheck || discardedAssetReleaseChecks.has(releaseCheck)) return false;
+    discardedAssetReleaseChecks.add(releaseCheck);
+    try {
+      return input.assetReleaseFinalizationStore.discardControlledAssetRelease(evidenceScope, releaseCheck) === true;
+    } catch { return false; }
+  };
+  const discardAssetReleasePreparation = (value) =>
+    discardAssetReleaseCheck(releaseCheckFromPreparation(value));
   const abortForStop = (reason) => {
     if (stopCause === null) stopCause = reason;
     if (!controller.signal.aborted) controller.abort();
+    revokeAssetReleaseAuthority(`run_stopped:${reason}`);
   };
   const triggerDeadline = () => {
     if (stopCause === null) stopCause = 'deadline';
     if (!controller.signal.aborted) controller.abort();
+    revokeAssetReleaseAuthority('run_deadline');
     if (!deadlineStopStarted) {
       deadlineStopStarted = true;
       persistStop('deadline');
@@ -1230,6 +1311,7 @@ export async function runPrivateRetrieval(value) {
     externalAbort = true;
     if (stopCause === null) stopCause = 'cancelled';
     if (!controller.signal.aborted) controller.abort();
+    revokeAssetReleaseAuthority('run_cancelled');
     persistStop('cancelled');
   };
   if (input.signal !== undefined) {
@@ -2536,47 +2618,75 @@ export async function runPrivateRetrieval(value) {
         for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
         limitations.add('asset_acquisition_reopen_unavailable');
       }
-      const revalidated = await input.controlledAssetEvidenceStore.revalidateControlledAssetRelease(
-        evidenceScope,
-        {
-          runId: input.runId,
-          policyDigest: digestJson(assetPolicy),
-          releaseController: assetReleaseController,
-          evidence: materialized.evidence.map((item) => ({ handle: item.handle, metadata: item.metadata })),
-          facts: factHandles,
-          assetGroups,
-          beforeFinalization: async () => {
-            if (!await currentAssetPolicyMatches()) {
-              for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
-              limitations.add('asset_acquisition_policy_changed');
-              return [];
-            }
-            return assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId);
-          },
-          finalizeHostAuthority: () => {
-            checkDeadline();
-            if (controller.signal.aborted) return { releaseAuthorized: false, candidateIds: [] };
-            if (!authorized(input, 'release')) return { releaseAuthorized: false, candidateIds: [] };
-            if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
-              for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
-              limitations.add('authorization_revoked');
-            }
-            checkDeadline();
-            return {
-              releaseAuthorized: true,
-              candidateIds: assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId),
-            };
-          },
+      const revalidationInput = {
+        runId: input.runId,
+        policyDigest: digestJson(assetPolicy),
+        releaseController: assetReleaseController,
+        evidence: materialized.evidence.map((item) => ({ handle: item.handle, metadata: item.metadata })),
+        facts: factHandles,
+        assetGroups,
+        beforeFinalization: async () => {
+          if (!await currentAssetPolicyMatches()) {
+            for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+            limitations.add('asset_acquisition_policy_changed');
+            return [];
+          }
+          return assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId);
         },
-        input.request,
-        controller.signal,
-      );
+        finalizeHostAuthority: () => {
+          checkDeadline();
+          if (controller.signal.aborted) return { releaseAuthorized: false, candidateIds: [] };
+          if (!authorized(input, 'release')) return { releaseAuthorized: false, candidateIds: [] };
+          if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
+            for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+            limitations.add('authorization_revoked');
+          }
+          checkDeadline();
+          return {
+            releaseAuthorized: true,
+            candidateIds: assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId),
+          };
+        },
+      };
+      let preparation;
+      try {
+        preparation = await awaitControlledAssetPreparation(
+          () => input.controlledAssetEvidenceStore.revalidateControlledAssetRelease(
+            evidenceScope, revalidationInput, input.request, controller.signal,
+          ),
+          controller.signal,
+          abortError,
+          (lateValue) => {
+            revokeAssetReleaseAuthority('late_asset_release_preparation');
+            discardAssetReleasePreparation(lateValue);
+          },
+        );
+      } catch (error) {
+        revokeAssetReleaseAuthority('asset_release_preparation_failed');
+        throw error;
+      }
+      let revalidated = null;
+      try {
+        if (!utilTypes.isProxy(preparation.value)) {
+          const copied = plainDataRecord(preparation.value, new Set(['releaseCheck', 'candidateIds']));
+          const candidateIds = copied && ownArray(copied.candidateIds, 8);
+          if (copied && candidateIds && copied.releaseCheck && typeof copied.releaseCheck === 'object') {
+            revalidated = Object.freeze({ releaseCheck: copied.releaseCheck, candidateIds: Object.freeze(candidateIds) });
+          }
+        }
+      } catch { /* malformed adapter result fails closed below */ }
+      if (!revalidated) {
+        revokeAssetReleaseAuthority('invalid_asset_release_preparation');
+        discardAssetReleasePreparation(preparation.value);
+        throw new RetrievalError('EVIDENCE_INVALID');
+      }
 
       try {
         checkDeadline();
         if (controller.signal.aborted) throw abortError();
       } catch (error) {
-        input.assetReleaseFinalizationStore.discardControlledAssetRelease(evidenceScope, revalidated.releaseCheck);
+        revokeAssetReleaseAuthority('asset_release_preparation_expired');
+        discardAssetReleaseCheck(revalidated.releaseCheck);
         throw error;
       }
 
@@ -2611,7 +2721,11 @@ export async function runPrivateRetrieval(value) {
           },
         },
       );
-      if (hasThenableBehavior(finalized)) throw new RetrievalError('EVIDENCE_INVALID');
+      if (hasThenableBehavior(finalized)) {
+        revokeAssetReleaseAuthority('asynchronous_asset_projection_denied');
+        discardAssetReleaseCheck(revalidated.releaseCheck);
+        throw new RetrievalError('EVIDENCE_INVALID');
+      }
       return finalized;
     }
     checkDeadline();

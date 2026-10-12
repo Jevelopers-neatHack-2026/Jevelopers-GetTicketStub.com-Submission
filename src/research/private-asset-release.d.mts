@@ -13,3 +13,12 @@ export type PrivateAssetReleaseCheck = { readonly [releaseCheckBrand]: true };
 export interface PrivateAssetReleaseAuthorityController {
   revoke(reason?: string): 'before_release' | 'after_release' | null;
 }
+
+/** Internal fail-closed adapter helpers for supported native Promise values. */
+export declare function hasThenableBehavior(value: unknown): boolean;
+export declare function observeNativeRejectedPromise(value: unknown): boolean;
+export declare function subscribeToSupportedNativePromise(
+  value: unknown,
+  onFulfilled: ((value: unknown) => void) | undefined,
+  onRejected: ((reason: unknown) => void) | undefined,
+): boolean;

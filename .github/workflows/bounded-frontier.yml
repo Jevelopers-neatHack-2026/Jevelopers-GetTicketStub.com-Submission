@@ -29,6 +29,8 @@ jobs:
       - name: Test controlled asset release protocol and revalidation regressions
         run: >-
           node --test tests/research/private-asset-release.test.mjs
+          tests/research/private-retrieval-r5-bounded-prep.test.mjs
+          tests/research/private-asset-release-r5-rejected-projection.test.mjs
           tests/research/r4-reviewer-r3-joint-tail.test.mjs
           tests/research/r2-reviewer-final-release.test.mjs
           tests/research/r2-reviewer-final-release-stage-order.test.mjs

@@ -1,9 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { types as utilTypes } from 'node:util';
 
 const AUTHORITIES = new WeakMap();
 const CONTROLLERS = new WeakMap();
 const RELEASE_CHECKS = new WeakMap();
+const GET_OWN_PROPERTY_DESCRIPTOR = Object.getOwnPropertyDescriptor;
+const GET_PROTOTYPE_OF = Object.getPrototypeOf;
+const HAS_OWN = Object.hasOwn;
+const FUNCTION_TO_STRING = Function.prototype.toString;
+const APPLY = Reflect.apply;
+const NATIVE_PROMISE_SPECIES = Symbol.species;
+const IS_PROXY = utilTypes.isProxy;
+const IS_PROMISE = utilTypes.isPromise;
+const NATIVE_PROMISE_THEN = Promise.prototype.then;
+const NATIVE_PROMISE_SOURCE = APPLY(FUNCTION_TO_STRING, Promise, []);
+const NATIVE_PROMISE_SPECIES_GETTER = GET_OWN_PROPERTY_DESCRIPTOR(Promise, NATIVE_PROMISE_SPECIES).get;
+const NATIVE_PROMISE_SPECIES_SOURCE = APPLY(FUNCTION_TO_STRING, NATIVE_PROMISE_SPECIES_GETTER, []);
 
 export class PrivateAssetReleaseError extends Error {
   constructor(code = 'ASSET_RELEASE_AUTHORITY_DENIED') {
@@ -54,9 +67,72 @@ function validCandidateIds(value) {
   }
 }
 
-function thenable(value) {
+function supportedNativePromise(value) {
+  try {
+    if (IS_PROXY(value) || !IS_PROMISE(value)
+      || GET_OWN_PROPERTY_DESCRIPTOR(value, 'constructor') !== undefined) return false;
+    const prototype = GET_PROTOTYPE_OF(value);
+    if (!prototype || IS_PROXY(prototype)) return false;
+    const constructorDescriptor = GET_OWN_PROPERTY_DESCRIPTOR(prototype, 'constructor');
+    if (!constructorDescriptor || !HAS_OWN(constructorDescriptor, 'value')) return false;
+    const constructor = constructorDescriptor.value;
+    if (typeof constructor !== 'function' || IS_PROXY(constructor)) return false;
+    const constructorPrototype = GET_OWN_PROPERTY_DESCRIPTOR(constructor, 'prototype');
+    if (!constructorPrototype || !HAS_OWN(constructorPrototype, 'value')
+      || constructorPrototype.value !== prototype
+      || APPLY(FUNCTION_TO_STRING, constructor, []) !== NATIVE_PROMISE_SOURCE) return false;
+    const species = GET_OWN_PROPERTY_DESCRIPTOR(constructor, NATIVE_PROMISE_SPECIES);
+    return species !== undefined
+      && typeof species.get === 'function'
+      && !IS_PROXY(species.get)
+      && species.set === undefined
+      && species.enumerable === false
+      && APPLY(FUNCTION_TO_STRING, species.get, []) === NATIVE_PROMISE_SPECIES_SOURCE;
+  } catch {
+    return false;
+  }
+}
+
+/** Attach handlers only to ordinary native promises whose species path is verified. */
+export function subscribeToSupportedNativePromise(value, onFulfilled, onRejected) {
+  if (!supportedNativePromise(value) || typeof onRejected !== 'function'
+    || (onFulfilled !== undefined && typeof onFulfilled !== 'function')) return false;
+  try {
+    APPLY(NATIVE_PROMISE_THEN, value, [onFulfilled, onRejected]);
+    return true;
+  } catch {
+    // A malformed promise remains denied; never inspect its own then accessor.
+    return false;
+  }
+}
+
+export function observeNativeRejectedPromise(value) {
+  let nativePromise = false;
+  try { nativePromise = IS_PROMISE(value); } catch { return false; }
+  if (!nativePromise) return false;
+  subscribeToSupportedNativePromise(value, undefined, () => {});
+  return true;
+}
+
+export function hasThenableBehavior(value) {
   if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return false;
-  try { return typeof value.then === 'function'; } catch { return true; }
+  if (observeNativeRejectedPromise(value)) return true;
+  try {
+    let current = value;
+    for (let depth = 0; current !== null && depth < 64; depth += 1) {
+      if (IS_PROXY(current)) return true;
+      const descriptor = GET_OWN_PROPERTY_DESCRIPTOR(current, 'then');
+      if (descriptor) {
+        if (!HAS_OWN(descriptor, 'value')) return true;
+        return typeof descriptor.value === 'function';
+      }
+      current = GET_PROTOTYPE_OF(current);
+    }
+    return current !== null;
+  } catch {
+    // Do not execute hostile accessors or proxy traps to decide whether to deny.
+    return true;
+  }
 }
 
 export function createPrivateAssetReleaseAuthority({
@@ -188,7 +264,7 @@ export function finalizePrivateAssetRelease(authority, binding, callback) {
   state.finalizing = true;
   try {
     const result = callback();
-    if (thenable(result) || state.revoked
+    if (hasThenableBehavior(result) || state.revoked
       || performance.now() >= Math.min(state.expiresAtMonotonic, record.deadlineAtMonotonic)) fail();
     state.released = true;
     return result;
