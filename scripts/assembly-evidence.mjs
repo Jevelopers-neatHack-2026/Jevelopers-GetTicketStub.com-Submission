@@ -8,10 +8,11 @@
 //   node scripts/assembly-evidence.mjs verify [<manifest>] [--allow-dirty]
 //
 // The default output (out/assembly-evidence/manifest.json) is git-ignored, so the app SHA is never committed into
-// the app itself. No network, no provider calls, no .env or data reads; only tracked fixtures/vendor files are hashed.
+// the app itself. No network, no provider calls; identities are read only from committed HEAD blobs (so no .env, ignored,
+// untracked or locally modified content is ever opened), and the manifest digest is unkeyed, not an authenticity proof.
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,104 +25,143 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const HEX40 = /^[0-9a-f]{40}$/;
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const git = (root, ...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 64 << 20 });
+const gitBytes = (root, ...args) => execFileSync("git", args, { cwd: root, maxBuffer: 256 << 20, stdio: ["ignore", "pipe", "pipe"] });
+const git = (root, ...args) => gitBytes(root, ...args).toString("utf8");
 
-// A repo-relative path must be plain, stay inside `base`, and be a regular file reached without any symlink.
-export function safeRegularFile(root, rel, base = "") {
-  if (typeof rel !== "string" || !rel || rel.includes("\0") || rel.includes("\\") || isAbsolute(rel)) {
-    throw new Error(`unsafe path: ${JSON.stringify(rel)}`);
+// Every identity below is read from committed HEAD blobs (never the working tree), so ignored, untracked,
+// skip-worktree or locally modified content cannot become a pin, and no path outside the tracked tree is opened.
+function headTree(root) {
+  const tree = new Map();
+  for (const entry of git(root, "ls-tree", "-r", "-z", "--full-tree", "HEAD").split("\0").filter(Boolean)) {
+    const tab = entry.indexOf("\t");
+    const [mode, type, oid] = entry.slice(0, tab).split(" ");
+    tree.set(entry.slice(tab + 1), { mode, type, oid });
   }
-  if (rel.split("/").some((part) => part === ".." || part === "." || part === "")) throw new Error(`unsafe path: ${rel}`);
-  const full = resolve(root, base, rel);
-  const baseFull = resolve(root, base);
-  if (full !== baseFull && !full.startsWith(baseFull + sep)) throw new Error(`path escapes ${base || "repo"}: ${rel}`);
-  let current = baseFull;
-  for (const part of relative(baseFull, full).split(sep)) {
-    current = join(current, part);
-    if (lstatSync(current).isSymbolicLink()) throw new Error(`symlink refused: ${relative(root, current)}`);
-  }
-  if (!lstatSync(full).isFile()) throw new Error(`not a regular file: ${rel}`);
-  if (realpathSync(full) !== join(realpathSync(root), base, rel)) throw new Error(`path resolves elsewhere: ${rel}`);
-  return full;
+  return tree;
 }
 
-const hashFile = (root, rel, base) => sha256(readFileSync(safeRegularFile(root, rel, base)));
+function plainPath(rel) {
+  if (typeof rel !== "string" || !rel || rel.includes("\0") || rel.includes("\\") || isAbsolute(rel)) throw new Error(`unsafe path: ${JSON.stringify(rel)}`);
+  if (rel.split("/").some((part) => part === ".." || part === "." || part === "")) throw new Error(`unsafe path: ${rel}`);
+  if (/(^|\/)\.env/i.test(rel) || /\.pem$/i.test(rel)) throw new Error(`secret-like path refused: ${rel}`);
+  return rel;
+}
 
-function requireFile(root, rel) {
-  try { return hashFile(root, rel, ""); }
+// A path must be a plain relative path to a regular, tracked HEAD blob; returns its bytes.
+function readTracked(root, tree, rel) {
+  const entry = tree.get(plainPath(rel));
+  if (!entry) throw new Error(`not tracked at HEAD: ${rel}`);
+  if (entry.type !== "blob" || (entry.mode !== "100644" && entry.mode !== "100755")) throw new Error(`not a regular tracked file (mode ${entry.mode}): ${rel}`);
+  return gitBytes(root, "cat-file", "blob", entry.oid);
+}
+
+function requireTracked(root, tree, rel) {
+  try { return readTracked(root, tree, rel); }
   catch (error) { throw new Error(`required input missing or unsafe: ${rel} (${error.message})`); }
 }
 
 function appState(root) {
   const sha = git(root, "rev-parse", "HEAD").trim();
   if (!HEX40.test(sha)) throw new Error("could not read app git SHA");
-  const dirtyPaths = git(root, "status", "--porcelain", "-z", "--untracked-files=all")
-    .split("\0").filter(Boolean).map((entry) => entry.slice(3)).sort();
-  const branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").trim();
-  return { sha, branch, dirty: dirtyPaths.length > 0, dirtyPaths };
+  const dirtyPaths = new Set();
+  const status = git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").split("\0");
+  for (let i = 0; i < status.length; i += 1) {
+    const entry = status[i];
+    if (!entry) continue;
+    dirtyPaths.add(entry.slice(3));
+    if (entry[0] === "R" || entry[0] === "C" || entry[1] === "R" || entry[1] === "C") i += 1; // skip the rename/copy source token
+  }
+  // skip-worktree / assume-unchanged entries hide edits from `git status`; treat them as dirty.
+  for (const entry of git(root, "ls-files", "-v", "-z").split("\0").filter(Boolean)) {
+    if (entry[0] !== "H") dirtyPaths.add(entry.slice(2));
+  }
+  const sorted = [...dirtyPaths].sort();
+  return { sha, dirty: sorted.length > 0, dirtyPaths: sorted };
 }
 
-function toolchain(root) {
-  const pkg = JSON.parse(readFileSync(safeRegularFile(root, "package.json"), "utf8"));
-  const npmVersion = execFileSync("npm", ["--version"], { cwd: root, encoding: "utf8" }).trim();
+const NODE_VERSION = /^\d+\.\d+\.\d+$/;
+
+function toolchain(root, tree) {
+  const pkg = JSON.parse(requireTracked(root, tree, "package.json").toString("utf8"));
   const declared = { nodeRange: pkg.engines?.node ?? null, npmRange: pkg.engines?.npm ?? null, packageManager: pkg.packageManager ?? null };
-  const pinnedNpm = /^npm@(\d+\.\d+\.\d+)$/.exec(declared.packageManager ?? "")?.[1] ?? null;
-  const runtime = { node: process.versions.node, npm: npmVersion };
-  return {
-    declared, runtime,
-    // Declared and runtime are recorded separately; a mismatch is visible, never papered over.
-    runtimeMatchesPackageManager: pinnedNpm !== null && pinnedNpm === npmVersion,
-  };
+  // Runtime is whatever this process reports about itself; verify cannot prove it for a past build.
+  const runtime = { node: process.versions.node, npm: execFileSync("npm", ["--version"], { cwd: root, encoding: "utf8" }).trim() };
+  return { declared, runtime, runtimeMatchesPackageManager: runtimeMatches(declared, runtime) };
 }
 
-function vendored(root) {
+function runtimeMatches(declared, runtime) {
+  const pinnedNpm = /^npm@(\d+\.\d+\.\d+)$/.exec(declared.packageManager ?? "")?.[1] ?? null;
+  return pinnedNpm !== null && pinnedNpm === runtime.npm;
+}
+
+// Repository identity is derived from the planning inventory's organization and the module name, never copied.
+function trustedRepository(map, name) {
+  const entry = map.repositories.find((repo) => repo.name === name);
+  if (!entry || typeof map.organization !== "string" || !/^[A-Za-z0-9._-]+$/.test(map.organization) || !/^[A-Za-z0-9._-]+$/.test(name)) {
+    throw new Error(`vendored module ${name} is not in the repository inventory`);
+  }
+  const url = `https://github.com/${map.organization}/${name}`;
+  if (entry.supplied_url !== undefined && entry.supplied_url !== url) throw new Error(`inventory URL for ${name} is not the plain organization URL`);
+  return url;
+}
+
+function vendored(root, tree, map) {
+  const prefix = `${VENDOR_DIR}/`;
+  const byModule = new Map();
+  for (const path of tree.keys()) {
+    if (!path.startsWith(prefix)) continue;
+    const [name] = path.slice(prefix.length).split("/");
+    byModule.set(name, [...(byModule.get(name) ?? []), path.slice(prefix.length + name.length + 1)]);
+  }
   const out = [];
-  const vendorRoot = safeDir(root, VENDOR_DIR);
-  for (const name of readdirSync(vendorRoot).sort()) {
-    const base = `${VENDOR_DIR}/${name}`;
-    if (lstatSync(join(root, base)).isSymbolicLink() || !lstatSync(join(root, base)).isDirectory()) throw new Error(`vendor entry is not a plain directory: ${base}`);
-    const manifest = JSON.parse(readFileSync(safeRegularFile(root, "MANIFEST.json", base), "utf8"));
+  for (const name of [...byModule.keys()].sort()) {
+    const base = `${prefix}${name}`;
+    const tracked = byModule.get(name).filter((rel) => rel !== "");
+    const manifestBytes = requireTracked(root, tree, `${base}/MANIFEST.json`);
+    const manifest = JSON.parse(manifestBytes.toString("utf8"));
     if (!HEX40.test(manifest.commit ?? "")) throw new Error(`${base}/MANIFEST.json has no 40-hex commit`);
+    const repository = trustedRepository(map, name);
+    if (manifest.repository !== repository) throw new Error(`${base}/MANIFEST.json repository is not ${repository}`);
+    if (!manifest.files || typeof manifest.files !== "object" || Array.isArray(manifest.files)) throw new Error(`${base}/MANIFEST.json lists no files`);
+    const listed = Object.keys(manifest.files).map(plainPath).sort();
+    if (!listed.length) throw new Error(`${base}/MANIFEST.json lists no files`);
+    const extra = tracked.filter((rel) => rel !== "MANIFEST.json" && !listed.includes(rel));
+    if (extra.length) throw new Error(`tracked vendored files not listed in ${base}/MANIFEST.json: ${extra.join(", ")}`);
     const files = {};
-    for (const [rel, declared] of Object.entries(manifest.files ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
-      const actual = hashFile(root, rel, base);
-      if (actual !== declared) throw new Error(`vendored file drifted from MANIFEST.json: ${base}/${rel}`);
+    for (const rel of listed) {
+      const actual = sha256(readTracked(root, tree, `${base}/${rel}`));
+      if (actual !== manifest.files[rel]) throw new Error(`vendored file drifted from MANIFEST.json: ${base}/${rel}`);
       files[rel] = actual;
     }
-    if (!Object.keys(files).length) throw new Error(`${base}/MANIFEST.json lists no files`);
-    out.push({
-      name, status: "installed-vendored", repository: manifest.repository ?? null, commit: manifest.commit,
-      manifestSha256: hashFile(root, "MANIFEST.json", base), files,
-    });
+    out.push({ name, status: "installed-vendored", repository, commit: manifest.commit, manifestSha256: sha256(manifestBytes), files });
   }
-  if (!out.length) throw new Error(`no vendored modules under ${VENDOR_DIR}`);
+  if (!out.length) throw new Error(`no tracked vendored modules under ${VENDOR_DIR}`);
   return out;
 }
 
-function safeDir(root, rel) {
-  const full = resolve(root, rel);
-  if (lstatSync(full).isSymbolicLink() || realpathSync(full) !== join(realpathSync(root), rel)) throw new Error(`directory unsafe: ${rel}`);
-  return full;
-}
-
-function fixtures(root) {
+function fixtures(root, tree) {
   const suites = {};
   for (const suite of FIXTURE_SUITES) {
-    const tracked = git(root, "ls-files", "-z", "--", suite).split("\0").filter(Boolean).sort();
+    const tracked = [...tree.keys()].filter((path) => path.startsWith(`${suite}/`)).sort();
     if (!tracked.length) throw new Error(`required fixture suite has no tracked files: ${suite}`);
     const files = {};
-    for (const rel of tracked) files[rel] = hashFile(root, rel, "");
+    for (const rel of tracked) files[rel] = sha256(readTracked(root, tree, rel));
     suites[suite] = { fileCount: tracked.length, digest: digestOf(files), files };
   }
   return suites;
 }
 
 // Required component pins come from the planning inventory's composition root; the inventory itself is never a pin.
-function components(root, vendoredModules) {
-  const inventoryHash = requireFile(root, "integration/repository-map.json");
-  const map = JSON.parse(readFileSync(join(root, "integration/repository-map.json"), "utf8"));
+function loadMap(root, tree) {
+  const bytes = requireTracked(root, tree, "integration/repository-map.json");
+  const map = JSON.parse(bytes.toString("utf8"));
+  if (!Array.isArray(map.repositories)) throw new Error("repository map has no repositories array");
   const rootRepo = map.repositories.find((repo) => repo.id === map.integration_root || repo.name === map.integration_root);
-  if (!rootRepo) throw new Error("repository map has no integration root");
+  if (!rootRepo || !Array.isArray(rootRepo.planned_package_dependencies)) throw new Error("repository map has no integration root with planned_package_dependencies");
+  return { map, rootRepo, sha256: sha256(bytes) };
+}
+
+function components({ rootRepo, sha256: inventoryHash }, vendoredModules) {
   const byName = new Map(vendoredModules.map((entry) => [entry.name, entry]));
   return {
     plannedInventorySha256: inventoryHash,
@@ -144,83 +184,83 @@ function canonical(value) {
   return JSON.stringify(value);
 }
 
+const ACCEPTANCE = {
+  status: "not_accepted",
+  statement: "Snapshot of checkout identities only. No lint, typecheck, build, integration suite, journey, provider or release check was executed or implied; pending pins mean GT-10B.1 is unmet.",
+};
+
 export function buildManifest(root, { allowDirty = false } = {}) {
   const app = appState(root);
   if (app.dirty && !allowDirty) {
     throw new Error(`working tree is dirty (${app.dirtyPaths.length} paths); commit first or pass --allow-dirty for a non-reproducible snapshot`);
   }
-  const vendoredModules = vendored(root);
+  const tree = headTree(root);
+  const inventory = loadMap(root, tree);
+  const vendoredModules = vendored(root, tree, inventory.map);
   const body = {
     schema: SCHEMA,
     mode: MODE,
     app: { ...app, reproducible: !app.dirty },
-    lockfile: { path: "package-lock.json", sha256: requireFile(root, "package-lock.json") },
-    toolchain: toolchain(root),
+    lockfile: { path: "package-lock.json", sha256: sha256(requireTracked(root, tree, "package-lock.json")) },
+    toolchain: toolchain(root, tree),
     vendored: vendoredModules,
-    components: components(root, vendoredModules),
-    fixtures: fixtures(root),
+    components: components(inventory, vendoredModules),
+    fixtures: fixtures(root, tree),
     executed: [],
-    acceptance: {
-      status: "not_accepted",
-      statement: "Snapshot of checkout identities only. No lint, typecheck, build, integration suite, journey, provider or release check was executed or implied; pending pins mean GT-10B.1 is unmet.",
-    },
+    acceptance: ACCEPTANCE,
   };
   return { ...body, manifestDigest: digestOf(body) };
 }
 
-// Returns a list of problems (empty = consistent with this checkout). Never throws on bad manifest content.
+const isPlain = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const sameKeys = (value, keys) => isPlain(value) && canonical(Object.keys(value).sort()) === canonical([...keys].sort());
+
+// Returns a list of problems (empty = every claim matches what this checkout derives from HEAD). Never throws on bad
+// manifest content. manifestDigest is an UNKEYED hash: it detects accidental edits only and does not authenticate the
+// manifest. Safety comes from recomputing every claim; the only claims that cannot be recomputed are build-time
+// self-reports (toolchain.runtime and the app dirty/reproducible flags), which are checked for internal consistency only.
 export function verifyManifest(root, manifest, { allowDirty = false } = {}) {
   const problems = [];
   const fail = (message) => problems.push(message);
-  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return ["manifest is not an object"];
+  if (!isPlain(manifest)) return ["manifest is not an object"];
+  if (!sameKeys(manifest, ["schema", "mode", "app", "lockfile", "toolchain", "vendored", "components", "fixtures", "executed", "acceptance", "manifestDigest"])) {
+    fail("manifest has missing or unknown top-level keys");
+  }
   const { manifestDigest, ...body } = manifest;
+  if (!HEX64.test(manifestDigest ?? "") || manifestDigest !== digestOf(body)) fail("manifestDigest does not match manifest content (unkeyed; detects accidental edits only)");
   if (manifest.schema !== SCHEMA) fail(`unsupported schema: ${manifest.schema}`);
   if (manifest.mode !== MODE) fail(`unexpected mode label: ${manifest.mode}`);
-  if (!HEX64.test(manifestDigest ?? "") || manifestDigest !== digestOf(body)) fail("manifestDigest does not match manifest content (tampered or edited)");
-  if (manifest.acceptance?.status !== "not_accepted") fail("acceptance.status must be not_accepted for a snapshot manifest");
-  if (!Array.isArray(manifest.executed) || manifest.executed.length) fail("snapshot manifest must not carry executed results");
-  if (manifest.app?.dirty || manifest.app?.reproducible === false) {
-    if (!allowDirty) fail("manifest was produced from a dirty tree (not reproducible)");
-  }
-  try {
-    const app = appState(root);
-    if (manifest.app?.sha !== app.sha) fail(`app SHA ${manifest.app?.sha} is not this checkout's HEAD ${app.sha}`);
-    if (app.dirty && !allowDirty) fail("checkout is dirty");
-  } catch (error) { fail(`cannot read git state: ${error.message}`); }
 
-  const attempt = (label, fn) => { try { return fn(); } catch (error) { fail(`${label}: ${error.message}`); return null; } };
-  attempt("lockfile", () => {
-    if (manifest.lockfile?.sha256 !== hashFile(root, "package-lock.json", "")) fail("package-lock.json hash differs");
-  });
-  attempt("vendored", () => {
-    const current = vendored(root);
-    if (canonical(current) !== canonical(manifest.vendored)) fail("vendored module identities differ from checkout");
-    for (const entry of manifest.vendored ?? []) if (entry.status !== "installed-vendored") fail(`vendored ${entry.name}: bad status ${entry.status}`);
-  });
-  attempt("fixtures", () => {
-    const current = fixtures(root);
-    if (canonical(Object.keys(current)) !== canonical(Object.keys(manifest.fixtures ?? {}).sort())) fail("fixture suite set differs from allowlist");
-    for (const [suite, entry] of Object.entries(current)) {
-      const recorded = manifest.fixtures?.[suite];
-      if (!recorded) continue;
-      const names = new Set([...Object.keys(entry.files), ...Object.keys(recorded.files ?? {})]);
-      for (const name of [...names].sort()) {
-        if (!(name in entry.files)) fail(`fixture listed but not tracked: ${name}`);
-        else if (!(name in (recorded.files ?? {}))) fail(`tracked fixture missing from manifest: ${name}`);
-        else if (entry.files[name] !== recorded.files[name]) fail(`fixture hash differs: ${name}`);
-      }
-      if (recorded.digest !== entry.digest) fail(`fixture suite digest differs: ${suite}`);
-    }
-  });
-  attempt("components", () => {
-    const currentComponents = components(root, vendored(root));
-    if (canonical(currentComponents) !== canonical(manifest.components)) fail("component pin table differs from checkout");
-    for (const component of manifest.components?.required ?? []) {
-      if (component.status === "pending" && (component.commit || component.sha256)) fail(`pending component ${component.name} carries a pin`);
-      if (component.status !== "pending" && !HEX40.test(component.commit ?? "")) fail(`component ${component.name} claims ${component.status} without a 40-hex commit`);
-      if (!["pending", "installed-vendored"].includes(component.status)) fail(`component ${component.name}: unknown status ${component.status}`);
-    }
-  });
+  const app = manifest.app;
+  if (!sameKeys(app, ["sha", "dirty", "dirtyPaths", "reproducible"])
+    || typeof app.dirty !== "boolean" || !Array.isArray(app.dirtyPaths) || !app.dirtyPaths.every((p) => typeof p === "string")
+    || app.dirty !== app.dirtyPaths.length > 0 || app.reproducible !== !app.dirty) {
+    fail("app block is malformed or internally inconsistent");
+  } else if (app.dirty && !allowDirty) fail("manifest was produced from a dirty tree (self-reported; not reproducible)");
+
+  const tc = manifest.toolchain;
+  if (!sameKeys(tc, ["declared", "runtime", "runtimeMatchesPackageManager"]) || !sameKeys(tc.runtime, ["node", "npm"])
+    || !NODE_VERSION.test(tc.runtime.node ?? "") || !NODE_VERSION.test(tc.runtime.npm ?? "")) {
+    fail("toolchain block is malformed");
+  }
+
+  let expected = null;
+  try {
+    const current = appState(root);
+    if (app?.sha !== current.sha) fail(`app SHA ${app?.sha} is not this checkout's HEAD ${current.sha}`);
+    if (current.dirty && !allowDirty) fail("checkout is dirty");
+    expected = buildManifest(root, { allowDirty: true });
+  } catch (error) { fail(`cannot derive expected identities from HEAD: ${error.message}`); }
+  if (!expected) return problems;
+
+  if (canonical(tc?.declared) !== canonical(expected.toolchain.declared)) fail("toolchain.declared differs from package.json at HEAD");
+  if (tc?.runtimeMatchesPackageManager !== runtimeMatches(expected.toolchain.declared, tc?.runtime ?? {})) fail("runtimeMatchesPackageManager is inconsistent with the recorded runtime");
+  for (const key of ["lockfile", "vendored", "components", "fixtures", "executed", "acceptance"]) {
+    if (canonical(manifest[key]) !== canonical(expected[key])) fail(`${key} differs from what HEAD derives`);
+  }
+  for (const component of manifest.components?.required ?? []) {
+    if (component?.status === "pending" && (component.commit || component.sha256)) fail(`pending component ${component.name} carries a pin`);
+  }
   return problems;
 }
 
@@ -228,8 +268,12 @@ function parseArgs(argv) {
   const args = { positional: [], allowDirty: false, out: null };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--allow-dirty") args.allowDirty = true;
-    else if (argv[i] === "--out") { args.out = argv[i + 1]; i += 1; }
-    else if (argv[i].startsWith("--")) throw new Error(`unknown option: ${argv[i]}`);
+    else if (argv[i] === "--out") {
+      const value = argv[i + 1];
+      if (!value || value.startsWith("--")) throw new Error("--out requires a file path");
+      args.out = value;
+      i += 1;
+    } else if (argv[i].startsWith("--")) throw new Error(`unknown option: ${argv[i]}`);
     else args.positional.push(argv[i]);
   }
   return args;
@@ -239,7 +283,13 @@ function parseArgs(argv) {
 function checkOutputPath(root, out) {
   const full = resolve(root, out);
   const rel = relative(root, full);
-  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return full; // explicit user-chosen path outside the repo
+  if (rel === "") throw new Error("--out must be a file path");
+  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return full; // explicit user-chosen path outside the repo
+  let current = root;
+  for (const part of rel.split(sep)) {
+    current = join(current, part);
+    if (existsSync(current) && lstatSync(current).isSymbolicLink()) throw new Error(`refusing to write through a symlink: ${relative(root, current)}`);
+  }
   const tracked = git(root, "ls-files", "--", rel).trim();
   if (tracked) throw new Error(`refusing to overwrite tracked file: ${rel}`);
   try { execFileSync("git", ["check-ignore", "-q", "--", rel], { cwd: root }); }

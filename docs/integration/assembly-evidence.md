@@ -13,38 +13,52 @@ Default output is `out/assembly-evidence/manifest.json` (git-ignored). `--out` a
 repo, or inside it only if git ignores it and it is not tracked, so the app SHA is never committed into the app
 (no recursive self-pin). There is deliberately no `package.json` script entry; run the file directly.
 
-## What is recorded (all from actual files)
+## Trust model and limits (read first)
+
+- `manifestDigest` is an **unkeyed** SHA-256 of the canonical JSON. It catches accidental edits only and proves nothing
+  about who produced the manifest; anyone can recompute it. Do not treat it as a signature or authenticity claim.
+- `verify` therefore **recomputes every claim from the committed HEAD** and rejects any difference, any unknown key and
+  any extra claim (a resealed "release certified" manifest fails).
+- Two things cannot be recomputed later and are **build-time self-reports**: `toolchain.runtime` (whatever the building
+  process said about itself) and `app.dirty` / `app.dirtyPaths` / `app.reproducible` (a dirty build relabelled clean
+  after cleaning the tree is not detectable). `verify` checks only that they are well-formed and internally consistent.
+- Snapshot only: no command results, no acceptance, no release claim.
+
+## What is recorded (all from committed HEAD blobs)
+
+Everything below is read with `git ls-tree`/`git cat-file` from HEAD, never from the working tree. Ignored, untracked,
+`.env*`, skip-worktree or locally modified files can never be opened or become a pin.
 
 | Field | Source |
 | --- | --- |
-| `app` | `git rev-parse HEAD`, branch, dirty paths (names only) |
-| `lockfile` | SHA-256 of `package-lock.json` |
-| `toolchain.declared` / `.runtime` | `package.json` engines and `packageManager` vs the running Node and `npm --version`, kept separate |
-| `vendored` | each `src/server/vendor/*/MANIFEST.json`: repository, commit, per-file SHA-256 (build fails if a file drifts from its MANIFEST) |
-| `components.required` | dependencies of the composition root in `integration/repository-map.json`: `installed-vendored` only if a vendored module exists, otherwise `pending` with no commit or hash |
-| `fixtures` | git-tracked files under `fixtures/approval`, `fixtures/context`, `fixtures/order-authorization` with SHA-256 and a per-suite digest |
+| `app` | `git rev-parse HEAD`, dirty path names (status, including untracked, plus skip-worktree/assume-unchanged entries) |
+| `lockfile` | SHA-256 of `package-lock.json` at HEAD |
+| `toolchain.declared` / `.runtime` | `package.json` engines and `packageManager` at HEAD vs the running Node and `npm --version` (self-reported), kept separate |
+| `vendored` | each tracked `src/server/vendor/<name>/MANIFEST.json`: commit, per-file SHA-256. The repository must be exactly `https://github.com/<inventory organization>/<name>` (no credentials, no `.git`), `<name>` must be in the inventory, every tracked file in the module must be listed, and listed files must be regular tracked blobs |
+| `components.required` | dependencies of the composition root in `integration/repository-map.json`: `installed-vendored` only if a tracked vendored module exists, otherwise `pending` with no commit or hash |
+| `fixtures` | HEAD blobs under `fixtures/approval`, `fixtures/context`, `fixtures/order-authorization` with SHA-256 and a per-suite digest |
 | `executed` | always `[]`; this tool records no command results |
-| `acceptance` | always `not_accepted` |
+| `acceptance` | always the fixed `not_accepted` object |
 
-`integration/repository-map.json` is hashed only as planning inventory; it never counts as a pin. Specialist, schema,
-brand, landing and dashboard components absent from the checkout remain `pending` (GT-10B.1 is unmet until they have
-real revisions).
+`integration/repository-map.json` is hashed only as planning inventory; it never counts as a pin. Components absent
+from the checkout remain `pending` (GT-10B.1 is unmet until they have real revisions).
 
 ## Dirty-tree policy
 
-`build` refuses a dirty tree (untracked files included). `--allow-dirty` records `dirty: true`,
-`reproducible: false` and the dirty path names; `verify` rejects such manifests unless `--allow-dirty` is passed.
+`build` refuses a dirty tree (untracked files included, and skip-worktree/assume-unchanged paths). `--allow-dirty`
+records `dirty: true`, `reproducible: false` and the dirty path names (hashes still come from HEAD); `verify` rejects
+such manifests unless `--allow-dirty` is passed.
 
-## Safety
+## Path safety
 
-Vendored and fixture paths must be plain relative paths with no `..`, backslash, absolute or NUL; every path component
-is checked for symlinks and the file must be regular. Fixtures are enumerated with `git ls-files` under a fixed
-allowlist, so untracked or ignored files are never hashed.
+Vendored paths must be plain relative paths (no `..`, backslash, absolute, NUL, `.env*` or `.pem`) naming regular
+tracked HEAD blobs; symlinks and submodules are refused. `--out` must have a value, may not go through a symlink, and
+in-repo targets must be git-ignored and untracked.
 
 ## Verify
 
-`verify` fails on: a tampered manifest (digest), a non-`not_accepted` status, executed results, a wrong mode label,
-a pending component carrying a pin, an unknown status, a different HEAD, lockfile/vendor/fixture drift, and
-added/removed fixtures. A pass means "consistent with this checkout", nothing more.
+`verify` fails on: unknown or missing keys at any level, a digest mismatch, any claim differing from what HEAD derives
+(lockfile, vendored, components, fixtures, acceptance, executed, declared toolchain), a wrong mode or app SHA, a pending
+component carrying a pin, and inconsistent dirty/runtime self-reports. A pass means "consistent with this HEAD", nothing more.
 
 Tests: `node --test tests/assembly-evidence.test.mjs` (synthetic temp git repos plus one check against this checkout).
