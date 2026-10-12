@@ -1,5 +1,9 @@
 import type { PdfTextReaderErrorCode } from '../extraction/pdf/index.mjs';
 import type { RetrievedDocument, RetrievedSvgAssetDocument } from '../security/index.mjs';
+import type {
+  PrivateAssetReleaseAuthorityController,
+  PrivateAssetReleaseCheck,
+} from '../research/private-asset-release.mjs';
 
 declare const tenantScopeBrand: unique symbol;
 declare const evidenceHandleBrand: unique symbol;
@@ -744,6 +748,9 @@ export interface ControlledAssetReleaseRoleGroup {
 }
 
 export interface ControlledAssetReleaseRevalidationInput {
+  readonly runId: string;
+  readonly policyDigest: string;
+  readonly releaseController: PrivateAssetReleaseAuthorityController;
   /** The same at-most-eight evidence records selected for the private draft, including fact support. */
   readonly evidence: readonly ControlledAssetReleaseEvidenceReference[];
   /** The same fact handles selected for the private draft. */
@@ -753,9 +760,9 @@ export interface ControlledAssetReleaseRevalidationInput {
   /** Last awaited policy re-read; returns only candidate IDs whose plans remain eligible. */
   readonly beforeFinalization: (context: Readonly<{ candidateIds: readonly string[] }>) => readonly string[] | Promise<readonly string[]>;
   /**
-   * Synchronous trusted-composition host authorization, called twice around
-   * current store authorization. Re-derive release, asset, and deadline state
-   * on each call; thenables are rejected.
+   * Synchronous trusted-composition preflight after the last awaited policy
+   * check. The opaque release controller, not this boolean result, is the
+   * final revocation authority at projection; thenables are rejected.
    */
   readonly finalizeHostAuthority: (context: Readonly<{ candidateIds: readonly string[] }>) => Readonly<{
     releaseAuthorized: boolean;
@@ -764,7 +771,21 @@ export interface ControlledAssetReleaseRevalidationInput {
 }
 
 export interface ControlledAssetReleaseRevalidationResult {
-  readonly currentEvidenceMetadata: readonly AvailableEvidenceMetadata[];
+  readonly releaseCheck: PrivateAssetReleaseCheck;
+  readonly candidateIds: readonly string[];
+}
+
+export interface ControlledAssetReleaseFinalizationInput<Result> {
+  readonly releaseController: PrivateAssetReleaseAuthorityController;
+  readonly runId: string;
+  readonly policyDigest: string;
+  readonly deadlineAtMonotonic: number;
+  readonly candidateIds: readonly string[];
+  /** Synchronous projection callback executed at the release linearization point. */
+  readonly project: (current: Readonly<{
+    currentEvidenceMetadata: readonly AvailableEvidenceMetadata[];
+    candidateIds: readonly string[];
+  }>) => Result;
 }
 
 /** Optional capability required only when private retrieval is explicitly opted into controlled SVG acquisition. */
@@ -803,6 +824,16 @@ export interface ControlledAssetEvidenceStore<Request = unknown> extends Evidenc
     request: Request,
     signal?: AbortSignal,
   ): Promise<ControlledAssetReleaseRevalidationResult>;
+  /** Synchronous one-shot current-state check and projection; implementations must not await or return a thenable. */
+  finalizeControlledAssetRelease<Result>(
+    scope: EvidenceTenantScope,
+    releaseCheck: PrivateAssetReleaseCheck,
+    request: Request,
+    signal: AbortSignal | undefined,
+    input: ControlledAssetReleaseFinalizationInput<Result>,
+  ): Result;
+  /** Discards an unused preflight and wipes its retained snapshot. */
+  discardControlledAssetRelease(scope: EvidenceTenantScope, releaseCheck: PrivateAssetReleaseCheck): boolean;
 }
 
 export declare function createEvidenceStore<Request = unknown>(options: EvidenceStoreOptions<Request>): ControlledAssetEvidenceStore<Request>;

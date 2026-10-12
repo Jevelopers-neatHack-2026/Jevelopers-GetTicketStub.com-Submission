@@ -10,7 +10,7 @@ import test from 'node:test';
 import { gzipSync } from 'node:zlib';
 import { createEvidenceStore } from '../../src/evidence/store.mjs';
 import { createDiscoveryFrontierStore } from '../../src/discovery/planner/frontier.mjs';
-import { runPrivateRetrieval } from '../../src/research/private-retrieval.mjs';
+import { createPrivateAssetReleaseAuthority, runPrivateRetrieval } from '../../src/research/private-retrieval.mjs';
 import { SafeFetcher } from '../../src/security/controlled-fetch.mjs';
 import { fixtureUrl, localTestSeam, respond, startFixture } from '../security/support.mjs';
 
@@ -71,6 +71,15 @@ async function waitUntilPerfAtOrAfter(targetPerfMs) {
 
 function request(allowPrivate = true) {
   return { principal: { tenantId: TENANT }, allowPrivate };
+}
+
+function releaseAuthorityFor(_authenticated, context) {
+  return createPrivateAssetReleaseAuthority({
+    tenantId: TENANT,
+    runId: context.runId,
+    policy: context.policy,
+    expiresAtMonotonic: context.deadlineAtMonotonic,
+  });
 }
 
 function eventHtml({ name = 'Moonlight Market', date = '2027-06-20', city = 'Boston', asset = false } = {}) {
@@ -180,7 +189,7 @@ async function harness(t, { evidenceOptions = {}, hostnames = [LOCAL_FIXTURE_HOS
     onDial: () => requests.add('dial'),
   }));
   const makeInput = ({ runId, server, seeds, limits, authorizeCurrent, retentionHandleFor, safeFetcher, signal,
-    assetAcquisitionPolicyFor, frontier: frontierStore = frontier, store = evidenceStore }) => ({
+    assetAcquisitionPolicyFor, assetAcquisitionReleaseAuthorityFor, frontier: frontierStore = frontier, store = evidenceStore }) => ({
     frontier: frontierStore,
     evidenceStore: store,
     safeFetcher: safeFetcher ?? makeFetcher(server),
@@ -189,7 +198,10 @@ async function harness(t, { evidenceOptions = {}, hostnames = [LOCAL_FIXTURE_HOS
     seeds,
     ...(limits ? { limits } : {}),
     ...(signal ? { signal } : {}),
-    ...(assetAcquisitionPolicyFor ? { assetAcquisitionPolicyFor } : {}),
+    ...(assetAcquisitionPolicyFor ? {
+      assetAcquisitionPolicyFor,
+      assetAcquisitionReleaseAuthorityFor: assetAcquisitionReleaseAuthorityFor ?? releaseAuthorityFor,
+    } : {}),
     retentionHandleFor: retentionHandleFor ?? (() => createRetention()),
     authorizeCurrent: authorizeCurrent ?? (() => true),
   });

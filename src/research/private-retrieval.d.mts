@@ -21,6 +21,7 @@ import type {
   OccurrenceTransition,
 } from '../discovery/occurrences/identity.mjs';
 import type { SafeFetcher } from '../security/index.mjs';
+import type { PrivateAssetReleaseAuthorityController } from './private-asset-release.mjs';
 
 export type PrivateRetrievalAuthorizationStage = 'start' | 'candidate' | 'asset-acquisition' | 'release';
 
@@ -66,6 +67,20 @@ export interface PrivateRetrievalInputBase<Request = unknown, Store extends Evid
     request: Request,
     context: Readonly<{ runId: string }>,
   ) => PrivateRetrievalAssetAcquisitionPolicy | null | Promise<PrivateRetrievalAssetAcquisitionPolicy | null>;
+  /**
+   * Opt-in host capability issuer. Its controller is bound to this logical run,
+   * exact normalized policy digest, tenant, and monotonic deadline. Keep the
+   * controller and revoke it synchronously when any bound authority changes.
+   */
+  readonly assetAcquisitionReleaseAuthorityFor?: (
+    request: Request,
+    context: Readonly<{
+      runId: string;
+      policy: PrivateRetrievalAssetAcquisitionPolicy;
+      policyDigest: string;
+      deadlineAtMonotonic: number;
+    }>,
+  ) => PrivateAssetReleaseAuthorityController | Promise<PrivateAssetReleaseAuthorityController>;
   readonly signal?: AbortSignal;
 }
 
@@ -77,10 +92,22 @@ export interface PrivateRetrievalInputBase<Request = unknown, Store extends Evid
 export type PrivateRetrievalInput<Request = unknown> =
   | (PrivateRetrievalInputBase<Request, EvidenceStore<Request>> & {
       readonly assetAcquisitionPolicyFor?: undefined;
+      readonly assetAcquisitionReleaseAuthorityFor?: undefined;
     })
   | (PrivateRetrievalInputBase<Request, ControlledAssetEvidenceStore<Request>> & {
       readonly assetAcquisitionPolicyFor: NonNullable<PrivateRetrievalInputBase<Request>['assetAcquisitionPolicyFor']>;
+      readonly assetAcquisitionReleaseAuthorityFor: NonNullable<
+        PrivateRetrievalInputBase<Request>['assetAcquisitionReleaseAuthorityFor']
+      >;
     });
+
+/** Issues the opaque host controller used by the opt-in release barrier. */
+export declare function createPrivateAssetReleaseAuthority(input: Readonly<{
+  tenantId: string;
+  runId: string;
+  policy: PrivateRetrievalAssetAcquisitionPolicy;
+  expiresAtMonotonic: number;
+}>): PrivateAssetReleaseAuthorityController;
 
 export interface PrivateRetrievalProgress {
   readonly state: 'active' | 'halted' | 'exhausted';

@@ -11,6 +11,13 @@ import { compareEntityIdentity } from '../discovery/entities/identity.mjs';
 import { compareOccurrenceIdentity } from '../discovery/occurrences/identity.mjs';
 import { parseAndValidateUrl } from '../security/url-policy.mjs';
 import { inspectSafeAssetBytes, SAFE_ASSET_POLICY_VERSION, SAFE_ASSET_LIMITS } from '../security/assets/inspect.mjs';
+import {
+  createPrivateAssetReleaseAuthority as createReleaseAuthorityState,
+  isPrivateAssetReleaseController,
+  privateAssetReleaseAuthorityForController,
+  privateAssetReleaseControllerMatches,
+  revokePrivateAssetReleaseController,
+} from './private-asset-release.mjs';
 
 const PRIVATE_DRAFT_SCHEMA = 'ei-private-retrieval-draft/v1';
 const MAX_ADMISSIONS = 8;
@@ -149,10 +156,16 @@ function urlHasSensitiveMaterial(value) {
   }
 }
 
+function hasThenableBehavior(value) {
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return false;
+  try { return typeof value.then === 'function'; } catch { return true; }
+}
+
 function snapshotRunInput(value) {
   const input = plainDataRecord(value, new Set([
     'frontier', 'evidenceStore', 'safeFetcher', 'request', 'runId', 'seeds', 'limits',
-    'retentionHandleFor', 'authorizeCurrent', 'assetAcquisitionPolicyFor', 'signal',
+    'retentionHandleFor', 'authorizeCurrent', 'assetAcquisitionPolicyFor',
+    'assetAcquisitionReleaseAuthorityFor', 'signal',
   ]));
   if (!input || typeof input.runId !== 'string' || input.runId.length < 1 || input.runId.length > 96
     || input.request === null || (typeof input.request !== 'object' && typeof input.request !== 'function')
@@ -211,10 +224,16 @@ function snapshotRunInput(value) {
   const assetSourceBindingStore = exactMethods(input.evidenceStore, ['readAssetSourceCandidateBinding']);
   if (!frontier || !evidenceStore || !(input.safeFetcher instanceof SafeFetcher)) fail();
   if (input.assetAcquisitionPolicyFor !== undefined && typeof input.assetAcquisitionPolicyFor !== 'function') fail();
+  if (input.assetAcquisitionReleaseAuthorityFor !== undefined
+    && typeof input.assetAcquisitionReleaseAuthorityFor !== 'function') fail();
+  if (input.assetAcquisitionReleaseAuthorityFor !== undefined && input.assetAcquisitionPolicyFor === undefined) fail();
   return {
     ...input, seeds, limits, frontier, evidenceStore,
     controlledAssetEvidenceStore,
     assetSourceBindingStore,
+    assetReleaseFinalizationStore: exactMethods(input.evidenceStore, [
+      'finalizeControlledAssetRelease', 'discardControlledAssetRelease',
+    ]),
     workerId: `private-retrieval-${randomUUID()}`,
   };
 }
@@ -240,6 +259,27 @@ function normalizeAssetAcquisitionPolicy(value) {
     policyVersion: ASSET_ACQUISITION_POLICY_VERSION,
     policyId: policy.policyId,
     allowedOrigins: Object.freeze(normalizedOrigins),
+  });
+}
+
+/**
+ * Creates a host-owned, one-shot release authority for one tenant, logical run,
+ * immutable asset policy, and run deadline. Keep the returned controller in the
+ * host authorization layer and call revoke() synchronously when any bound
+ * authority changes. A revoke before the store's synchronous projection denies
+ * release; a revoke after it reports after_release. This is opt-in only.
+ */
+export function createPrivateAssetReleaseAuthority({ tenantId, runId, policy, expiresAtMonotonic }) {
+  const normalizedPolicy = normalizeAssetAcquisitionPolicy(policy);
+  if (!normalizedPolicy) fail();
+  const maximumExpiry = performance.now() + 30_000;
+  const selectedExpiry = expiresAtMonotonic;
+  if (!Number.isFinite(selectedExpiry) || selectedExpiry <= performance.now() || selectedExpiry > maximumExpiry) fail();
+  return createReleaseAuthorityState({
+    tenantId,
+    runId,
+    policyDigest: digestJson(normalizedPolicy),
+    expiresAtMonotonic: selectedExpiry,
   });
 }
 
@@ -923,6 +963,8 @@ export async function runPrivateRetrieval(value) {
   const input = snapshotRunInput(value);
   let runConfigHash = digestJson({ runId: input.runId, seeds: input.seeds, limits: input.limits });
   let assetPolicy = null;
+  let assetReleaseController = null;
+  let assetReleaseAuthority = null;
   const limitations = new Set([
     'source_authority_not_evaluated', 'rights_not_evaluated', 'billable_usage_unknown', 'provider_and_external_egress_not_measured',
   ]);
@@ -996,7 +1038,13 @@ export async function runPrivateRetrieval(value) {
     return await awaitAbortableOperation(operation, controller.signal, abortError);
   };
   const currentAssetPolicyMatches = async () => {
-    if (!assetPolicy || !input.assetAcquisitionPolicyFor || !authorized(input, 'asset-acquisition')) return false;
+    if (!assetPolicy || !assetReleaseController || !assetReleaseAuthority
+      || !input.assetAcquisitionPolicyFor || !authorized(input, 'asset-acquisition')
+      || !privateAssetReleaseControllerMatches(assetReleaseController, {
+        runId: input.runId,
+        policyDigest: digestJson(assetPolicy),
+        deadlineAtMonotonic,
+      })) return false;
     try {
       const valueNow = await awaitAbortableHostCallback(input.assetAcquisitionPolicyFor, [input.request,
         Object.freeze({ runId: input.runId })], controller.signal, abortError);
@@ -1199,14 +1247,49 @@ export async function runPrivateRetrieval(value) {
       assetPolicy = normalizeAssetAcquisitionPolicy(policyValue);
       if (assetPolicy) {
         runConfigHash = digestJson({
-          schema: 'ei-private-retrieval-config/asset-acquisition-v1',
+          schema: 'ei-private-retrieval-config/asset-acquisition-v2',
           runId: input.runId,
           seeds: input.seeds,
           limits: input.limits,
           assetAcquisitionPolicy: assetPolicy,
+          releaseProtocol: 'one-shot-synchronous-projection/v1',
         });
-        if (!input.controlledAssetEvidenceStore || !input.assetSourceBindingStore) {
+        if (!input.controlledAssetEvidenceStore || !input.assetSourceBindingStore || !input.assetReleaseFinalizationStore) {
           limitations.add('asset_acquisition_store_unavailable');
+          return incompleteResult(input.runId, 'incomplete', [...limitations]);
+        }
+        if (!input.assetAcquisitionReleaseAuthorityFor) {
+          limitations.add('asset_acquisition_release_authority_unavailable');
+          return incompleteResult(input.runId, 'incomplete', [...limitations]);
+        }
+        const policyDigest = digestJson(assetPolicy);
+        let issued;
+        try {
+          issued = await awaitAbortableHostCallback(input.assetAcquisitionReleaseAuthorityFor, [input.request,
+            Object.freeze({
+              runId: input.runId,
+              policy: assetPolicy,
+              policyDigest,
+              deadlineAtMonotonic,
+            })], controller.signal, abortError);
+        } catch {
+          limitations.add('asset_acquisition_release_authority_unavailable');
+          return incompleteResult(input.runId, 'incomplete', [...limitations]);
+        }
+        if (!isPrivateAssetReleaseController(issued)
+          || !privateAssetReleaseControllerMatches(issued, {
+            runId: input.runId,
+            policyDigest,
+            deadlineAtMonotonic,
+          })) {
+          limitations.add('asset_acquisition_release_authority_unavailable');
+          return incompleteResult(input.runId, 'incomplete', [...limitations]);
+        }
+        assetReleaseController = issued;
+        assetReleaseAuthority = privateAssetReleaseAuthorityForController(issued);
+        if (!assetReleaseAuthority) {
+          revokePrivateAssetReleaseController(issued, 'invalid_host_capability');
+          limitations.add('asset_acquisition_release_authority_unavailable');
           return incompleteResult(input.runId, 'incomplete', [...limitations]);
         }
       }
@@ -2446,62 +2529,97 @@ export async function runPrivateRetrieval(value) {
     const sourceLinkCandidateOmittedCount = sourceLinkCandidateOmittedCountComplete
       ? sourceLinkCandidateOmittedCountLowerBound : null;
     let finalEvidence = materialized.evidence;
-    let controlledReleaseRevalidationCompleted = false;
-    if (assetAcquisitionResults.length > 0) {
+    if (assetPolicy) {
       const assetGroups = assetAcquisitionResults.map((result) =>
         assetReleaseRoleReferences.get(result.candidate.frontierCandidateId)).filter(Boolean);
       if (assetGroups.length !== assetAcquisitionResults.length) {
         for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
         limitations.add('asset_acquisition_reopen_unavailable');
       }
-      if (assetAcquisitionResults.length > 0) {
-        const revalidated = await awaitOperation(() => input.controlledAssetEvidenceStore.revalidateControlledAssetRelease(
-          evidenceScope,
-          {
-            evidence: materialized.evidence.map((item) => ({ handle: item.handle, metadata: item.metadata })),
-            facts: factHandles,
-            assetGroups,
-            beforeFinalization: async () => {
-              if (assetAcquisitionResults.length === 0 || !await currentAssetPolicyMatches()) {
-                for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
-                limitations.add('asset_acquisition_policy_changed');
-                return [];
-              }
-              return assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId);
-            },
-            finalizeHostAuthority: () => {
-              checkDeadline();
-              if (controller.signal.aborted) return { releaseAuthorized: false, candidateIds: [] };
-              if (!authorized(input, 'release')) return { releaseAuthorized: false, candidateIds: [] };
-              if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
-                for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
-                limitations.add('authorization_revoked');
-              }
-              checkDeadline();
-              return {
-                releaseAuthorized: true,
-                candidateIds: assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId),
-              };
-            },
+      const revalidated = await input.controlledAssetEvidenceStore.revalidateControlledAssetRelease(
+        evidenceScope,
+        {
+          runId: input.runId,
+          policyDigest: digestJson(assetPolicy),
+          releaseController: assetReleaseController,
+          evidence: materialized.evidence.map((item) => ({ handle: item.handle, metadata: item.metadata })),
+          facts: factHandles,
+          assetGroups,
+          beforeFinalization: async () => {
+            if (!await currentAssetPolicyMatches()) {
+              for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+              limitations.add('asset_acquisition_policy_changed');
+              return [];
+            }
+            return assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId);
           },
-          input.request,
-          controller.signal,
-        ));
-        controlledReleaseRevalidationCompleted = true;
-        const currentMetadata = new Map(revalidated.currentEvidenceMetadata.map((metadata) => [metadata.evidenceId, metadata]));
-        finalEvidence = materialized.evidence.map((item) => {
-          const metadata = currentMetadata.get(item.metadata.evidenceId);
-          if (!metadata) throw new RetrievalError('final_selected_snapshot_mismatch');
-          return Object.freeze({ ...item, metadata });
-        });
+          finalizeHostAuthority: () => {
+            checkDeadline();
+            if (controller.signal.aborted) return { releaseAuthorized: false, candidateIds: [] };
+            if (!authorized(input, 'release')) return { releaseAuthorized: false, candidateIds: [] };
+            if (assetAcquisitionResults.length > 0 && !authorized(input, 'asset-acquisition')) {
+              for (const candidateId of [...assetAcquisitionReceipts.keys()]) forgetAcquiredAssetPlan(candidateId);
+              limitations.add('authorization_revoked');
+            }
+            checkDeadline();
+            return {
+              releaseAuthorized: true,
+              candidateIds: assetAcquisitionResults.map((entry) => entry.candidate.frontierCandidateId),
+            };
+          },
+        },
+        input.request,
+        controller.signal,
+      );
+
+      try {
+        checkDeadline();
+        if (controller.signal.aborted) throw abortError();
+      } catch (error) {
+        input.assetReleaseFinalizationStore.discardControlledAssetRelease(evidenceScope, revalidated.releaseCheck);
+        throw error;
       }
+
+      const activeCandidateIds = new Set(revalidated.candidateIds);
+      for (const candidateId of [...assetAcquisitionReceipts.keys()]) {
+        if (!activeCandidateIds.has(candidateId)) forgetAcquiredAssetPlan(candidateId);
+      }
+      const finalized = input.assetReleaseFinalizationStore.finalizeControlledAssetRelease(
+        evidenceScope,
+        revalidated.releaseCheck,
+        input.request,
+        controller.signal,
+        {
+          releaseController: assetReleaseController,
+          runId: input.runId,
+          policyDigest: digestJson(assetPolicy),
+          deadlineAtMonotonic,
+          candidateIds: revalidated.candidateIds,
+          project: ({ currentEvidenceMetadata }) => {
+            checkDeadline();
+            if (controller.signal.aborted) throw abortError();
+            const currentMetadata = new Map(currentEvidenceMetadata.map((metadata) => [metadata.evidenceId, metadata]));
+            finalEvidence = materialized.evidence.map((item) => {
+              const metadata = currentMetadata.get(item.metadata.evidenceId);
+              if (!metadata) throw new RetrievalError('final_selected_snapshot_mismatch');
+              return Object.freeze({ ...item, metadata });
+            });
+            return projection(identity, finalEvidence, materialized.facts, finalSnapshot, limitations,
+              omittedLinkCandidates, truncatedSuggestionCount, sourceLinkCandidateOmittedCount,
+              sourceLinkCandidateOmittedCountLowerBound, sourceLinkCandidateOmittedCountComplete,
+              assetCandidateIds, assetAcquisitionResults);
+          },
+        },
+      );
+      if (hasThenableBehavior(finalized)) throw new RetrievalError('EVIDENCE_INVALID');
+      return finalized;
     }
     checkDeadline();
     if (controller.signal.aborted) {
       limitations.add('cancelled');
       return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
     }
-    if (!controlledReleaseRevalidationCompleted && !authorized(input, 'release')) {
+    if (!authorized(input, 'release')) {
       limitations.add('authorization_revoked');
       return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
     }

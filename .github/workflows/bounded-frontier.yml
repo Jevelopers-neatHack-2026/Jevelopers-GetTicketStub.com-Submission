@@ -26,9 +26,11 @@ jobs:
         run: node --test tests/discovery/planner/*.test.mjs
       - name: Test bounded private retrieval lifecycle
         run: node --test tests/research/private-retrieval.test.mjs
-      - name: Test controlled asset release revalidation regressions
+      - name: Test controlled asset release protocol and revalidation regressions
         run: >-
-          node --test tests/research/r2-reviewer-final-release.test.mjs
+          node --test tests/research/private-asset-release.test.mjs
+          tests/research/r4-reviewer-r3-joint-tail.test.mjs
+          tests/research/r2-reviewer-final-release.test.mjs
           tests/research/r2-reviewer-final-release-stage-order.test.mjs
           tests/research/r2-reviewer-shared-asset.test.mjs
           tests/research/reviewer-r2-last-await.test.mjs

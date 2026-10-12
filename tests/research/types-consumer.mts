@@ -6,6 +6,7 @@ import type {
   EvidenceHandle,
   EvidenceTenantScope,
 } from '../../src/evidence/store.mjs';
+import { createPrivateAssetReleaseAuthority } from '../../src/research/private-retrieval.mjs';
 import type {
   PrivateRetrievalAssetAcquisitionPolicy,
   PrivateRetrievalInput,
@@ -35,6 +36,13 @@ const acquisitionPolicy: PrivateRetrievalAssetAcquisitionPolicy = {
   allowedOrigins: ['https://events.example.org'],
 };
 
+let optInReleaseContext: Readonly<{
+  runId: string;
+  policy: PrivateRetrievalAssetAcquisitionPolicy;
+  policyDigest: string;
+  deadlineAtMonotonic: number;
+}> | undefined;
+
 const input: PrivateRetrievalInput<AuthenticatedRequest> = {
   frontier,
   evidenceStore,
@@ -51,6 +59,15 @@ const input: PrivateRetrievalInput<AuthenticatedRequest> = {
   assetAcquisitionPolicyFor: async (_request, context) => {
     context.runId satisfies string;
     return acquisitionPolicy;
+  },
+  assetAcquisitionReleaseAuthorityFor: async (authenticated, context) => {
+    optInReleaseContext = context;
+    return createPrivateAssetReleaseAuthority({
+      tenantId: authenticated.principal.tenantId,
+      runId: context.runId,
+      policy: context.policy,
+      expiresAtMonotonic: context.deadlineAtMonotonic,
+    });
   },
   signal: new AbortController().signal,
 };
@@ -100,18 +117,40 @@ void storeControlledAsset;
 void reopenAssetSource;
 
 async function revalidateControlledRelease(candidateId: string): Promise<void> {
+  const releaseContext = optInReleaseContext;
+  if (!releaseContext) return;
   const assetRoles = [
     { handle: fetchedAssetEvidenceHandle, metadata: evidenceMetadata },
     { handle: transformedAssetEvidenceHandle, metadata: evidenceMetadata },
   ] as const;
+  const releaseController = createPrivateAssetReleaseAuthority({
+    tenantId: request.principal.tenantId,
+    runId: releaseContext.runId,
+    policy: releaseContext.policy,
+    expiresAtMonotonic: releaseContext.deadlineAtMonotonic,
+  });
   const current = await evidenceStore.revalidateControlledAssetRelease(evidenceScope, {
+    runId: releaseContext.runId,
+    policyDigest: releaseContext.policyDigest,
+    releaseController,
     evidence: [{ handle: selectedEvidenceHandle, metadata: evidenceMetadata }],
     facts: [],
     assetGroups: [{ candidateId, evidence: assetRoles }],
     beforeFinalization: async ({ candidateIds }) => candidateIds,
     finalizeHostAuthority: ({ candidateIds }) => ({ releaseAuthorized: true, candidateIds }),
   }, request);
-  current.currentEvidenceMetadata[0]?.expiresAt satisfies string | undefined;
+  current.releaseCheck satisfies object;
+  current.candidateIds satisfies readonly string[];
+  const projected = evidenceStore.finalizeControlledAssetRelease(evidenceScope, current.releaseCheck, request, undefined, {
+    releaseController,
+    runId: releaseContext.runId,
+    policyDigest: releaseContext.policyDigest,
+    deadlineAtMonotonic: releaseContext.deadlineAtMonotonic,
+    candidateIds: current.candidateIds,
+    project: ({ currentEvidenceMetadata, candidateIds }) => ({ currentEvidenceMetadata, candidateIds }),
+  });
+  projected.candidateIds satisfies readonly string[];
+  projected.currentEvidenceMetadata[0]?.expiresAt satisfies string | undefined;
 }
 
 void revalidateControlledRelease;

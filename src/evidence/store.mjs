@@ -24,6 +24,16 @@ import {
   verifyControlledSvgIngestWitness,
 } from '../security/internal/fetch-lifecycle.mjs';
 import { inspectSafeAssetBytes, SAFE_ASSET_POLICY_VERSION } from '../security/assets/inspect.mjs';
+import {
+  bindPrivateAssetReleaseCandidates,
+  createPrivateAssetReleaseCheck,
+  finalizePrivateAssetRelease,
+  isPrivateAssetReleaseController,
+  privateAssetReleaseAuthorityValidDuringFinalization,
+  privateAssetReleaseAuthorityForController,
+  revokePrivateAssetReleaseAuthority,
+  takePrivateAssetReleaseCheck,
+} from '../research/private-asset-release.mjs';
 
 const SUPPORTED_SOURCE_KINDS = new Set(['external', 'customer_supplied']);
 const FACT_STATUSES = new Set(['sourced', 'inferred', 'customer_supplied', 'missing', 'conflicting']);
@@ -3131,20 +3141,25 @@ export function createEvidenceStore(options) {
   }
 
   /**
-   * Rechecks the selected private snapshot and any controlled asset roles at
-   * the release boundary. This is an opt-in-only capability: it does not
-   * materialize additional evidence or change the ordinary eight-evidence
-   * selection limit. All host callbacks which may await finish before the
-   * synchronous authorization / durable-state tail below.
+   * Reopens the selected records and role-separated assets for a one-shot
+   * synchronous finalizer. This preflight does not release evidence: the
+   * returned opaque check must be consumed by finalizeControlledAssetRelease
+   * after this promise settles, so queued work from the async callbacks has
+   * run before the final current-state/authority check and projection.
    */
   async function revalidateControlledAssetRelease(scope, inputValue, request, signal) {
     const info = scopeInfo(scope);
     checkCancellation(signal);
     const input = ownDataRecord(inputValue, new Set([
-      'evidence', 'facts', 'assetGroups', 'beforeFinalization', 'finalizeHostAuthority',
+      'runId', 'policyDigest', 'releaseController', 'evidence', 'facts', 'assetGroups',
+      'beforeFinalization', 'finalizeHostAuthority',
     ]));
-    if (!input || typeof input.beforeFinalization !== 'function'
+    if (!input || typeof input.runId !== 'string' || input.runId.length < 1 || input.runId.length > 96
+      || !isDigest(input.policyDigest) || !isPrivateAssetReleaseController(input.releaseController)
+      || typeof input.beforeFinalization !== 'function'
       || typeof input.finalizeHostAuthority !== 'function') fail('EVIDENCE_INVALID');
+    const releaseAuthority = privateAssetReleaseAuthorityForController(input.releaseController);
+    if (!releaseAuthority) fail('EVIDENCE_INVALID');
     const evidenceValues = safeArray(input.evidence, SELECTED_BATCH_LIMITS.evidenceCount);
     const factValues = safeArray(input.facts, SELECTED_BATCH_LIMITS.factCount);
     const assetGroupValues = safeArray(input.assetGroups, 8);
@@ -3211,6 +3226,7 @@ export function createEvidenceStore(options) {
     const directory = await tenantDirectory(info);
     let snapshot;
     let finalVerifier;
+    let retainedReleaseCheck = false;
     try {
       snapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
@@ -3291,9 +3307,6 @@ export function createEvidenceStore(options) {
         ...assetGroups.filter((group) => activeCandidateIds.includes(group.candidateId))
           .flatMap((group) => group.evidence.map((item) => item.evidenceId)),
       ];
-      const syncCurrentAuthorization = (evidenceIds) => {
-        authorizeCurrent(info, request, 'read_private_evidence', evidenceIds, factIds);
-      };
       const runHostFinalizer = () => {
         let decision;
         try { decision = input.finalizeHostAuthority(Object.freeze({ candidateIds: Object.freeze([...activeCandidateIds]) })); }
@@ -3313,34 +3326,137 @@ export function createEvidenceStore(options) {
         fail('EVIDENCE_INVALID');
       };
 
-      // No async work follows this joint tail. The two synchronous authority
-      // checks bracket host authorization so one-time revocations made by a
-      // trusted callback are observed by the next check; the durable verifier
-      // then checks all selected and active role records at the final state.
-      syncCurrentAuthorization(finalEvidenceIds());
+      // This callback runs before the returned promise settles. The caller's
+      // await therefore drains any microtasks it schedules before invoking the
+      // final synchronous coordinator/store release point.
       runHostFinalizer();
-      syncCurrentAuthorization(finalEvidenceIds());
-      runHostFinalizer();
+      const finalCandidateIds = [...activeCandidateIds].sort();
+      try {
+        bindPrivateAssetReleaseCandidates(releaseAuthority, {
+          tenantId: info.tenantId,
+          runId: input.runId,
+          policyDigest: input.policyDigest,
+          candidateIds: finalCandidateIds,
+        });
+      } catch { fail('EVIDENCE_DENIED'); }
       finalVerifier = makeFinalStateVerifier(info, directory, finalEvidenceIds(), factIds);
-      finalVerifier.check({
-        evidence: snapshot.evidence.filter((record) => finalEvidenceIds().includes(record.id)),
-        facts: snapshot.facts,
-        manifestPresentAtSnapshot: snapshot.manifestPresentAtSnapshot,
-      });
       checkCancellation(signal);
-      const currentEvidenceMetadata = evidenceReferences.map((reference) => {
-        const record = snapshot.evidence.find((item) => item.id === reference.evidenceId);
-        if (!record) fail('EVIDENCE_INTEGRITY');
-        return frozenMetadata(record);
+      const releaseCheck = createPrivateAssetReleaseCheck({
+        tenantHash: info.tenantHash,
+        tenantId: info.tenantId,
+        runId: input.runId,
+        policyDigest: input.policyDigest,
+        releaseAuthority,
+        releaseController: input.releaseController,
+        finalEvidenceIds: finalEvidenceIds(),
+        factIds: [...factIds],
+        evidenceReferences,
+        candidateIds: finalCandidateIds,
+        snapshot,
+        finalVerifier,
       });
-      return Object.freeze({ currentEvidenceMetadata: Object.freeze(currentEvidenceMetadata) });
+      retainedReleaseCheck = true;
+      return Object.freeze({ releaseCheck, candidateIds: Object.freeze(finalCandidateIds) });
     } catch (error) {
+      revokePrivateAssetReleaseAuthority(releaseAuthority, 'store_release_revalidation_failed');
       if (!(error instanceof EvidenceStoreError && error.code === 'EVIDENCE_CANCELLED')) {
         try { await persistExpirySweep(info, directory, signal); } catch (cleanupError) { throw safePublicError(cleanupError); }
       }
       throw safePublicError(error);
     } finally {
-      finalVerifier?.close();
+      if (!retainedReleaseCheck) {
+        finalVerifier?.close();
+        for (const record of snapshot?.evidence ?? []) record.sealed?.fill(0);
+        for (const record of snapshot?.facts ?? []) record.sealed?.fill(0);
+      }
+    }
+  }
+
+  function finalizeControlledAssetRelease(scope, releaseCheck, request, signal, inputValue) {
+    const info = scopeInfo(scope);
+    const state = takePrivateAssetReleaseCheck(releaseCheck);
+    if (!state || state.tenantHash !== info.tenantHash || state.tenantId !== info.tenantId) {
+      if (state) {
+        revokePrivateAssetReleaseAuthority(state.releaseAuthority, 'release_check_scope_mismatch');
+        state.finalVerifier?.close();
+        for (const record of state.snapshot?.evidence ?? []) record.sealed?.fill(0);
+        for (const record of state.snapshot?.facts ?? []) record.sealed?.fill(0);
+      }
+      fail('EVIDENCE_DENIED');
+    }
+    try {
+      const input = ownDataRecord(inputValue, new Set([
+        'releaseController', 'runId', 'policyDigest', 'deadlineAtMonotonic', 'candidateIds', 'project',
+      ]));
+      const candidateIds = input && safeArray(input.candidateIds, 8);
+      const releaseAuthority = input && privateAssetReleaseAuthorityForController(input.releaseController);
+      if (!input || !isPrivateAssetReleaseController(input.releaseController) || !releaseAuthority
+        || input.runId !== state.runId || input.policyDigest !== state.policyDigest
+        || !Number.isFinite(input.deadlineAtMonotonic) || typeof input.project !== 'function'
+        || !candidateIds || JSON.stringify([...candidateIds].sort()) !== JSON.stringify(state.candidateIds)) {
+        fail('EVIDENCE_INVALID');
+      }
+      const authorityBinding = {
+        tenantId: info.tenantId,
+        runId: state.runId,
+        policyDigest: state.policyDigest,
+        deadlineAtMonotonic: input.deadlineAtMonotonic,
+        candidateIds: state.candidateIds,
+      };
+      if (state.releaseController !== input.releaseController) fail('EVIDENCE_DENIED');
+      try {
+        return finalizePrivateAssetRelease(releaseAuthority, authorityBinding, () => {
+          checkCancellation(signal);
+          authorizeCurrent(info, request, 'read_private_evidence', state.finalEvidenceIds, state.factIds);
+          if (!privateAssetReleaseAuthorityValidDuringFinalization(releaseAuthority, authorityBinding)) {
+            fail('EVIDENCE_DENIED');
+          }
+          state.finalVerifier.check({
+            evidence: state.snapshot.evidence.filter((record) => state.finalEvidenceIds.includes(record.id)),
+            facts: state.snapshot.facts,
+            manifestPresentAtSnapshot: state.snapshot.manifestPresentAtSnapshot,
+          });
+          checkCancellation(signal);
+          if (!privateAssetReleaseAuthorityValidDuringFinalization(releaseAuthority, authorityBinding)) {
+            fail('EVIDENCE_DENIED');
+          }
+          const currentEvidenceMetadata = state.evidenceReferences.map((reference) => {
+            const record = state.snapshot.evidence.find((item) => item.id === reference.evidenceId);
+            if (!record) fail('EVIDENCE_INTEGRITY');
+            return frozenMetadata(record);
+          });
+          const result = input.project(Object.freeze({
+            currentEvidenceMetadata: Object.freeze(currentEvidenceMetadata),
+            candidateIds: Object.freeze([...state.candidateIds]),
+          }));
+          return result;
+        });
+      } catch (error) {
+        if (error instanceof EvidenceStoreError) throw error;
+        fail('EVIDENCE_DENIED');
+      }
+    } catch (error) {
+      revokePrivateAssetReleaseAuthority(state.releaseAuthority, 'controlled_release_finalization_failed');
+      throw safePublicError(error);
+    } finally {
+      state.finalVerifier?.close();
+      for (const record of state.snapshot?.evidence ?? []) record.sealed?.fill(0);
+      for (const record of state.snapshot?.facts ?? []) record.sealed?.fill(0);
+    }
+  }
+
+  function discardControlledAssetRelease(scope, releaseCheck) {
+    const info = scopeInfo(scope);
+    const state = takePrivateAssetReleaseCheck(releaseCheck);
+    if (!state) return false;
+    try {
+      const matchesScope = state.tenantHash === info.tenantHash && state.tenantId === info.tenantId;
+      revokePrivateAssetReleaseAuthority(state.releaseAuthority, 'release_check_discarded');
+      return matchesScope;
+    } finally {
+      state.finalVerifier?.close();
+      for (const record of state.snapshot?.evidence ?? []) record.sealed?.fill(0);
+      for (const record of state.snapshot?.facts ?? []) record.sealed?.fill(0);
     }
   }
 
@@ -5579,6 +5695,8 @@ export function createEvidenceStore(options) {
     readAssetSourceCandidateBinding,
     readControlledAssetBytes,
     revalidateControlledAssetRelease,
+    finalizeControlledAssetRelease,
+    discardControlledAssetRelease,
     appendFact,
     lookupFact,
     readFact,
