@@ -34,8 +34,8 @@
         "path": "review/deployment/current-public-root.headers.txt",
         "rawBytes": 1139,
         "rawSha256": "8fb6b8893f21cae5d4fa053cee9b5d3883c55b145ea25a326f8a3756d2ce8a37",
-        "savedBytes": 836,
-        "savedSha256": "c04a4f88e42dc9bf3da7731ac401063f0484e9807989095237289774626c7a01",
+        "savedBytes": 819,
+        "savedSha256": "ad3e4cc23bf1733c6c2825e0d7a10aeb7a24d26584a45a51c27e8c46bc0ae9a7",
         "redaction": "Set-Cookie/authorization header values removed if present",
         "identityRelevantHeaders": [
           "date: Mon, 12 Oct 2026 14:20:06 GMT",
@@ -43,7 +43,10 @@
           "cache-control: private, no-cache, no-store, max-age=0, must-revalidate",
           "server: cloudflare"
         ],
-        "originalCapturePath": "/tmp/lp-release-public-inspection/root.headers.txt"
+        "originalCapturePath": "/tmp/lp-release-public-inspection/root.headers.txt",
+        "captureRedactedBytes": 836,
+        "captureRedactedSha256": "c04a4f88e42dc9bf3da7731ac401063f0484e9807989095237289774626c7a01",
+        "archiveTransformation": "Captured redacted CRLF header text normalized to LF; trailing whitespace and terminal empty separator removed; header values unchanged"
       },
       "body": {
         "bytes": 24262,
@@ -105,8 +108,8 @@
         "path": "review/deployment/current-public-api-health.headers.txt",
         "rawBytes": 708,
         "rawSha256": "1380f6fc069c6719e15a9a88aa80d96a47d6c28107a0c78bdbbf99a20bb3156d",
-        "savedBytes": 405,
-        "savedSha256": "74df8609202f850c0731223e1ad2914624c85dd8fa376cd0b92f10edb8c7b04b",
+        "savedBytes": 389,
+        "savedSha256": "fe741af0b4fd5136e62e372852f0639a0e8bd96a49e4979c4ae36abbc20fa910",
         "redaction": "Set-Cookie/authorization header values removed if present",
         "identityRelevantHeaders": [
           "date: Mon, 12 Oct 2026 14:20:06 GMT",
@@ -114,7 +117,10 @@
           "cache-control: no-store",
           "server: cloudflare"
         ],
-        "originalCapturePath": "/tmp/lp-release-public-inspection/api-health.headers.txt"
+        "originalCapturePath": "/tmp/lp-release-public-inspection/api-health.headers.txt",
+        "captureRedactedBytes": 405,
+        "captureRedactedSha256": "74df8609202f850c0731223e1ad2914624c85dd8fa376cd0b92f10edb8c7b04b",
+        "archiveTransformation": "Captured redacted CRLF header text normalized to LF; trailing whitespace and terminal empty separator removed; header values unchanged"
       },
       "body": {
         "bytes": 119,
@@ -186,8 +192,8 @@
         "path": "review/deployment/current-public-literal-health-path.headers.txt",
         "rawBytes": 873,
         "rawSha256": "733cb5a98f7996b7cd139c4f4c80b34c8ea925e04881c0b68820df8818e4a42a",
-        "savedBytes": 570,
-        "savedSha256": "f1f7ec27c78ef105dd3e056c34110c185ae3e6ad9a0c6e0d2e96b8da1cfff27d",
+        "savedBytes": 553,
+        "savedSha256": "9cffe8cdd86110b2c96cf079868f1e74e07fd5db2f7eb1a28bf3216380913384",
         "redaction": "Set-Cookie/authorization header values removed if present",
         "identityRelevantHeaders": [
           "date: Mon, 12 Oct 2026 14:20:06 GMT",
@@ -195,7 +201,10 @@
           "cache-control: private, no-cache, no-store, max-age=0, must-revalidate",
           "server: cloudflare"
         ],
-        "originalCapturePath": "/tmp/lp-release-public-inspection/literal-health-path.headers.txt"
+        "originalCapturePath": "/tmp/lp-release-public-inspection/literal-health-path.headers.txt",
+        "captureRedactedBytes": 570,
+        "captureRedactedSha256": "f1f7ec27c78ef105dd3e056c34110c185ae3e6ad9a0c6e0d2e96b8da1cfff27d",
+        "archiveTransformation": "Captured redacted CRLF header text normalized to LF; trailing whitespace and terminal empty separator removed; header values unchanged"
       },
       "body": {
         "bytes": 15658,

@@ -1,4 +1,4 @@
-HTTP/2 200 
+HTTP/2 200
 date: Mon, 12 Oct 2026 14:20:06 GMT
 content-type: application/json
 cache-control: no-store
@@ -11,4 +11,3 @@ cf-cache-status: DYNAMIC
 set-cookie: [REDACTED]
 server: cloudflare
 cf-ray: a496be4b1eeed8a5-CLE
-

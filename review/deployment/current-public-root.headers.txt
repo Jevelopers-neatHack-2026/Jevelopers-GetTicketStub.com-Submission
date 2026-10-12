@@ -1,4 +1,4 @@
-HTTP/2 200 
+HTTP/2 200
 date: Mon, 12 Oct 2026 14:20:06 GMT
 content-type: text/html; charset=utf-8
 cache-control: private, no-cache, no-store, max-age=0, must-revalidate
@@ -12,4 +12,3 @@ x-request-id: aea662bd284da3d5
 cf-cache-status: DYNAMIC
 server: cloudflare
 cf-ray: a496be4918a123b7-CLE
-
