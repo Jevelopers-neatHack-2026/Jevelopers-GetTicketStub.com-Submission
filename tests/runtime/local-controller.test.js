@@ -158,9 +158,14 @@ function tenStepEscapedTextPlan() {
   });
 }
 
-function mutableClock(startAtMs) {
+function mutableClock(startAtMs, { monotonic = false } = {}) {
   let current = startAtMs;
-  return { read: () => current, set: value => { current = value; } };
+  let overridden = false;
+  const startedAt = performance.now();
+  return {
+    read: () => overridden || !monotonic ? current : current + Math.floor(performance.now() - startedAt),
+    set: value => { current = value; overridden = true; }
+  };
 }
 
 function openStore(databasePath, clock = Date.now, busyTimeoutMs = 5000) {
@@ -2164,12 +2169,18 @@ test('a pending admission does not refresh an expired lease, backwards wall cloc
   const controls = [
     { name: 'lease expiry', reason: 'LEASE_FENCED', limitsJson: '{}', mutate: (clock, lease) => clock.set(lease.expiresAtMs) },
     { name: 'wall-clock rollback', reason: 'CLOCK_ROLLBACK', limitsJson: '{}', mutate: (clock, lease, candidate) => clock.set(candidate.controllerState.budget.lastWallMs - 1) },
-    { name: 'workload deadline', reason: 'DEADLINE_EXCEEDED', limitsJson: '{"maxElapsedMs":100}', mutate: (clock, lease, candidate) => clock.set(candidate.controllerState.budget.deadlineWallMs) }
+    {
+      name: 'workload deadline', reason: 'DEADLINE_EXCEEDED', limitsJson: '{"maxElapsedMs":2000}',
+      waitForDeadlineAtPendingAdmission: true,
+      mutate: (clock, lease, candidate) => clock.set(Math.max(
+        clock.read(), candidate.controllerState.budget.deadlineWallMs
+      ))
+    }
   ];
   for (const control of controls) {
     await t.test(control.name, async subtest => {
       const temporary = temporaryDatabase('bounded-local-admission-clock-' + control.name + '-');
-      const clock = mutableClock(100_000);
+      const clock = mutableClock(100_000, { monotonic: control.name === 'workload deadline' });
       const store = openStore(temporary.databasePath, clock.read, 20);
       const blockers = [];
       subtest.after(async () => {
@@ -2191,6 +2202,13 @@ test('a pending admission does not refresh an expired lease, backwards wall cloc
         const blocker = sqliteWriterBlockerSync(temporary.databasePath);
         blockers.push(blocker);
         try {
+          if (control.waitForDeadlineAtPendingAdmission === true) {
+            const candidateBudget = args[1]?.controllerState?.budget;
+            assert.ok(Number.isSafeInteger(candidateBudget?.deadlineWallMs), control.name);
+            const untilDeadlineMs = Math.max(1, candidateBudget.deadlineWallMs - clock.read() + 5);
+            assert.ok(untilDeadlineMs <= 2_005, control.name);
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)), 0, 0, untilDeadlineMs);
+          }
           return originalAdmit(...args);
         } catch (error) {
           blocker.releaseAndWait();
