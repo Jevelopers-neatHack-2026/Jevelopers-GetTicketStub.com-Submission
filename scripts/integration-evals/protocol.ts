@@ -1,5 +1,7 @@
 import { constants } from "node:fs";
-import { open, lstat, readdir, rmdir, unlink, mkdir } from "node:fs/promises";
+import { open, lstat, readdir, unlink, mkdir } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
+import { isMainThread } from "node:worker_threads";
 import { isAbsolute, join, parse, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -96,6 +98,9 @@ export async function readBounded(
 	limit = 65536,
 ): Promise<Buffer> {
 	await safePath(path);
+	return readOpened(path, limit);
+}
+async function readOpened(path: string, limit: number): Promise<Buffer> {
 	const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
 	try {
 		const info = await file.stat();
@@ -238,7 +243,18 @@ export async function claimRoot(request: OwnerRequest) {
 	await writeOwned(paths.root, "owner.json", paths.marker);
 	return paths;
 }
+let cleanupStarted = false;
 export async function cleanup(request: OwnerRequest) {
+	// cwd is a process-global directory handle. Only this single-purpose CLI
+	// process may use it; no restoration through a mutable pathname is attempted.
+	requireOwner(
+		isMainThread &&
+			process.argv[1] === fileURLToPath(new URL("./cli.js", import.meta.url)) &&
+			process.argv[2] === "cleanup" &&
+			!cleanupStarted,
+		"CLEANUP_PROCESS_REQUIRED",
+	);
+	cleanupStarted = true;
 	const { root, marker } = await ownedPaths(request);
 	try {
 		await safePath(root);
@@ -247,32 +263,64 @@ export async function cleanup(request: OwnerRequest) {
 			return { status: "absent", namespace: request.namespace, removed: [] };
 		throw error;
 	}
-	requireOwner((await lstat(root)).isDirectory(), "INVALID_OWNED_ROOT");
-	const entries = await readdir(root);
-	requireOwner(entries.includes("owner.json"), "OWNERSHIP_UNPROVEN");
-	const actual: unknown = JSON.parse(
-		(await readBounded(join(root, "owner.json"))).toString(),
+	const expected = await lstat(root, { bigint: true });
+	requireOwner(expected.isDirectory(), "INVALID_OWNED_ROOT");
+	process.chdir(root);
+	const bound = await lstat(".", { bigint: true });
+	requireOwner(
+		bound.isDirectory() &&
+			bound.dev === expected.dev &&
+			bound.ino === expected.ino,
+		"OWNED_ROOT_CHANGED",
 	);
-	requireOwner(isDeepStrictEqual(actual, marker), "OWNERSHIP_MISMATCH");
-	const allowed = new Set([
-		"owner.json",
-		"state.sqlite",
-		"state.sqlite-wal",
-		"state.sqlite-shm",
-		"mapping.json",
-		"trace.json",
-		"evaluation.json",
-	]);
-	for (const name of entries) {
-		requireOwner(allowed.has(name), "UNOWNED_CLEANUP_ENTRY");
-		const path = join(root, name);
-		await safePath(path);
-		requireOwner((await lstat(path)).isFile(), "UNSAFE_CLEANUP_ENTRY");
+	let lock: FileHandle;
+	try {
+		lock = await open(
+			".cleanup-lock",
+			constants.O_WRONLY |
+				constants.O_CREAT |
+				constants.O_EXCL |
+				constants.O_NOFOLLOW,
+			0o600,
+		);
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "EEXIST")
+			throw new OwnerFailure("CLEANUP_BUSY");
+		throw error;
 	}
-	// Validate the entire namespace before deleting any bytes. Keep the marker last.
-	for (const name of entries.filter((n) => n !== "owner.json"))
-		await unlink(join(root, name));
-	await unlink(join(root, "owner.json"));
-	await rmdir(root);
-	return { status: "removed", namespace: request.namespace, removed: entries };
+	try {
+		const entries = (await readdir(".")).filter((n) => n !== ".cleanup-lock");
+		requireOwner(entries.includes("owner.json"), "OWNERSHIP_UNPROVEN");
+		const actual: unknown = JSON.parse(
+			(await readOpened("owner.json", 65536)).toString(),
+		);
+		requireOwner(isDeepStrictEqual(actual, marker), "OWNERSHIP_MISMATCH");
+		const allowed = new Set([
+			"owner.json",
+			"state.sqlite",
+			"state.sqlite-wal",
+			"state.sqlite-shm",
+			"mapping.json",
+			"trace.json",
+			"evaluation.json",
+		]);
+		requireOwner(entries.length <= allowed.size, "UNOWNED_CLEANUP_ENTRY");
+		for (const name of entries) {
+			requireOwner(allowed.has(name), "UNOWNED_CLEANUP_ENTRY");
+			requireOwner((await lstat(name)).isFile(), "UNSAFE_CLEANUP_ENTRY");
+		}
+		const removed = entries.filter((n) => n !== "owner.json");
+		for (const name of removed) await unlink(name);
+		// Retain ownership proof for repeats. Removing the directory via root
+		// would re-traverse replaceable ancestors and could remove a foreign root.
+		return {
+			status: "removed",
+			namespace: request.namespace,
+			removed,
+			retained: ["owner.json"],
+		};
+	} finally {
+		await lock.close();
+		await unlink(".cleanup-lock");
+	}
 }

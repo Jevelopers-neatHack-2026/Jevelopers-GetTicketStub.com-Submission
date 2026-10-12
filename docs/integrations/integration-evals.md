@@ -141,11 +141,37 @@ The command exclusively claims `artifacts/pp-<namespace>`, writes a request-boun
 ownership marker and stores its SQLite/evidence files there. A repeated invocation
 cannot overwrite retained files. Cleanup receives the same request/environment and
 does not require the operation's revision/configuration check to have succeeded.
-It validates ownership and every entry before removing the finite allowlist, removes
-the ownership marker last, and preserves staging and unrelated paths. Absent owned
-namespace is an idempotent successful no-op.
+Cleanup runs only in its dedicated, single-invocation CLI process. It enters the
+namespace with `process.chdir`, checks the bound directory identity, and validates
+the marker and finite file allowlist using direct filenames relative to that bound
+directory. Every deletion uses those filenames, never the original absolute root.
+Replacing the namespace, staging or an ancestor after binding cannot redirect
+deletion through a replacement symlink or directory. Replacement before binding
+with a different directory identity fails without deleting files. These guarantees
+come from the OS working-directory binding, not a repeated pathname check.
 
-Interrupted execution after a complete marker can be cleaned. An empty or corrupt
+The original marker is retained after all owned data/evidence files are deleted;
+cleanup never unlinks the marker or removes the namespace directory. Removing the
+directory through its original pathname would reintroduce the ancestor race, and
+removing its marker would lose proof for repeat cleanup. Successful cleanup returns
+`status: "removed"`, the actual `removed` filenames, and `retained: ["owner.json"]`.
+Repeat cleanup validates the retained marker and returns `removed: []` with the
+same status. A genuinely absent namespace still returns `status: "absent"`.
+This changes cleanup receipts only; OwnerRequest and OwnerResponse are unchanged.
+The evaluator owns disposal of its isolated HOME after evidence capture and all
+owner processes have exited. It must not infer that the namespace directory was
+removed from a successful owner cleanup exit. Reuse requires a fresh namespace.
+
+An exclusive `.cleanup-lock` in the bound directory excludes simultaneous owner
+cleanup processes. A competing cleanup exits nonzero with `CLEANUP_BUSY`; it never
+continues without the lock. The first cleanup removes only its own lock on normal
+completion or failure. Killing cleanup while it holds the lock leaves uncertainty:
+subsequent cleanup fails and preserves the stale lock for evaluator disposition.
+Run uses exclusive namespace creation, so it cannot write into an existing claimed
+namespace while cleanup is running. Cleanup does not restore cwd or run product
+operations; importing it for concurrent in-process use is rejected.
+
+Interrupted run after a complete marker can be cleaned. An empty or corrupt
 partial marker, unexpected file, mismatched request or symlink makes cleanup fail
 honestly and preserve uncertain files. The evaluator finally path records that
 failure/uncertainty; it must not report a passing case. Cleanup never recursively
@@ -161,7 +187,19 @@ operation, succeeds and hashes actual published product files. It is a positive
 control for the rejection boundary, not support for `print-preflight`.
 Negative tests cover context/config/revision, cases/modes, bounded malformed input,
 traversal/symlinks, failed runtime, repeated invocation, uncertain partial ownership
-and actual process interruption.
+and actual process interruption. Deterministic subprocess IPC barriers exercise
+symlink and directory replacement of namespace/staging/HOME before binding and at
+the first and second unlink, checking every actual foreign sentinel byte even on
+failure. Concurrent cleanup and SIGKILL immediately before/during marker creation
+are also exercised without arbitrary sleeps.
+
+The cleanup guarantee covers replacement of ancestors of the bound directory.
+It does not grant authority against an actor forging the request-bound marker or
+replacing individual files inside that same directory. Evaluator isolation must
+prevent such mutation. Existing run/write/configuration helpers still use pathname
+validation and exclusive/no-follow final opens; they do not provide a general
+ancestor-race guarantee. The cleanup binding is private to cleanup and does not
+change those helpers' path semantics or create concurrent cwd use.
 
 macOS producer subprocess execution is local characterization only: integration-evals
 prohibits child process creation under its macOS sandbox. Required Linux evaluator
