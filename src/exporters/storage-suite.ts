@@ -1,10 +1,20 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runIndependentTests } from "../internal/independent-tests.js";
+import { z } from "zod";
+import {
+	runIndependentTests,
+	durabilityTestFiles,
+	durabilityExpectedTests,
+	durabilityProcessEvidence,
+} from "../internal/independent-tests.js";
 import { hash } from "../internal/durability.js";
 import { assertEnvironment } from "../runtime/environment.js";
 import { VerificationFailure } from "../runtime/errors.js";
+import {
+	measureStorageCustody,
+	requireStorageCustody,
+} from "./storage-custody.js";
 
 export const storageConformanceScope = {
 	mode: "local-storage-adapter-conformance",
@@ -42,25 +52,48 @@ function scopedExecution(result: IndependentResult) {
 	};
 }
 
-export async function verifyStorageConformance(
-	durability: IndependentResult,
-	evidenceDir: string,
-) {
-	const { receipt: environment } = await assertEnvironment();
-	const paths = Object.keys(storageCanonicalTests).map((path) => ({
-		path,
-		absolute: fileURLToPath(new URL(`../../tests/${path}`, import.meta.url)),
-	}));
-	const inventory = async () =>
-		Promise.all(
-			paths.map(async ({ path, absolute }) => ({
-				path,
-				digest: hash(await readFile(absolute)),
-			})),
+async function requireExecutionCustody(result: IndependentResult) {
+	for (const artifact of result.artifacts) {
+		const raw = await readFile(join(result.evidenceDir, artifact.path), "utf8");
+		if (
+			hash(raw) !== artifact.digest ||
+			!z
+				.object({ executionNonce: z.literal(result.executionNonce) })
+				.safeParse(JSON.parse(raw)).success
+		)
+			throw new VerificationFailure(
+				"RUNTIME_FAILURE",
+				"Storage execution evidence changed or was replayed.",
+			);
+	}
+}
+
+export async function verifyStorageConformance(evidenceDir: string) {
+	if (!z.string().min(1).safeParse(evidenceDir).success)
+		throw new VerificationFailure(
+			"RUNTIME_FAILURE",
+			"Storage conformance owns execution; an evidence directory is required.",
 		);
-	const compiledTests = await inventory();
+	const { receipt: environment } = await assertEnvironment();
+	const originalPaths = [
+		...durabilityTestFiles["artifact-storage"],
+		"fixtures/durability/canary.js",
+	];
+	const canonicalPaths = Object.keys(storageCanonicalTests);
+	const allPaths = [...originalPaths, ...canonicalPaths];
+	const absolute = (path: string) =>
+		fileURLToPath(new URL(`../../tests/${path}`, import.meta.url));
+	const custody = await measureStorageCustody(allPaths);
+	const durability = await runIndependentTests({
+		paths: originalPaths.map(absolute),
+		evidenceDir,
+		expectedTests: durabilityExpectedTests["artifact-storage"] + 1,
+		requiredEvidence: [...durabilityProcessEvidence, "canary-executed.json"],
+	});
+	requireStorageCustody(custody, await measureStorageCustody(allPaths));
+	await requireExecutionCustody(durability);
 	const canonical = await runIndependentTests({
-		paths: paths.map(({ absolute }) => absolute),
+		paths: canonicalPaths.map(absolute),
 		evidenceDir: join(evidenceDir, "canonical"),
 		expectedTests: Object.values(storageCanonicalTests).reduce(
 			(total, count) => total + count,
@@ -68,22 +101,18 @@ export async function verifyStorageConformance(
 		),
 		requiredEvidence: ["canary-executed.json"],
 	});
-	if (
-		hash(JSON.stringify(compiledTests)) !==
-		hash(JSON.stringify(await inventory()))
-	)
-		throw new VerificationFailure(
-			"RUNTIME_FAILURE",
-			"Storage conformance compiled tests changed during execution.",
-		);
-	return {
+	requireStorageCustody(custody, await measureStorageCustody(allPaths));
+	await requireExecutionCustody(durability);
+	await requireExecutionCustody(canonical);
+	const conformance = {
 		...storageConformanceScope,
 		criteria: ["PP-10A.1", "PP-10A.2", "PP-10A.3", "PP-10A.4", "PP-10A.5"],
 		environment,
-		compiledTests,
+		...custody,
 		checks: {
 			durability: scopedExecution(durability),
 			canonical: scopedExecution(canonical),
 		},
 	} as const;
+	return { durability, conformance } as const;
 }

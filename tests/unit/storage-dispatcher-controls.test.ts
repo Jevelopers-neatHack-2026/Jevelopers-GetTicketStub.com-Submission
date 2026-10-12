@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -8,6 +8,7 @@ import { z } from "zod";
 import { resource } from "../../src/runtime/resources.js";
 import { independentTestEnvironment } from "../../src/internal/independent-tests.js";
 import { fixture } from "../fixtures/durability/fixture.js";
+import { storageVerificationProbe } from "../fixtures/durability/storage-verification-probe.js";
 
 const canary = "tests/fixtures/durability/canary.js";
 const probes = [
@@ -39,19 +40,7 @@ for (const [name, path, replacement] of probes)
 		timeout: 30000,
 	}, async () => {
 		using f = fixture();
-		const root = join(f.root, "probe");
-		await mkdir(root);
-		await cp(resource("dist"), join(root, "dist"), { recursive: true });
-		for (const name of [
-			"src",
-			"scripts",
-			"docs",
-			"vendor",
-			"node_modules",
-			"package-lock.json",
-			"package.json",
-		])
-			await symlink(resource(name), join(root, name));
+		const { root } = await storageVerificationProbe(f.root);
 		const target = join(root, "dist", path);
 		if (replacement === null) await rm(target);
 		else await writeFile(target, replacement);
@@ -110,18 +99,15 @@ for (const [name, path, replacement] of probes)
 				),
 			);
 		const reasons = {
-			"missing canary": "counts",
 			"incomplete counts": "counts",
 			"missing evidence": "artifact-missing",
 			"stale evidence": "artifact-schema",
 		} as const;
-		if (name === "missing canonical test")
+		if (name === "missing canonical test" || name === "missing canary")
 			assert.equal(local.diagnostic, undefined);
 		else assert.equal(local.diagnostic?.reason, reasons[name]);
 		if (name === "incomplete counts")
 			assert.equal(local.diagnostic?.counts.tests, 81);
-		if (name === "missing canary")
-			assert.equal(local.diagnostic?.counts.tests, 79);
 	});
 
 for (const args of [

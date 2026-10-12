@@ -9,7 +9,7 @@ import {
 	durabilityProcessEvidence,
 } from "../internal/independent-tests.js";
 import { IndependentTestFailure } from "../internal/independent-diagnostics.js";
-import { VerificationFailure } from "../runtime/errors.js";
+import { VerificationFailure, failureReceipt } from "../runtime/errors.js";
 import { verifyStorageConformance } from "./storage-suite.js";
 export { suiteNames, suiteRegistry } from "./private-suite-registry.js";
 import type { SuiteName } from "./private-suite-registry.js";
@@ -32,6 +32,10 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 	await mkdir(root, { recursive: true });
 	await rm(receipt, { force: true });
 	try {
+		const storage =
+			suite === "artifact-storage"
+				? await verifyStorageConformance(root)
+				: undefined;
 		let paths: readonly string[],
 			requiredEvidence: (
 				| string
@@ -177,19 +181,18 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 			});
 			expectedTests = outputExpectedTests[key];
 		}
-		const result = await runIndependentTests({
-			paths: paths.map((p) =>
-				fileURLToPath(new URL(`../../tests/${p}`, import.meta.url)),
-			),
-			evidenceDir: root,
-			requiredEvidence,
-			evidenceEnvironment: { directoryVariable },
-			expectedTests,
-		});
-		const conformance =
-			suite === "artifact-storage"
-				? await verifyStorageConformance(result, root)
-				: undefined;
+		const result =
+			storage?.durability ??
+			(await runIndependentTests({
+				paths: paths.map((p) =>
+					fileURLToPath(new URL(`../../tests/${p}`, import.meta.url)),
+				),
+				evidenceDir: root,
+				requiredEvidence,
+				evidenceEnvironment: { directoryVariable },
+				expectedTests,
+			}));
+		const conformance = storage?.conformance;
 		await writeFile(
 			receipt,
 			JSON.stringify(
@@ -213,6 +216,9 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 						state: "failed-private-mechanisms",
 						externalState: "external-blocked",
 						code: "RUNTIME_FAILURE",
+						...(suite === "artifact-storage"
+							? { failure: failureReceipt(error) }
+							: {}),
 						...(error instanceof IndependentTestFailure
 							? { diagnostic: error.diagnostic }
 							: {}),

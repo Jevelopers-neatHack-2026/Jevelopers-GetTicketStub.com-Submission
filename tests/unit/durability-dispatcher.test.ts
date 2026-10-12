@@ -9,6 +9,7 @@ import { dispatchVerification } from "../../scripts/verify/dispatcher.js";
 import { independentTestEnvironment } from "../../src/internal/independent-tests.js";
 import { diagnosticSchema } from "../../src/internal/independent-diagnostics.js";
 import { fixture } from "../fixtures/durability/fixture.js";
+import { assertStorageProvenance } from "../fixtures/durability/storage-verification-probe.js";
 
 const expected = {
 	"artifact-storage": 80,
@@ -58,6 +59,7 @@ for (const suite of [
 		if (suite === "artifact-storage") {
 			assert.equal(receipt.status, "passed");
 			assert.ok("result" in receipt);
+			await assertStorageProvenance(receipt.result);
 			const result = z
 				.object({
 					mode: z.literal("local-storage-adapter-conformance"),

@@ -30,17 +30,40 @@ Missing tests, incomplete counts, absent/stale evidence and nonzero child exits
 fail and replace any earlier passing receipt. No stored passing receipt is
 adopted as evidence for a new run.
 
+The conformance entry owns both real executions. It accepts an evidence
+directory only, and cannot adopt caller-created or replayed runner results.
+The private dispatcher delegates to that entry and retains its original run
+without executing the original suite twice.
+
 The dispatcher receipt has status=passed with
 result.mode=local-storage-adapter-conformance, accepted=false,
 live_integration=false, handoff_eligibility=unproven and
 externalState=external-blocked. `local-conformance` is a registry marker for
 this PP-10A local adapter leaf only, not a new canonical wire protocol or
 accepted integration state. Its provenance includes measured environment and
-package-lock identity, compiled test digests, child counts/nonces, output
+package-lock identity, all 17 unique compiled test-file digests (the seven
+original files plus the canonical selection, sharing the canary), child
+counts/nonces, output
 digests and artifact digests; absolute test/evidence paths stay in the private
-local receipt. Canonical tests use actual rendering and the measured runtime.
+local receipt. It retains a measured source inventory digest and Git label
+(revision, tree, clean/dirty/unavailable state), separate from measured compiled
+build bytes, implementation digest and diagnostic renderer/parser commitments.
+Git labels alone do not authenticate a build or deployment;
+build.gitCorrespondence is explicitly unproven. Missing source/build inputs fail; missing or unsuitable
+Git metadata is labeled unavailable with null identities, and dirty source is
+labeled dirty. A final committed or mechanically merged run records its actual
+clean Git revision/tree together with the measured bytes and runtime.
+
+Source, build, dependency/runtime commitments and complete test inventory are
+compared before the original phase, between phases and after the canonical phase.
+These are three custody snapshots, not a claim of continuous filesystem
+immutability. Original nonce-bound evidence is rehashed after canonical work;
+both phases' retained artifacts must still match before conformance returns.
+Changed bytes, missing artifacts or replayed evidence invalidate conformance.
+Canonical tests use actual rendering and the measured runtime.
 The matching macOS profile is supplemental; pinned Linux CI is authoritative
-for renderer-dependent cases. A fresh Linux run is required for a changed head.
+for renderer-dependent containment claims. A local pass makes no new-head Linux
+claim, including when the Captain explicitly waives waiting for CI success.
 
 `restart-recovery` and `metering-traces` retain exit **1**, status=failed and
 externalState=external-blocked after their private checks. Release retains
