@@ -36,7 +36,7 @@ class SnapshotTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
-        self.source = self.base / 'source'
+        self.source = (self.base / 'source').resolve()
         init(self.source)
 
     def test_export_preserves_ignored_files_modes_and_safe_symlinks(self):
@@ -186,6 +186,50 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(stats['source_file_lines'], 4)
         self.assertEqual(stats['binary_or_non_utf8_files'], 2)
         self.assertEqual(stats['symlinks'], 1)
+
+    def test_original_authors_and_commits_survive_history_merge_and_refresh(self):
+        (self.source / 'source.txt').write_text('first')
+        git(self.source, 'config', 'user.name', 'Original Author')
+        git(self.source, 'config', 'user.email', 'original@example.invalid')
+        first = commit(self.source)
+        original = git(self.source, 'cat-file', 'commit', first)
+        target = self.base / 'submission'
+        init(target)
+        (target / 'README.md').write_text('judge guide')
+        before = commit(target)
+        entries = [{'name': 'source', 'commit': first}]
+        with patch.object(sync, 'ROOT', target):
+            self.assertTrue(sync.prepare_history_merge(entries, self.base))
+            commit(target)
+            self.assertEqual(git(target, 'cat-file', 'commit', first), original)
+            self.assertEqual(git(target, 'rev-parse', 'HEAD^1').strip(), before)
+            self.assertEqual(git(target, 'rev-parse', 'HEAD^2').strip(), first)
+            self.assertEqual(git(target, 'ls-tree', 'HEAD'), git(target, 'ls-tree', before))
+            self.assertFalse(sync.prepare_history_merge(entries, self.base))
+            (self.source / 'source.txt').write_text('second')
+            git(self.source, 'config', 'user.name', 'Second Author')
+            second = commit(self.source)
+            self.assertTrue(sync.prepare_history_merge([{'name': 'source', 'commit': second}], self.base))
+            commit(target)
+            git(target, 'merge-base', '--is-ancestor', first, 'HEAD')
+            git(target, 'merge-base', '--is-ancestor', second, 'HEAD')
+            self.assertEqual(git(target, 'cat-file', 'commit', second), git(self.source, 'cat-file', 'commit', second))
+            self.assertIn('Original Author', git(target, 'log', '--format=%an'))
+            self.assertIn('Second Author', git(target, 'log', '--format=%an'))
+
+    def test_history_scan_failure_stops_before_import(self):
+        with patch.object(sync.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, '', 'failure')):
+            with self.assertRaisesRegex(RuntimeError, 'History scan failed'):
+                sync.scan_source_history({'name': 'source', 'commit': 'a' * 40}, self.source, self.base)
+        self.assertFalse((self.source / '.git' / 'MERGE_HEAD').exists())
+
+    def test_pending_history_merge_blocks_another_sync(self):
+        (self.source / 'file').write_text('first')
+        sha = commit(self.source)
+        (self.source / '.git' / 'MERGE_HEAD').write_text(sha + '\n')
+        with patch.object(sync, 'ROOT', self.source):
+            with self.assertRaisesRegex(RuntimeError, 'pending history merge'):
+                sync.check_checkout(False)
 
     def test_statistics_reject_shallow_history(self):
         (self.source / 'file').write_text('hello')

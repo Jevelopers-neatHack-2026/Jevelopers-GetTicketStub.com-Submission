@@ -197,7 +197,7 @@ def fetch_source(repo, temporary, stage):
 
 def write_index(stage, entries):
     (stage / 'sources.json').write_text(json.dumps({
-        'schema_version': 2, 'organization': ORG, 'strategy': 'public-default-branch-snapshots',
+        'schema_version': 2, 'organization': ORG, 'strategy': 'public-default-branch-snapshots-with-original-history',
         'statistics_method': {
             'version': 1,
             'commits': 'All commits reachable from each pinned source commit, including merges. Sum is per repository, not globally deduplicated.',
@@ -207,7 +207,8 @@ def write_index(stage, entries):
         'repositories': entries}, indent=2) + '\n')
     lines = ['# Source repository index', '',
              'Each folder contains actual tracked source files at the linked commit. '
-             'Original authorship, event-dated commits, and full development history remain in the source repositories.', '']
+             'Original commits are also imported into submission main without changing authors, dates, or commit IDs. '
+             '[Contributor credit](docs/judges/CONTRIBUTORS.md) explains GitHub account matching.', '']
     if all('statistics' in repo for repo in entries):
         total = lambda key: sum(repo['statistics'][key] for repo in entries)
         lines += ['## Collection at a glance', '',
@@ -281,9 +282,73 @@ def scan(stage, scratch):
     print('Secret scan passed.', flush=True)
 
 
+def scan_source_history(entry, source, scratch):
+    """Scan public history too: old deleted credentials must not enter this repo."""
+    config = scratch / 'history-gitleaks.toml'
+    config.write_text('[extend]\nuseDefault = true\n')
+    fd, name = tempfile.mkstemp(prefix='ticketstub-history-scan-', suffix='.json')
+    os.close(fd)
+    result = subprocess.run(['gitleaks', 'git', str(source), '--log-opts', entry['commit'],
+        '--config', str(config), '--gitleaks-ignore-path', str(scratch / 'no-ignore-file'),
+        '--ignore-gitleaks-allow', '--redact', '--no-banner', '--max-archive-depth', '2',
+        '--exit-code', '42', '--report-format', 'json', '--report-path', name],
+        capture_output=True, text=True)
+    if result.returncode not in (0, 42):
+        raise RuntimeError(f'History scan failed; nothing published. Report: {name}')
+    findings = json.loads(Path(name).read_text() or '[]')
+    if result.returncode == 42 and not findings:
+        raise RuntimeError(f'History scan returned no usable report: {name}')
+    baseline = json.loads((ROOT / 'scripts/reviewed-scan-findings.json').read_text())
+    approved = {(e['path'], e['sha256'], location)
+                for e in baseline['files'] for location in e['findings']}
+    unexpected = []
+    for finding in findings:
+        path = finding['File']
+        outer = path.split('!', 1)[0]
+        content = run('git', '-C', str(source), 'show',
+                      finding['Commit'] + ':' + outer, binary=True)
+        location = ':'.join(str(finding.get(k, '')) for k in
+                           ('RuleID', 'StartLine', 'StartColumn', 'EndLine', 'EndColumn'))
+        identity = (f"repositories/{entry['name']}/{path}", hashlib.sha256(content).hexdigest(), location)
+        if identity not in approved:
+            unexpected.append(finding)
+    if unexpected:
+        Path(name).write_text(json.dumps(unexpected, indent=2) + '\n')
+        raise RuntimeError(f"{len(unexpected)} unreviewed history findings in {entry['name']}; "
+                           f'nothing published. Redacted report: {name}')
+    Path(name).unlink()
+
+
+def prepare_history_merge(entries, temporary):
+    """Attach exact public source commits as parents; never rewrite author metadata."""
+    parents = []
+    for entry in entries:
+        sha = entry['commit']
+        run('git', '-c', 'core.hooksPath=/dev/null', 'fetch', '--quiet', '--no-tags',
+            str(temporary / entry['name']), sha, cwd=ROOT)
+        check = subprocess.run(['git', 'merge-base', '--is-ancestor', sha, 'HEAD'],
+                               cwd=ROOT, capture_output=True)
+        if check.returncode not in (0, 1):
+            raise RuntimeError('Cannot verify imported source ancestry')
+        if check.returncode == 1 and sha not in parents:
+            parents.append(sha)
+    if parents:
+        git_dir = Path(run('git', 'rev-parse', '--absolute-git-dir', cwd=ROOT).strip())
+        # Git's normal commit command consumes these parents without merging source
+        # paths into the root. The already verified snapshot is the commit tree.
+        (git_dir / 'ORIG_HEAD').write_text(run('git', 'rev-parse', 'HEAD', cwd=ROOT))
+        (git_dir / 'MERGE_HEAD').write_text(''.join(sha + '\n' for sha in parents))
+        (git_dir / 'MERGE_MODE').write_text('no-ff')
+        (git_dir / 'MERGE_MSG').write_text('Sync public source snapshots and preserve original commit authors\n')
+    return bool(parents)
+
+
 def check_checkout(publish):
     if run('git', 'rev-parse', '--show-toplevel', cwd=ROOT).strip() != str(ROOT):
         raise RuntimeError('Run from a dedicated submission checkout')
+    git_dir = Path(run('git', 'rev-parse', '--absolute-git-dir', cwd=ROOT).strip())
+    if (git_dir / 'MERGE_HEAD').exists():
+        raise RuntimeError('Finish or abort the pending history merge before syncing')
     if run('git', 'status', '--porcelain', '--untracked-files=all', cwd=ROOT).strip():
         raise RuntimeError('Submission checkout must be clean. Commit or move local changes first.')
     if run('git', 'branch', '--show-current', cwd=ROOT).strip() != 'main':
@@ -353,6 +418,8 @@ def main():
             write_index(stage, entries)
             scan(stage, scratch)
             print(f"Validated {len(entries)} repositories, {sum(r['tracked_files'] for r in entries)} tracked files.", flush=True)
+            for entry in entries:
+                scan_source_history(entry, scratch / 'git' / entry['name'], scratch)
             if args.dry_run:
                 print('Dry run complete; checkout and remote unchanged.')
                 return
@@ -361,7 +428,8 @@ def main():
                 actual = run('git', 'write-tree', f"--prefix={entry['path']}/", cwd=ROOT).strip()
                 if actual != entry['tree']:
                     raise RuntimeError(f"Staged files differ from source tree for {entry['name']}; nothing was published")
-        if not changed:
+            history_changed = prepare_history_merge(entries, scratch / 'git')
+        if not changed and not history_changed:
             print('Already up to date; no new commit.')
             return
         if args.publish:
@@ -370,7 +438,7 @@ def main():
             run('git', 'push', '--set-upstream', 'origin', 'HEAD:refs/heads/main', cwd=ROOT)
             print(f'Published: https://github.com/{ORG}/{TARGET}')
         else:
-            print('Snapshot staged. Review git diff --cached, then commit and push when ready.')
+            print('Snapshot and source-history parents staged. Review git diff --cached, then git commit and git push. Do not squash or rebase this merge.')
 
 
 if __name__ == '__main__':

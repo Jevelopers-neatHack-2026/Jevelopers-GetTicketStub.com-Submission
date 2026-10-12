@@ -15,7 +15,7 @@ python3 scripts/sync_submission.py --publish
 
 The script discovers all public repositories in `Jevelopers-neatHack-2026` except this submission repository, fetches each default branch, scans the complete staged snapshot for secrets, verifies each copied Git tree against its source, refreshes the index and manifest, and commits and pushes only when something changed. New public repositories are picked up automatically. Files removed upstream are removed from the next snapshot. Refresh after merging the work you want judges to see.
 
-It fetches complete history for each selected branch to count source commits accurately. Repository, file, text-line, source-file-line, and commit counts are generated in the same manifest and index. [Counting rules](COLLECTION.md) explain what each number includes. Full history may take longer to fetch than the earlier shallow snapshots; only files at the selected commit are copied into the collection.
+It fetches complete history for each selected branch to count source commits accurately. Repository, file, text-line, source-file-line, and commit counts are generated in the same manifest and index. [Counting rules](COLLECTION.md) explain what each number includes. Full history may take longer to fetch than the earlier shallow snapshots; only files at the selected commit are copied into the collection. The sync also imports original source commits as merge parents, preserving author credit. [How credit works](CONTRIBUTORS.md) records rollout status and GitHub account-matching limits.
 
 If the signed-in account has used its GitHub API quota, public metadata can use the separate unauthenticated quota:
 
@@ -35,11 +35,13 @@ git commit -m "Refresh submission snapshot"
 git push origin main
 ```
 
-Only committed code on GitHub's default branches is collected. Open pull requests, other branches, local edits, issues, releases, and private repositories (including agent-session checkpoint storage) are outside the snapshot. Original commit history remains in the source repositories, with exact commit links in the index; the submission has its own snapshot history. The source repositories remain the development homes. Edit source projects there and rerun the script; edits inside this repository's generated `repositories/` folders are overwritten by the next refresh.
+Only committed code on GitHub's default branches is collected. Open pull requests, other branches, local edits, issues, releases, and private repositories (including agent-session checkpoint storage) are outside the snapshot. Original commit history remains in the source repositories, with exact commit links in the index. Successful history-enabled syncs also connect those unchanged commits to submission main. Do not squash or rebase the sync merge: its parents preserve the original histories. The source repositories remain the development homes. Edit source projects there and rerun the script; edits inside this repository's generated `repositories/` folders are overwritten by the next refresh.
 
-The script fails before replacing the snapshot if a fetch, secret scan, or file validation fails. It rejects submodule pointers, Git LFS pointers, escaping symlinks, and oversized files instead of silently submitting incomplete code. Previously included repositories disappearing or becoming private require explicit manifest review. Updates use normal Git pushes without force; if another maintainer publishes first, reconcile your checkout and rerun. If a push fails after the local commit, that commit remains available for inspection and a normal retry with `git push origin main`.
+The script fails before replacing the snapshot if a fetch, snapshot or history secret scan, or file validation fails. It rejects submodule pointers, Git LFS pointers, escaping symlinks, and oversized files instead of silently submitting incomplete code. Previously included repositories disappearing or becoming private require explicit manifest review. Updates use normal Git pushes without force; if another maintainer publishes first, reconcile your checkout and rerun. If a push fails after the local commit, that commit remains available for inspection and a normal retry with `git push origin main`.
 
 Upstream workflows are kept inside their component folders and do not become active workflows in this repository. Existing per-project licenses and notices remain attached to their files; this collection grants no additional license.
+
+History imports also scan older committed versions, including files later deleted. Their findings require the same exact-file review. A failed history scan leaves the current snapshots intact.
 
 ### Secret scan review
 
