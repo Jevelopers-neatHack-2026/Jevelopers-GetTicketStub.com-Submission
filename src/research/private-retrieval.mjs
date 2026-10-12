@@ -1083,11 +1083,18 @@ export async function runPrivateRetrieval(value) {
     stopPersistenceStarted = true;
     if (!runCreated) return;
     const cleanup = new AbortController();
-    const remaining = Math.min(STOP_PERSIST_CLEANUP_MS, remainingCleanupMs());
+    const stopDeadlineAt = Math.min(performance.now() + STOP_PERSIST_CLEANUP_MS, cleanupEnvelopeDeadline);
+    const remaining = Math.max(0, stopDeadlineAt - performance.now());
     let timer;
     if (remaining <= 0) cleanup.abort();
     else timer = setTimeout(() => cleanup.abort(), remaining);
-    const pending = Promise.resolve().then(() => input.frontier.stopRun(scope, input.runId, reason, cleanup.signal))
+    const pending = Promise.resolve().then(() => {
+      // A sibling abort listener may block after this microtask is scheduled.
+      // Microtasks run before overdue timers, so enforce the original bound
+      // again at callback entry without granting another stop allowance.
+      if (performance.now() >= stopDeadlineAt) cleanup.abort();
+      return input.frontier.stopRun(scope, input.runId, reason, cleanup.signal);
+    })
       .catch(() => {}).finally(() => {
         clearTimeout(timer);
         if (!cleanup.signal.aborted) cleanup.abort();
