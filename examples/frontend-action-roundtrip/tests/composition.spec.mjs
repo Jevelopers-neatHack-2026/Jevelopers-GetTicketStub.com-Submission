@@ -5,6 +5,66 @@ async function refresh(page,expected){const response=page.waitForResponse('**/ap
 async function initialize(page){await expect(page.locator('#composition-status')).toContainText('not initialized');await page.getByLabel('I reviewed the selected artwork and initialization binding.').check();const response=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Initialize reviewed composition'}).click();const result=(await(await response).json()).result;expect(result.ok).toBe(true);await expect(page.locator('#operation-status')).toContainText(result.revision_id);await refresh(page,result);}
 async function apply(page){await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();const response=page.waitForResponse('**/api/composition/apply');await page.keyboard.press('Enter');const result=(await(await response).json()).result;expect(result.ok).toBe(true);await expect(page.locator('#operation-status')).toContainText(result.revision_id);await refresh(page,result);}
 test.beforeEach(async({page,request})=>{await request.post('/__fixture/reset',{data:{lock_logo:false}});await page.goto('/composition.html');});
+test('definitive stale non-admission survives reload and permits reviewed renewal plus fresh Apply',async({page,request},info)=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();
+  await request.post('/__fixture/state',{data:{advance_ms:60001}});
+  const response=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();const rejected=(await(await response).json()).result;
+  expect(rejected).toMatchObject({ok:false,status:'stale',code:'stale_version',approval:false,purchase:false,recovery:'not_admitted'});
+  await expect(page.locator('#operation-status')).toContainText('stale');await expect(page.locator('#composition-error')).toBeHidden();
+  await page.reload();await expect(page.locator('#composition-status')).toContainText('authority is stale');await expect(page.locator('#operation-status')).toContainText(`${rejected.action_id}: stale`);
+  await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeEnabled();
+  await renew(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await apply(page);
+  expect(await counts(request)).toMatchObject({composition_previews:2,composition_revalidations:1,image_calls:0,jev_calls:0,reservations:0});
+  const cached=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1')));expect(Object.keys(cached).sort()).toEqual(['action','scope']);expect(JSON.stringify(cached)).not.toContain('draft');
+  await page.screenshot({path:info.outputPath('stale-reload-renew-fresh-apply.png'),fullPage:true});
+});
+test('superseded initialization has durable non-admission after reload and does not block fresh composition Apply',async({page,request})=>{
+  await expect(page.locator('#composition-status')).toContainText('not initialized');await page.getByLabel('I reviewed the selected artwork and initialization binding.').check();
+  const initial=(await(await request.get('/api/composition/current')).json()).view;
+  const other={action_version:'creative-composition-initialize/1.0',action_id:'other-tab-initialize',intent:'initialize',review_sha256:initial.review.review_sha256};
+  expect((await(await request.post('/api/composition/apply',{data:other})).json()).result.ok).toBe(true);
+  const response=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Initialize reviewed composition'}).click();const rejected=(await(await response).json()).result;
+  expect(rejected).toMatchObject({ok:false,status:'stale',approval:false,purchase:false,recovery:'not_admitted'});
+  await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await expect(page.locator('#operation-status')).toContainText(`${rejected.action_id}: stale`);
+  await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeEnabled();await page.getByLabel('Name size',{exact:true}).selectOption('large');await apply(page);
+  expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0,jev_calls:0,reservations:0});
+});
+test('lost definitive rejection response reconciles its durable non-admission before enabling renewal',async({page,request})=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();await expect(page.getByRole('button',{name:'Apply reviewed composition',exact:true})).toBeFocused();await request.post('/__fixture/state',{data:{advance_ms:60001}});
+  await page.route('**/api/composition/apply',async route=>{const response=await route.fetch();expect((await response.json()).result.recovery).toBe('not_admitted');await route.abort();},{times:1});
+  await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('outcome remains unknown');
+  await page.reload();await expect(page.locator('#operation-status')).toContainText(': stale');await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeEnabled();
+  expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0,jev_calls:0,reservations:0});
+});
+test('null lookup and a caller-written terminal cache cannot clear a transport-unknown action after reload',async({page,request})=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();
+  // Abort BEFORE admission. No server rejection or operation outcome is known.
+  await page.route('**/api/composition/apply',route=>route.abort(),{times:1});await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('outcome remains unknown');
+  const cached=await page.evaluate(()=>{const key='creative-composition-reviewed-action/1',value=JSON.parse(sessionStorage.getItem(key));value.terminal={ok:false,status:'stale',code:'stale_version',action_id:value.action.action_id,approval:false,purchase:false,recovery:'not_admitted'};sessionStorage.setItem(key,JSON.stringify(value));return value;});
+  expect((await(await request.post('/api/composition/lookup',{data:{action_id:cached.action.action_id}})).json()).result).toBeNull();
+  await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await page.getByRole('button',{name:'Read composition history',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('outcome remains unknown');
+  const after=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1')));expect(after.action.action_id).toBe(cached.action.action_id);expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0,reservations:0});
+});
+test('closed refusal of a changed duplicate preserves a genuine pending action across reload until authoritative completion',async({page,request},info)=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();await request.post('/__fixture/state',{data:{block:'composition-preview'}});
+  const submitted=page.waitForRequest('**/api/composition/apply');await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();const original=(await submitted).postDataJSON();
+  try {
+    await expect.poll(async()=>{const result=(await(await request.post('/api/composition/lookup',{data:{action_id:original.action_id}})).json()).result;return result?.status==='unknown'&&!!result.backend_job_id;}).toBe(true);
+    await page.reload();await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');await expect(page.locator('#operation-status')).toContainText('outcome unknown');
+    // Feed the browser the genuine public backend refusal for a changed duplicate
+    // of its held identity. No failure envelope or full backend is fabricated.
+    await page.route('**/api/composition/retry',async route=>{const changed={...original,draft:{categories:{name_size:'small'},exact:{}}};const response=await route.fetch({url:new URL('/api/composition/apply',route.request().url()).href,method:'POST',postData:JSON.stringify(changed)});expect((await response.json()).result).toMatchObject({ok:false,status:'failed',code:'conflict',recovery:'unknown'});await route.fulfill({response});},{times:1});
+    await page.getByRole('button',{name:'Retry existing Apply',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('outcome unknown');await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeDisabled();
+    await page.reload();await expect(page.locator('#operation-status')).toContainText('outcome unknown');await expect(page.getByRole('button',{name:'Review draft',exact:true})).toBeDisabled();
+    const cached=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('creative-composition-reviewed-action/1')));expect(cached.action.action_id).toBe(original.action_id);expect(Object.keys(cached).sort()).toEqual(['action','scope']);
+    await request.post('/__fixture/state',{data:{release:true}});
+    await expect.poll(async()=>((await(await request.post('/api/composition/lookup',{data:{action_id:original.action_id}})).json()).result)?.ok).toBe(true);
+    await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('Historical completion recovered');await refresh(page);
+    expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0,jev_calls:0,reservations:0});await page.screenshot({path:info.outputPath('pending-refusal-reload-recovered.png'),fullPage:true});
+  } finally {await request.post('/__fixture/state',{data:{release:true}});}
+});
 test('read-only categorical review displays actual mapped before/after units and exact approved asset before keyboard Apply', async ({page,request}) => {
   await initialize(page);const current=(await(await request.get('/api/composition/current')).json()).view;
   await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByLabel('Approved logo position',{exact:true}).selectOption('bottom');

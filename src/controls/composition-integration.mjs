@@ -5,7 +5,7 @@ import { canonicalHash, canonicalSerialize } from 'creative-engine/contracts';
 import { snapshotCompositionJson, validateCompositionProductionEnvelope, createCompositionProductionEnvelope } from 'creative-engine/contracts/composition-authority';
 import { snapshotControlJson, validId, canonical } from './schema.mjs';
 import { createCompositionControlProjection, createCompositionControlPlan, COMPOSITION_APPLY_VERSION, CompositionControlsError } from './composition-projection.mjs';
-import { assertCompositionHistoryIdentity, assertCompositionDraftReview } from './composition-view.mjs';
+import { assertCompositionHistoryIdentity, assertCompositionDraftReview, assertCompositionCompletion } from './composition-view.mjs';
 import { projectPublicTelemetry } from 'creative-engine/telemetry';
 
 const safe = input => { const output = projectPublicTelemetry(input); if (output.redactions.length) throw new TypeError('Unsafe composition view'); return snapshotControlJson(output.value); };
@@ -19,7 +19,11 @@ export class CompositionControlsAdapter {
       tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, actor_id TEXT NOT NULL, action_id TEXT NOT NULL,
       action_json TEXT NOT NULL, action_hash TEXT NOT NULL, request_json TEXT NOT NULL, request_hash TEXT NOT NULL,
       job_id TEXT, backend_request_hash TEXT, response_json TEXT, created_at INTEGER NOT NULL,
-      PRIMARY KEY(tenant_id,project_id,action_id));`);
+      PRIMARY KEY(tenant_id,project_id,action_id));
+      CREATE TABLE IF NOT EXISTS control_composition_rejections_v1 (
+        tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, actor_id TEXT NOT NULL, action_id TEXT NOT NULL,
+        action_hash TEXT NOT NULL, response_json TEXT NOT NULL, response_hash TEXT NOT NULL, created_at INTEGER NOT NULL,
+        PRIMARY KEY(tenant_id,project_id,action_id));`);
     const begin = ports.jobs.begin;
     this.api = createCreativeApi({ now, ports: { ...ports, jobs: { ...ports.jobs, begin: async input => {
       const result = await begin(input);
@@ -163,25 +167,58 @@ export class CompositionControlsAdapter {
     }
     return row;
   }
+  rejection(principal, action_id) {
+    this.assertTransactionFree(); this.context(principal);
+    const row=this.db.prepare('SELECT * FROM control_composition_rejections_v1 WHERE tenant_id=? AND project_id=? AND actor_id=? AND action_id=?')
+      .get(principal.tenant_id,principal.project_id,principal.actor_id,action_id);
+    if(!row)return null;
+    const result=assertCompositionCompletion(JSON.parse(row.response_json),action_id);
+    if(result.ok||result.recovery!=='not_admitted'||canonicalHash(result)!==row.response_hash||
+      this.db.prepare('SELECT 1 FROM control_composition_actions_v1 WHERE tenant_id=? AND project_id=? AND action_id=?').get(principal.tenant_id,principal.project_id,action_id)) throw new TypeError('Corrupt rejection');
+    return result;
+  }
+  failure(principal, action, code, status='failed') {
+    const result={ok:false,code,status,...(validId(action?.action_id)?{action_id:action.action_id}:{}),approval:false,purchase:false,recovery:'unknown'};
+    try {
+      this.assertTransactionFree(); this.context(principal);
+      if(!validId(action?.action_id))return result;
+      // A rejected request over an admitted action says nothing about that
+      // original operation's outcome. Never persist it as a terminal receipt.
+      const admitted=this.db.prepare('SELECT actor_id,job_id FROM control_composition_actions_v1 WHERE tenant_id=? AND project_id=? AND action_id=?')
+        .get(principal.tenant_id,principal.project_id,action.action_id);
+      if(admitted)return {...result,...(admitted.actor_id===principal.actor_id?{backend_job_id:admitted.job_id}: {})};
+      const prior=this.rejection(principal,action.action_id);if(prior)return prior;
+      const rejected={...result,recovery:'not_admitted'};
+      // The matching conditional action INSERT below gives these two journals
+      // one exclusive admission decision even across SQLite connections.
+      this.db.prepare(`INSERT OR IGNORE INTO control_composition_rejections_v1
+        (tenant_id,project_id,actor_id,action_id,action_hash,response_json,response_hash,created_at)
+        SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS
+        (SELECT 1 FROM control_composition_actions_v1 WHERE tenant_id=? AND project_id=? AND action_id=?)`)
+        .run(principal.tenant_id,principal.project_id,principal.actor_id,action.action_id,canonicalHash(action),canonical(rejected),canonicalHash(rejected),this.now(),principal.tenant_id,principal.project_id,action.action_id);
+      return this.rejection(principal,action.action_id)??result;
+    } catch { return result; }
+  }
   async apply(principal, rawAction) {
     let action, row;
     try {
-      this.assertTransactionFree();
-      principal = snapshotControlJson(principal); action = snapshotControlJson(rawAction); this.context(principal, true);
-      if (!validId(action.action_id)) return { ok: false, code: 'validation', status: 'failed', approval: false, purchase: false };
-      if (!['creative-composition-initialize/1.0', 'creative-composition-renew/1.0', COMPOSITION_APPLY_VERSION].includes(action.action_version)) return { ok: false, code: 'unsupported_version', status: 'failed', action_id: action.action_id, approval: false, purchase: false };
+      action = snapshotControlJson(rawAction); principal = snapshotControlJson(principal);
+      this.assertTransactionFree(); this.context(principal, true);
+      if (!validId(action.action_id)) return this.failure(principal,action,'validation');
+      const rejected=this.rejection(principal,action.action_id);if(rejected)return rejected;
+      if (!['creative-composition-initialize/1.0', 'creative-composition-renew/1.0', COMPOSITION_APPLY_VERSION].includes(action.action_version)) return this.failure(principal,action,'unsupported_version');
       row = this.row(principal, action.action_id);
-      if (row && row.action_hash !== canonicalHash(action)) return safe({ ok: false, code: 'conflict', status: 'failed', action_id: action.action_id });
+      if (row && row.action_hash !== canonicalHash(action)) return this.failure(principal,action,'conflict');
       if (!row) {
         const view = action.action_version === 'creative-composition-renew/1.0' ? await this.history(principal) : await this.current(principal), context = this.context(principal, true); let operation, payload;
         if (action.action_version === 'creative-composition-renew/1.0') {
-          if (!exact(action, ['action_version','action_id','review_sha256','intent']) || action.intent !== 'renew' || !view.ok || !view.review?.can_renew || action.review_sha256 !== view.review.review_sha256) return { ok: false, code: 'stale_version', status: 'stale', action_id: action.action_id, approval: false, purchase: false };
+          if (!exact(action, ['action_version','action_id','review_sha256','intent']) || action.intent !== 'renew' || !view.ok || !view.review?.can_renew || action.review_sha256 !== view.review.review_sha256) return this.failure(principal,action,'stale_version','stale');
           operation = 'composition.revalidate'; payload = { expected_current_revision_id: view.review.base.current_revision_id, expected_current_revision_sha256: view.review.base.current_revision_sha256, candidate_revision_id: `renew:${action.action_id}` };
         } else if (action.action_version === 'creative-composition-initialize/1.0') {
-          if (!exact(action, ['action_version','action_id','review_sha256','intent']) || action.intent !== 'initialize' || view.status !== 'not_initialized' || !view.review.can_initialize || action.review_sha256 !== view.review.review_sha256) return { ok: false, code: 'stale_version', status: 'stale' };
+          if (!exact(action, ['action_version','action_id','review_sha256','intent']) || action.intent !== 'initialize' || view.status !== 'not_initialized' || !view.review.can_initialize || action.review_sha256 !== view.review.review_sha256) return this.failure(principal,action,'stale_version','stale');
           operation = 'composition.create'; payload = {};
         } else {
-          if (action.action_version !== COMPOSITION_APPLY_VERSION || view.status !== 'current') return { ok: false, code: 'stale_version', status: 'stale' };
+          if (action.action_version !== COMPOSITION_APPLY_VERSION || view.status !== 'current') return this.failure(principal,action,'stale_version','stale');
           const current = await this.ports.storage.getCurrentComposition({ scope: { ...principal, brief_id: context.brief.brief_id }, design_version_id: context.design.design_version_id });
           const plan = createCompositionControlPlan({ revision: current.revision, policy: this.readPolicy(principal, context), projection: view.projection, action });
           operation = 'composition.update'; payload = { plan };
@@ -190,14 +227,16 @@ export class CompositionControlsAdapter {
         const request = this.request(principal, context, operation, payload, action.action_id);
         // Synchronous persistence precedes invoke/begin/owner/render callbacks.
         const raced = this.row(principal, action.action_id);
-        if (raced && raced.action_hash !== canonicalHash(action)) return { ok: false, code: 'conflict', status: 'failed' };
-        if (!raced) this.db.prepare('INSERT INTO control_composition_actions_v1(tenant_id,project_id,actor_id,action_id,action_json,action_hash,request_json,request_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
-          .run(principal.tenant_id, principal.project_id, principal.actor_id, action.action_id, canonical(action), canonicalHash(action), canonicalSerialize(request), canonicalHash(request), this.now());
+        if (raced && raced.action_hash !== canonicalHash(action)) return this.failure(principal,action,'conflict');
+        if (!raced) this.db.prepare(`INSERT INTO control_composition_actions_v1(tenant_id,project_id,actor_id,action_id,action_json,action_hash,request_json,request_hash,created_at)
+          SELECT ?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM control_composition_rejections_v1 WHERE tenant_id=? AND project_id=? AND action_id=?)`)
+          .run(principal.tenant_id, principal.project_id, principal.actor_id, action.action_id, canonical(action), canonicalHash(action), canonicalSerialize(request), canonicalHash(request), this.now(),principal.tenant_id,principal.project_id,action.action_id);
         row = this.row(principal, action.action_id);
+        if(!row){const rejected=this.rejection(principal,action.action_id);if(rejected)return rejected;throw new TypeError('Admission unavailable');}
       }
     } catch (error) {
       const allowed = ['permission_denied','stale_version','invalid_request','unsupported_version','conflict','integrity_error'];
-      return { ok: false, code: allowed.includes(error?.code) ? error.code : 'validation', status: error?.code === 'stale_version' ? 'stale' : 'failed', ...(action && validId(action.action_id) ? {action_id:action.action_id} : {}), approval: false, purchase: false };
+      return this.failure(principal,action,allowed.includes(error?.code)?error.code:'validation',error?.code==='stale_version'?'stale':'failed');
     }
     const key = canonical([principal.tenant_id, principal.project_id, action.action_id]);
     if (this.inflight.has(key)) return this.inflight.get(key);
@@ -214,13 +253,12 @@ export class CompositionControlsAdapter {
       if (row.response_json) response = snapshotCompositionJson(JSON.parse(row.response_json));
       else if (readOnly) {
         const savedJob = row.job_id ? await this.ports.jobs.get({ scope: principal, job_id: row.job_id }) : null;
-        if (savedJob?.status !== 'completed' || !savedJob.result) return safe({ ok: false, code: savedJob?.status === 'cancelled' ? 'cancelled' : 'unavailable', status: savedJob?.status === 'cancelled' ? 'cancelled' : 'unknown', action_id: row.action_id, backend_job_id: row.job_id, approval: false, purchase: false });
+        if (savedJob?.status !== 'completed' || !savedJob.result) return this.outcomeFailure(principal,row,'unavailable','unknown');
         // A read-only projection of the real durable job, not an executor call.
         response = { ok: true, job: { job_id: savedJob.job_id }, result: savedJob.result, replayed: true };
       } else response = await this.api.invoke(context.actor, request);
       this.assertTransactionFree(); this.context(principal);
-      if (!response.ok) return safe({ ok: false, status: response.error.code === 'stale_version' ? 'stale' : response.error.code === 'cancelled' ? 'cancelled' : 'failed', code: response.error.code,
-        action_id: row.action_id, backend_job_id: response.job?.job_id ?? this.row(principal, row.action_id).job_id ?? null, approval: false, purchase: false });
+      if (!response.ok) return this.outcomeFailure(principal,row,response.error.code,response.error.code==='stale_version'?'stale':response.error.code==='cancelled'?'cancelled':'failed');
       const checked = this.validateResult(response.result, principal), latest = this.row(principal, row.action_id);
       const job = await this.ports.jobs.get({ scope: principal, job_id: latest.job_id });
       const durable = await this.ports.storage.getCompositionAction({ scope: { ...principal, brief_id: request.payload.brief_id }, action_id: row.action_id });
@@ -243,18 +281,30 @@ export class CompositionControlsAdapter {
         state_sha256: revision.state_sha256, artwork_sha256: revision.dependencies.artwork_sha256, preview: this.previewDescriptor(revision), approval: false, purchase: false });
     } catch { return safe({ ok: false, code: 'unavailable', status: 'unknown', action_id: row.action_id, backend_job_id: row.job_id ?? null, approval: false, purchase: false }); }
   }
+  async outcomeFailure(principal,row,code,status) {
+    let job_id=row.job_id??null;
+    try {
+      this.assertTransactionFree();this.context(principal);
+      const latest=this.row(principal,row.action_id);job_id=latest.job_id??null;
+      const job=job_id?await this.ports.jobs.get({scope:principal,job_id}):null;
+      this.assertTransactionFree();this.context(principal);
+      if(job&&['failed','cancelled'].includes(job.status)&&job.action_id===row.action_id&&job.request_hash===latest.backend_request_hash)
+        return safe({ok:false,status:job.status,code:job.status,action_id:row.action_id,backend_job_id:job_id,approval:false,purchase:false,recovery:'terminal'});
+    } catch { /* A failed read or revoked scope cannot establish an outcome. */ }
+    return safe({ok:false,status,code,action_id:row.action_id,backend_job_id:job_id,approval:false,purchase:false,recovery:'unknown'});
+  }
   async lookup(principal, action_id) {
-    try { this.assertTransactionFree(); this.context(principal); if (!validId(action_id)) return null; const row = this.row(principal, action_id); return row ? this.consume(principal, row, true) : null; } catch { return null; }
+    try { this.assertTransactionFree(); this.context(principal); if (!validId(action_id)) return null; const row = this.row(principal, action_id); return row ? this.consume(principal, row, true) : this.rejection(principal,action_id); } catch { return null; }
   }
   async retry(principal, action_id) {
     // The browser persists only this opaque identity, never the name/text draft.
     // Recovery uses the original durable, scoped, hash-checked request.
-    try { this.assertTransactionFree(); this.context(principal); if (!validId(action_id)) return null; const row = this.row(principal, action_id); return row ? this.consume(principal, row) : null; } catch { return null; }
+    try { this.assertTransactionFree(); this.context(principal); if (!validId(action_id)) return null; const row = this.row(principal, action_id); return row ? this.consume(principal, row) : this.rejection(principal,action_id); } catch { return null; }
   }
   async cancel(principal, action_id) {
-    try { this.assertTransactionFree(); const context = this.context(principal, true), row = this.row(principal, action_id); if (!row?.job_id) return { ok: false, status: 'unknown', action_id };
+    try { this.assertTransactionFree(); const context = this.context(principal, true), row = this.row(principal, action_id); if (!row?.job_id) return { ok: false, status: 'unknown', action_id, approval: false, purchase: false };
       const response = await this.api.invoke(context.actor, { ...this.request(principal, context, 'cancel', {}, `cancel:${action_id}`), schema_version: '1.0', payload: { job_id: row.job_id } });
       this.context(principal); return safe({ ok: response.ok, status: response.ok ? response.job.status : 'unknown', action_id, backend_job_id: row.job_id, approval: false, purchase: false });
-    } catch { return { ok: false, status: 'unknown', approval: false, purchase: false }; }
+    } catch { return { ok: false, status: 'unknown', ...(validId(action_id) ? { action_id } : {}), approval: false, purchase: false }; }
   }
 }

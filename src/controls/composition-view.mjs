@@ -101,8 +101,11 @@ export function assertCompositionCompletion(value, action_id) {
       (x.parent_revision_id===null?x.parent_revision_sha256!==null:!validId(x.parent_revision_id)||!digest(x.parent_revision_sha256)))deny();x.preview=assertCompositionPreview(x.preview);
     if(['revision_id','revision_sha256','state_sha256'].some(k=>x[k]!==x.preview[k]))deny();return x;
   }
-  if(!x.ok&&['failed','stale','unknown','cancelled'].includes(x.status)&&Object.keys(x).every(k=>['ok','status','code','action_id','backend_job_id','approval','purchase'].includes(k))&&
-      ['unavailable','stale_version','failed','conflict','cancelled','validation','invalid_request','unsupported_version','permission_denied','scope_denied','integrity_error'].includes(x.code)&& (x.backend_job_id===undefined||x.backend_job_id===null||validId(x.backend_job_id)))return x;
+  if(!x.ok&&['failed','stale','unknown','cancelled'].includes(x.status)&&Object.keys(x).every(k=>['ok','status','code','action_id','backend_job_id','approval','purchase','recovery'].includes(k))&&
+      ['unavailable','stale_version','failed','conflict','cancelled','validation','invalid_request','unsupported_version','permission_denied','scope_denied','integrity_error'].includes(x.code)&& (x.backend_job_id===undefined||x.backend_job_id===null||validId(x.backend_job_id))&&
+      (x.recovery===undefined||['not_admitted','terminal','unknown'].includes(x.recovery))&&
+      (x.recovery!=='not_admitted'||!x.backend_job_id&&['failed','stale'].includes(x.status))&&
+      (x.recovery!=='terminal'||validId(x.backend_job_id)&&['failed','cancelled'].includes(x.status)))return x;
   deny();
 }
 

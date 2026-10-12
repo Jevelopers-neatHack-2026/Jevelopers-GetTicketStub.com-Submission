@@ -29,7 +29,7 @@ export type CompositionCurrentView =
 export type CompositionCompletion = Readonly<{ ok: true; status: 'saved'; historical: boolean; action_id: string; backend_job_id: string; request_sha256: CreativeCompositionSha256;
   revision_id: string; revision_sha256: CreativeCompositionSha256; parent_revision_id: string | null; parent_revision_sha256: CreativeCompositionSha256 | null; state_sha256: CreativeCompositionSha256;
   artwork_sha256: CreativeCompositionSha256; preview: CompositionPreviewDescriptor; approval: false; purchase: false }> |
-  Readonly<{ ok: false; status: 'failed' | 'stale' | 'unknown' | 'cancelled'; code: string; action_id?: string; backend_job_id?: string | null; approval?: false; purchase?: false }>;
+  Readonly<{ ok: false; status: 'failed' | 'stale' | 'unknown' | 'cancelled'; code: string; action_id?: string; backend_job_id?: string | null; approval: false; purchase: false; recovery?: 'not_admitted' | 'terminal' | 'unknown' }>;
 export interface ControlsSqliteDatabase {
   readonly isTransaction: boolean;
   exec(sql: string): void;
