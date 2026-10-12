@@ -888,6 +888,12 @@ function admitAttemptInTransaction(database, tenantHash, runIdValue, run, input,
       if (seen) fail('FRONTIER_CONFLICT');
     }
   }
+  // A v1 uncertainty row already reserves this run's entire transport budget.
+  // New raw admissions cannot hide inside that hold under a larger tenant
+  // policy. Exact historical replay was handled before any admission checks.
+  const legacyHold = database.prepare(`SELECT 1 AS found FROM frontier_transport_legacy_uncertainty
+    WHERE tenant_hash = ? AND run_id = ?`).get(tenantHash, runIdValue);
+  if (legacyHold) return deepFreeze({ state: 'denied', reason: 'decoded_budget' });
   const tenantCapacity = tenantCapacityInTransaction(database, tenantHash, tenantLimits);
   // This lease is already counted. Over-limit migrated state permits history
   // and settlement, but cannot admit more work for an existing lease either.

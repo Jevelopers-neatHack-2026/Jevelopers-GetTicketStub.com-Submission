@@ -50,8 +50,10 @@ are not an attestation of deployed tenant policy or host containment.
 Both values must be ordinary safe integers. Lease capacity accepts 1–512,
 derived from the existing 128-run and four-lease ceilings. Outstanding byte
 capacity accepts 20 MiB–12,800 MiB, derived from the existing per-hop reservation
-and per-run/store ceilings. Per-run limits retain their existing values and
-cannot be raised by a larger tenant policy. Unknown keys, getters, string
+and per-run/store ceilings. The existing per-run lease/attempt limits and
+100 MiB tracked-transport/v1-uncertainty bound retain their values; a larger
+tenant policy cannot raise them. Raw metadata admission remains separate from
+tracked transport and does not grant a transport permit. Unknown keys, getters, string
 coercions, fractions, non-finite values and out-of-range values fail with
 `FRONTIER_INVALID_INPUT` before storage access.
 
@@ -80,6 +82,8 @@ also conservatively reserves 20 MiB for this tenant policy, even after planner
 completion. It cannot be converted to a new transport permit by replaying its
 key through `admitTransportHop`. The existing v1 full-run uncertainty reserves
 100 MiB per affected run instead of double-counting its untracked attempts.
+Any run with a v1 full-run hold denies fresh raw admissions with `decoded_budget`,
+even under a larger tenant policy; exact historical-key replay stays available.
 No reconciliation authority or refund path is invented for these unknowns.
 
 Known-zero and complete-body settlement release the corresponding **outstanding

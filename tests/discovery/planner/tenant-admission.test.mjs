@@ -12,6 +12,8 @@ import { createDiscoveryFrontierStore, DiscoveryFrontierError } from '../../../s
 const MIB = 1024 * 1024;
 const REPO = fileURLToPath(new URL('../../../', import.meta.url));
 const WORKER = fileURLToPath(new URL('./tenant-admission-worker.mjs', import.meta.url));
+const V1_COMMIT = 'd91e08d666abc243ae456a7f9f1bc9c745ca4f8d';
+const V1_HASH = '4e6cfbb88e7913984739634a69323c410dbff5ab48128b0ef70eee782de5105e';
 const V3_COMMIT = 'ef69133bb38320793e02f8530accdd67e59f90e3';
 const V3_HASH = '1abca6355bf01393dfc81f831638fa77d00945885f7bd339bba1894e85da853f';
 const DEFAULTS = { maxInFlightLeases: 4, maxReservedDecodedBytes: 100 * MIB };
@@ -365,6 +367,54 @@ async function pinnedV3(t) {
   t.after(() => rm(location, { force: true }));
   return import(pathToFileURL(location).href);
 }
+
+async function pinnedV1(t) {
+  const extracted = spawnSync('git', ['show', `${V1_COMMIT}:src/discovery/planner/frontier.mjs`], { cwd: REPO, maxBuffer: 4 * MIB });
+  assert.equal(extracted.status, 0, 'the actual pinned v1 source must be available');
+  assert.equal(createHash('sha256').update(extracted.stdout).digest('hex'), V1_HASH);
+  const location = path.join(REPO, 'src/discovery/planner', `.legacy-tenant-v1-${process.pid}-${randomUUID()}.mjs`);
+  await writeFile(location, extracted.stdout, { flag: 'wx', mode: 0o600 });
+  t.after(() => rm(location, { force: true }));
+  return import(pathToFileURL(location).href);
+}
+
+test('a v1 full-run hold denies new raw admissions under a larger tenant policy while preserving replay', async (t) => {
+  const h = await fixture(t, { maxReservedDecodedBytes: 120 * MIB });
+  const legacyModule = await pinnedV1(t);
+  const legacy = legacyModule.createDiscoveryFrontierStore({ directory: h.directory, resolveTenant: () => 'tenant-a', now: () => 1000 });
+  t.after(() => legacy.close());
+  const scope = await legacy.scopeForAuthenticatedRequest({});
+  const claim = await claimRun(legacy, scope, 'v1-unknown');
+  const original = attempt(claim, 'historical');
+  assert.equal((await legacy.admitAttempt(scope, 'v1-unknown', original)).state, 'admitted');
+  const history = await legacy.getSnapshot(scope, 'v1-unknown');
+  legacy.close();
+
+  const held = await h.store.getTenantProgress(h.scope);
+  assert.equal(held.legacyUnknownRuns, 1);
+  assert.equal(held.reservedBytes, 100 * MIB);
+  assert.equal(held.availableReservedBytes, 20 * MIB);
+  assert.equal((await h.store.admitAttempt(h.scope, 'v1-unknown', original)).state, 'already_admitted');
+  assert.equal((await h.store.admitTransportHop(h.scope, 'v1-unknown', attempt(claim, 'tracked', 'historical'))).reason, 'decoded_budget');
+  for (let index = 0; index < 7; index += 1) {
+    assert.deepEqual(await h.store.admitAttempt(h.scope, 'v1-unknown', attempt(claim, `new-${index}`, 'historical')),
+      { state: 'denied', reason: 'decoded_budget' });
+  }
+  assert.deepEqual(await h.store.getSnapshot(h.scope, 'v1-unknown'), history);
+  assert.deepEqual(await h.store.getTenantProgress(h.scope), held);
+  await h.store.stopRun(h.scope, 'v1-unknown', 'cancelled');
+  h.store.close();
+  const restarted = await h.open();
+  assert.equal((await restarted.store.admitAttempt(restarted.scope, 'v1-unknown', original)).state, 'already_admitted');
+  assert.deepEqual(await restarted.store.getTenantProgress(restarted.scope), held);
+  const fresh = await claimRun(restarted.store, restarted.scope, 'fresh-after-v1');
+  assert.equal((await restarted.store.admitAttempt(restarted.scope, 'fresh-after-v1', attempt(fresh))).state, 'admitted');
+  const full = await restarted.store.getTenantProgress(restarted.scope);
+  assert.equal(full.reservedBytes, 120 * MIB);
+  assert.equal(full.untrackedAttempts, 1);
+  assert.deepEqual(await restarted.store.admitAttempt(restarted.scope, 'fresh-after-v1', attempt(fresh, 'overflow', 'attempt')),
+    { state: 'denied', reason: 'tenant_decoded_budget' });
+});
 
 for (const matches of [true, false]) {
   test(`concurrent schema migration rechecks a ${matches ? 'matching' : 'mismatched'} policy after lock acquisition`, { timeout: 15_000 }, async (t) => {
