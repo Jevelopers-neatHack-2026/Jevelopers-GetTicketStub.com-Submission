@@ -14,7 +14,7 @@ Files (all under this folder, standalone, JSON Schema 2020-12, closed objects, l
 What this packet is not:
 
 - The `$id` values are `urn:sc13-proposal:reporting-v1:...:0.1.0-proposed`. They are a proposal namespace, not canonical shared-contracts `$id`s, and nothing here is a public export of any package.
-- It has no root package, dependencies, scripts, generated types, compatibility layer or fixtures. Fixture content needs Finance-approved metric definitions that do not exist yet; none are invented here.
+- It adds no root package, dependencies, generated types or canonical compatibility layer. It includes a local offline validator and 199 synthetic structural fixtures (14 positive, 185 negative). These are not Finance-approved metric datasets or actual query/export evidence; authoritative definitions and consumer acceptance remain pending.
 - It does not compute ledgers, formulas, queries or CSV rendering, and makes no claim of actual dashboard integration. The files are plain JSON with no Node-only code, so a browser can load them, but no browser execution is claimed.
 - It does not rename or redefine Finance policy. Metric names (`gross_sales`, `net_sales`, `direct_costs`, `contribution`, `operating_result`, `cash`, `budget_remaining`) are copied verbatim from `ci-operational-accounting-1.0.0` and only used as keys that point at an immutable definition reference. Formulas, class/sign matrices and recognition rules stay with Finance/cost-intelligence.
 - The existing `FinancialSummary/1.0.0` (strict, no `as_of`) is untouched. Reconciling these shapes with it is an owner decision (Q-SUMMARY).
@@ -109,30 +109,22 @@ Paths are JSON pointers into the named schema (Q = query, M = manifest). "Host" 
 - `$id`s are proposal URNs. There is no compatibility or migration behaviour for version `0.1.0-proposed`.
 - Free-of-secrets: id patterns are permissive within their charset.
 
-## Validation command template
+## Offline validation
 
-Pin Ajv 8.17.1 in a separate provisioned directory (not this repo); a later worker supplies fixtures. Run offline from that worker's checkout. The schemas use no `format` keyword, so `ajv-formats` is not needed, and strict mode must compile them:
+Provision Ajv 8.17.1 outside this repository before running. `SC_AJV_ROOT` names the absolute directory containing the `ajv` package (usually a provisioned `node_modules` directory). The runner checks that exact version and performs no installation or network access. No `ajv-formats` plugin is needed.
 
 ```sh
-AJV_DIR=/path/to/provisioned/ajv-8.17.1 \
-SCHEMA=proposals/reporting-v1/reporting-query.schema.json \
-DATA=/path/to/fixture.json \
-node -e '
-const { createRequire } = require("node:module");
-const fs = require("node:fs");
-const Ajv = createRequire(process.env.AJV_DIR + "/")("ajv/dist/2020");
-const ajv = new Ajv({ strict: true, allErrors: true });
-const validate = ajv.compile(JSON.parse(fs.readFileSync(process.env.SCHEMA, "utf8")));
-const ok = validate(JSON.parse(fs.readFileSync(process.env.DATA, "utf8")));
-if (!ok) console.error(JSON.stringify(validate.errors, null, 2));
-process.exit(ok ? 0 : 1);
-'
+export SC_AJV_ROOT=/absolute/path/to/provisioned/node_modules
+node proposals/reporting-v1/validate.mjs
+node --test tests/reporting-proposal.test.mjs
 ```
 
-Record the Ajv version (`require(AJV_DIR + "/node_modules/ajv/package.json").version`), Node version, schema git SHA, fixture hashes and exit codes. Exit 0 means structural validity only, never semantic acceptance.
+The runner exits 0 when all synthetic fixtures match, 1 on expectation mismatch, and 2 on setup failure. Output contains counts, fixture identifiers and sanitized error locations. Success means structural validity only, never semantic or owner acceptance. Preserve the source SHA, runtime version, raw schema/fixture byte hashes and command outputs alongside any review receipt.
 
 ## Verification performed on this packet
 
-- Both files parse as JSON and every `$ref` is a local `#/$defs/...` that resolves.
-- Both compile under Ajv 8.17.1 `ajv/dist/2020` with `strict: true`.
-- Throwaway inline checks (not committed, not fixtures) confirmed one structurally valid instance of each schema and rejection of: extra property, zero-filled hash, multi-currency, over-limit page, non-UTC time, negative zero, numeric amount, unknown amount with a value, URL object key, empty file set, wrong media type, and a cursor with `resolve_at_as_of`.
+- Both schemas compile with strict Ajv 8.17.1; local references resolve.
+- All 199 committed synthetic cases pass: 14 positive and 185 negative.
+- Twenty new tests pass on Node 22.23.3 and 24.21.0, with zero failures or skips.
+- Tests detect tampered expectations and validators that incorrectly accept all negative cases, and reject missing/wrong dependencies without fetching.
+- This verifies the isolated proposal and fixture harness only. Documented host obligations, owner decisions, canonical types/exports, actual browser integration, returned-page contracts and Finance-approved metric evidence remain pending.
