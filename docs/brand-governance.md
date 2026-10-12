@@ -12,15 +12,17 @@ Controls described here are **manual**. This document does not rely on branch pr
 | Brand implementation/release owner team | CompleteDotTech, LaJefa, Lars | Recorded by the user. CompleteDotTech is a confirmed GitHub username. The later owner request identifies Lars as **@lmvdz**; this identifies the recipient but supplies no reviewer-role acknowledgement. LaJefa's GitHub handle and the per-person BK-03A/B responsibility split remain **Unknown** | [Original team receipt](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8#issuecomment-6116787775); [later owner request to @lmvdz (Lars)](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/9#issuecomment-6118216028) |
 | Technical token/export reviewer | **Unknown** | Not appointed | Receipt 2026-10-11 says technical reviewer appointments under BK-07.1 "remain outstanding" |
 | Provenance/rights reviewer | **Unknown** | Not appointed | same |
-| Affected consumer reviewers (getticketstub.com, landing-page-repo, team-dashboard, marketing-material) | **Unknown** | Not appointed. No consumer repository has acknowledged a review role | same |
+| Affected consumer reviewer — marketing-material | Existing user-assigned marketing-material root/supervisor | Recorded as accountable marketing content/brand/handoff reviewer and receiver. An acknowledgement of this exact brand artifact remains **pending** | [MM-06 role receipt](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/7#issuecomment-6105489382); [later MM-02 confirmation](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5#issuecomment-6112307412) |
+| Affected consumer reviewers — getticketstub.com, landing-page-repo, team-dashboard | **Unknown** | No reviewer-role acknowledgement found in the reviewed sources; exact-artifact acknowledgements also remain pending | [Original reviewer-gap receipt](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/8#issuecomment-6113526793) |
 | Release reviewer/publisher | **Unknown** | Not appointed | Not covered by any receipt |
 
 Notes:
 
 - The nomination does **not** approve unseen identity, token or font artifacts, distribution outputs or a release. BK-02 [#9](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/9) needs a real dated decision against an exact source SHA; BK-03B [#14](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/14) needs a reviewed immutable artifact/version; BK-08 [#12](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/12) and BK-09 [#15](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/15) retain accessibility and consumer review obligations.
-- Until the technical, provenance and consumer reviewer rows name a person with a linked acknowledgement, a decision that needs them cannot reach **approved**. Repo participants may record execution claims through the existing ownership process ([OWNERSHIP](architecture/OWNERSHIP.md)).
+- The marketing receipts record an existing user-assigned reviewer for that consumer; they do not appoint a new reviewer or transfer that supervisor's authority to the brand-kit execution agent. No additional human-only marketing appointment is inferred. Source-owned identity, rights, font and release decisions still require their actual owners, and the marketing supervisor has not acknowledged this exact brand artifact.
+- Until every required technical, provenance and consumer role has a documented holder and linked acknowledgement for the decision, that decision cannot reach **approved**. Repo participants may record execution claims through the existing ownership process ([OWNERSHIP](architecture/OWNERSHIP.md)).
 - One person may hold several roles only if the decision record says so. The approver must not be the sole reviewer of a decision they authored unless the record states that explicitly and the other required roles are still filled.
-- Acknowledgements must be added here as links to a real, dated comment or commit by the person. Do not write one on someone's behalf.
+- Acknowledgements must be added here as links to a real, dated comment or commit by the authorized reviewer. Do not write one on someone's behalf.
 
 ## Standing constraints
 
@@ -46,7 +48,7 @@ Every decision record must carry: exact files, revision (commit SHA) and SHA-256
 Rules:
 
 0. **Controlling decision.** Eligibility is judged per exact path and SHA-256. Of all decisions listing that path at that hash, the controlling one is the latest by decision date (record order breaks ties). Only its status counts. A rejected or superseded record does not block a hash if a later `approved` decision lists the same hash (a resubmission, or a successor that carries the file unchanged, or a reinstatement). A hash with no decision, or whose controlling decision is not `approved` or has been revoked, is ineligible. Older records are never edited or deleted.
-1. Pending assets cannot be labelled approved. "Approved" appears only in a record whose reviewer evidence links to a real dated action by the named person.
+1. Pending assets cannot be labelled approved. "Approved" appears only in a record whose reviewer evidence links to a real dated action by the named authorized reviewer.
 2. A decision covers only the listed files at the listed hashes. Any other file or hash is unapproved.
 3. Decisions are append-only. Correct a mistake with a new record that supersedes the old one.
 4. Simulated records live only in [`governance/simulated-walkthrough.md`](governance/simulated-walkthrough.md), carry the marker `FICTIONAL SIMULATION`, and are never release eligible.
@@ -77,7 +79,7 @@ When in doubt, use the stricter class. A change that touches consumers needs the
 2. is recorded in a revocation entry (date, cause, affected versions, previously approved fallback);
 3. is communicated to affected consumers through the version/migration record owned here.
 
-**Consumer notification.** A notification names the affected version, what changed, the fallback version, the action required and a date. Sending it is manual (issue comment or linked document). Delivery is not verified automatically, so record where you sent it. Consumers known today: getticketstub.com, landing-page-repo, team-dashboard, marketing-material ([OWNERSHIP](architecture/OWNERSHIP.md)). The consumer owners are unassigned (see table above).
+**Consumer notification.** A notification names the affected version, what changed, the fallback version, the action required and a date. Sending it is manual (issue comment or linked document). Delivery is not verified automatically, so record where you sent it. Consumers known today: getticketstub.com, landing-page-repo, team-dashboard, marketing-material ([OWNERSHIP](architecture/OWNERSHIP.md)). Use the existing marketing supervisor role and the remaining reviewer gaps in the responsibility table above; recording a role here does not establish notification or an exact-artifact acknowledgement.
 
 ## Release eligibility check
 
@@ -96,7 +98,7 @@ Currently **no decision is approved**, so **no release is eligible**.
 
 - [ ] Technical token/export reviewer named, with linked acknowledgement.
 - [ ] Provenance/rights reviewer named, with linked acknowledgement.
-- [ ] Affected consumer reviewers named, with linked acknowledgements.
+- [ ] Missing Product, Landing and Dashboard reviewer roles recorded, with linked acknowledgements; exact-decision acknowledgements from all affected consumers, including the existing marketing supervisor, recorded.
 - [ ] Release reviewer/publisher named.
 - [ ] LaJefa's GitHub handle verified; Lars/@lmvdz and the other owner-team members acknowledge the responsibilities assigned to them (or an explicit decision not to assign them).
 - [ ] Reviewed by the accountable approver (@CompleteDotTech), with a link to that review.
