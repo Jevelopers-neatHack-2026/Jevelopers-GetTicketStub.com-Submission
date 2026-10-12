@@ -59,7 +59,7 @@ The merchant-of-record options (B-D) would cover a future digital-only product, 
 1. **Order before payment.** All new tables live in the app SQLite DB (`TICKETSTUB_DB`), alongside `orders`.
    - Add an idempotency key to `POST /api/orders` (client-generated UUID, unique index), so a retry returns the same order.
    - Add a `mode` column (`sandbox | live`) to `orders`, `checkout_attempts` and `payment_inbox`, set from the deployment's billing mode.
-   - `checkout_attempts(order_id, attempt_n, provider_session_id unique, status, mode)`. Create each Checkout Session server-side from the stored authorization. Pass `client_reference_id` = order id and `metadata.authorization_id`. Use **`order_id:attempt_n`** as the Stripe `Idempotency-Key`: Stripe replays a key's saved response for 24 h and errors if its parameters change, so a retry after `checkout.session.expired` needs a new attempt. A unique index allows only one open attempt per order.
+   - `checkout_attempts(order_id, attempt_n, provider_session_id unique, status, mode)`. Create each Checkout Session server-side from the stored authorization. Pass `client_reference_id` = order id and `metadata.authorization_id`. Use **`order_id:attempt_n`** as the Stripe `Idempotency-Key`: Stripe replays a key's saved response for at least 24 h and errors if its parameters change, so a retry after `checkout.session.expired` needs a new attempt. A unique index allows only one open attempt per order.
    - Move the receipt email and the analytics `purchase` event out of `POST /api/orders` into `fulfillCheckout`, after payment is confirmed (or rely on Stripe receipts). Order creation may send an "order started" note at most.
 2. **Webhook ingress** `POST /api/payments/stripe/webhook` (Node runtime; exempt from CSRF and the Origin check):
    - Cap the body size, then read the **raw body** with `await request.text()` before any JSON parse.
@@ -76,11 +76,11 @@ The merchant-of-record options (B-D) would cover a future digital-only product, 
      - the charge's Disputes.
    - Compute two independent fields from that snapshot:
      - `payment_state` = `awaiting_payment | paid | failed | expired`, plus `refunded_minor` = sum of refunds whose status is `succeeded` (a refund that later fails drops out, so the order returns to fully paid);
-     - `dispute_state` = `none | open | won | lost`, from the Dispute's `status` (`warning_*` and `needs_response` / `under_review` are `open`). A won dispute returns to `won`, not to a stuck `disputed`.
+     - `dispute_state` = `none | open | won | lost`, aggregated across **all** Disputes on the charge (Stripe allows more than one): `open` if any dispute has status `warning_needs_response`, `warning_under_review`, `needs_response` or `under_review`; otherwise `lost` if any is `lost`; otherwise `won` if any is `won`; otherwise `none`. `warning_closed` (an inquiry that closed without becoming a dispute) and `prevented` count as not open. A won dispute returns to `won`, not to a stuck `disputed`.
    - Write the derived snapshot with a compare-and-set on a `state_version` (or the fetched objects' fingerprint), not a forward-only ordering. A stale event just re-derives the same state; a reversal (failed refund, won dispute) is applied, not discarded.
 4. **Fulfilment** `fulfillCheckout(sessionId)`:
    - Safe to call repeatedly and concurrently.
-   - Runs only when `payment_status` is `paid` (or `no_payment_required`) **and** `dispute_state` is `none`. A dispute opened before the supplier order holds fulfilment until the owner decides.
+   - Runs only when `payment_status` is `paid` (or `no_payment_required`) **and** `dispute_state` is not `open`. A dispute opened before the supplier order holds fulfilment only while it is open; a closed inquiry or a won dispute releases it, and a lost one goes to the owner.
    - Writes a unique `fulfillment(order_id)` row before it submits to the supplier, then sends the receipt and `purchase` event.
    - Is called both by the processor and by the success page (`success_url?session_id={CHECKOUT_SESSION_ID}`). The webhook remains the guarantee.
 5. **Events to subscribe:**
@@ -114,7 +114,7 @@ The merchant-of-record options (B-D) would cover a future digital-only product, 
    - **Name a dispute-evidence owner** who watches dispute notices and submits evidence (or accepts) before each deadline, usually 7-21 days. Decide whether an open dispute holds fulfilment.
 4. **Keys and refunds:**
    - **Decide where refunds are issued.** Recommended: the Stripe Dashboard only, so the app key needs Refunds read only. If the app issues refunds, it needs Refunds write and a separate review.
-   - Create **test-mode** restricted keys first. Scope: Checkout Sessions write (create; includes read for `line_items`), PaymentIntents read, Charges read, Refunds read, **Disputes read**. No Webhook Endpoints permission: register endpoints in the Dashboard.
+   - Create **test-mode** restricted keys first. Scope: Checkout Sessions write (create; includes read for `line_items`), PaymentIntents read, Charges read, Refunds read, **Disputes read**, **Balance transactions read** (needed for the sale-fee posting in step 6; dispute fees are already on the Dispute object). No Webhook Endpoints permission: register endpoints in the Dashboard.
    - Register the test webhook endpoint, and give the `whsec_` value to the GoDaddy **Preview** environment only.
    - Issue live keys only after LIVE-01 passes and you approve launch.
    - Never paste keys into issues, chat or evidence.
