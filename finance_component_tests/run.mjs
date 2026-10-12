@@ -8,6 +8,12 @@ import { verifySource, buildSource, fileManifest, recordEvaluator } from './cust
 import { expectedFiles, expectedCases, validateReceipt, sanitizedJson } from './receipt.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
+if (process.argv[2] === '--candidate-export0c4-fixtures') {
+  assert.equal(process.argv.length, 4, 'Export candidate mode accepts exactly one output path');
+  const { runExportCandidate } = await import('./export-candidate.mjs');
+  await runExportCandidate(process.argv[3]);
+  process.exit(process.exitCode ?? 0);
+}
 if (process.argv[2] === '--candidate-924-fixtures') {
   assert.equal(process.argv.length, 4, 'Candidate fixture mode accepts exactly one output path');
   const { runCandidate924 } = await import('./candidate924.mjs');
