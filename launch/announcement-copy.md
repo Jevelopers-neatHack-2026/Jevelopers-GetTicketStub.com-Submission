@@ -5,7 +5,7 @@
 
 ## A. Required official X quote-post — field template
 
-The organizer's current requirement is one public quote-post of its official neatlogs submission post, carrying the team, name, project, public repository, and demo link; the owner's issue 22 entry-contents list also requires the business plan to be included. The official page checked **2026-10-11 UTC** says the final cutoff will be announced on Discord. The official post URL, confirmed cutoff, submitter name, public demo URL, and submitter authorization are unresolved here. The team, project, repository, and business-plan values below come from the owner's marketing-material issue 22 entry-contents list (body updated 2026-10-11T20:21:44Z) through four pending ledger rows (`CLAIM-X-DEST-TEAM-001`, `-PROJECT-001`, `-REPO-001`, `-PLAN-001`); they are draft field values, not approved external copy. Do not invent or leave any pending field looking final.
+The organizer's current requirement is one public quote-post of its official neatlogs submission post, carrying the team, name, project, public repository, and demo link; the owner's issue 22 entry-contents list also requires the business plan to be included. The official page checked **2026-10-11 UTC** says the final cutoff will be announced on Discord. The official post URL, confirmed cutoff, submitter name, public demo URL, and submitter authorization are unresolved here. The team, project, repository, and business-plan values below come from the owner's marketing-material issue 22 entry-contents list (source snapshot issue updated_at 2026-10-11T20:21:44Z (GitHub activity metadata, not proof of the last body edit; body SHA-256 c8b8607cf7ecc8992f6516843c720e93f16d38c17e64c1397b86ea25d58a652f; later comments do not change the four known fields)) through four pending ledger rows (`CLAIM-X-DEST-TEAM-001`, `-PROJECT-001`, `-REPO-001`, `-PLAN-001`); they are draft field values, not approved external copy. Do not invent or leave any pending field looking final.
 
 **Attach/quote target outside the copy body:** `[OFFICIAL NEATLOGS SUBMISSION POST — not yet published or supplied]`
 **Final cutoff:** `[PENDING — check the official Discord announcement]`
@@ -54,7 +54,7 @@ Build-in-public update: [DATED, SOURCE-LINKED ACTIVITY THAT ACTUALLY OCCURRED]. 
 
 - `#neatHack` is required by the organizer's current build-in-public guidance.
 - **CTA:** `CTA-REPOSITORY-DOCS-001` — “Explore the repository docs.” — <https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/05ed6ca6db94b6384fa9ef7ee965271be071264b/README.md>.
-- CTA destination is pinned public repository documentation only; its exact wording review remains pending. No product or landing-page route is implied.
+- CTA destination is pinned public repository documentation only; the ledger records its exact wording as approved and its route as confirmed for repository docs only (2026-10-11), for this same pinned target. No product or landing-page route is implied.
 - Check the completed text against the ordinary 280-character X limit and the current composer before use. No scheduled or automatic publication is part of this deliverable.
 
 ## Visual and accessible alternative
@@ -67,10 +67,10 @@ X Help currently says one image with standard ratios between 2:1 and 3:4 display
 
 | Text | Source/ledger reference | Review state |
 | --- | --- | --- |
-| “Explore the repository docs.” | `CTA-REPOSITORY-DOCS-001`; pinned README target above | Route scoped to docs; exact wording review pending |
+| “Explore the repository docs.” | `CTA-REPOSITORY-DOCS-001`; pinned README target above | Wording approved and route confirmed for repository docs only, per ledger (same pinned target) |
 | `#neatHack` | Official event page, checked 2026-10-11 UTC | Organizer-required tag; refresh before use |
 | Field set (team/name/project/repository/demo) | Official event page, checked 2026-10-11 UTC | Required fields per organizer; submitter name and demo value pending |
-| `Business plan: https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/f375fcf20584f5c98dbd4f3b69f884c52994224e/evidence/cfo-ai/2026-10-11-r2` | `CLAIM-X-DEST-PLAN-001`; source: issue 22 entry contents (body updated 2026-10-11T20:21:44Z). Qualifier: locator only; not Finance approval; `CFO-R2-001` unresolved | planned / review pending; not approved; no figures or sponsor approval |
+| `Business plan: https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/f375fcf20584f5c98dbd4f3b69f884c52994224e/evidence/cfo-ai/2026-10-11-r2` | `CLAIM-X-DEST-PLAN-001`; source: issue 22 entry contents (source snapshot issue updated_at 2026-10-11T20:21:44Z (GitHub activity metadata, not proof of the last body edit; body SHA-256 c8b8607cf7ecc8992f6516843c720e93f16d38c17e64c1397b86ea25d58a652f; later comments do not change the four known fields)). Qualifier: locator only; not Finance approval; `CFO-R2-001` unresolved | planned / review pending; not approved; no figures or sponsor approval |
 | `Team: Jevelopers` | `CLAIM-X-DEST-TEAM-001`; source: marketing-material issue 22 entry contents (mutable issue text, not a commit) | planned / review pending; not approved |
 | `Project: TicketStub` | `CLAIM-X-DEST-PROJECT-001`; qualifier “Project name only; product availability is unverified.” | planned / review pending; not approved; separate from `CLAIM-PRODUCT-NAME-001` (concept artwork only) |
 | `Repository: https://github.com/Jevelopers-neatHack-2026/getticketstub.com` | `CLAIM-X-DEST-REPO-001`; locator only, not a product route | planned / review pending; route-owner confirmation pending |
