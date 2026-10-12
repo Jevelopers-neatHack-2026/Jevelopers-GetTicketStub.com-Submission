@@ -99,7 +99,7 @@ EXPECTED_AUTH_OWNER = "Agent and research with provider/account administrator"
 EXPECTED_CREDENTIAL_ENV = {
     "typesafe": "TYPESAFE_API_KEY",
     "openai": "OPENAI_API_KEY",
-    "neatlogs": "NEATLOGS_API_KEY",
+    "neatlogs": "NEATLOGS_INGEST_KEY",
 }
 MODEL_REQUIRED = frozenset(
     {"jev", "gpt_image", "planner_reasoning", "generative_baseline"}

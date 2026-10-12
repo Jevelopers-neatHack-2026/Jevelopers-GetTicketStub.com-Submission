@@ -8,18 +8,19 @@ Neatlogs separates ingestion from reading. Do not assume one credential works fo
 
 | Setting | What it is | Used for | Where it comes from |
 | --- | --- | --- | --- |
-| `NEATLOGS_API_KEY` | Project key, sent as the `x-api-key` header | OTLP/HTTP ingest to `{ingest}/v1/traces` | Neatlogs → Settings → API keys → Project API key |
-| `NEATLOGS_TOKEN` | Expiring service-account token, sent as `Authorization: Bearer` | Public API readback | Settings → Service accounts: create an account, bind it to the project with the least role, mint a token with `context:read` and `observability:read` (the create dialog pre-ticks only `context:read`; tick **Traces and sessions · Read** too, since scopes cannot be changed after creation) |
+| `NEATLOGS_INGEST_KEY` | Project key, sent as the `x-api-key` header | OTLP/HTTP ingest to `{ingest}/v1/traces` | Neatlogs → Settings → API keys → Project API key |
+| `NEATLOGS_READ_TOKEN` | Expiring service-account token, sent as `Authorization: Bearer` | Public API readback | Settings → Service accounts: create an account, bind it to the project with the least role, mint a token with `context:read` and `observability:read` (the create dialog pre-ticks only `context:read`; tick **Traces and sessions · Read** too, since scopes cannot be changed after creation) |
 | `NEATLOGS_PROJECT_ID` | UUID of the bound project, sent as `x-project-id` | Public API readback | The project the service account is bound to |
 | `NEATLOGS_ENDPOINT` | Ingest origin. Blank means US `https://ingest.neatlogs.com` | Region selection | EU: `https://eu.ingest.neatlogs.com` |
 | `NEATLOGS_HOST` | App/API origin. Blank means US `https://app.neatlogs.com` | Region selection | EU: `https://eu.app.neatlogs.com` |
 
 Notes:
 
+- **Renamed 2026-10-12.** These were `NEATLOGS_API_KEY` and `NEATLOGS_TOKEN`, the names in the Neatlogs docs. The loader still reads the old names as fallbacks, and the new name wins when both are set, so a host can rename its settings at its own pace. The fallback will be removed once deployments use the new names.
 - Credentials are bound to the region that issued them. The loader refuses a mixed pair, such as an EU ingest origin with the US app origin.
 - SDK ingest keys "do not authorize Public API reads" per the Neatlogs authentication page, and SDK, dashboard and Public API credentials have separate policies.
 - The per-user HTTP write key (`nlw_…`, for `POST /v1/trace`) is a different credential. The harness does not use it.
-- These names come from the Neatlogs documentation. The harness adds no other Neatlogs variables.
+- `NEATLOGS_PROJECT_ID`, `NEATLOGS_ENDPOINT` and `NEATLOGS_HOST` are the names from the Neatlogs documentation. The harness adds no other Neatlogs variables.
 
 ## Loading configuration
 
@@ -131,7 +132,7 @@ The cursor now advances when the batch is durably in the outbox. "Sent, awaiting
 - **Tokens.** The request ID and the producer's actor/project refs are replaced by HMAC-SHA256 tokens under `AGENT_HARNESS_TELEMETRY_KEY`. Without that key the exported tokens cannot be joined to TicketStub IDs. The session is the project token, or the request token for events without a project.
 - **Export.** One trace per event, workflow `agent-harness.ticketstub-events`, tags `ticketstub` plus the host's (for example `ticketstub@<commit>`). The input is `agent-harness.ticketstub-intake.v1` JSON: type, time, mode, actor kind, fields and tokens. Attributes: `agent_harness.source`, `ticketstub.event_type`, `ticketstub.mode`, `ticketstub.actor`.
 - **Host API.** `createTicketstubHarnessExporter({ env, databasePath, tags })` reads `AGENT_HARNESS_TELEMETRY_KEY` and the `NEATLOGS_*` names from the explicit `env` object. It does not use the SDK capture, so the host keeps its `NEATLOGS_*` settings and nothing is scrubbed. `accept(events)` is synchronous and local, and schedules a drain; `drain()` does the network work; `status()` returns counts and trace IDs; `close()` waits for a running drain.
-- **Deployment settings (server secret storage).** `NEATLOGS_API_KEY` (required), `AGENT_HARNESS_TELEMETRY_KEY` (required), and `NEATLOGS_TOKEN` with `NEATLOGS_PROJECT_ID` (optional, enables server-side readback and recovery). The ingest key is the same project key the app's own operational exporter uses.
+- **Deployment settings (server secret storage).** `NEATLOGS_INGEST_KEY` (required), `AGENT_HARNESS_TELEMETRY_KEY` (required), and `NEATLOGS_READ_TOKEN` with `NEATLOGS_PROJECT_ID` (optional, enables server-side readback and recovery). The ingest key is the same project key the app's own operational exporter uses.
 
 ## Commands
 
@@ -143,12 +144,12 @@ node tools/neatlogs-live-verify.mjs --mode offline \
   --component-revision "$(git rev-parse HEAD)" \
   --evidence /tmp/neatlogs-offline.json --plan /tmp/neatlogs-plan.json
 
-# Live send of one synthetic workflow (needs NEATLOGS_API_KEY).
+# Live send of one synthetic workflow (needs NEATLOGS_INGEST_KEY).
 node tools/neatlogs-live-verify.mjs --mode send --env-file .env \
   --component-revision "$(git rev-parse HEAD)" \
   --evidence /tmp/neatlogs-send.json --plan /tmp/neatlogs-plan.json
 
-# Readback of a saved plan (needs NEATLOGS_TOKEN + NEATLOGS_PROJECT_ID).
+# Readback of a saved plan (needs NEATLOGS_READ_TOKEN + NEATLOGS_PROJECT_ID).
 node tools/neatlogs-live-verify.mjs --mode readback --env-file .env \
   --plan /tmp/neatlogs-plan.json --evidence /tmp/neatlogs-readback.json
 

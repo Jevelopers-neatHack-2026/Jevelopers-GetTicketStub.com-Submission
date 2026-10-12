@@ -70,8 +70,8 @@ const SAMPLE_FIELDS = {
 function env(overrides = {}) {
   return {
     [HARNESS_TELEMETRY_KEY_NAME]: KEY_HEX,
-    NEATLOGS_API_KEY: FAKE_INGEST_KEY,
-    NEATLOGS_TOKEN: FAKE_READ_TOKEN,
+    NEATLOGS_INGEST_KEY: FAKE_INGEST_KEY,
+    NEATLOGS_READ_TOKEN: FAKE_READ_TOKEN,
     NEATLOGS_PROJECT_ID: FAKE_PROJECT_ID,
     ...overrides
   };
@@ -158,10 +158,10 @@ describe('host exporter', () => {
     assert.throws(() => createTicketstubHarnessExporter({ env: env({ [HARNESS_TELEMETRY_KEY_NAME]: '' }), databasePath: dbPath() }),
       { code: 'INVALID_TELEMETRY_KEY' });
     const noIngest = env();
-    delete noIngest.NEATLOGS_API_KEY;
+    delete noIngest.NEATLOGS_INGEST_KEY;
     assert.throws(() => createTicketstubHarnessExporter({ env: noIngest, databasePath: dbPath() }), { code: 'MISSING_INGEST_KEY' });
     try {
-      createTicketstubHarnessExporter({ env: env({ NEATLOGS_TOKEN: 'bad value with spaces' }), databasePath: dbPath() });
+      createTicketstubHarnessExporter({ env: env({ NEATLOGS_READ_TOKEN: 'bad value with spaces' }), databasePath: dbPath() });
       assert.fail('expected a configuration error');
     } catch (error) {
       assert.equal(error.code, 'INVALID_CREDENTIAL');
