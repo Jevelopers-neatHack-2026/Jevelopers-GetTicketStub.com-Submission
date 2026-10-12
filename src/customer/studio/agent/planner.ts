@@ -12,7 +12,7 @@ const monthIndex = (w: string) => MONTHS.findIndex((m) => w === m || w === m.sli
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** The first date in the text: yyyy-mm-dd, "12 Oct 2024" or "October 12, 2024". The year defaults to the stub's. Null when none is found. */
-export function findDate(t: string, fallbackYear?: number): { iso: string; real: boolean } | null {
+export function findDate(t: string, fallbackYear?: number, fallbackMonth?: number): { iso: string; real: boolean } | null {
   const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(t);
   if (iso) return { iso: iso[0], real: isRealDate(iso[0]) };
   const dayFirst = /\b(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+([a-z]{3,9})\.?(?:,?\s+(\d{4}))?\b/i.exec(t);
@@ -28,9 +28,16 @@ export function findDate(t: string, fallbackYear?: number): { iso: string; real:
     const r = pick(dayFirst[1], dayFirst[2], dayFirst[3]);
     if (r) return r;
   }
-  if (monthFirst) return pick(monthFirst[2], monthFirst[1], monthFirst[3]);
+  if (monthFirst) {
+    const r = pick(monthFirst[2], monthFirst[1], monthFirst[3]);
+    if (r) return r;
+  }
+  // a day alone ("the 12th") is in the stub's own month and year
+  const ordinal = /\b(\d{1,2})(?:st|nd|rd|th)\b/i.exec(t);
+  if (ordinal && fallbackYear && fallbackMonth) return pick(ordinal[1], MONTHS[fallbackMonth - 1], String(fallbackYear));
   return null;
 }
+const stubMonth = (state: StateSummary) => (state.dateISO ? Number(state.dateISO.slice(5, 7)) || undefined : undefined);
 
 const tidy = (s: string) => s.trim().replace(/^["'“”‘’]+|["'“”‘’.!?]+$/g, "").trim();
 
@@ -56,6 +63,7 @@ function fromMessage(message: string, state: StateSummary): AgentPlan {
   const t = raw.toLowerCase();
   const actions: Action[] = [];
   const year = state.dateISO ? Number(state.dateISO.slice(0, 4)) : undefined;
+  let dateAsk: AgentPlan | undefined;
 
   // a demo-only switch so the failure and recovery path is reproducible without a provider
   if (/\bsimulate\b.*\b(fail|failure)\b|\bforce\b.*\bfail/.test(t)) {
@@ -64,10 +72,10 @@ function fromMessage(message: string, state: StateSummary): AgentPlan {
 
   // date
   if (/\bdate\b/.test(t) && /\b(fix|change|correct|set|update|wrong|should|was|is|to)\b/.test(t)) {
-    const found = findDate(valueAfter(raw, /\bdate\b/) ?? raw, year);
+    const found = findDate(valueAfter(raw, /\bdate\b/) ?? raw, year, stubMonth(state));
     if (found?.real) actions.push({ type: "set_fact", field: "date", value: found.iso });
     else
-      return {
+      dateAsk = {
         reply: found ? `${found.iso} is not a real calendar date, so I will not change anything.` : "I could not find a date in that.",
         actions: [ask("Which date was it? Give a day, month and year, like 12 Oct 2024.", undefined, "date")],
       };
@@ -115,6 +123,12 @@ function fromMessage(message: string, state: StateSummary): AgentPlan {
   }
   if (/\b(show|flip|see|view|turn)\b.*\b(back|reverse)\b|\bback of\b/.test(t)) actions.push({ type: "show_back" });
 
+  // the date could not be read: keep what else was asked for, and ask for the date after it
+  if (dateAsk) {
+    if (!actions.length) return dateAsk;
+    const kept = actions.slice(0, LIMITS.actions - 1);
+    return { reply: `${sentence(kept, state)} ${dateAsk.reply} The date stays as it is until you give it.`, actions: [...kept, ...dateAsk.actions] };
+  }
   const picked = actions.slice(0, LIMITS.actions);
   if (!picked.length) {
     const question = raw.endsWith("?");
@@ -181,11 +195,11 @@ export function resolvePending(message: string, pending: PendingQuestion, state:
   if (!isOption) {
     // a different request (a question, or something the planner can act on) is a change of topic
     if (raw.endsWith("?")) return undefined;
-    if (fromMessage(raw, state).actions.some((a) => a.type !== "ask_user") && !(pending.field === "date" && findDate(raw, state.dateISO ? Number(state.dateISO.slice(0, 4)) : undefined))) return undefined;
+    if (fromMessage(raw, state).actions.some((a) => a.type !== "ask_user") && !(pending.field === "date" && findDate(raw, state.dateISO ? Number(state.dateISO.slice(0, 4)) : undefined, stubMonth(state)))) return undefined;
   }
   const answer = isOption ? pending.options!.find((o) => o.toLowerCase() === raw.toLowerCase())! : tidy(raw);
   if (pending.field === "date") {
-    const found = findDate(answer, state.dateISO ? Number(state.dateISO.slice(0, 4)) : undefined);
+    const found = findDate(answer, state.dateISO ? Number(state.dateISO.slice(0, 4)) : undefined, stubMonth(state));
     if (!found) return again("I could not find a date in that, so nothing is proposed.");
     if (!found.real) return again(`${found.iso} is not a real calendar date, so nothing is proposed.`);
     return { reply: sentence([{ type: "set_fact", field: "date", value: found.iso }], state), actions: [{ type: "set_fact", field: "date", value: found.iso }] };

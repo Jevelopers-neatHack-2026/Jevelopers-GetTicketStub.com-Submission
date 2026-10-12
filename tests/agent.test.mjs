@@ -208,6 +208,25 @@ test("an invalid date is not proposed: the planner asks instead", () => {
   assert.deepEqual(types(ask("fix the date")), ["ask_user"]);
 });
 
+test("a day alone resolves in the stub's own month and year, and an unreadable date does not drop the other asks", () => {
+  const iso = state().dateISO;
+  const [y, m] = iso.split("-");
+  assert.deepEqual(findDate("the 12th", Number(y), Number(m)), { iso: `${y}-${m}-12`, real: true });
+  assert.deepEqual(findDate("on the 17th", Number(y), Number(m)), { iso: `${y}-${m}-17`, real: true });
+  assert.equal(findDate("the 12th", Number(y)), null, "without a month there is nothing to resolve against");
+  assert.deepEqual(ask("Fix the date to the 12th").actions, [{ type: "set_fact", field: "date", value: `${y}-${m}-12` }]);
+  assert.deepEqual(ask("Fix the date to the 12th and make it moodier").actions, [
+    { type: "set_fact", field: "date", value: `${y}-${m}-12` },
+    { type: "remix_art", vibe: "moodier" },
+  ]);
+  const both = ask("Fix the date to soonish and make it moodier");
+  assert.deepEqual(types(both), ["remix_art", "ask_user"], "the art change is still proposed, the date is asked for");
+  assert.match(both.reply, /could not find a date/);
+  assert.match(both.reply, /moodier/);
+  assert.equal(both.actions[1].field, "date");
+  assert.deepEqual(types(ask("fix the date to 2024-02-31 and make it moodier")), ["remix_art", "ask_user"]);
+});
+
 // What the browser carries from one turn to the next: the first typed question of the last plan.
 const pendingOf = (plan) => {
   const q = plan.actions.find((a) => a.type === "ask_user" && a.field);
