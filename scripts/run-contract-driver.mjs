@@ -15,7 +15,7 @@ const snapshot = join(root, 'node_modules/@jevelopers/shared-contracts');
 const fail = (message) => { console.error('CONTRACT_DRIVER_BLOCKED: ' + message); process.exit(1); };
 if (!existsSync(snapshot)) fail('shared-contracts is not provisioned; run `npm run contracts:provision` (needs network for the public git clone only)');
 // Verify with code that is NOT imported from the unverified package, before trusting any manifest entry or running package code.
-const problem = verifyInstalledPackage(snapshot, pin);
+const problem = verifyInstalledPackage(snapshot, pin, root);
 if (problem) fail(problem);
 const read = (path) => JSON.parse(readFileSync(join(snapshot, path), 'utf8'));
 const content = read('generated/package-content-manifest.json'), fixtureManifest = read('generated/fixture-manifest.json');
