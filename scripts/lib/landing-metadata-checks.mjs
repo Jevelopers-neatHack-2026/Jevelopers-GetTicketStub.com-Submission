@@ -16,6 +16,11 @@ export function metadataPagePath(path) {
   return path.slice(0, -5).replace(/\[\[?\.\.\.[^\]]+\]\]?|\[[^\]]+\]/g, PRIVATE) || "/";
 }
 
+/** The server deliberately conceals every admin route from anonymous visitors. */
+export function metadataPageStatus(path) {
+  return /^\/admin(?:\/|$)/.test(path) ? 404 : 200;
+}
+
 /** Verify production output for every page route using only the fixture server. */
 export async function checkSocialMetadata(base, check, { expectedOrigin = "https://getticketstub.com" } = {}) {
   const origin = new URL(base);
@@ -39,8 +44,11 @@ export async function checkSocialMetadata(base, check, { expectedOrigin = "https
       if (destination.origin !== origin.origin) continue;
       rendered = await fetch(destination, { headers: { "user-agent": "Twitterbot/1.0" }, redirect: "manual", signal: AbortSignal.timeout(15_000) });
     }
-    check(`metadata ${path}: server renders`, rendered.status === 200, rendered.status);
-    if (rendered.status !== 200) continue;
+    const expectedStatus = metadataPageStatus(path);
+    check(`metadata ${path}: ${expectedStatus === 404 ? "anonymous admin route stays concealed" : "server renders"}`,
+      rendered.status === expectedStatus && (expectedStatus !== 404 || response.status === 404),
+      { status: rendered.status, expectedStatus });
+    if (rendered.status !== expectedStatus) continue;
     const tags = metadataTags(await rendered.text());
     const values = (name) => tags.filter((tag) => tag.name === name).map((tag) => tag.content);
     check(`metadata ${path}: generic Open Graph and X descriptions`,
@@ -61,7 +69,7 @@ export async function checkSocialMetadata(base, check, { expectedOrigin = "https
       check(`metadata ${path}: meaningful ${tagName} alt`, values(`${tagName}:alt`).some((value) => /TicketStub: Keep the night.*personalized keepsake ticket stub/.test(value)));
     }
     check(`metadata ${path}: Open Graph dimensions`, values("og:image:width").includes("1200") && values("og:image:height").includes("630"));
-    if (/^\/(s|u|claim)\//.test(path) || path === "/account") {
+    if (/^\/(s|u|claim)\//.test(path) || path === "/account" || expectedStatus === 404) {
       check(`metadata ${path}: private route remains unindexed`, values("robots").some((value) => /noindex/.test(value)));
     }
   }

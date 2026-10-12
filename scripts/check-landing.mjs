@@ -255,6 +255,9 @@ try {
     check('positive 3D: hardware probe simulation selects 3D', (await state(three)).mode === '3d', await state(three));
     check('positive 3D: actual emitted Three chunk requested', three.entry.requestedChunks.some(c=>result.threeChunks.includes(c)), three.entry.requestedChunks);
     check('positive 3D: real WebGL renderer makes draw calls', await three.waitFor(`window.__landingEvidence.draws > 0 && !document.querySelector('.lp').classList.contains('no3d')`,20000), await state(three));
+    check('positive 3D: loader dismisses before visual evidence', await three.waitFor(`document.querySelector('#loader')?.hidden`,5000), await state(three));
+    check('positive 3D: hero text intro settles', await three.waitFor(`(() => {const chars=[...document.querySelectorAll('.hero h1 .ch')];return chars.length>0 && chars.every(e=>e.getAnimations().every(a=>a.playState!=='running'));})()`,5000));
+    await sleep(800); // Allow the ticket's spring to settle after the text intro, while real draw calls continue.
     await snapshot(three,'simulated-detector-real-three');
     await pointer(three); await expected(three,'off','positive 3D: disable via real toggle');
     check('positive 3D: renderer context released after remount', await three.waitFor(`window.__landingActualGL?.isContextLost()`,5000), await state(three));

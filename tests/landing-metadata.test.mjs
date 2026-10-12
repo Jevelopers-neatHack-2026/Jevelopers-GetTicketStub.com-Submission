@@ -4,7 +4,7 @@ import { registerHooks } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { metadataPagePath } from "../scripts/lib/landing-metadata-checks.mjs";
+import { metadataPagePath, metadataPageStatus } from "../scripts/lib/landing-metadata-checks.mjs";
 
 // Load the real layout metadata and hardened HTTP helper. Only unrelated rendered
 // children and build-time font loading are replaced; no server or network is needed.
@@ -102,4 +102,13 @@ test("metadata route sweep renders dynamic and optional catch-all pages at valid
   assert.equal(metadataPagePath("/s/[token]/page"), "/s/zq_private_metadata_127");
   assert.equal(metadataPagePath("/admin/[[...path]]/page"), "/admin/zq_private_metadata_127");
   assert.equal(metadataPagePath("/example/[...segments]/page"), "/example/zq_private_metadata_127");
+});
+
+test("metadata sweep requires anonymous admin concealment without accepting missing public pages", () => {
+  for (const path of ["/admin", "/admin/", "/admin/zq_private_metadata_127", "/admin/x/y"]) {
+    assert.equal(metadataPageStatus(path), 404, path);
+  }
+  for (const path of ["/", "/account", "/s/zq_private_metadata_127", "/administrator", "/admin-public"]) {
+    assert.equal(metadataPageStatus(path), 200, path);
+  }
 });
