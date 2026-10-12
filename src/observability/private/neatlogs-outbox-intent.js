@@ -181,10 +181,14 @@ export function restoreOutboxIntents(records, intents) {
 }
 
 export function summarizeOutboxIntent(intent) {
-  const latest = intent.calls.at(-1);
+  // An interrupted call that never recorded a possible POST adds no effect.
+  // Keep the latest known result for this intent, or no summary at all when
+  // nothing has completed or possibly been sent. Do not invent a call result.
+  const latest = intent.calls.findLast(call => call.result !== null || call.postsStarted > 0);
+  if (!latest) return null;
   const uncertain = intent.calls.some(call => (call.postsStarted > 0 && call.result === null)
     || call.result?.status === 'outcome_unknown');
-  const result = latest?.result;
+  const result = latest.result;
   if (result && (!uncertain || result.status === 'receiver_accepted')) {
     return { ...result, sentAt: latest.completedAt, priorOutcomeUnknown: uncertain };
   }

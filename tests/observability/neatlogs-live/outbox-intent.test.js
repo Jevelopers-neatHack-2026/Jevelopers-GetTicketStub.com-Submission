@@ -115,6 +115,38 @@ function child(directory, mode, failAt = 0) {
   return summary;
 }
 
+function cliSnapshot(directory) {
+  const evidencePath = join(scratch, `summary-cli-${Date.now()}.json`);
+  const networkReceiptPath = `${evidencePath}.network.json`;
+  const tool = fileURLToPath(new URL('../../../tools/neatlogs-runtime-trace.mjs', import.meta.url));
+  const guard = `
+    import { writeFileSync } from 'node:fs';
+    import net from 'node:net';
+    import tls from 'node:tls';
+    let attempts = 0;
+    const deny = () => { attempts += 1; throw new Error('real network forbidden'); };
+    globalThis.fetch = deny;
+    net.Socket.prototype.connect = deny;
+    tls.connect = deny;
+    process.on('exit', () => writeFileSync(${JSON.stringify(networkReceiptPath)}, JSON.stringify({ attempts })));
+  `;
+  const result = spawnSync(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(guard)}`,
+    tool, '--mode', 'drain', '--outbox', directory, '--evidence', evidencePath,
+    '--component-revision', 'b'.repeat(40)], {
+    encoding: 'utf8', timeout: 10_000, maxBuffer: 64 * 1024,
+    env: { PATH: process.env.PATH, TMPDIR: tmpdir(), NODE_NO_WARNINGS: '1',
+      NEATLOGS_INGEST_KEY: INGEST_KEY, NEATLOGS_READ_TOKEN: READ_TOKEN, NEATLOGS_PROJECT_ID: PROJECT_ID }
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.signal, null);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(readFileSync(networkReceiptPath, 'utf8')).attempts, 0);
+  const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
+  assert.equal(evidence.batchEvidenceSource, 'persisted_outbox_snapshot');
+  assert.equal(evidence.batches.length, 1);
+  return evidence.batches[0];
+}
+
 test('the first HTTP boundary observes a validated complete intent and durable start marker', async () => {
   const directory = batchDirectory('initial-intent');
   let observed;
@@ -203,7 +235,8 @@ test('recovery selects its subset and generation before I/O and retries the same
   assert.equal(firstBoundary.batch.dispatches[1].calls[0].postsStarted, 1);
   assert.deepEqual(firstBoundary.batch.dispatches[1].traces.map(trace => trace.sequence), [2, 3]);
   assert.deepEqual(firstBoundary.batch.plan.traces.map(trace => trace.generation), [0, 1, 1]);
-  assert.equal(firstBoundary.batch.recovery.send, null);
+  assert.equal(firstBoundary.batch.recovery.send.status, 'outcome_unknown');
+  assert.equal(firstBoundary.batch.recovery.send.deliveryConfirmed, false);
   assert.equal(disk(directory).state, 'pending_send');
   const retry = service(directory, { visible: sequence => sequence === 1 ? [0] : [1] });
   const [result] = await drainNeatlogsOutbox(options(directory, retry, { readback: true, captureTimeoutMs: 1 }));
@@ -298,6 +331,154 @@ test('a child exit at recovery POST resumes that generation without recreating t
   assert.equal(fake.posts[0].toString('base64'), observed.bodyBase64);
   assert.equal(disk(directory).dispatches.length, 2);
   assert.equal(disk(directory).plan.traces[0].generation, 1);
+});
+
+test('readback-only restart and CLI report the unresolved initial POST without inventing its result', async t => {
+  const directory = batchDirectory('initial-summary-restart');
+  child(directory, 'crash');
+  const retained = readFileSync(pathFor(directory), 'utf8');
+  const [snapshot] = [...iterateNeatlogsOutboxSnapshot(directory)];
+  assert.equal(readFileSync(pathFor(directory), 'utf8'), retained, 'inspection must stay read-only');
+  const calls = structuredClone(disk(directory).dispatches[0].calls);
+  const fake = service(directory, { visible: () => [0] });
+  const [result] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
+  const cli = cliSnapshot(directory);
+  t.diagnostic(JSON.stringify({ mode: 'synthetic', scenario: 'initial-post-interrupted',
+    snapshotSend: snapshot.batch.send, readbackSend: result.batch.send,
+    cliSend: cli.send, posts: fake.posts.length, readback: result.state }));
+  assert.equal(result.state, 'verified');
+  assert.equal(fake.posts.length, 0);
+  for (const batch of [snapshot.batch, result.batch, disk(directory)]) {
+    assert.equal(batch.send?.status, 'outcome_unknown');
+    assert.equal(batch.send.priorOutcomeUnknown, true);
+    assert.equal(batch.send.attempts, 1);
+    assert.equal(batch.send.deliveryConfirmed, false);
+    assert.deepEqual(batch.dispatches[0].calls, calls);
+    assert.equal(batch.dispatches[0].calls[0].result, null);
+    assert.equal(batch.dispatches[0].calls[0].completedAt, null);
+  }
+  assert.equal(cli.send?.status, 'outcome_unknown');
+  assert.equal(cli.send.reasonCode, 'DISPATCH_RESULT_NOT_RECORDED');
+  assert.equal(cli.traces[0].generation, 0);
+});
+
+test('readback-only recovery restart and CLI derive the current generation summary', async t => {
+  const directory = batchDirectory('recovery-summary-restart');
+  await drainNeatlogsOutbox(options(directory, service(directory), { readback: true }));
+  child(directory, 'crash');
+  const retained = readFileSync(pathFor(directory), 'utf8');
+  const [snapshot] = [...iterateNeatlogsOutboxSnapshot(directory)];
+  assert.equal(readFileSync(pathFor(directory), 'utf8'), retained);
+  const dispatches = structuredClone(disk(directory).dispatches);
+  const fake = service(directory, { visible: () => [1] });
+  const [result] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
+  const cli = cliSnapshot(directory);
+  t.diagnostic(JSON.stringify({ mode: 'synthetic', scenario: 'recovery-post-interrupted',
+    snapshotSend: snapshot.batch.send, readbackSend: result.batch.send,
+    recoverySend: result.batch.recovery.send, cliSend: cli.send, cliRecoverySend: cli.recovery.send,
+    posts: fake.posts.length, generation: result.batch.plan.traces[0].generation, readback: result.state }));
+  assert.equal(result.state, 'verified');
+  assert.equal(fake.posts.length, 0);
+  for (const batch of [snapshot.batch, result.batch, disk(directory)]) {
+    assert.equal(batch.send?.status, 'outcome_unknown');
+    assert.equal(batch.send.priorOutcomeUnknown, true);
+    assert.equal(batch.send.attempts, 1, 'summary belongs to this recovery, not all generations');
+    assert.deepEqual(batch.recovery.send, batch.send);
+    assert.equal(batch.plan.traces[0].generation, 1);
+    assert.deepEqual(batch.dispatches, dispatches);
+    assert.equal(batch.dispatches[0].calls[0].result.status, 'receiver_accepted');
+    assert.equal(batch.dispatches[1].calls[0].result, null);
+    assert.equal(batch.dispatches[1].calls[0].completedAt, null);
+  }
+  assert.equal(cli.send?.status, 'outcome_unknown');
+  assert.equal(cli.recovery.send?.status, 'outcome_unknown');
+  assert.equal(cli.traces[0].generation, 1);
+});
+
+test('an interrupted eighth POST remains unknown at the cap, after readback and in the CLI', async t => {
+  const directory = batchDirectory('eighth-post-summary');
+  const refused = service(directory, { status: 429 });
+  for (let attempt = 0; attempt < 7; attempt += 1) await drainNeatlogsOutbox(options(directory, refused));
+  assert.equal(refused.posts.length, 7);
+  assert.equal(disk(directory).send.status, 'not_accepted');
+  assert.equal(disk(directory).send.priorOutcomeUnknown, false);
+  child(directory, 'crash');
+  const calls = structuredClone(disk(directory).dispatches[0].calls);
+  const [snapshot] = [...iterateNeatlogsOutboxSnapshot(directory)];
+  const fake = service(directory, { visible: () => [0] });
+  const [held] = await drainNeatlogsOutbox(options(directory, fake));
+  const persistedHold = disk(directory);
+  const [observed] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
+  const cli = cliSnapshot(directory);
+  t.diagnostic(JSON.stringify({ mode: 'synthetic', scenario: 'eighth-post-interrupted',
+    snapshotSend: snapshot.batch.send, heldSend: held.batch.send, held: held.state,
+    readbackSend: observed.batch.send, cliSend: cli.send, posts: fake.posts.length, readback: observed.state }));
+  assert.equal(held.state, 'held');
+  assert.equal(held.batch.deliveryHold.reasonCode, 'DISPATCH_ATTEMPT_LIMIT_REACHED');
+  assert.equal(observed.state, 'verified');
+  assert.equal(fake.posts.length, 0, 'a held eighth POST must never permit a ninth POST');
+  for (const batch of [snapshot.batch, held.batch, persistedHold, observed.batch, disk(directory)]) {
+    assert.equal(batch.send?.status, 'outcome_unknown');
+    assert.equal(batch.send.priorOutcomeUnknown, true);
+    assert.equal(batch.send.attempts, 8);
+    assert.deepEqual(batch.dispatches[0].calls, calls);
+    assert.equal(batch.dispatches[0].calls.at(-1).result, null);
+    assert.equal(batch.dispatches[0].calls.at(-1).completedAt, null);
+  }
+  assert.equal(cli.send?.status, 'outcome_unknown');
+  assert.equal(cli.send.attempts, 8);
+});
+
+test('no-call and interrupted-before-POST intents have no invented send or prior-generation acknowledgement', async () => {
+  for (const recovery of [false, true]) for (const failAt of [2, 3]) {
+    const directory = batchDirectory(`unposted-summary-${recovery}-${failAt}`);
+    if (recovery) await drainNeatlogsOutbox(options(directory, service(directory), { readback: true }));
+    const stopped = child(directory, 'fail-write', failAt);
+    assert.equal(stopped.code, 'EIO');
+    assert.equal(stopped.posts, 0);
+    const retained = readFileSync(pathFor(directory), 'utf8');
+    const dispatches = structuredClone(disk(directory).dispatches);
+    const [snapshot] = [...iterateNeatlogsOutboxSnapshot(directory)];
+    assert.equal(readFileSync(pathFor(directory), 'utf8'), retained);
+    const current = dispatches.at(-1);
+    assert.equal(current.calls.length, failAt === 2 ? 0 : 1);
+    assert.ok(current.calls.every(call => call.postsStarted === 0 && call.result === null && call.completedAt === null));
+    const fake = service(directory);
+    const [inspected] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: false }));
+    assert.equal(readFileSync(pathFor(directory), 'utf8'), retained);
+    const [readback] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
+    assert.equal(fake.posts.length, 0);
+    if (!recovery) assert.equal(fake.reads.length, 0, 'an unposted initial intent has no possible delivery to read back');
+    for (const batch of [snapshot.batch, inspected.batch, readback.batch]) {
+      assert.equal(batch.send, null, 'no send result or possible POST exists for this intent');
+      if (recovery) assert.equal(batch.recovery.send, null, 'generation zero acceptance cannot summarize generation one');
+      assert.deepEqual(batch.dispatches, dispatches);
+    }
+  }
+});
+
+test('an incomplete zero-POST call preserves the known previous result for its current intent', async () => {
+  const directory = batchDirectory('known-result-unposted-followup');
+  await drainNeatlogsOutbox(options(directory, service(directory, { status: 429 })));
+  const known = structuredClone(disk(directory).send);
+  const stopped = child(directory, 'fail-write', 2);
+  assert.equal(stopped.code, 'EIO');
+  assert.equal(stopped.posts, 0);
+  const dispatches = structuredClone(disk(directory).dispatches);
+  assert.equal(dispatches[0].calls.length, 2);
+  assert.equal(dispatches[0].calls[1].postsStarted, 0);
+  assert.equal(dispatches[0].calls[1].result, null);
+  const [snapshot] = [...iterateNeatlogsOutboxSnapshot(directory)];
+  const fake = service(directory);
+  const [result] = await drainNeatlogsOutbox(options(directory, fake, { send: false, readback: true }));
+  for (const batch of [snapshot.batch, result.batch, disk(directory)]) {
+    assert.deepEqual(batch.send, known);
+    assert.equal(batch.send.status, 'not_accepted');
+    assert.equal(batch.send.priorOutcomeUnknown, false);
+    assert.deepEqual(batch.dispatches, dispatches);
+  }
+  assert.equal(fake.posts.length, 0);
+  assert.equal(fake.reads.length, 0);
 });
 
 test('send plus readback after interrupted recovery retains uncertainty and the selected generation', async () => {

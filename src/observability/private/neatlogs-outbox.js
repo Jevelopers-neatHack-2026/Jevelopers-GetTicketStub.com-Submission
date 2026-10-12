@@ -127,8 +127,21 @@ function readBatch(path) {
     if (JSON.stringify(batch.plan) !== JSON.stringify(currentPlan === null ? null : serializablePlan(currentPlan))) {
       throw new NeatlogsOutboxError('PLAN_IDENTITY_MISMATCH');
     }
+    refreshSendSummary(batch);
   }
   return batch;
+}
+
+function refreshSendSummary(batch) {
+  if (batch.schema !== NEATLOGS_OUTBOX_SCHEMA || batch.dispatches.length === 0) return;
+  const intent = batch.dispatches.at(-1);
+  batch.send = summarizeOutboxIntent(intent);
+  if (intent.purpose === 'recovery') {
+    if (!batch.recovery || typeof batch.recovery !== 'object' || Array.isArray(batch.recovery)) {
+      throw new NeatlogsOutboxError('BATCH_INVALID');
+    }
+    batch.recovery.send = batch.send === null ? null : { ...batch.send };
+  }
 }
 
 function persistBatch(path, batch) {
@@ -410,8 +423,7 @@ async function sendPersistedIntent(batch, persist, config, tags, scan, fetchImpl
   });
   call.result = { ...result };
   call.completedAt = new Date().toISOString();
-  batch.send = summarizeOutboxIntent(intent);
-  if (intent.purpose === 'recovery') batch.recovery.send = { ...batch.send };
+  refreshSendSummary(batch);
   batch.state = batch.send.status === 'receiver_accepted' ? 'receiver_accepted'
     : RETRYABLE_SEND.has(batch.send.status) ? 'pending_send' : batch.send.status;
   persist();
@@ -465,7 +477,13 @@ export async function drainNeatlogsOutbox({
       })}\n`);
     }
     const batch = readBatch(path);
-    const persist = () => persistBatch(path, batch);
+    const persist = () => {
+      // Summaries are projections of the current validated intent. Refresh
+      // before holds/readback and each durable start, including before a
+      // process can exit with a newer generation or an interrupted POST.
+      refreshSendSummary(batch);
+      persistBatch(path, batch);
+    };
     const legacy = batch.schema === LEGACY_OUTBOX_SCHEMA;
     if (legacy && send && !TERMINAL_READBACK.has(batch.state)) {
       // v1 wrote its result only after I/O. Even plan:null/send:null can be a
