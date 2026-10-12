@@ -5,12 +5,14 @@ function manifest(value) {
   if (!isPlainDataRecord(value)) throw new JevDecisionError('CONFIG_INVALID');
   const required = ['application', 'agent_harness', 'creative_engine'];
   const allowed = new Set([...required, 'event_intelligence', 'finance']);
-  const keys = Object.keys(value).sort();
-  if (required.some(key => !Object.hasOwn(value, key)) || keys.some(key => !allowed.has(key))) {
+  // Hidden pins must not disappear from validation, comparison or provenance.
+  const keys = Reflect.ownKeys(value);
+  if (keys.length > allowed.size || required.some(key => !Object.hasOwn(value, key)) ||
+      keys.some(key => typeof key !== 'string' || !allowed.has(key))) {
     throw new JevDecisionError('CONFIG_INVALID');
   }
   const record = Object.create(null);
-  for (const key of keys) {
+  for (const key of keys.sort()) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value') ||
         typeof descriptor.value !== 'string' || !/^[a-f0-9]{40}$/u.test(descriptor.value)) {

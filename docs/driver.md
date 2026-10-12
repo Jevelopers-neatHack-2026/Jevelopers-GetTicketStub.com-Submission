@@ -15,6 +15,11 @@ references, mismatches, cross-environment requests, and production are rejected
 before invoking the host. The application must verify its loaded vendor-file
 manifest and derive authenticated principals itself.
 
+Both manifest records require enumerable own data properties for every supplied
+pin. Hidden properties, symbol keys, unknown components and accessors are rejected
+before host invocation; validation does not evaluate pin getters. Equivalent key
+ordering and plain records with a null prototype remain supported.
+
 ```js
 import { invokeAgentCreativeDevelopment } from '@jevelopers/agent-harness-runtime/development';
 
