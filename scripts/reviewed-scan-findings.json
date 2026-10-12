@@ -43,6 +43,15 @@
       ]
     },
     {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/outbox-enumeration.test.js",
+      "sha256": "e76db2f673591616f7c59137c304477f62c95b1c44bb3b8b1147c87de9bd3eb3",
+      "reason": "Explicit synthetic credential literals in validation or mocked integration tests; not operational credentials.",
+      "reviewed_source_commit": "2dd61d52c94bede16251ef92e6f9ba325dd3b958",
+      "findings": [
+        "generic-api-key:106:17:106:84"
+      ]
+    },
+    {
       "path": "repositories/agent-harness/tests/observability/neatlogs-live/outbox-intent.test.js",
       "sha256": "40c754d0e1013097bc0a1c58f21544d0808c557e47b4aa245b2f4948cc32ae94",
       "reason": "Explicit synthetic ingest-key literal in an isolated mock outbox test; no operational credential.",
@@ -66,6 +75,15 @@
       "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
       "findings": [
         "generic-api-key:24:8:24:59"
+      ]
+    },
+    {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/runtime-trace-bounds.test.js",
+      "sha256": "4e3078f7a4af594f4549cff42da20354d30ed4f3460695b4e132ae512329cd3b",
+      "reason": "Explicit synthetic credential literals in validation or mocked integration tests; not operational credentials.",
+      "reviewed_source_commit": "2dd61d52c94bede16251ef92e6f9ba325dd3b958",
+      "findings": [
+        "generic-api-key:18:8:18:59"
       ]
     },
     {
@@ -228,8 +246,9 @@
     },
     {
       "path": "repositories/creative-engine/examples/frontend-action-roundtrip/tests/integrated.spec.mjs",
-      "sha256": "bdd32eb7f5203b2d85b333c2dad43336613c22579bca6894219202f01487f6af",
-      "reason": "Two deliberately fake test token literals used to test credential rejection and redaction.",
+      "sha256": "84be02b783ce0d544c38987df2c4e2005badb3085f86215943d4b6aaee41fe99",
+      "reason": "Explicit synthetic credential literals in validation or mocked integration tests; not operational credentials.",
+      "reviewed_source_commit": "052e4f4735dcf3cf0e7db6d1ce533a6851736b39",
       "findings": [
         "github-pat:287:63:287:102",
         "github-pat:290:16:290:55"
@@ -984,8 +1003,9 @@
     },
     {
       "path": "repositories/creative-engine/src/api/v1.d.mts",
-      "sha256": "469493d1110f72ef82becad81476f65f43a4259cd35bdc019f515bc8895d52e4",
-      "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
+      "sha256": "088b43ac1dc0ee2a483490dda8024b778b28695dfebbc8a9ae6665fbd378dc91",
+      "reason": "Public TypeScript type alias; not a credential.",
+      "reviewed_source_commit": "052e4f4735dcf3cf0e7db6d1ce533a6851736b39",
       "findings": [
         "generic-api-key:1578:14:1578:55"
       ]
@@ -1017,12 +1037,13 @@
     },
     {
       "path": "repositories/creative-engine/tests/inspection/inspection.test.mjs",
-      "sha256": "2a86064fee3a3fbfc03eb2a70485ac059108eadd723d2ff7f90cef9db9b5ad0f",
-      "reason": "Two deliberately fake test token literals used to test credential rejection and redaction.",
+      "sha256": "95282a4f40eae37712b3338e6c2576d83fa545003979c0e35999d8bec5043231",
+      "reason": "Explicit synthetic credential literals in validation or mocked integration tests; not operational credentials.",
+      "reviewed_source_commit": "052e4f4735dcf3cf0e7db6d1ce533a6851736b39",
       "findings": [
-        "github-pat:1019:29:1019:68",
-        "github-pat:613:110:613:149",
-        "github-pat:932:87:932:126"
+        "github-pat:614:110:614:149",
+        "github-pat:933:87:933:126",
+        "github-pat:1062:29:1062:68"
       ]
     },
     {
@@ -1079,9 +1100,9 @@
     },
     {
       "path": "repositories/event-intelligence/tests/research/private-retrieval.test.mjs",
-      "sha256": "2487d8229c5524d8bbd3f7eb104805c47f288dba696b9894148557eebaa3a831",
-      "reason": "Previously reviewed literal unchanged: test-only UUID deliberately overwrites the fixture SQLite claim lease in a tamper test. No operational credential.",
-      "reviewed_source_commit": "ef69133bb38320793e02f8530accdd67e59f90e3",
+      "sha256": "51018c11c28cb6662384e74960ea8a51cf7c0ad5066a6a1c3af16d28424671e1",
+      "reason": "Fixed UUID used to tamper with a test database lease; not an operational credential.",
+      "reviewed_source_commit": "15355c3b57f85606829b97bda02e488ad0775bbc",
       "findings": [
         "generic-api-key:1964:55:1964:106"
       ]
