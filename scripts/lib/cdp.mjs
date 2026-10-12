@@ -20,6 +20,16 @@ export const chromePath = () => CANDIDATES.find((p) => existsSync(p)) ?? null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Unlike a bare race against sleep(), this leaves no timer behind when the operation finishes.
+async function within(promise, ms) {
+  let timer;
+  try {
+    return await Promise.race([promise.then(() => true), new Promise((r) => { timer = setTimeout(() => r(false), ms); })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function launchBrowser() {
   const exe = chromePath();
   if (!exe) throw new Error("no Chrome or Edge found (set CHROME_PATH)");
@@ -70,22 +80,25 @@ export async function launchBrowser() {
       return page;
     },
     async close() {
-      try {
-        await conn.send("Browser.close");
-      } catch {
-        /* already gone */
-      }
       // Wait for "exit", not "close": "close" also needs the stderr pipe to end, and Chrome's helper processes can hold
       // that pipe open after the browser itself is gone, which hung the runners at teardown on macOS and Linux. The wait
       // is bounded: ask politely, then SIGKILL, then stop waiting and drop the pipe.
       const gone = new Promise((r) => (child.exitCode !== null || child.signalCode !== null ? r() : child.once("exit", r)));
-      const within = (ms) => Promise.race([gone.then(() => true), sleep(ms).then(() => false)]);
-      child.kill();
-      if (!(await within(5000))) {
-        child.kill("SIGKILL");
-        await within(5000);
+      // Chrome may close the socket before acknowledging Browser.close. A still-open socket may also
+      // never answer; neither case may prevent the existing process cleanup from running.
+      await within(Promise.race([conn.send("Browser.close").catch(() => {}), gone]), 1000);
+      let exited;
+      try {
+        child.kill();
+        exited = await within(gone, 5000);
+        if (!exited) {
+          child.kill("SIGKILL");
+          exited = await within(gone, 5000);
+        }
+      } finally {
+        child.stderr.destroy();
       }
-      child.stderr.destroy();
+      if (!exited) throw new Error("Chrome did not exit after bounded shutdown");
       try {
         rmSync(profile, { recursive: true, force: true });
       } catch {
@@ -95,13 +108,22 @@ export async function launchBrowser() {
   };
 }
 
-function connect(url) {
+export function connect(url, Socket = WebSocket) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
+    const ws = new Socket(url);
     let id = 0;
+    let closedError;
     const pending = new Map();
     const listeners = new Set();
+    const disconnected = (error) => {
+      closedError ??= error;
+      for (const { no } of pending.values()) no(closedError);
+      pending.clear();
+      listeners.clear();
+      reject(closedError); // Also rejects a connection that closed before its open event.
+    };
     ws.onmessage = (ev) => {
+      if (closedError) return;
       const msg = JSON.parse(ev.data);
       if (msg.id && pending.has(msg.id)) {
         const { ok, no } = pending.get(msg.id);
@@ -110,17 +132,26 @@ function connect(url) {
         else ok(msg.result);
       } else if (msg.method) listeners.forEach((l) => l(msg));
     };
-    ws.onerror = () => reject(new Error("DevTools socket error"));
-    ws.onopen = () =>
+    ws.onerror = () => disconnected(new Error("DevTools socket error"));
+    ws.onclose = () => disconnected(new Error("DevTools socket closed"));
+    ws.onopen = () => {
+      if (closedError) { ws.close(); return; }
       resolve({
         send: (method, params = {}, sessionId) =>
           new Promise((ok, no) => {
+            if (closedError) { no(closedError); return; }
             const n = ++id;
             pending.set(n, { ok, no });
-            ws.send(JSON.stringify({ id: n, method, params, sessionId }));
+            try {
+              ws.send(JSON.stringify({ id: n, method, params, sessionId }));
+            } catch (error) {
+              pending.delete(n);
+              no(error);
+            }
           }),
-        on: (fn) => (listeners.add(fn), () => listeners.delete(fn)),
+        on: (fn) => { if (!closedError) listeners.add(fn); return () => listeners.delete(fn); },
       });
+    };
   });
 }
 
