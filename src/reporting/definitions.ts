@@ -2,7 +2,12 @@ import { Type } from '@sinclair/typebox';
 import { ACCOUNTING_POLICY_VERSION, ACCOUNTING_DEFINITIONS_STATUS, ACCOUNTING_ALLOCATION_POLICY_VERSION, ACCOUNTING_SIGN_MATRIX } from '../accounting/index.js';
 import { REPORTING_POLICY_VERSION } from './schema-v2.js';
 import { hash } from './projection.js';
-export const REPORTING_METRIC_DICTIONARY = Object.freeze({
+function immutable<T>(value: T): T {
+  const copy = structuredClone(value);
+  const freeze = (item: unknown): void => { if (item && typeof item === 'object') { for (const child of Object.values(item)) freeze(child); Object.freeze(item); } };
+  freeze(copy); return copy;
+}
+export const REPORTING_METRIC_DICTIONARY = immutable({
   expense: { formula: 'actual direct, supplier, operating and payable-labor expense plus fees, less supplier credits and reimbursements; excludes simulation, tax, financing and cash movements', source: 'expense' },
   gross_sales: { formula: 'recognized actual sale magnitudes before discount and refund, excluding tax', source: 'revenue' },
   net_sales: { formula: 'gross_sales - actual discounts - actual sale refunds', source: 'revenue' },
@@ -11,7 +16,7 @@ export const REPORTING_METRIC_DICTIONARY = Object.freeze({
   cash_receipts: { formula: 'observed actual cash-movement receipts, separate from recognized sales', source: 'cash' },
   cash_payouts: { formula: 'observed actual cash-movement payouts and payout transfers, never new sales or expense', source: 'cash' },
 });
-export const REPORTING_DEFINITION_POLICY = Object.freeze({ reportingPolicyVersion: REPORTING_POLICY_VERSION, accountingPolicyVersion: ACCOUNTING_POLICY_VERSION,
+export const REPORTING_DEFINITION_POLICY = immutable({ reportingPolicyVersion: REPORTING_POLICY_VERSION, accountingPolicyVersion: ACCOUNTING_POLICY_VERSION,
   allocationPolicyVersion: ACCOUNTING_ALLOCATION_POLICY_VERSION, definitionsStatus: ACCOUNTING_DEFINITIONS_STATUS, signMatrix: ACCOUNTING_SIGN_MATRIX,
   recognition: 'live billing is actual even in test; sandbox and simulated billing remains separate simulation',
   currency: 'no cross-currency addition or unsourced conversion', period: 'economic root occurredAt in [start,end); ingestedAt and successors <= asOf',
@@ -37,7 +42,7 @@ export const ReportingPolicyDefinitionSchema = Type.Object({
   definitionsStatus: Type.Literal(ACCOUNTING_DEFINITIONS_STATUS), signMatrix: Type.Record(Type.String(),Type.Object({grossSalesSign:Type.Integer({minimum:-1,maximum:1}),netSalesSign:Type.Integer({minimum:-1,maximum:1}),directCostsSign:Type.Integer({minimum:-1,maximum:1}),cash:Type.Union([Type.Literal('none'),Type.Literal('receipt'),Type.Literal('payout'),Type.Literal('directional')]),recovery:Type.Boolean(),note:Type.String()}, {additionalProperties:false})),
   recognition:Type.String(),currency:Type.String(),period:Type.String(),coverage:Type.String(),denominator:Type.String(),allocation:Type.String(),
 }, {additionalProperties:false});
-export const REPORTING_CANONICAL_REFERENCE_REGISTRY = Object.freeze({
+export const REPORTING_CANONICAL_REFERENCE_REGISTRY = immutable({
   metrics: Object.fromEntries(Object.entries(REPORTING_METRIC_DICTIONARY).map(([name,body])=>{
     const definitionBody={policyVersion:ACCOUNTING_POLICY_VERSION,metric:name,definitionsStatus:ACCOUNTING_DEFINITIONS_STATUS,...body};
     const definition={contract:'cost-intelligence.reporting.metric-definition',schemaVersion:'1.0.0',definitionId:financeOwnedDefinitionId({namespace:'cost-intelligence/metric-definition/1',...definitionBody}),revision:1,...definitionBody};

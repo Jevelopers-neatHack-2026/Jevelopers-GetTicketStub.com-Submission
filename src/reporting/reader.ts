@@ -6,7 +6,7 @@ import { bindFinancialDatabaseScope } from '../shared/database-scope.js';
 import { validateCanonical } from '../shared/canonical.js';
 import { FinancialSummaryPageV2Schema, FinancialSummaryQueryV2Schema, ReportingProductEvidenceSchema, REPORTING_POLICY_VERSION, type FinancialSummaryPageV2, type FinancialSummaryQueryV2 } from './schema-v2.js';
 import type { ReportingPorts, ReportingTransactionPort } from './runtime.js';
-import { canonicalJson, hash, safeReportingReference, projectReporting, type SourceEvent, type BudgetSource, type AllocationSource } from './projection.js';
+import { canonicalJson, decimal, hash, safeReportingReference, projectReporting, type SourceEvent, type BudgetSource, type AllocationSource } from './projection.js';
 import { canonicalSummaries, CANONICAL_SCOPE_PATTERN } from './canonical-mapping.js';
 
 function validateV2<T extends TSchema>(schema: T, value: unknown) {
@@ -109,13 +109,58 @@ export async function executeSummary(value: FinancialSummaryQueryV2, ports: Repo
       const asOf = request.requestedAsOf ? new Date(request.requestedAsOf).toISOString() : now.toISOString();
       if (!asOf.endsWith('Z') || Date.parse(asOf) > now.valueOf()) reject('VALIDATION_ERROR', request.requestId, 'The reporting as-of must not be in the future.');
       const scopeAsOf = [...scopeValues, asOf];
-      const ledger = await read(`SELECT e.event_id,e.event_hash,e.economic_root_event_id,e.event_payload,
+      const ledger = await read(`SELECT e.event_id,e.event_hash,e.economic_root_event_id,e.economic_event_type,e.event_payload,axis.economic_lineage,
+        (root.tenant_id=e.tenant_id AND root.project_id=e.project_id AND root.environment=e.environment AND root.billing_mode=e.billing_mode
+          AND root.ingested_at <= $5 AND root.economic_event_type=e.economic_event_type
+          AND root.event_payload->>'eventType'=root.economic_event_type
+          AND (e.supersedes_event_id IS NULL OR (parent.event_id IS NOT NULL AND parent.ingested_at <= $5
+            AND parent.tenant_id=e.tenant_id AND parent.project_id=e.project_id AND parent.environment=e.environment AND parent.billing_mode=e.billing_mode
+            AND parent.economic_root_event_id=e.economic_root_event_id AND parent.economic_event_type=e.economic_event_type))) AS lineage_valid,
         to_char(root.occurred_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS root_occurred_at
         FROM cost_intelligence.financial_ledger_events e JOIN cost_intelligence.financial_ledger_events root ON root.event_id=e.economic_root_event_id
+        LEFT JOIN cost_intelligence.financial_ledger_events parent ON parent.event_id=e.supersedes_event_id
+        LEFT JOIN LATERAL (
+          WITH RECURSIVE ancestry AS (
+            SELECT root.event_id,root.economic_event_type,root.economic_reverses_event_id,root.tenant_id,root.project_id,root.environment,root.billing_mode,
+              root.ingested_at,root.financial_effect,root.event_payload,0 AS depth,ARRAY[root.event_id] AS path,false AS cycle
+            UNION ALL
+            SELECT target.event_id,target.economic_event_type,target.economic_reverses_event_id,target.tenant_id,target.project_id,target.environment,target.billing_mode,
+              target.ingested_at,target.financial_effect,target.event_payload,ancestry.depth+1,ancestry.path||target.event_id,target.event_id=ANY(ancestry.path)
+            FROM ancestry JOIN cost_intelligence.financial_ledger_events target ON target.event_id=ancestry.economic_reverses_event_id
+            WHERE ancestry.economic_event_type='reversal' AND NOT ancestry.cycle AND ancestry.depth < 32
+          ) SELECT jsonb_agg(jsonb_build_object('eventId',event_id,'eventType',economic_event_type,'reversesId',economic_reverses_event_id,
+            'scope',jsonb_build_object('tenantId',tenant_id,'projectId',project_id,'environment',environment,'billingMode',billing_mode),
+            'ingestedAt',ingested_at,'financialEffect',financial_effect,'payload',event_payload,'depth',depth,'cycle',cycle) ORDER BY depth) AS economic_lineage FROM ancestry
+        ) axis ON true
         WHERE e.tenant_id=$1 AND e.project_id=$2 AND e.environment=$3 AND e.billing_mode=$4 AND e.ingested_at <= $5 AND e.financial_effect
           AND NOT EXISTS (SELECT 1 FROM cost_intelligence.financial_ledger_events n WHERE n.supersedes_event_id=e.event_id AND n.ingested_at <= $5)
         ORDER BY e.event_id LIMIT 50001`, scopeAsOf);
-      const lifetimeEvents: SourceEvent[] = rowsBounded(ledger.rows, request.requestId).map(row => ({ eventId: row.event_id, eventHash: row.event_hash, rootId: row.economic_root_event_id, payload: row.event_payload }));
+      const lifetimeEvents: SourceEvent[] = rowsBounded(ledger.rows, request.requestId).map(row => {
+        if (row.lineage_valid !== true || (row.event_payload.eventType !== 'correction' && row.event_payload.eventType !== row.economic_event_type)
+          || (row.event_payload.eventType === 'correction' && !row.event_payload.supersedesEventId)) {
+          reject('SOURCE_UNAVAILABLE', request.requestId, 'The stored economic event lineage is incomplete.');
+        }
+        const lineage = row.economic_lineage as Record<string, any>[];
+        const invalid = () => reject('SOURCE_UNAVAILABLE',request.requestId,'The economic reversal axis lineage is incomplete.');
+        if (!Array.isArray(lineage) || !lineage.length || lineage.length > 33 || lineage[0]!.eventId !== row.economic_root_event_id) invalid();
+        const visited = new Set<string>();
+        for (let index=0; index<lineage.length; index++) {
+          const link=lineage[index]!; const next=lineage[index+1];
+          if (link.depth !== index || link.cycle || visited.has(link.eventId) || link.financialEffect !== true
+            || !Number.isFinite(Date.parse(link.ingestedAt)) || Date.parse(link.ingestedAt) > Date.parse(asOf)
+            || link.scope.tenantId !== request.scope.tenantId || link.scope.projectId !== request.scope.projectId
+            || link.scope.environment !== request.scope.environment || link.scope.billingMode !== request.scope.billingMode
+            || link.payload.eventType !== link.eventType || link.payload.classification !== row.event_payload.classification
+            || link.payload.money.currency !== row.event_payload.money.currency
+            || (link.eventType === 'reversal' ? !next || link.reversesId !== next.eventId : next !== undefined || link.reversesId !== null)) invalid();
+          visited.add(link.eventId);
+        }
+        const origin=lineage[lineage.length-1]!; const economicAxisType=origin.eventType as string;
+        const cashDirection=economicAxisType === 'cash_movement' ? origin.payload.classification === 'payout_transfer' || (origin.payload.money.amount !== null && decimal(origin.payload.money.amount) < 0n) ? 'payout' as const : 'receipt' as const : undefined;
+        const cashPolarity=origin.payload.classification === 'payout_transfer' ? 1 as const : origin.payload.money.amount !== null && decimal(origin.payload.money.amount) < 0n ? -1 as const : 1 as const;
+        return { eventId: row.event_id, eventHash: row.event_hash, rootId: row.economic_root_event_id, economicEventType: row.economic_event_type,
+          economicAxisType, ...(cashDirection ? {cashDirection,cashPolarity} : {}), payload: row.event_payload };
+      });
       const subjects = new Map<string,string>();
       for (const event of lifetimeEvents) {
         const source = event.payload.sourceIdentity;
@@ -195,7 +240,7 @@ export async function executeSummary(value: FinancialSummaryQueryV2, ports: Repo
     if(currentPrivacy.rows.length)reject('SOURCE_UNAVAILABLE',request.requestId,'Financial history in this scope is restricted pending review.');
     await client.query('COMMIT');inTransaction=false;
     await authorizeReportingRead(request, ports);
-    return success(boundary.value);
+    return success(structuredClone(boundary.value));
   } catch (error) {
     if (client && inTransaction) { await client.query('ROLLBACK').catch(() => {}); inTransaction = false; }
     return error instanceof QueryFailure ? error.result : failure(errorEnvelope('reporting','querySummary','SOURCE_UNAVAILABLE',request.requestId,'The scoped financial summary is temporarily unavailable.',true));

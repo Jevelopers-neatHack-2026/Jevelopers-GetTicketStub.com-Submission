@@ -295,3 +295,9 @@ owned definition ID, exact schema version, revision and content hash. It does
 not label arbitrary JSON as an accepted shared MetricDefinition. Consumers
 resolve these exact registry bytes independently; reading expected references
 back from the supplied summary does not authenticate them.
+
+Revision after frozen producer 54f24055 (independent Q1–Q4 findings): cash movements are excluded from recognized expense and budget capacity expense, including cash tagged operating_expense. Effective eventType comes from the immutable ledger economic_event_type and scoped root/predecessor lineage; cash corrections remain cash. Definition bodies and all nested registry references are immutable private copies; response references are detached copies.
+
+The pending 2.0.0 wrapper proposal changes currencies[].simulated.{expense,grossSales,netSales,directCosts} from decimal strings to ReportingAmount objects {status,knownSubtotal,total,unknownCount}. Unknown simulated amounts have null subtotal/total; mixed known and unknown retain only a partial knownSubtotal. A total of zero requires independently pinned complete-zero coverage for that simulated scope. Live coverage does not grant simulation coverage. Historical frozen54 fixtures are superseded only after new PostgreSQL capture and source revision publication; consumer acceptance remains pending.
+
+Cash reversal axis resolution reads the scoped immutable root and economic_reverses_event_id ancestry, bounded to 32 links (33 nodes). It validates scope, as-of ingestion, financial participation, classification/currency, original stored type, link continuity and cycles. Correction preserves the stored effective economic type; reversal deltas retain the original receipt or payout axis and signed amount, including reversal-of-reversal. Missing, cross-scope, cyclic or over-depth lineage returns SOURCE_UNAVAILABLE rather than an incomplete numerical total.

@@ -16,7 +16,7 @@ export function canonicalSummaries(query: FinancialSummaryQueryV2, asOf: string,
     const records = details.filter(detail => detail.currency === row.currency);
     const metrics = Object.fromEntries(Object.entries(names).map(([key,name]) => {
       const metric = row.metrics[key as keyof typeof names];
-      return [name, { status: metric.total === null ? 'unknown' : 'known', definition_ref: REPORTING_CANONICAL_REFERENCE_REGISTRY.metrics[name]!.reference,
+      return [name, { status: metric.total === null ? 'unknown' : 'known', definition_ref: structuredClone(REPORTING_CANONICAL_REFERENCE_REGISTRY.metrics[name]!.reference),
         value: metric.total === null ? null : { amount: metric.total, currency: row.currency, scale: 18 }, source_refs: [] }];
     }));
     const { requestId: _requestId, idempotencyKey: _idempotencyKey, cursor: _cursor, snapshotId: _snapshotId, requestedAsOf: _requestedAsOf, ...queryIdentity } = query;
@@ -30,7 +30,7 @@ export function canonicalSummaries(query: FinancialSummaryQueryV2, asOf: string,
       reservation_state: summary.budgets.some(budget => budget.currency === row.currency && budget.unresolvedExposure) ? 'uncertain' : summary.budgets.some(budget => budget.currency === row.currency && budget.held !== '0') ? 'held' : 'none',
       completeness: summary.coverage.status === 'complete' ? 'complete' : summary.coverage.status === 'partial' ? 'incomplete' : 'unknown',
       included_environments: query.filters.environments, included_billing_modes: query.filters.billingModes, coverage: { observed: row.groups.filter(group => group.dimension === query.groupings[0]).reduce((n,group) => n + group.eventCount,0), expected: summary.coverage.status === 'complete' ? records.length : null, missing_sources: summary.coverage.missingSources },
-      metrics, original_amounts: [], conversion_ref: null, policy_ref: REPORTING_CANONICAL_REFERENCE_REGISTRY.policy.reference, rate_card_refs: [], financial_event_refs: [] };
+      metrics, original_amounts: [], conversion_ref: null, policy_ref: structuredClone(REPORTING_CANONICAL_REFERENCE_REGISTRY.policy.reference), rate_card_refs: [], financial_event_refs: [] };
     const validated = validateCanonical({ contract: 'FinancialSummary', value, module: 'reporting', operation: 'querySummary', requestId: query.requestId });
     if (!validated.ok) throw new Error('Canonical proposal mapping is unsupported');
     return validated.value;

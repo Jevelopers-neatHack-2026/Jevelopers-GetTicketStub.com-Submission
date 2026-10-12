@@ -51,7 +51,7 @@ export const ReportingCurrencySummarySchema = Type.Object({
   currency: CurrencySchema, scale: Type.Literal(18), metrics: Metrics,
   valuation: Type.Object({ estimated: ReportingAmountSchema, confirmed: ReportingAmountSchema, unknownCount: Type.Integer({ minimum: 0 }) }, { additionalProperties: false }),
   reconciliation: Type.Object({ matchedCount: Type.Integer({ minimum: 0 }), unmatchedCount: Type.Integer({ minimum: 0 }), exceptionCount: Type.Integer({ minimum: 0 }) }, { additionalProperties: false }),
-  simulated: Type.Object({ expense: DecimalAmountSchema, grossSales: DecimalAmountSchema, netSales: DecimalAmountSchema, directCosts: DecimalAmountSchema }, { additionalProperties: false }),
+  simulated: Type.Object({ expense: ReportingAmountSchema, grossSales: ReportingAmountSchema, netSales: ReportingAmountSchema, directCosts: ReportingAmountSchema }, { additionalProperties: false }),
   groups: Type.Array(Type.Object({ dimension: ReportingDimensionSchema, value: Type.Union([Identifier, Type.Null()]), bucket: Type.Union([Type.Literal('known'), Type.Literal('unknown_unallocated')]),
     eventCount: Type.Integer({ minimum: 0 }), metrics: Metrics }, { additionalProperties: false }), { maxItems: 400000 }),
 }, { additionalProperties: false });
