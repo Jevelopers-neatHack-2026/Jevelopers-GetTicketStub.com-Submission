@@ -1843,6 +1843,184 @@ test('host preparation invokes the captured function without reading its own cal
   assert.deepEqual(host, ['prepare']);
 });
 
+for (const operation of ['prepare', 'dispatch']) {
+  for (const boundary of ['options-getter', 'final-clock']) {
+    test(`host ${operation} retains its invocation intrinsic after the ${boundary}`, async () => {
+      const originalApply = Reflect.apply;
+      const calls = [];
+      let interceptedCalls = 0;
+      let interceptedCredential = false;
+      let armed = false;
+      let replaceOnClock = false;
+      const replacement = (_host, _receiver, args) => {
+        interceptedCalls += 1;
+        interceptedCredential ||= args[0]?.credential?.token === TOKEN_CANARY;
+        return { intercepted: true };
+      };
+      const host = function (input) {
+        calls.push({ receiver: this === dispatchPort, credential: input.credential.token === TOKEN_CANARY });
+        return { retained: true };
+      };
+      const dispatchPort = {
+        get prepare() {
+          if (operation !== 'prepare') return undefined;
+          if (armed && boundary === 'final-clock') replaceOnClock = true;
+          return host;
+        },
+        get dispatch() {
+          if (armed && operation === 'dispatch' && boundary === 'final-clock') replaceOnClock = true;
+          return operation === 'dispatch' ? host : async () => {};
+        },
+      };
+      const { fetchImpl, requests } = interceptedFetch();
+      try {
+        const input = billable();
+        const adapter = createOpenRouterImagesAdapter({
+          now() {
+            if (replaceOnClock) Reflect.apply = replacement;
+            return clock();
+          },
+          credentialPort: grantCredentialPort(), fetchImpl,
+          get dispatchPort() {
+            if (boundary === 'options-getter') Reflect.apply = replacement;
+            return dispatchPort;
+          },
+        });
+        armed = operation === 'prepare';
+        const prepared = await adapter.prepare(input);
+        assert.deepEqual(prepared, { prepared: true });
+        if (operation === 'dispatch') {
+          armed = true;
+          await adapter.dispatch(dispatchInput(input, prepared));
+        }
+      } finally {
+        Reflect.apply = originalApply;
+      }
+      assert.equal(interceptedCalls, 0, 'a mutable global invocation function must never receive host input');
+      assert.equal(interceptedCredential, false, 'the replacement must never receive even a synthetic credential');
+      assert.deepEqual(calls, [{ receiver: true, credential: true }], 'invoke the captured host with its original receiver');
+      assert.equal(requests.length, 0, 'the host fixture performs no external request');
+    });
+  }
+}
+
+for (const boundary of ['freeze', 'weakmap-set', 'weakmap-get', 'weakmap-delete', 'weakmap-constructor', 'trim', 'regexp-exec']) {
+  test(`credential-bearing intrinsics remain private after replacing ${boundary}`, async () => {
+    const original = { apply: Reflect.apply, freeze: Object.freeze, WeakMap,
+      set: WeakMap.prototype.set, get: WeakMap.prototype.get, delete: WeakMap.prototype.delete,
+      trim: String.prototype.trim, exec: RegExp.prototype.exec };
+    let exposures = 0;
+    let constructors = 0;
+    const host = [];
+    const inspect = (value) => {
+      if (value === TOKEN_CANARY || value?.token === TOKEN_CANARY || value?.credential?.token === TOKEN_CANARY) exposures += 1;
+    };
+    const replace = () => {
+      if (boundary === 'freeze') Object.freeze = (value) => { inspect(value); return original.freeze(value); };
+      if (boundary === 'weakmap-set') original.WeakMap.prototype.set = function (key, value) {
+        inspect(value); return original.apply(original.set, this, [key, value]);
+      };
+      if (boundary === 'weakmap-get') original.WeakMap.prototype.get = function (key) {
+        const value = original.apply(original.get, this, [key]); inspect(value); return value;
+      };
+      if (boundary === 'weakmap-delete') original.WeakMap.prototype.delete = function (key) {
+        inspect(original.apply(original.get, this, [key])); return original.apply(original.delete, this, [key]);
+      };
+      if (boundary === 'weakmap-constructor') globalThis.WeakMap = class extends original.WeakMap {
+        constructor() { super(); constructors += 1; }
+        set(key, value) { inspect(value); return original.apply(original.set, this, [key, value]); }
+      };
+      if (boundary === 'trim') String.prototype.trim = function () {
+        inspect(this); return original.apply(original.trim, this, []);
+      };
+      if (boundary === 'regexp-exec') RegExp.prototype.exec = function (value) {
+        inspect(value); return original.apply(original.exec, this, [value]);
+      };
+    };
+    const { fetchImpl, requests } = interceptedFetch();
+    try {
+      const input = billable();
+      const adapter = createOpenRouterImagesAdapter({ now: clock,
+        credentialPort: grantCredentialPort(), fetchImpl,
+        get dispatchPort() {
+          replace();
+          return { async prepare(args) { host.push(['prepare', args.credential.token === TOKEN_CANARY]); },
+            async dispatch(args) { host.push(['dispatch', args.credential.token === TOKEN_CANARY]); } };
+        },
+      });
+      const prepared = await adapter.prepare(input);
+      await adapter.dispatch(dispatchInput(input, prepared));
+      await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
+    } finally {
+      Object.freeze = original.freeze;
+      globalThis.WeakMap = original.WeakMap;
+      original.WeakMap.prototype.set = original.set;
+      original.WeakMap.prototype.get = original.get;
+      original.WeakMap.prototype.delete = original.delete;
+      String.prototype.trim = original.trim;
+      RegExp.prototype.exec = original.exec;
+    }
+    assert.equal(exposures, 0, 'global replacements cannot observe even synthetic private credentials');
+    assert.equal(constructors, 0, 'private prepared state must use the captured native constructor');
+    assert.deepEqual(host, [['prepare', true], ['dispatch', true]]);
+    assert.equal(requests.length, 0);
+  });
+}
+
+for (const boundary of ['object-keys', 'array-map', 'json-stringify', 'set-has', 'descriptor-getter']) {
+  test(`the final authority fence runs no replacement ${boundary} callback`, async () => {
+    const original = { apply: Reflect.apply, keys: Object.keys, map: Array.prototype.map,
+      stringify: JSON.stringify, has: Set.prototype.has,
+      descriptorGet: Object.getOwnPropertyDescriptor(Object.prototype, 'get') };
+    const restore = () => {
+      Object.keys = original.keys; Array.prototype.map = original.map;
+      JSON.stringify = original.stringify; Set.prototype.has = original.has;
+      if (original.descriptorGet) Object.defineProperty(Object.prototype, 'get', original.descriptorGet);
+      else delete Object.prototype.get;
+    };
+    const input = billable();
+    let armed = false;
+    let pending = false;
+    let installed = false;
+    let lateCallbacks = 0;
+    let hostCalls = 0;
+    let outcome;
+    let failure;
+    const mutate = () => { lateCallbacks += 1; input.grant_ref = 'grant:test:changed-by-global'; restore(); };
+    const adapter = createOpenRouterImagesAdapter({ now() {
+      if (pending && !installed) {
+        installed = true;
+        if (boundary === 'object-keys') Object.keys = (value) => { mutate(); return original.keys(value); };
+        if (boundary === 'array-map') Array.prototype.map = function (...args) {
+          mutate(); return original.apply(original.map, this, args);
+        };
+        if (boundary === 'json-stringify') JSON.stringify = (...args) => { mutate(); return original.stringify(...args); };
+        if (boundary === 'set-has') Set.prototype.has = function (value) {
+          mutate(); return original.apply(original.has, this, [value]);
+        };
+        if (boundary === 'descriptor-getter') Object.defineProperty(Object.prototype, 'get', {
+          configurable: true, get() { mutate(); return undefined; },
+        });
+      }
+      return clock();
+    }, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl,
+    dispatchPort: { get prepare() {
+      if (armed) pending = true;
+      return () => { hostCalls += 1; restore(); };
+    }, async dispatch() {} } });
+    armed = true;
+    try { outcome = await adapter.prepare(input); }
+    catch (error) { failure = error; }
+    finally { restore(); }
+    assert.equal(installed, true);
+    assert.equal(lateCallbacks, 0, 'no new callback can mutate authority after its final capture');
+    assert.equal(failure, undefined);
+    assert.deepEqual(outcome, { prepared: true });
+    assert.equal(hostCalls, 1);
+    assert.equal(input.grant_ref, GRANT);
+  });
+}
+
 test('prepare rejects deadlines crossed by host accessors or final binding getters before sharing credentials', async () => {
   for (const boundary of ['host-accessor', 'binding-getter']) {
     let currentTime = clock();
