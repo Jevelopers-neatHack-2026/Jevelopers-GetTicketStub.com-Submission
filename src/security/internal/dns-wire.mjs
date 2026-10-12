@@ -199,13 +199,16 @@ export class DnsWireResolver {
     let response;
     for (const nameserver of this.nameservers) {
       try {
-        response = await this.#udp(nameserver, request, { id, hostname, type, signal, deadline });
-        if (response.truncated) {
+        let candidate = await this.#udp(nameserver, request, { id, hostname, type, signal, deadline });
+        if (candidate.truncated) {
           const tcp = await this.#tcp(nameserver, request, { id, hostname, type, signal, deadline });
           // Revalidate transaction, flags, question and all response fields on the TCP reply.
-          response = parseResponse(tcp, { id, hostname, type });
-          if (response.truncated) throw new RetrievalError("DNS_FAILURE");
+          candidate = parseResponse(tcp, { id, hostname, type });
+          if (candidate.truncated) throw new RetrievalError("DNS_FAILURE");
         }
+        // Only a complete validated attempt may supply a family result. A
+        // failed TCP fallback must not leave its truncated UDP reply behind.
+        response = candidate;
         break;
       } catch (error) {
         if (error instanceof RetrievalError && ["CANCELED", "DEADLINE_EXCEEDED", "POLICY_DENIED"].includes(error.code)) throw error;
@@ -259,14 +262,27 @@ export class DnsWireResolver {
       socket.once("error", () => finish(new RetrievalError("DNS_FAILURE")));
       socket.once("message", onMessage);
       context.signal?.addEventListener("abort", onAbort, { once: true });
-      timer = setTimeout(() => finish(new RetrievalError("DEADLINE_EXCEEDED")), remaining(context.deadline));
       if (context.signal?.aborted) return onAbort();
-      started = true;
-      socket.connect(this.port, nameserver, () => {
-        socket.send(request, (error) => {
-          if (error) finish(new RetrievalError("DNS_FAILURE"));
+      try {
+        timer = setTimeout(() => finish(new RetrievalError("DEADLINE_EXCEEDED")), remaining(context.deadline));
+        started = true;
+        socket.connect(this.port, nameserver, (connectError) => {
+          if (settled) return;
+          try {
+            ensureActive(context.signal, context.deadline);
+            // Node delivers connect failures to this callback without emitting
+            // "error". Sending then would use an unconnected socket overload.
+            if (connectError) throw new RetrievalError("DNS_FAILURE");
+            socket.send(request, (error) => {
+              if (error) finish(new RetrievalError("DNS_FAILURE"));
+            });
+          } catch (error) {
+            finish(error instanceof RetrievalError ? error : new RetrievalError("DNS_FAILURE"));
+          }
         });
-      });
+      } catch (error) {
+        finish(error instanceof RetrievalError ? error : new RetrievalError("DNS_FAILURE"));
+      }
     });
   }
 
@@ -304,14 +320,25 @@ export class DnsWireResolver {
         }
       });
       context.signal?.addEventListener("abort", onAbort, { once: true });
-      timer = setTimeout(() => finish(new RetrievalError("DEADLINE_EXCEEDED")), remaining(context.deadline));
       if (context.signal?.aborted) return onAbort();
+      try {
+        timer = setTimeout(() => finish(new RetrievalError("DEADLINE_EXCEEDED")), remaining(context.deadline));
+      } catch (error) {
+        finish(error instanceof RetrievalError ? error : new RetrievalError("DNS_FAILURE"));
+        return;
+      }
       socket.once("connect", () => {
-        if (!socket.remoteAddress || !sameAddress(socket.remoteAddress, nameserver) || socket.remotePort !== this.port) {
-          finish(new RetrievalError("DNS_FAILURE"));
-          return;
+        if (settled) return;
+        try {
+          ensureActive(context.signal, context.deadline);
+          if (!socket.remoteAddress || !sameAddress(socket.remoteAddress, nameserver) || socket.remotePort !== this.port) {
+            finish(new RetrievalError("DNS_FAILURE"));
+            return;
+          }
+          socket.write(framed);
+        } catch (error) {
+          finish(error instanceof RetrievalError ? error : new RetrievalError("DNS_FAILURE"));
         }
-        socket.write(framed);
       });
     });
   }

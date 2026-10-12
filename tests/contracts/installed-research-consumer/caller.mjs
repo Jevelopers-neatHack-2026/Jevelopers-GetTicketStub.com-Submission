@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createCorrectionHistoryStore, ReviewHistoryError } from '../../../src/review/history/store.mjs';
+import { runInstalledDecisionConsumer } from './decision-caller.mjs';
 
 const NOW = '2026-10-12T14:00:00.000Z';
 const EPOCH = Date.parse(NOW);
@@ -369,6 +370,9 @@ export async function runInstalledResearchConsumer({ contracts, research, operat
     assert.deepEqual(json(controls), observations.canonicalControls);
     return { outcome: 'inputs_unchanged' };
   });
+  // Keep the original 38 history/bridge/control cases and their origins intact.
+  observations.decisionPort = await runInstalledDecisionConsumer({ contracts, operations, directory,
+    consumerSha, check, reject });
   const failures = cases.filter((row) => row.status !== 'passed').map((row) => row.id);
   return {
     diagnostic_status: failures.length ? 'failed' : 'passed_expected_incompatibility',
@@ -377,10 +381,13 @@ export async function runInstalledResearchConsumer({ contracts, research, operat
     authority: 'synthetic', provider_mode: 'offline_no_provider_transport',
     imports: ['@jevelopers/shared-contracts', '@jevelopers/shared-contracts/research-creative', '@jevelopers/shared-contracts/operations'],
     contracts_exercised: ['ResearchRequest/1.0.0', 'EventIntelligencePackage/1.0.0',
-      'ResearchCorrectionRequest/1.0.0', 'ResearchCorrectionReceipt/1.0.0', 'ResearchInvalidation/1.0.0'],
+      'ResearchCorrectionRequest/1.0.0', 'ResearchCorrectionReceipt/1.0.0', 'ResearchInvalidation/1.0.0',
+      'DecisionPortRequest/1.0.0'],
     definitions_exercised: ['ResearchFact (EventIntelligencePackage/1.0.0)', 'VersionedReference/1.0.0'],
     counts: { scenarios: cases.length, passed: cases.length - failures.length, failed: failures.length,
       skipped: 0, upstream_fixture_cases: 0,
+      origins: Object.fromEntries([...new Set(cases.map((row) => row.origin))]
+        .map((origin) => [origin, cases.filter((row) => row.origin === origin).length])),
       expected_rejections: cases.filter((row) => row.status === 'passed' && row.outcome === 'expected_rejection').length },
     failures, cases, observations,
     limitations: [
@@ -389,7 +396,8 @@ export async function runInstalledResearchConsumer({ contracts, research, operat
       'Local source/evidence claims have no canonical URL/retrieved_at/access/retention reference envelope or accepted lossless status mapping.',
       'Synthetic host callbacks establish no real authentication, authorization, retention policy, permission, Finance authority or Creative acceptance.',
       'Local reference invalidation is observed; external delivery and recipient acknowledgement are unverified.',
-      'ResearchRequest public orchestration, DecisionPort, assets/rights, canonical corrections/receipts and full catalog obligations remain unaccepted.',
+      'Actual question preparation and bound DecisionPort request refusal are exercised; successful canonical dispatch, actual EI result consumption and provider/Finance authority remain unsupported or unaccepted.',
+      'ResearchRequest public orchestration, assets/rights, canonical corrections/receipts and full catalog obligations remain unaccepted.',
       '0.9.8 is a separate exact archive that this diagnostic does not exercise; results cannot transfer to it.',
     ],
     acknowledgements: { accountable_owner: null, reviewer: null, producer: null, consumer: null, product: null, release: null },

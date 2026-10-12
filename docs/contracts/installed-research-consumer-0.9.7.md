@@ -1,8 +1,11 @@
 # EI-X01 installed 0.9.7 consumer diagnostic
 
 This maintained diagnostic exercises EI's actual private correction-history store
-against the exact private-development shared-contracts 0.9.7 archive requested on
+and source-composition → identity-question preparation callers against the exact
+private-development shared-contracts 0.9.7 archive requested on
 [issue #3](https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/3#issuecomment-6122028176).
+The actual-caller request also includes
+[DecisionPort](https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/3#issuecomment-6116331061).
 Its expected disposition is **INCOMPATIBLE_HOLD**. A passing diagnostic establishes
 that the observed local behavior and explicit incompatibilities match the checks.
 It is not a consumer ACK, accepted migration, public API, release pin, or completion
@@ -40,6 +43,8 @@ node tools/contracts/installed-research-consumer.mjs \
   --archive /absolute/path/jevelopers-shared-contracts-0.9.7.tgz \
   --output /absolute/path/to/a-new-evidence-directory
 node --test tests/contracts/installed-research-consumer/launcher.test.mjs
+node --test tests/decisions/questions/from-source-identity.test.mjs
+npm run typecheck
 ```
 
 The launcher requires Node 22.23.3 and checks both archive SHA256 and SRI before
@@ -53,8 +58,12 @@ The installed type check defaults to the consumer's locked TypeScript compiler.
 `--tsc /absolute/path/to/typescript/bin/tsc` permits an explicitly recorded compiler
 location for an isolated worktree; it does not change any dependency. The receipt
 records the actual compiler version and command. Negative type assertions preserve
-the distinction between the real local DTOs and canonical package, correction, and
-invalidation DTOs.
+the distinction between the real local DTOs and canonical package, correction,
+invalidation and DecisionPort DTOs. In particular, an actual `QuestionPlan` and its
+factory result are not assignable to `DecisionPortRequest`; the public operation
+result discriminants narrow without an `any` cast. The DecisionPort result checker
+receives compile-only signature coverage. Runtime result consumption remains
+unsupported because EI has no active consumer for that result.
 
 Every output directory must be new. The launcher retains stdout, stderr, exit codes,
 consumer commit/tree, dirty status, source file hashes, runtime, schema versions and
@@ -72,8 +81,14 @@ their own bytes.
 | Actual local SQLite caller | 12 scenarios | Create history with missing and conflicting facts; bind a local handoff reference; apply an immutable customer correction; preserve source claims/revisions; invalidate the exact old version/hash; reopen and read both versions; replay without duplication; reject stale and forged hashes/references, copied requests, forged scope, and a locked field. |
 | Actual local DTOs passed to installed package | 10 scenarios | The exact snapshot, correction command/result and invalidation fail canonical wire checks; all three candidate alias profiles refuse the local snapshot; naming a canonical contract/version alone still leaves required fields absent; local and canonical hash domains remain distinct. |
 | Independently authored synthetic canonical controls | 16 scenarios | Installed ResearchRequest and EventIntelligencePackage helpers, serialization, unknown/conflicting states, exact reference binding, fact/package tampering, scope, version/additive-field behavior, malformed JSON, and hash domains behave as recorded. These controls are not a transformation of local history into canonical records. |
+| Actual source composition and question preparation | 3 scenarios | Persist two explicitly synthetic HTML sources through the real evidence store and composer; prepare an immutable blocked, unpromoted, undispatched identity plan; refuse a tampered source hash; preserve the exact bytes, stored source/evidence identities, sidecar and internal source/state/target/instance/plan hashes across all probes. |
+| Actual plan passed unchanged to installed DecisionPort | 3 scenarios | The public root validator, request checker and bound port reject the real plan with `INVALID_PAYLOAD` at `/schema_version`. The bound handler is never invoked; trusted context and Finance policy are not reached. |
+| Explicitly rejected DecisionPort projection probes | 3 scenarios | Adding only wire markers still leaves canonical envelope/reference fields absent and the local question array incompatible; reusing the exact local question ID in a separately authored syntax control violates canonical key grammar; the bare local state hash is not a canonical versioned-reference digest. These are rejected mechanical probes, not adapters. |
+| Independently authored DecisionPort syntax controls | 2 scenarios | A wholly synthetic canonical request passes structural validation; the bound port still refuses missing trusted context with `INVALID_TRUST_CONTEXT` and zero handler calls. This does not establish Finance authority, result consumption or a successful dispatch. |
 
-The 38 scenarios include 26 expected rejections. The test harness does not reinterpret
+The original 38 scenarios remain unchanged. The 11 DecisionPort scenarios extend the
+diagnostic to 49 scenarios, including 34 expected rejections and zero skipped cases
+when all prerequisites and checks pass. The test harness does not reinterpret
 a rejection as interoperability. `diagnostic_status=passed_expected_incompatibility`
 and `consumer_acceptance=INCOMPATIBLE_HOLD` intentionally coexist. The launcher
 regression test additionally verifies that a wrong archive runs no install/import
@@ -82,8 +97,11 @@ commands and that its failed receipt cannot be overwritten.
 Canonical controls use fabricated URLs under `synthetic.example.test`, identifiers,
 source metadata, references and trust contexts. The synthetic unknown fact has its
 own invented control provenance; the actual missing local fact has no such evidence.
-These values are never written into the local store or presented as a lossless
-adapter. There are no approved assets. No network retrieval, provider call, paid
+Canonical control values are not written into the local correction store or
+presented as a lossless adapter. The DecisionPort caller separately persists its
+own labeled synthetic HTML bytes in a fresh private evidence store, using synthetic
+in-process request/retention capabilities. Those capabilities supply no canonical
+issuer trust. There are no approved assets. No network retrieval, provider call, paid
 effect, live identity, actual approval, Finance authority, external invalidation
 delivery, or Creative acknowledgement is exercised.
 
@@ -97,14 +115,18 @@ delivery, or Creative acknowledgement is exercised.
 | Local UUID `versionId`, `parentVersionId`, whole-snapshot bare SHA256; separate `materialHash` | Stable canonical `package_id`, `package_version`, parent reference, per-fact hash and canonical `researchContentHash` domains | Shared-contracts and EI: settle package/fact identity ownership and retain both local and canonical digests/lineage; prefixing or renaming a local digest cannot establish equivalence. |
 | Local correction uses an opaque retention handle and actor authorization callbacks; local invalidation binds old local version/hash | Canonical correction authority, request/receipt identity, affected package/asset references and delivery/acknowledgement | Product owns real issuer/authentication; EI and Creative own reviewed correction and invalidation consumption. A local invalidated row is not an external receipt. |
 | Proposed EI compatibility expects `UNSUPPORTED_SCHEMA` and old-minor/additive preservation | Candidate returns exact-semver `UNSUPPORTED_VERSION` and rejects unknown additive fields | Shared-contracts/EI/consumers must record the normative version/error policy; no error renaming or schema weakening occurs in this diagnostic. |
+| The actual factory returns a blocked internal `QuestionPlan` and source binding sidecar, with `schema: ei-jev-question-plan-internal/v2` and a question array | `DecisionPortRequest/1.0.0` requires its own envelope, authenticated scope, request/batch/attempt identity, deadline, cancellation/model/policy/budget/state references and a question object | Shared-contracts #14, EI and agent-harness owners: approve the lossless question/target representation and the app-owned issuer/reference bindings before EI can implement a wire adapter. The first unchanged-plan refusal is a schema-version error, before any context or Finance check. |
+| `Q-EI-IDENTITY:v1` and bare internal state/source/target/plan hashes | Canonical question keys exclude the local colon syntax; a canonical `VersionedReference` needs its own contract, schema version, ID, revision and prefixed digest with a defined hash domain | Shared-contracts and EI: decide stable question/target/reference ownership and digest semantics while retaining the original local IDs and hashes. This diagnostic does not rename a question or prefix a local digest into accepted authority. |
+| EI has question preparation but no active DecisionPort result consumer | Successful dispatch, accepted answers, evidence references, usage/receipt consumption and recovery require the accepted port/result binding | Agent-harness #15 and EI, with Product assembly and Finance owners: supply the accepted caller/result interface and trusted runtime capabilities. No result, completed stage, provider response or consumer ACK is fabricated here. |
 
 The later [0.9.8 private handoff](https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/3#issuecomment-6123207522)
 names an intentionally unpushed source and exact owner-held archive. Its bytes were
 unavailable to this lane at the recorded checkpoint. This 0.9.7 run preserves the
 separately authorized immutable baseline; it does not substitute for, repair, or ACK
 0.9.8. The producer must supply that exact artifact through the authorized handoff
-before its specific migration checks can run. DecisionPort, rights/asset and full
-catalog acceptance remain separate work.
+before its specific migration checks can run. The 0.9.7 DecisionPort request-side
+refusal diagnostics above are implemented; successful DecisionPort interoperability,
+rights/asset and full catalog acceptance remain separate work.
 
 ## Retained development failures
 
@@ -116,3 +138,11 @@ history; they are not reconstructed as passing runs. The import paths were corre
 The next retained run executed all 38 scenarios and installed type checks successfully,
 and the launcher regression passed 1/1 with zero skips. Final reviewed evidence must
 record the later exact clean consumer revision separately.
+
+The DecisionPort extension retains the clean pre-extension 38-case baseline and its
+separate development receipts. Its first extended run passed all 49 cases and the
+installed strict type check. That run used a dirty worktree and is development
+evidence only; reviewed evidence must identify the later clean committed source.
+The required graph lookup was attempted but the `entire` executable was unavailable
+(exit 127), so source discovery used focused `rg` and source reads. This tooling
+limitation is not a passing graph check or a product test failure.
