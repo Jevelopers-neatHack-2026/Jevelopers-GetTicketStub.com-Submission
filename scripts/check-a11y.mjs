@@ -20,6 +20,7 @@ const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const axeVersion = JSON.parse(readFileSync(join(dirname(require.resolve("axe-core/package.json")), "package.json"), "utf8")).version;
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
 let passed = 0;
 function check(name, ok, detail = "") {
@@ -218,6 +219,17 @@ try {
   await page.waitFor(`document.activeElement && document.activeElement.getAttribute("role") === "slider"`, 3000);
   await page.key("Enter");
   check("tear: Enter on the handle tears it off and pins it to the wall", await page.waitFor(`location.pathname === "/wall"`, 6000), await page.eval("location.href"));
+
+  check("tear: the stub just pinned on the wall lifts the lamp when tapped", await (async () => {
+    await page.waitFor(`!!document.querySelector('[class*="landingBtn"]')`, 4000);
+    await sleep(1200); // the landing animation
+    const at = await page.eval(`(() => { const el = document.querySelector('[class*="landingBtn"]'); el.scrollIntoView({ block: "center" }); const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    await page.click(at[0], at[1]);
+    const opened = await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')].every((x) => x.closest("[inert]") || x.getAttribute("aria-hidden") === "true")`, 3000);
+    await page.key("Escape");
+    await page.waitFor(noDialog, 3000);
+    return opened;
+  })());
 
   await open(`/studio/${DEMO}`, 1440, 900, { desktop: true });
   await page.eval(`document.body.focus(); 0`);
