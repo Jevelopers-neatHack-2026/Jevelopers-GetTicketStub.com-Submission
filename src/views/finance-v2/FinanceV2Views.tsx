@@ -5,7 +5,7 @@ import { MetricCard } from '../../components/MetricCard';
 import { ScopeContext } from '../../components/ScopeContext';
 import { StateBadge } from '../../components/StateBadge';
 import { TableScroll } from '../../components/TableScroll';
-import { checkFinanceV2Page } from './check';
+import { checkFinanceV2Page, type FinanceV2TrustedReferences } from './check';
 import {
   DETAIL_METRIC_NAMES, METRIC_NAMES, REPORTING_DIMENSIONS,
   type FinanceV2Input, type FinanceV2Mode, type FinanceV2Page, type OpaqueProductScope, type ReportingAmount, type ReportingBudget, type ReportingCoverage,
@@ -27,6 +27,8 @@ export type FinanceV2ViewProps = Readonly<{
   /** The query and summary hashes the host asked for. A page carrying other hashes is refused. Compared as strings only; never computed here. */
   expectedQueryContentHash?: string;
   expectedSummaryContentHash?: string;
+  /** References the host pinned independently of the page. With none supplied, no canonical reference is bound. */
+  expectedReferences?: FinanceV2TrustedReferences;
   /** Detail id for `transaction-detail`. */
   detailId?: string;
   detailHref?: (detailId: string) => string;
@@ -73,7 +75,7 @@ function MetricsTable({ caption, metrics, currency }: { caption: string; metrics
 
 function Banner({ page }: { page: FinanceV2Page }) {
   return <>
-    <p role="note"><strong>SYNTHETIC_PROPOSAL</strong>: offline fixture generated from the frozen, unaccepted Finance v2 proposal. Not Finance output, not an observation, not owner-accepted. Metric definitions are pending owner acknowledgement.</p>
+    <p role="note"><strong>SYNTHETIC_PROPOSAL</strong>: offline synthetic data for the unaccepted Finance v2 proposal. Synthetic data only; a payload cannot attest its own provenance. Not live Finance data, not an observation, not a production acknowledgement and not owner-accepted. Metric definitions are pending owner acknowledgement.</p>
     <ScopeContext scope={{ status: 'available', projectLabel: page.scope.projectId, periodLabel: `${page.period.start} to ${page.period.end}`, currencyLabel: page.summary.currencies.map((entry) => `${entry.currency} (scale ${entry.scale})`).join(', ') || 'None delivered' }} />
     <Section label="Snapshot and scope" title="Snapshot and scope">
       <dl>
@@ -87,6 +89,9 @@ function Banner({ page }: { page: FinanceV2Page }) {
         <Row term="Summary hash">{page.summaryContentHash}</Row>
         <Row term="As of">{page.asOf} ({page.timezone})</Row>
         <Row term="Request">{page.requestId}</Row>
+        <Row term="Filters">{`environments ${page.filters.environments.join(', ')}; billing modes ${page.filters.billingModes.join(', ')}`}</Row>
+        <Row term="Watermark">{`${page.watermark.watermarkId} captured ${page.watermark.capturedAt}`}</Row>
+        <Row term="Source completeness">{page.watermark.sources.map((source) => `${source.source} ${source.completeness}`).join('; ')}</Row>
         <Row term="Policy version">{page.summary.policyVersion}</Row>
         <Row term="Accounting policy version">{page.summary.accountingPolicyVersion}</Row>
         <Row term="Definitions status">{page.summary.definitionsStatus}</Row>
@@ -178,12 +183,15 @@ function CurrencyBreakdown({ entry }: { entry: ReportingCurrencySummary }) {
       </dl>
     </Section>
     <Section label={`${c} simulated`} title={`${c} simulated (not actual)`}>
-      <dl>
-        <Row term="Simulated expense"><AmountText amount={known(entry.simulated.expense, c)} /></Row>
-        <Row term="Simulated gross sales"><AmountText amount={known(entry.simulated.grossSales, c)} /></Row>
-        <Row term="Simulated net sales"><AmountText amount={known(entry.simulated.netSales, c)} /></Row>
-        <Row term="Simulated direct costs"><AmountText amount={known(entry.simulated.directCosts, c)} /></Row>
-      </dl>
+      <p>Simulated amounts are a separate read. They are never added to the actual totals, and an unknown total stays unknown.</p>
+      <TableScroll caption={`${c} simulated amounts`}><table className="td-table"><caption>{c} simulated amounts</caption>
+        <thead><tr><th scope="col">Simulated metric</th>{AMOUNT_HEAD}</tr></thead>
+        <tbody>
+          <tr><th scope="row">Simulated expense</th><ReportingAmountCells amount={entry.simulated.expense} currency={c} /></tr>
+          <tr><th scope="row">Simulated gross sales</th><ReportingAmountCells amount={entry.simulated.grossSales} currency={c} /></tr>
+          <tr><th scope="row">Simulated net sales</th><ReportingAmountCells amount={entry.simulated.netSales} currency={c} /></tr>
+          <tr><th scope="row">Simulated direct costs</th><ReportingAmountCells amount={entry.simulated.directCosts} currency={c} /></tr>
+        </tbody></table></TableScroll>
     </Section>
   </section>;
 }
@@ -285,7 +293,7 @@ const HEADINGS: Readonly<Record<FinanceV2ViewName, string>> = { budget: 'Budget 
  */
 export function FinanceV2View(props: FinanceV2ViewProps) {
   const headingId = useId();
-  const { view, input, expectedScope, expectedSnapshotId, expectedQueryContentHash, expectedSummaryContentHash, detailId, detailHref, listHref, onNavigate, filters, onFiltersChange } = props;
+  const { view, input, expectedScope, expectedSnapshotId, expectedQueryContentHash, expectedSummaryContentHash, expectedReferences, detailId, detailHref, listHref, onNavigate, filters, onFiltersChange } = props;
   const wrap = (body: ReactNode) => <section className="td-component-stack" aria-labelledby={headingId}><h2 id={headingId}>{HEADINGS[view] ?? 'Finance v2'}</h2>{body}</section>;
   if (props.mode !== 'SYNTHETIC_PROPOSAL') return wrap(<Notice alert title="Unsupported mode">This presentation only renders in explicit SYNTHETIC_PROPOSAL mode. Nothing is shown. Code UNSUPPORTED_MODE.</Notice>);
   if (!input || typeof input !== 'object') return wrap(<Notice title="Finance state unknown">The state of this report could not be determined. No amounts are shown.</Notice>);
@@ -296,6 +304,7 @@ export function FinanceV2View(props: FinanceV2ViewProps) {
   const checked = checkFinanceV2Page(input.page, expectedScope, expectedSnapshotId, {
     ...(expectedQueryContentHash !== undefined ? { queryContentHash: expectedQueryContentHash } : {}),
     ...(expectedSummaryContentHash !== undefined ? { summaryContentHash: expectedSummaryContentHash } : {}),
+    ...(expectedReferences !== undefined ? { references: expectedReferences } : {}),
   });
   if (!checked.ok) {
     return wrap(<section className="td-example-section" role="alert"><h3>Report refused</h3>

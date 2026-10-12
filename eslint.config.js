@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import hooks from 'eslint-plugin-react-hooks';
 import a11y from 'eslint-plugin-jsx-a11y';
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', '.fixture-package/**', '.shared-contracts/**', 'playwright-report/**', 'test-results/**'] },
+  { ignores: ['dist/**', 'node_modules/**', '.fixture-package/**', '.shared-contracts/**', 'playwright-report/**', 'test-results/**', 'tests/fixtures/finance-v2-conformance/source/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { files: ['**/*.{ts,tsx}'], plugins: { 'react-hooks': hooks, 'jsx-a11y': a11y }, rules: { ...hooks.configs.recommended.rules, ...a11y.configs.recommended.rules } },

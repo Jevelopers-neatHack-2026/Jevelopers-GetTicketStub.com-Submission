@@ -8,6 +8,7 @@ import { DETAIL_METRIC_NAMES, METRIC_NAMES, REPORTING_DIMENSIONS, type FinanceV2
  */
 const HASH = /^sha256:[a-f0-9]{64}$/u;
 const SCOPE_KEYS = ['tenantId', 'projectId', 'environment', 'billingMode', 'actorId'] as const;
+const PAGE_KEYS: ReadonlySet<string> = new Set(['schemaVersion', 'requestId', 'snapshotId', 'queryContentHash', 'summaryContentHash', 'asOf', 'timezone', 'period', 'scope', 'filters', 'watermark', 'summary', 'details', 'detailCount', 'hasMore', 'nextCursor', 'canonicalSummaries', 'canonicalMappingStatus']);
 const AMOUNT_STATUS = new Set(['known', 'partial', 'unknown']);
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const text = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
@@ -44,7 +45,7 @@ function summaryPath(summary: unknown): string | undefined {
     if (!record(entry.reconciliation)) return `${base}/reconciliation`;
     for (const key of ['matchedCount', 'unmatchedCount', 'exceptionCount'] as const) if (!count(entry.reconciliation[key])) return `${base}/reconciliation/${key}`;
     if (!record(entry.simulated)) return `${base}/simulated`;
-    for (const key of ['expense', 'grossSales', 'netSales', 'directCosts'] as const) if (!text(entry.simulated[key])) return `${base}/simulated/${key}`;
+    for (const key of ['expense', 'grossSales', 'netSales', 'directCosts'] as const) { const bad = amountPath(entry.simulated[key], `${base}/simulated/${key}`); if (bad) return bad; }
     if (!Array.isArray(entry.groups)) return `${base}/groups`;
     for (const [at, group] of entry.groups.entries()) {
       const where = `${base}/groups/${at}`;
@@ -96,13 +97,71 @@ function detailPath(detail: unknown, index: number, currencies: ReadonlySet<stri
   return undefined;
 }
 
-/** Identity the host asked for, stated independently of the response. The browser only compares these strings for equality; it never computes or vouches for a hash. */
-export type FinanceV2ExpectedHashes = Readonly<{ queryContentHash?: string; summaryContentHash?: string }>;
+/**
+ * The earlier proposal delivered `simulated.*` as bare decimal strings. The accepted-for-conformance producer shape delivers `ReportingAmount` objects.
+ * The two are never the same `2.0.0`: a page still carrying a scalar there is refused under its own code, and nothing is coerced to an amount.
+ */
+function legacyPath(summary: unknown): string | undefined {
+  if (!record(summary) || !Array.isArray(summary.currencies)) return undefined;
+  for (const [index, entry] of summary.currencies.entries()) {
+    if (!record(entry) || !record(entry.simulated)) continue;
+    for (const key of Object.keys(entry.simulated)) if (typeof entry.simulated[key] === 'string') return `/summary/currencies/${index}/simulated/${key}`;
+  }
+  return undefined;
+}
 
-/** `expectedScope` is the host's own opaque scope. `expectedSnapshotId` and `expected` are optional; when given, a different snapshot or hash is refused. */
+/** A canonical reference as the pinned registry states it. Compared field by field for equality only. */
+export type FinanceV2CanonicalReference = Readonly<{ contract: string; schema_version: string; id: string; revision: number; content_hash: string }>;
+/**
+ * References the host pinned independently of the payload (for example from the definition registry whose digest the host verified).
+ * A canonical summary naming any other definition or policy reference is refused; the payload never vouches for its own references.
+ */
+export type FinanceV2TrustedReferences = Readonly<{ metrics: Readonly<Record<string, FinanceV2CanonicalReference>>; policy: FinanceV2CanonicalReference }>;
+const REFERENCE_KEYS = ['contract', 'schema_version', 'id', 'revision', 'content_hash'] as const;
+const sameReference = (actual: unknown, trusted: FinanceV2CanonicalReference | undefined): boolean =>
+  trusted !== undefined && record(actual) && Object.keys(actual).length === REFERENCE_KEYS.length && REFERENCE_KEYS.every((key) => actual[key] === trusted[key]);
+function referencePath(summaries: readonly unknown[], trusted: FinanceV2TrustedReferences): string | undefined {
+  for (const [index, entry] of summaries.entries()) {
+    const base = `/canonicalSummaries/${index}`;
+    if (!record(entry) || !record(entry.metrics)) return `${base}/metrics`;
+    // Every independently pinned metric key must be present: deleting an entry (or emptying `metrics`) is refused, not skipped.
+    for (const name of Object.keys(trusted.metrics)) if (!Object.hasOwn(entry.metrics, name)) return `${base}/metrics/${name}`;
+    for (const name of Object.keys(entry.metrics)) {
+      const metric = entry.metrics[name];
+      const own = Object.hasOwn(trusted.metrics, name) ? trusted.metrics[name] : undefined;
+      if (!record(metric) || !sameReference(metric.definition_ref, own)) return `${base}/metrics/${name}/definition_ref`;
+    }
+    if (!sameReference(entry.policy_ref, trusted.policy)) return `${base}/policy_ref`;
+  }
+  return undefined;
+}
+
+function wrapperPath(raw: Record<string, unknown>): string | undefined {
+  const { filters, watermark } = raw;
+  if (!record(filters)) return '/filters';
+  for (const key of ['environments', 'billingModes'] as const) if (!Array.isArray(filters[key]) || !filters[key].every(text)) return `/filters/${key}`;
+  if (!record(watermark)) return '/watermark';
+  if (typeof watermark.watermarkId !== 'string' || !HASH.test(watermark.watermarkId)) return '/watermark/watermarkId';
+  if (!text(watermark.capturedAt)) return '/watermark/capturedAt';
+  if (!Array.isArray(watermark.sources) || watermark.sources.length === 0) return '/watermark/sources';
+  for (const [index, source] of watermark.sources.entries()) {
+    const base = `/watermark/sources/${index}`;
+    if (!record(source)) return base;
+    for (const key of ['source', 'revision', 'observedThrough', 'completeness'] as const) if (!text(source[key])) return `${base}/${key}`;
+    if (typeof source.contentHash !== 'string' || !HASH.test(source.contentHash)) return `${base}/contentHash`;
+  }
+  return undefined;
+}
+
+/** Identity the host asked for, stated independently of the response. The browser only compares these strings for equality; it never computes or vouches for a hash. */
+export type FinanceV2ExpectedHashes = Readonly<{ queryContentHash?: string; summaryContentHash?: string; references?: FinanceV2TrustedReferences }>;
+
+/** `expectedScope` is the host's own opaque scope. `expectedSnapshotId` and `expected` are optional; when given, a different snapshot, hash or canonical reference is refused. */
 export function checkFinanceV2Page(raw: unknown, expectedScope: OpaqueProductScope, expectedSnapshotId?: string, expected: FinanceV2ExpectedHashes = {}): FinanceV2Check {
   if (!record(raw)) return refuse('INVALID_SHAPE', '/');
   if (raw.schemaVersion !== '2.0.0') return refuse('UNSUPPORTED_VERSION', '/schemaVersion');
+  // The pinned page schema is closed (`additionalProperties: false`) and requires all eighteen members: an invented top-level member is refused, never displayed.
+  for (const key of Object.keys(raw)) if (!PAGE_KEYS.has(key)) return refuse('INVALID_SHAPE', `/${key}`);
   if (!record(raw.scope)) return refuse('INVALID_SHAPE', '/scope');
   for (const key of SCOPE_KEYS) {
     if (!text(raw.scope[key])) return refuse('INVALID_SHAPE', `/scope/${key}`);
@@ -114,6 +173,10 @@ export function checkFinanceV2Page(raw: unknown, expectedScope: OpaqueProductSco
   if (expectedSnapshotId !== undefined && raw.snapshotId !== expectedSnapshotId) return refuse('SNAPSHOT_MISMATCH', '/snapshotId');
   if (expected.queryContentHash !== undefined && raw.queryContentHash !== expected.queryContentHash) return refuse('QUERY_HASH_MISMATCH', '/queryContentHash');
   if (expected.summaryContentHash !== undefined && raw.summaryContentHash !== expected.summaryContentHash) return refuse('SUMMARY_HASH_MISMATCH', '/summaryContentHash');
+  const legacy = legacyPath(raw.summary);
+  if (legacy) return refuse('LEGACY_PROPOSAL_SHAPE', legacy);
+  const wrapper = wrapperPath(raw);
+  if (wrapper) return refuse('INVALID_SHAPE', wrapper);
   const bad = summaryPath(raw.summary);
   if (bad) return refuse('INVALID_SHAPE', bad);
   if (!Array.isArray(raw.details)) return refuse('INVALID_SHAPE', '/details');
@@ -122,6 +185,8 @@ export function checkFinanceV2Page(raw: unknown, expectedScope: OpaqueProductSco
   if (!count(raw.detailCount)) return refuse('INVALID_SHAPE', '/detailCount');
   if (typeof raw.hasMore !== 'boolean') return refuse('INVALID_SHAPE', '/hasMore');
   if (raw.nextCursor !== null && typeof raw.nextCursor !== 'string') return refuse('INVALID_SHAPE', '/nextCursor');
+  if (!Array.isArray(raw.canonicalSummaries)) return refuse('INVALID_SHAPE', '/canonicalSummaries');
   if (raw.canonicalMappingStatus !== 'proposal_only_owner_ack_pending' && raw.canonicalMappingStatus !== 'unsupported_opaque_scope') return refuse('INVALID_SHAPE', '/canonicalMappingStatus');
+  if (expected.references !== undefined) { const mismatch = referencePath(raw.canonicalSummaries, expected.references); if (mismatch) return refuse('REFERENCE_MISMATCH', mismatch); }
   return { ok: true, page: raw as unknown as FinanceV2Page };
 }

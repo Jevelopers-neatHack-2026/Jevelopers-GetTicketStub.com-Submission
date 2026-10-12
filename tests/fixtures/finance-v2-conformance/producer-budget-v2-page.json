@@ -1,0 +1,214 @@
+{
+  "schemaVersion": "2.0.0",
+  "requestId": "synthetic-query",
+  "snapshotId": "sha256:afd6bfaff7b9b39c01760e21b67a15412f5116b88f3f931d87ba72763f65d884",
+  "queryContentHash": "sha256:bab15333c609c7ade7199175c8118e24e8e50095c5f56801f87faa70dfd2cb2a",
+  "summaryContentHash": "sha256:13900b597734b68c2480765eb4df038a7509b707b2798ff12f723392ba6a7f4a",
+  "asOf": "2026-10-12T22:00:01.000Z",
+  "timezone": "America/New_York",
+  "period": {
+    "start": "2026-10-10T00:00:00.000Z",
+    "end": "2026-10-11T00:00:00.000Z"
+  },
+  "scope": {
+    "tenantId": "7c30a51a-c065-472b-817e-3adf250e0880",
+    "projectId": "1f48d2f8-7496-40c2-8ee6-a7dd60528d58",
+    "actorId": "synthetic-reporting-service",
+    "environment": "test",
+    "billingMode": "live"
+  },
+  "filters": {
+    "environments": [
+      "test"
+    ],
+    "billingModes": [
+      "live"
+    ],
+    "currency": "USD"
+  },
+  "watermark": {
+    "watermarkId": "sha256:8816370996521b5acdff1f3750d489ec2f81a9930b672772bcb1bc38ffc506c7",
+    "capturedAt": "2026-10-12T22:00:01.000Z",
+    "sources": [
+      {
+        "source": "immutable_finance_inputs",
+        "revision": "ci08-reporting-policy-2.0.0",
+        "observedThrough": "2026-10-12T22:00:01.000Z",
+        "contentHash": "sha256:ee3702b12c5a5bcd27d40e2043b4b8951f7ce8538be21b3a6d351d4be539eebf",
+        "completeness": "unknown"
+      }
+    ]
+  },
+  "summary": {
+    "policyVersion": "ci08-reporting-policy-2.0.0",
+    "accountingPolicyVersion": "ci06-accounting-policy-1.0.0",
+    "definitionsStatus": "PENDING FINANCE-OWNER SIGN-OFF",
+    "currencies": [
+      {
+        "currency": "USD",
+        "scale": 18,
+        "metrics": {
+          "expense": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "grossSales": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "netSales": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "directCosts": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "contribution": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "cashReceipts": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "cashPayouts": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          }
+        },
+        "valuation": {
+          "estimated": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "confirmed": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "unknownCount": 0
+        },
+        "reconciliation": {
+          "matchedCount": 0,
+          "unmatchedCount": 0,
+          "exceptionCount": 0
+        },
+        "simulated": {
+          "expense": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "grossSales": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "netSales": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          },
+          "directCosts": {
+            "status": "unknown",
+            "knownSubtotal": null,
+            "total": null,
+            "unknownCount": 0
+          }
+        },
+        "groups": []
+      }
+    ],
+    "coverage": {
+      "status": "unknown",
+      "observed": 0,
+      "expected": null,
+      "unknownAmountCount": 0,
+      "unpostedAttemptCount": 0,
+      "awaitingEvidenceAttemptCount": 0,
+      "quarantinedObservationCount": 0,
+      "unsupportedEventCount": 0,
+      "missingSources": [
+        "expense",
+        "revenue",
+        "cash",
+        "approved_product_denominators"
+      ]
+    },
+    "budgets": [
+      {
+        "currency": "USD",
+        "window": "project_lifetime",
+        "policyReference": {
+          "id": "d8def504-7c33-4c2c-b33d-a428739d0dd4",
+          "revision": 1,
+          "contentHash": "sha256:122f70413f215f2cd0c897f6464d936a1b3c8f6038b642c88a9c714d64e1c583"
+        },
+        "limit": "1",
+        "ledgerExpense": "0",
+        "lifecycleConsumed": "0",
+        "held": "0.75",
+        "remainingAuthorizedCapacity": "0.25",
+        "unresolvedExposure": false,
+        "advisoryOnly": true
+      }
+    ],
+    "unitCosts": [
+      {
+        "kind": "design",
+        "currency": "USD",
+        "status": "unknown",
+        "numerator": null,
+        "denominator": null,
+        "approvalReference": null,
+        "allocationPolicyVersion": "ci06-allocation-policy-1.0.0"
+      },
+      {
+        "kind": "workflow",
+        "currency": "USD",
+        "status": "unknown",
+        "numerator": null,
+        "denominator": null,
+        "approvalReference": null,
+        "allocationPolicyVersion": "ci06-allocation-policy-1.0.0"
+      },
+      {
+        "kind": "order",
+        "currency": "USD",
+        "status": "unknown",
+        "numerator": null,
+        "denominator": null,
+        "approvalReference": null,
+        "allocationPolicyVersion": "ci06-allocation-policy-1.0.0"
+      }
+    ],
+    "allocations": []
+  },
+  "details": [],
+  "detailCount": 0,
+  "hasMore": false,
+  "nextCursor": null,
+  "canonicalSummaries": [],
+  "canonicalMappingStatus": "proposal_only_owner_ack_pending"
+}

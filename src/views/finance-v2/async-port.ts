@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { checkFinanceV2Page } from './check';
+import { checkFinanceV2Page, type FinanceV2TrustedReferences } from './check';
 import type { FinanceV2Input, FinanceV2Page, FinanceV2RefusalCode, OpaqueProductScope } from './types';
 
 /**
@@ -87,6 +87,8 @@ export type FinanceV2ReadOptions = Readonly<{
   expectedSnapshotId: string;
   expectedQueryContentHash: string;
   expectedSummaryContentHash: string;
+  /** References the host pinned independently of any page (for example from a digest-verified definition registry). Optional: with none, nothing is bound. */
+  expectedReferences?: FinanceV2TrustedReferences;
   authorization: FinanceV2Authorization;
   /** Ceiling for one read, default 15000 ms. On expiry the request is aborted and a late answer is dropped. */
   timeoutMs?: number;
@@ -118,14 +120,14 @@ function identityOf(value: unknown): number {
  */
 function identityKey(o: FinanceV2ReadOptions): string {
   const { scope } = o;
-  return JSON.stringify([o.mode, o.availability.status, scope.tenantId, scope.projectId, scope.environment, scope.billingMode, scope.actorId, o.expectedSnapshotId, o.expectedQueryContentHash, o.expectedSummaryContentHash, o.authorization.revision, identityOf(o.port)]);
+  return JSON.stringify([o.mode, o.availability.status, scope.tenantId, scope.projectId, scope.environment, scope.billingMode, scope.actorId, o.expectedSnapshotId, o.expectedQueryContentHash, o.expectedSummaryContentHash, o.expectedReferences ?? null, o.authorization.revision, identityOf(o.port)]);
 }
 
 function interpret(result: FinanceV2Input | null | undefined, o: FinanceV2ReadOptions): FinanceV2ReadState {
   if (typeof result !== 'object' || result === null) return { phase: 'unknown' };
   if (result.status === 'missing' || result.status === 'restricted' || result.status === 'unauthorized' || result.status === 'unknown') return { phase: result.status };
   if (result.status !== 'ready') return { phase: 'unknown' };
-  const checked = checkFinanceV2Page(result.page, o.scope, o.expectedSnapshotId, { queryContentHash: o.expectedQueryContentHash, summaryContentHash: o.expectedSummaryContentHash });
+  const checked = checkFinanceV2Page(result.page, o.scope, o.expectedSnapshotId, { queryContentHash: o.expectedQueryContentHash, summaryContentHash: o.expectedSummaryContentHash, ...(o.expectedReferences ? { references: o.expectedReferences } : {}) });
   return checked.ok ? { phase: 'ready', page: checked.page } : { phase: 'refused', code: checked.code, path: checked.path };
 }
 function fromFault(fault: FinanceV2Fault): FinanceV2ReadState {

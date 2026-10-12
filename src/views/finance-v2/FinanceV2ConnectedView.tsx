@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { FinanceV2View, type FinanceV2ViewName, type FinanceV2ViewProps } from './FinanceV2Views';
 import { FINANCE_V2_FAULT_COPY, useFinanceV2Read, type FinanceV2Authorization, type FinanceV2HostAvailability, type FinanceV2SyntheticReadPort } from './async-port';
+import type { FinanceV2TrustedReferences } from './check';
 import type { OpaqueProductScope } from './types';
 
 type Shared = Readonly<{
@@ -12,6 +13,8 @@ type Shared = Readonly<{
   expectedSnapshotId: string;
   expectedQueryContentHash: string;
   expectedSummaryContentHash: string;
+  /** References the host pinned independently of the response (for example from a digest-verified definition registry). */
+  expectedReferences?: FinanceV2TrustedReferences;
   authorization: FinanceV2Authorization;
   timeoutMs?: number;
 }> & Pick<FinanceV2ViewProps, 'detailId' | 'detailHref' | 'listHref' | 'onNavigate' | 'filters' | 'onFiltersChange'>;
@@ -47,6 +50,7 @@ export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
   const { state, retry } = useFinanceV2Read({
     mode: props.mode, port: props.port, availability: props.availability, scope: props.scope, expectedSnapshotId: props.expectedSnapshotId,
     expectedQueryContentHash: props.expectedQueryContentHash, expectedSummaryContentHash: props.expectedSummaryContentHash, authorization: props.authorization,
+    ...(props.expectedReferences ? { expectedReferences: props.expectedReferences } : {}),
     ...(props.timeoutMs !== undefined ? { timeoutMs: props.timeoutMs } : {}),
   });
   // Retry focus: the Retry button unmounts when loading starts, which would drop focus to <body>. After a retry, focus moves to the heading of the
@@ -77,7 +81,7 @@ export function FinanceV2ConnectedView(props: FinanceV2ConnectedViewProps) {
       <dl><div><dt>Refusal code</dt><dd>{state.code}</dd></div><div><dt>Refusal path</dt><dd>{state.path}</dd></div></dl></section>);
     case 'ready':
       return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view={props.view} input={{ status: 'ready', page: state.page }} expectedScope={props.scope} expectedSnapshotId={props.expectedSnapshotId}
-        expectedQueryContentHash={props.expectedQueryContentHash} expectedSummaryContentHash={props.expectedSummaryContentHash}
+        expectedQueryContentHash={props.expectedQueryContentHash} expectedSummaryContentHash={props.expectedSummaryContentHash} {...(props.expectedReferences ? { expectedReferences: props.expectedReferences } : {})}
         {...(props.detailId !== undefined ? { detailId: props.detailId } : {})} {...(props.detailHref ? { detailHref: props.detailHref } : {})} {...(props.listHref ? { listHref: props.listHref } : {})}
         {...(props.onNavigate ? { onNavigate: props.onNavigate } : {})} {...(props.filters ? { filters: props.filters } : {})} {...(props.onFiltersChange ? { onFiltersChange: props.onFiltersChange } : {})} />;
     default:

@@ -4,14 +4,15 @@ import { Dashboard, FinancialSummaryView, FinanceV2ConnectedView, evaluateFinanc
 import { routeHref } from '@jevelopers/team-dashboard/integration';
 import '@jevelopers/team-dashboard/style.css';
 import { ComponentExamples } from './component-examples';
-import { fixtureFinanceV2Port, portBehaviors, syntheticQueryContentHash, syntheticSummaryContentHash, type FixturePortLog, type PortBehavior } from './finance-v2-port';
-import { authorizedFixture, financeV2Fixture, financeV2FixtureNames, fixtureProvider, fixtureStates, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type FinanceV2FixtureName, type FixtureState, type SummaryFixtureName } from './host';
+import { fixtureFinanceV2Port, portBehaviors, type FixturePortLog, type PortBehavior } from './finance-v2-port';
+import { authorizedFixture, fixtureProvider, fixtureStates, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type FixtureState, type SummaryFixtureName } from './host';
+import { hostFixture, hostFixtureNames, type HostFixtureName } from './conformance';
 const params = new URLSearchParams(window.location.search);
 const requestedSummary = params.get('summary');
 const summaryName = summaryFixtureNames.find((name) => name === requestedSummary) as SummaryFixtureName | undefined;
 /** Explicit SYNTHETIC_PROPOSAL fixture mode for the Finance v2 views: `?v2=<fixture>` on the budgets, ai-costs, transactions and transaction detail routes only. */
 const requestedV2 = params.get('v2');
-const v2Name = financeV2FixtureNames.find((name) => name === requestedV2) as FinanceV2FixtureName | undefined;
+const v2Name = hostFixtureNames.find((name) => name === requestedV2) as HostFixtureName | undefined;
 /** Fixture-host-only scripting of the injected read port: `v2port=<behavior>` (or `none` for no port), `v2mode=integrated`, `v2timeout=<ms>`. */
 const requestedBehavior = params.get('v2port');
 const noV2Port = requestedBehavior === 'none';
@@ -72,7 +73,7 @@ function FixtureHost() {
     <main><Dashboard basePath={configuredBase} pathname={pathname} navigate={navigate}
       access={authenticated ? authorizedFixture : { status: 'restricted' }} provider={connected ? provider : undefined}
       renderRoute={({ data, route }) => v2Name && !examples && Object.hasOwn(v2Views, route.id) ? (() => {
-        const fixture = financeV2Fixture(v2Name);
+        const fixture = hostFixture(v2Name);
         // The URL query is the durable context: fixture, boundary state and transaction filters. Detail and return hrefs carry all of it, so reload, deep link and Back keep the same snapshot and filters.
         const context = search.toString() ? `?${search.toString()}` : '';
         const filters = { valuation: search.get('valuation') ?? 'all', currency: search.get('currency') ?? 'all' };
@@ -83,7 +84,8 @@ function FixtureHost() {
         };
         const scope = v2Actor === 'a' ? fixture.expectedScope : { ...fixture.expectedScope, actorId: 'account:synthetic-actor-b' };
         const shared = { view: v2Views[route.id]!, availability: v2Available ? { status: 'available' } as const : { status: 'refused', reason: 'restricted' } as const, scope, authorization: v2Authorization,
-          expectedSnapshotId: fixture.expectedSnapshotId, expectedQueryContentHash: syntheticQueryContentHash, expectedSummaryContentHash: syntheticSummaryContentHash,
+          expectedSnapshotId: fixture.expectedSnapshotId, expectedQueryContentHash: fixture.expectedQueryContentHash, expectedSummaryContentHash: fixture.expectedSummaryContentHash,
+          ...(fixture.expectedReferences ? { expectedReferences: fixture.expectedReferences } : {}),
           ...(v2Timeout ? { timeoutMs: v2Timeout } : {}),
           ...(route.params.id ? { detailId: route.params.id } : {}), detailHref: (id: string) => routeHref(configuredBase, 'transaction-detail', { id }) + context, listHref: routeHref(configuredBase, 'transactions') + context,
           onNavigate: navigate, filters, onFiltersChange: changeFilters };
