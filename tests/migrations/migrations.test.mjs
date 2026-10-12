@@ -139,7 +139,7 @@ async function verifyDurability(prefix) {
     assertDisposableMarker(marker.rows);
     const health = await client.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 8);
+    assert.equal(Number(health.rows[0].required_migrations_present), 9);
     await client.query('CREATE TABLE IF NOT EXISTS ci_test.foundation_durable_probe (probe_id uuid PRIMARY KEY, payload text NOT NULL)');
     await client.query('INSERT INTO ci_test.foundation_durable_probe(probe_id, payload) VALUES ($1, $2)', [probeId, `verified:${prefix}`]);
   } finally {
@@ -520,7 +520,7 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
   assert.equal(hasDestructiveMigrationStatement(
     'ALTER TABLE cost_intelligence.financial_projection_quantities DROP CONSTRAINT financial_projection_quantities_key;',
     [{ schema: 'cost_intelligence', table: 'financial_projection_quantities', constraint: 'financial_projection_quantities_key' }],
-  ), false, '0008 may replace only the projection identity constraint to retain included-parent fidelity');
+  ), false, '0009 may replace only the projection identity constraint to retain included-parent fidelity');
   assert.equal(hasDestructiveMigrationStatement(
     'ALTER TABLE cost_intelligence.financial_projection_snapshots DROP CONSTRAINT financial_projection_quantities_key;',
     [{ schema: 'cost_intelligence', table: 'financial_projection_quantities', constraint: 'financial_projection_quantities_key' }],
@@ -544,7 +544,8 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     { version: '0005_pricing_valuation_history', status: 'applied' },
     { version: '0006_finance_security_roles', status: 'applied' },
     { version: '0007_accounting_projection_snapshots', status: 'applied' },
-    { version: '0008_usage_intake', status: 'applied' },
+    { version: '0008_budget_reservations', status: 'applied' },
+    { version: '0009_usage_intake', status: 'applied' },
   ]);
 
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
@@ -552,9 +553,9 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     '0001_foundation.sql', '0002_foundation_health.sql', '0003_financial_ledger.sql',
     '0004_pricing_catalog.sql', '0005_pricing_valuation_history.sql',
     '0006_finance_security_roles.sql', '0007_accounting_projection_snapshots.sql',
-    '0008_usage_intake.sql',
-  ], 'the current migration set is additive through accounting projections and usage intake and preserves every earlier migration');
-  assert.equal(names.length, 8, 'foundation migration suite must exercise fresh creation, additive upgrades, the accounting projection migration, and usage intake');
+    '0008_budget_reservations.sql', '0009_usage_intake.sql',
+  ], 'the current migration set is additive through accounting projections, budget reservations, and usage intake and preserves every earlier migration');
+  assert.equal(names.length, 9, 'foundation migration suite must exercise fresh creation, an additive security upgrade, the additive accounting projection and CI-05A budget reservation migrations, and usage intake');
   for (const prefix of ['CI_TEST_DB', 'CI_TEST_PREVIOUS_DB']) {
     const client = new Client(databaseConfigFromEnvironment(prefix));
     await client.connect();
@@ -565,7 +566,7 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       assert.equal(records.rowCount, names.length);
       for (let index = 0; index < names.length; index++) {
         const sql = await readFile(join(root, 'migrations', names[index]), 'utf8');
-        const safeConstraintReplacements = names[index] === '0008_usage_intake.sql'
+        const safeConstraintReplacements = names[index] === '0009_usage_intake.sql'
           ? [{ schema: 'cost_intelligence', table: 'financial_projection_quantities', constraint: 'financial_projection_quantities_key' }]
           : [];
         assert.equal(hasDestructiveMigrationStatement(sql, safeConstraintReplacements), false,
@@ -900,7 +901,7 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
 test('0006 rejects pre-existing runtime role graphs and ACL escalation before a restricted-login upgrade', async () => {
   assert.ok(process.env.CI_TEST_DB_HOST, 'role-upgrade audit requires the disposable PostgreSQL harness');
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
-  assert.equal(names.length, 8);
+  assert.equal(names.length, 9);
   const migrationName = names[5];
   assert.equal(migrationName, '0006_finance_security_roles.sql', 'the security preflight continues to target the frozen 0006 migration');
   const { name, base, config } = await createPre0006Database();
@@ -2063,12 +2064,13 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
   }
 });
 
-test('separate migration login applies 0007 accounting and 0008 usage intake to an existing 0006 database without widening runtime grants', async () => {
+test('separate migration login applies 0007 accounting, 0008 budget reservations, and 0009 usage intake to an existing 0006 database without widening runtime grants', async () => {
   assert.ok(process.env.CI_TEST_DB_HOST, 'migration-role upgrade requires the disposable PostgreSQL harness');
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
   assert.equal(names[5], '0006_finance_security_roles.sql');
   assert.equal(names[6], '0007_accounting_projection_snapshots.sql');
-  assert.equal(names[7], '0008_usage_intake.sql');
+  assert.equal(names[7], '0008_budget_reservations.sql');
+  assert.equal(names[8], '0009_usage_intake.sql');
   const { name, base, config } = await createPre0006Database();
   let installer;
   let migrator;
@@ -2127,7 +2129,7 @@ test('separate migration login applies 0007 accounting and 0008 usage intake to 
     const health = await migrator.query(
       'SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health',
     );
-    assert.deepEqual(health.rows[0], { migrations_ready: true, required_migrations_present: 8 });
+    assert.deepEqual(health.rows[0], { migrations_ready: true, required_migrations_present: 9 });
     const intakeProjectionColumns = await migrator.query(
       `SELECT table_name, column_name FROM information_schema.columns
        WHERE table_schema='cost_intelligence' AND (
@@ -2145,7 +2147,7 @@ test('separate migration login applies 0007 accounting and 0008 usage intake to 
       'financial_projection_snapshots.unknown_economic_exposure_count',
       'financial_projection_snapshots.unposted_attempt_count',
       'usage_intake_inbox.attempt_revision_accepted',
-    ], 'additive 0008 migration exposes durable unresolved exposure and parent lineage fields');
+    ], 'additive 0009 migration exposes durable unresolved exposure and parent lineage fields');
     const quantityKey = await migrator.query(
       `SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
        WHERE conrelid='cost_intelligence.financial_projection_quantities'::regclass
@@ -2179,7 +2181,7 @@ test('separate migration login applies 0007 accounting and 0008 usage intake to 
 
 test('legacy financial privacy upgrade preserves immutable economics and fails affected scopes closed', async () => {
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
-  assert.equal(names.length, 8);
+  assert.equal(names.length, 9);
   assert.equal(names[5], '0006_finance_security_roles.sql', 'privacy and role-boundary upgrade remains explicitly fixed at 0006');
   const { name, base, config } = await createPre0006Database();
   let admin;

@@ -758,3 +758,93 @@ test('PostgreSQL ledger reads and writes recheck current grants and preserve ten
     await pool.end().catch(() => {});
   }
 });
+
+// CI-05A: the PostgreSQL-backed budget reservation engine rechecks the current
+// grant, enforces tenant isolation under forced RLS, and keeps the restricted
+// runtime append-only on the budget surface.
+test('CI-05A PostgreSQL budget reservations recheck grants and isolate tenants', async () => {
+  const { authorizeReservation, changeBudgetPolicy } = await import('../../dist/index.js');
+  assert.ok(process.env.CI_TEST_DB_RUNTIME_HOST, 'budget security coverage requires the restricted disposable PostgreSQL role');
+  const pool = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), max: 6 });
+  const clock = { now: () => new Date(now) };
+  const reserve = JSON.parse(await readFile(join(sharedFixtureRoot, 'ReserveRequest.json'), 'utf8')).valid;
+  const tenantA = safeScope({ ...scope, tenantId: randomUUID(), projectId: randomUUID(), actorId: 'ci05a-budget-service-a' });
+  const tenantB = safeScope({ ...scope, tenantId: randomUUID(), projectId: randomUUID(), actorId: 'ci05a-budget-service-b' });
+  let active = true;
+  const portsFor = expectedScope => ({
+    database: { connect: async () => pool.connect() },
+    trustedContext: { resolve: async requested => requested }, clock,
+    financeAuthority: { authorizeCurrent: async request => {
+      if (!active || JSON.stringify(request.requestedScope) !== JSON.stringify(expectedScope)) {
+        return { status: 'denied', decisionId: 'ci05a-revoked-or-foreign', operation: request.operation, permission: request.permission };
+      }
+      return allowedDecision(request, { principalKind: 'service' });
+    } },
+  });
+  function reservationRequestFor(targetScope, policyRef) {
+    const idem = `ci05a-sec-${randomUUID()}`;
+    return {
+      schemaVersion: '1.0.0', requestId: randomUUID(), idempotencyKey: idem, scope: targetScope,
+      canonicalRequest: {
+        ...structuredClone(reserve), tenant_id: targetScope.tenantId, project_id: targetScope.projectId,
+        environment: targetScope.environment, billing_mode: targetScope.billingMode, currency: 'USD',
+        idempotency_key: idem, request_id: randomUUID(), correlation_id: randomUUID(), event_id: randomUUID(),
+        budget_scope_id: randomUUID(), logical_operation_id: randomUUID(), billable_attempt_id: randomUUID(),
+        requested: { amount: '0.25', currency: 'USD', scale: 2 },
+        policy_ref: policyRef ?? reserve.policy_ref,
+      },
+      estimate: { completeness: 'complete', knownSubtotal: '0.25', currency: 'USD', rateCardRef: null, missingDimensions: [] },
+      allowPartialAuthorization: false,
+      attemptBinding: { logicalOperationId: `logical-${randomUUID()}`, transportAttemptId: 't', providerRequestId: null, providerAttemptId: 'p', billableAttemptId: `billable-${randomUUID()}` },
+    };
+  }
+  function policyFor(targetScope) {
+    return {
+      schemaVersion: '1.0.0', requestId: randomUUID(), idempotencyKey: `ci05a-pol-${randomUUID()}`, scope: targetScope,
+      currency: 'USD', limitAmount: '5.00', expectedPolicyRevision: 0,
+      actorReference: 'ci05a-controller', reasonReference: 'ci05a-security',
+      sourceAuthorityRef: versionedRef('cost-intelligence.authority', randomUUID()),
+    };
+  }
+  try {
+    const policy = await changeBudgetPolicy(policyFor(tenantA), portsFor(tenantA));
+    assert.equal(policy.ok, true, policy.ok ? '' : policy.error.code);
+    const policyRef = policy.value.policyRef;
+    const authorizedRequest = reservationRequestFor(tenantA, policyRef);
+    const authorized = await authorizeReservation(authorizedRequest, portsFor(tenantA));
+    assert.equal(authorized.ok, true, authorized.ok ? '' : authorized.error.code);
+    assert.equal(authorized.value.status, 'authorized');
+
+    // A stale/foreign canonical policy reference and a conflicting replay of a used key are typed failures.
+    const stalePolicy = await authorizeReservation(reservationRequestFor(tenantA), portsFor(tenantA));
+    assert.equal(stalePolicy.ok, false);
+    if (!stalePolicy.ok) assert.equal(stalePolicy.error.code, 'VALIDATION_ERROR');
+    const conflicting = structuredClone(authorizedRequest);
+    conflicting.attemptBinding.billableAttemptId = `billable-${randomUUID()}`;
+    const conflict = await authorizeReservation(conflicting, portsFor(tenantA));
+    assert.equal(conflict.ok, false);
+    if (!conflict.ok) assert.equal(conflict.error.code, 'IDEMPOTENCY_CONFLICT');
+
+    // Forced RLS hides budget rows from an unbound runtime transaction.
+    const rawRows = await pool.query('SELECT reservation_id FROM cost_intelligence.budget_reservation_events LIMIT 20');
+    assert.equal(rawRows.rows.length, 0, 'RLS denies budget rows without a bound authorized scope');
+
+    // The restricted runtime can never mutate or truncate the append-only budget log.
+    await assert.rejects(pool.query('UPDATE cost_intelligence.budget_reservation_events SET held_amount = held_amount'), error => error.code === '42501');
+    await assert.rejects(pool.query('DELETE FROM cost_intelligence.budget_reservation_events'), error => error.code === '42501');
+    await assert.rejects(pool.query('TRUNCATE cost_intelligence.budget_reservation_events'), error => error.code === '42501');
+
+    // A foreign-tenant scope is denied by the current authority before any hold.
+    const foreign = await authorizeReservation(reservationRequestFor(tenantB), portsFor(tenantA));
+    assert.equal(foreign.ok, false);
+    if (!foreign.ok) assert.equal(foreign.error.code, 'FORBIDDEN_SCOPE');
+
+    // Revocation blocks a subsequent identical authorization.
+    active = false;
+    const revoked = await authorizeReservation(reservationRequestFor(tenantA, policyRef), portsFor(tenantA));
+    assert.equal(revoked.ok, false);
+    if (!revoked.ok) assert.equal(revoked.error.code, 'FORBIDDEN_SCOPE');
+  } finally {
+    await pool.end().catch(() => {});
+  }
+});

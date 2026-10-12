@@ -30,15 +30,15 @@ The database unique constraints and transaction lock are the concurrency authori
 
 ## Incomplete usage, cumulative snapshots, and valuation
 
-Unknown valuation keeps `money: null`; missing usage keeps `usage_units: null` and its explicit completeness/missing-field state. When no currency can be identified, the intake holds that observation as `awaiting_evidence`; the ledger schema requires a currency and cannot represent a currencyless unknown line. The authoritative `LedgerProjectionSchema` exposes an optional `unresolvedIntake` summary with unknown economic exposure, quarantined observation, awaiting-evidence attempt, and unposted attempt counts. On a complete current 0008 schema, counts are derived from durable, scope-bound intake facts and privacy-safe quarantine hashes at the requested as-of time, then stored in the immutable projection snapshot. A genuine pre-intake ledger schema (migrations through 0007) omits this optional summary to show intake coverage is unavailable; any partial 0008 schema fails projection with `SOURCE_UNAVAILABLE`. No amount, currency, provider confirmation, or attempt ID is invented, and unresolved exposure is never represented as zero.
+Unknown valuation keeps `money: null`; missing usage keeps `usage_units: null` and its explicit completeness/missing-field state. When no currency can be identified, the intake holds that observation as `awaiting_evidence`; the ledger schema requires a currency and cannot represent a currencyless unknown line. The authoritative `LedgerProjectionSchema` exposes an optional `unresolvedIntake` summary with unknown economic exposure, quarantined observation, awaiting-evidence attempt, and unposted attempt counts. On a complete current 0009 schema, counts are derived from durable, scope-bound intake facts and privacy-safe quarantine hashes at the requested as-of time, then stored in the immutable projection snapshot. A genuine pre-intake ledger schema (migrations through 0008) omits this optional summary to show intake coverage is unavailable; any partial 0009 schema fails projection with `SOURCE_UNAVAILABLE`. No amount, currency, provider confirmation, or attempt ID is invented, and unresolved exposure is never represented as zero.
 
 A later observation updates the attempt head only when it explicitly names the current source observation in `supersedes_observation_id`. The finance ledger appends a correction on the same source line and mapping; projections select the current revision, so an estimate replaced by provider-confirmed evidence is not added twice. An older observation arriving after the final observation is retained and suppressed without moving the head. Projection quantity rows carry `includedIn` and aggregate by unit, relation, and parent measure, so cache and reasoning subsets remain distinct from their containing totals. Coding-session cumulative snapshots that lack genuine attempt identity are rejected or quarantined rather than assigned a charge ID.
 
 `evidenceMode`, `verificationStatus`, and valuation basis remain separate labels. Their presence does not independently establish a provider charge or authenticated producer. Price-bearing events preserve the pinned rate-card reference; there is no pricing lookup or provider call during intake.
 
-## Existing 0006 migration-role handoff (to 0008)
+## Existing 0006 migration-role handoff (to 0009)
 
-The frozen 0006 migration leaves `schema_migrations` and `foundation_health` owned by the database installer, even though it creates `ci_finance_owner` and `ci_finance_migrator`. PostgreSQL requires ownership of the existing view to replace its definition and write access to record the new checksum. Before a dedicated migration login applies 0007 (accounting projection snapshots) and 0008 (usage intake) to a database already at 0006, the database owner must perform this one-time ownership handoff:
+The frozen 0006 migration leaves `schema_migrations` and `foundation_health` owned by the database installer, even though it creates `ci_finance_owner` and `ci_finance_migrator`. PostgreSQL requires ownership of the existing view to replace its definition and write access to record the new checksum. Before a dedicated migration login applies 0007 (accounting projection snapshots), 0008 (budget reservations) and 0009 (usage intake) to a database already at 0006, the database owner must perform this one-time ownership handoff:
 
 ```sql
 ALTER TABLE cost_intelligence.schema_migrations OWNER TO ci_finance_owner;
@@ -46,9 +46,9 @@ ALTER VIEW cost_intelligence.foundation_health OWNER TO ci_finance_owner;
 GRANT EXECUTE ON FUNCTION cost_intelligence.reject_ledger_projection_mutation() TO ci_finance_owner;
 ```
 
-The `GRANT` is needed because 0007 attaches append-only triggers that use the installer-owned 0003 function, and 0006 revokes `PUBLIC` execute on it; the owner role must hold `EXECUTE` to create those triggers. 0007 itself is unchanged.
+The `GRANT` is needed because 0007 and 0008 attach append-only triggers that use the installer-owned 0003 function, and 0006 revokes `PUBLIC` execute on it; the owner role must hold `EXECUTE` to create those triggers. The incoming 0007 and 0008 migrations are unchanged.
 
-The separate login can then assume `ci_finance_migrator`, followed by `ci_finance_owner`, apply each of 0007 and 0008, and record each checksum in the same transaction as that migration. This keeps the runtime role without DDL, owner, or migration-history privileges. The PostgreSQL migration test exercises that exact 0006-to-0008 path and confirms the runtime grants remain restricted.
+The separate login can then assume `ci_finance_migrator`, followed by `ci_finance_owner`, apply each of 0007, 0008 and 0009, and record each checksum in the same transaction as that migration. This keeps the runtime role without DDL, owner, or migration-history privileges. The PostgreSQL migration test exercises that exact 0006-to-0009 path and confirms the runtime grants remain restricted.
 
 ## Runtime and local evidence
 

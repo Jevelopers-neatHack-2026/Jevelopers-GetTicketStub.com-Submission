@@ -1449,10 +1449,10 @@ async function inspectIntakeProjectionCapability(client: LedgerTransactionPort):
   const unresolvedCountColumnCount = Number(schema.unresolved_count_columns);
   const hasAnyProjectionExtension = hasIncludedIn || unresolvedCountColumnCount > 0;
   const migrationCount = Number(health.required_migrations_present);
-  const currentCapabilityDetected = migrationCount >= 8 || hasAnyIntakeTable || hasAnyProjectionExtension;
+  const currentCapabilityDetected = migrationCount >= 9 || hasAnyIntakeTable || hasAnyProjectionExtension;
 
-  if (!currentCapabilityDetected && migrationCount >= 3 && migrationCount <= 7) return 'legacy';
-  if (migrationCount !== 8 || !hasAllIntakeTables || !hasIncludedIn || unresolvedCountColumnCount !== 4) {
+  if (!currentCapabilityDetected && migrationCount >= 3 && migrationCount <= 8) return 'legacy';
+  if (migrationCount !== 9 || !hasAllIntakeTables || !hasIncludedIn || unresolvedCountColumnCount !== 4) {
     throw new Error('Usage intake projection capability is incomplete.');
   }
 

@@ -197,7 +197,7 @@ async function applyCapabilityMigration(client, name) {
   }
 }
 
-// `through` is the number of migrations applied: 6 (legacy), 7 (accounting), or 8 (usage intake).
+// `through` is the number of migrations applied: 6 (legacy), 7 (accounting), 8 (budget reservations), or 9 (usage intake).
 async function createProjectionCapabilityDatabase(through) {
   const base = databaseConfigFromEnvironment('CI_TEST_DB');
   const name = `ci04a_projection_${randomUUID().replaceAll('-', '')}`;
@@ -369,8 +369,8 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     assert.equal(postgresVersion.slice(0, 2), '16', 'ledger acceptance must run on PostgreSQL 16');
     const health = await pool.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 8,
-      'the additive pricing history, accounting projection, and usage intake migrations extend the complete foundation set');
+    assert.equal(Number(health.rows[0].required_migrations_present), 9,
+      'the additive pricing history, accounting projection, CI-05A budget reservation, and usage intake migrations extend the complete foundation set');
 
     const scope = makeScope('union');
     const eventCases = [
@@ -1917,7 +1917,7 @@ test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage
   }
 });
 
-for (const [through, label] of [[6, '0006'], [7, '0007 accounting']]) test(`legacy ledger-only ${label} projection omits unavailable intake coverage and preserves its content address`, async () => {
+for (const [through, label] of [[6, '0006'], [7, '0007 accounting'], [8, '0008 budget reservations']]) test(`legacy ledger-only ${label} projection omits unavailable intake coverage and preserves its content address`, async () => {
   let database;
   let runtime;
   let observer;
@@ -1982,12 +1982,12 @@ for (const [through, label] of [[6, '0006'], [7, '0007 accounting']]) test(`lega
   }
 });
 
-test('partial current 0008 tables or columns fail projection without hiding unknown intake exposure', async () => {
+test('partial current 0009 tables or columns fail projection without hiding unknown intake exposure', async () => {
   let database;
   let runtime;
   let observer;
   try {
-    database = await createProjectionCapabilityDatabase(8);
+    database = await createProjectionCapabilityDatabase(9);
     runtime = new Pool({ ...runtimeDatabaseConfigFromEnvironment(), database: database.name, max: 3 });
     observer = new Client({ ...databaseConfigFromEnvironment('CI_TEST_DB'), database: database.name });
     await observer.connect();
@@ -2033,7 +2033,7 @@ test('partial current 0008 tables or columns fail projection without hiding unkn
       assert.deepEqual(authoritative.value.unresolvedIntake, {
         unknownEconomicExposureCount: 1, quarantinedObservationCount: 0,
         awaitingEvidenceAttemptCount: 1, unpostedAttemptCount: 1,
-      }, 'the authoritative current-0008 projection exposes durable unknown economic exposure as of the observation');
+      }, 'the authoritative current-0009 projection exposes durable unknown economic exposure as of the observation');
     }
     const authoritativeSnapshot = await observer.query(
       `SELECT unknown_economic_exposure_count, quarantined_observation_count,
@@ -2058,7 +2058,7 @@ test('partial current 0008 tables or columns fail projection without hiding unkn
 
     await observer.query('ALTER TABLE cost_intelligence.usage_intake_inbox DROP COLUMN provenance_sha256');
     const missingColumnResult = await rebuildLedgerProjection(projectionRequest('missing-intake-column'), ports);
-    assert.equal(missingColumnResult.ok, false, 'a missing 0008 source-fact column cannot pass as a complete intake projection');
+    assert.equal(missingColumnResult.ok, false, 'a missing 0009 source-fact column cannot pass as a complete intake projection');
     if (!missingColumnResult.ok) assert.equal(missingColumnResult.error.code, 'SOURCE_UNAVAILABLE');
 
     const after = await observer.query(
