@@ -31,7 +31,13 @@ The CI phase `pp16-bundle-handoff` fails unless every variant's observed outcome
 matches (owner `verifyProductionBundleFiles` and the independent
 roster/length/SHA-256 reference check, which also covers the control files).
 `trusted-commitment.json` is the owner verifier's trusted input, not a payload,
-so it is outside the pinned inventory.
+so it is outside `baseline_inventory` and the variants. The complete
+`ProductionBundleRef` (bundle_ref, file_set, detached_ref, row scope,
+composition_ref, eligibility) is passed unchanged to the owner verifier. Its own
+exact name, length and SHA-256 are pinned in `CORPUS.json` `control_inventory`
+(role `owner-verifier-trusted-commitment`): a consumer should verify those bytes
+before using it as the trust anchor. It is produced by the same synthetic export and
+carries no more authority than the bundle (`handoff_eligible:false`).
 
 ## Reproduce
 

@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
 	buildCorpus,
 	buildVariants,
@@ -28,6 +29,14 @@ const lineage = {
 	canonical_usage_intake: "unavailable",
 	finance_receipt: null,
 };
+const commitment = {
+	bundle_ref: { id: "b" },
+	file_set: [{ filename: "output.png" }],
+	detached_ref: { id: "d" },
+	row_scope: null,
+	composition_ref: { id: "c" },
+	eligibility: { handoff_eligible: false },
+};
 const baseline = (overrides: Record<string, unknown> = {}): CorpusFile[] => [
 	{ name: "output.png", bytes: Uint8Array.from([1, 2, 3, 4]) },
 	{ name: "output.svg", bytes: text("<svg/>") },
@@ -37,7 +46,7 @@ const baseline = (overrides: Record<string, unknown> = {}): CorpusFile[] => [
 	{ name: "archive.zip", bytes: Uint8Array.from([9, 9, 9]) },
 	{
 		name: "trusted-commitment.json",
-		bytes: text({ eligibility: { handoff_eligible: false } }),
+		bytes: text(commitment),
 	},
 ];
 const withoutCommitment = (files: CorpusFile[]) =>
@@ -127,4 +136,50 @@ test("refuses lineage that claims acceptance, usage intake or finance receipts",
 				runtime,
 			),
 		);
+});
+
+test("passes the complete trusted commitment to the owner verifier and pins its bytes separately", () => {
+	const received: unknown[] = [];
+	const corpus = buildCorpus(
+		{ bundle: baseline(), revision: "r" },
+		null,
+		(_files, _scope, trusted) => {
+			received.push(trusted);
+			return { ok: true, detail: "stub" };
+		},
+		runtime,
+	);
+	assert.equal(received.length, corpus.variants.length);
+	for (const trusted of received) assert.deepEqual(trusted, commitment);
+	const bytes = text(commitment);
+	assert.deepEqual(corpus.control_inventory, [
+		{
+			name: "trusted-commitment.json",
+			length: bytes.byteLength,
+			sha256: createHash("sha256").update(bytes).digest("hex"),
+			role: "owner-verifier-trusted-commitment",
+		},
+	]);
+	assert.ok(
+		!corpus.baseline_inventory.some(
+			(e) => e.name === "trusted-commitment.json",
+		),
+	);
+});
+
+test("refuses a trusted commitment that is not explicitly ineligible", () => {
+	const eligible = baseline().map((f) =>
+		f.name === "trusted-commitment.json"
+			? {
+					name: f.name,
+					bytes: text({
+						...commitment,
+						eligibility: { handoff_eligible: true },
+					}),
+				}
+			: f,
+	);
+	assert.throws(() =>
+		buildCorpus({ bundle: eligible, revision: "r" }, null, accept, runtime),
+	);
 });

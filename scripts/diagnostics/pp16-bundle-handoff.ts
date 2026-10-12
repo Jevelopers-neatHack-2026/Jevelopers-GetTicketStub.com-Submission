@@ -193,7 +193,14 @@ export function buildCorpus(
 	};
 	const manifest = scopeSchema.parse(find("manifest.json"));
 	lineageSchema.parse(find("lineage.json"));
-	const commitment = commitmentSchema.parse(find("trusted-commitment.json"));
+	// Keep the complete owner ProductionBundleRef: the verifier needs file_set,
+	// detached_ref, bundle_ref etc. The schema only asserts the ineligible flag.
+	const commitment = find("trusted-commitment.json");
+	const eligibility = commitmentSchema.parse(commitment).eligibility;
+	const commitmentFile = input.bundle.find(
+		(f) => f.name === "trusted-commitment.json",
+	);
+	if (!commitmentFile) throw new Error("Bundle lacks trusted-commitment.json.");
 	if (manifest.usage_refs.length !== 0)
 		throw new Error("usage_refs must be empty.");
 	// The trusted commitment is a control for the owner verifier, not a payload.
@@ -256,7 +263,12 @@ export function buildCorpus(
 		],
 		limitations,
 		conforms: results.every((r) => r.conforms),
-		eligibility_recorded: commitment.eligibility,
+		eligibility_recorded: eligibility,
+		// Verifier input, kept out of the payload variants but pinned byte-exactly.
+		control_inventory: inventoryOf([commitmentFile]).map((entry) => ({
+			...entry,
+			role: "owner-verifier-trusted-commitment",
+		})),
 	};
 }
 
