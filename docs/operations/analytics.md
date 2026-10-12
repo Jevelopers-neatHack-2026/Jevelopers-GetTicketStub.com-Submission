@@ -260,6 +260,7 @@ destination is GA4 for all of them.
 | `public_wall_select` | share | custom | `rank`: int 0–100 | — | `app/u/[token]/PublicWall.tsx` | Public wall item opened (rank) |
 | `gift_unwrap` | share | custom | — | — | `app/s/[token]/MemoryPage.tsx` | Gift unwrap animation completed |
 | `story_export` | share | custom | `action`: download; `result`: generated\|failed | — | `app/s/[token]/MemoryPage.tsx` | Story image generated for download (initiation, not proof of saving) |
+| `stub_download` | share | custom | `side`: front\|back; `context`: editor\|lamp\|memory; `method`: download\|share\|tab\|cancelled\|none; `result`: generated\|failed; `error_code`: enum(42) | — | `customer/studio/download/DownloadStub.tsx` | The stub as a PNG: image generated (or failed) and how it was handed over. Not proof the file was kept |
 | `memory_photo_remove` | share | custom | `photo_count`: int 0–1000; `storage`: ok\|failed | — | `app/s/[token]/MemoryPage.tsx` | Memory-page photo removed |
 | `stop_sharing_stub` | share | custom | `result`: saved\|error; `error_code`: enum(42) | — | `app/s/[token]/MemoryPage.tsx` | Sharing of one stub stopped |
 | `friends_update` | friends | custom | `action`: add\|remove\|mode; `friend_count`: int 0–1000; `mode`: make\|claim; `storage`: ok\|failed | — | `app/friends/[id]/FriendsClient.tsx` | Friend added/removed or matching-set mode changed (counts only) |
