@@ -7,7 +7,7 @@
 import { mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { DurableWorkflowStore } from '../src/internal/durable-store.js';
@@ -17,7 +17,8 @@ import {
   drainNeatlogsOutbox,
   listNeatlogsOutbox,
   loadNeatlogsTelemetryOptIn,
-  runtimeNeatlogsTags
+  runtimeNeatlogsTags,
+  iterateNeatlogsOutboxSnapshot
 } from '../src/observability/private/neatlogs-outbox.js';
 
 const EVIDENCE_SCHEMA = 'agent-harness.neatlogs.runtime-trace.v1';
@@ -271,7 +272,11 @@ async function main() {
       recover: values.recover === true,
       readbackOptions: options
     });
-    evidence.batches = results.map(result => sanitizeBatch(result.batch ?? { state: result.state, records: [] }));
+    // A drain visits one bounded rotating page. Completeness is evaluated from
+    // all retained batch states, not from that page or the scheduling cursor.
+    evidence.drainPage = results.map(result => ({ path: basename(result.path), state: result.state }));
+    evidence.batchEvidenceSource = 'persisted_outbox_snapshot';
+    evidence.batches = Array.from(iterateNeatlogsOutboxSnapshot(outbox), result => sanitizeBatch(result.batch));
   } else {
     evidence.batches = listNeatlogsOutbox(outbox).map(path => ({ path: path.slice(outbox.length + 1) }));
   }
