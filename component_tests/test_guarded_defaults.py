@@ -1,6 +1,7 @@
 """Portable denial tests for the guarded invocation's pre-dispatch boundaries."""
 
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -11,7 +12,7 @@ import pytest
 
 from component_tests.container_docker import Docker
 from component_tests.container_records import Configuration, Observation
-from component_tests.guarded_active import stop_active
+from component_tests.guarded_active import step_owner, stop_active
 from component_tests.guarded_git import CONFIG, git_command, minimal_git, verify_git_projection
 from component_tests.guarded_identity import OwnerBinding
 from component_tests.guarded_print import (
@@ -259,3 +260,55 @@ def test_stale_held_owner_identity_is_rejected_before_any_signal(
             Docker(configuration, monotonic() + 3), "full-id", "test", tmp_path, handle.fileno()
         )
     assert signals == []
+
+
+@pytest.mark.parametrize("exited", [False, True])
+def test_stopped_identity_authorizes_only_same_handle_pulse_then_reauthentication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exited: bool
+) -> None:
+    owner = Observation(
+        pid=1,
+        uid=61002,
+        gid=61002,
+        groups=(61002,),
+        status={"State": "T (stopped)"},
+        namespaces={},
+        cgroup="controlled-call-order",
+        apparmor="docker-default (enforce)",
+    )
+    binding = OwnerBinding(
+        host_owner=owner,
+        host_owner_start_ticks="0",
+        executable_identity=(0, 0),
+        command=("original-node",),
+    )
+    docker = Docker(
+        Configuration(producer=tmp_path, directory=tmp_path, name="ie-lifetime-" + "a" * 32),
+        monotonic() + 1,
+    )
+    events: list[str] = []
+
+    def authenticated(*_: object) -> Observation:
+        events.append("authenticate")
+        return owner
+
+    def sent(descriptor: int, number: int) -> None:
+        assert descriptor == 7
+        events.append(signal.Signals(number).name)
+        if exited and number == signal.SIGSTOP:
+            raise ProcessLookupError
+
+    def quantum(duration: float) -> None:
+        assert 0 < duration <= 0.0005
+        events.append("quantum")
+
+    monkeypatch.setattr("component_tests.guarded_active.authenticate_owner", authenticated)
+    monkeypatch.setattr("component_tests.guarded_active.send_pidfd_signal", sent)
+    monkeypatch.setattr("component_tests.guarded_active.sleep", quantum)
+    if exited:
+        with pytest.raises(ProcessLookupError):
+            _ = step_owner(docker, binding, 7)
+        assert events == ["authenticate", "SIGCONT", "quantum", "SIGSTOP"]
+    else:
+        assert step_owner(docker, binding, 7) is owner
+        assert events == ["authenticate", "SIGCONT", "quantum", "SIGSTOP", "authenticate"]

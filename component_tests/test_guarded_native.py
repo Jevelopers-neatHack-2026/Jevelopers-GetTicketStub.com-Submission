@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import select
+import signal
 import socket
 import sqlite3
 import stat
@@ -17,11 +18,50 @@ import pytest
 from pydantic import JsonValue, TypeAdapter
 
 from component_tests.container_docker import Docker
-from component_tests.container_pidfd import open_pidfd
+from component_tests.container_pidfd import open_pidfd, send_pidfd_signal
 from component_tests.container_records import Configuration, Observation
 from component_tests.container_socket import bind_lease
 from component_tests.guarded_active import stop_active
 from component_tests.guarded_identity import OwnerBinding
+
+
+def test_dead_held_task_refuses_both_pulse_signals_without_touching_live_sentinel(
+    tmp_path: Path,
+) -> None:
+    """Real kernel handle regression; independent children are not producer proof."""
+    command = (sys.executable, "-c", "import sys; sys.stdin.buffer.read()")
+    with (
+        subprocess.Popen(command, stdin=subprocess.PIPE) as child,  # noqa: S603 - fixed child
+        subprocess.Popen(command, stdin=subprocess.PIPE) as sentinel,  # noqa: S603 - fixed sentinel
+    ):
+        assert child.stdin is not None
+        assert sentinel.stdin is not None
+        try:
+            with os.fdopen(open_pidfd(child.pid), "rb", buffering=0) as handle:
+                assert not os.get_inheritable(handle.fileno())
+                assert not select.select([handle], [], [], 0)[0]
+                child.stdin.close()
+                assert child.wait(timeout=5) == 0
+                assert select.select([handle], [], [], 1)[0]
+                for number in (signal.SIGCONT, signal.SIGSTOP):
+                    with pytest.raises(ProcessLookupError):
+                        send_pidfd_signal(handle.fileno(), number)
+                assert sentinel.poll() is None
+                _ = (tmp_path / "dead-held-task.json").write_text(
+                    json.dumps(
+                        {
+                            "held_child_pid": child.pid,
+                            "live_sentinel_pid": sentinel.pid,
+                            "rebound": False,
+                            "both_signals_rejected": True,
+                        }
+                    )
+                )
+        finally:
+            child.stdin.close()
+            sentinel.stdin.close()
+            _ = child.wait(timeout=5)
+            _ = sentinel.wait(timeout=5)
 
 
 def test_long_staging_root_binds_same_private_filesystem_lease(tmp_path: Path) -> None:

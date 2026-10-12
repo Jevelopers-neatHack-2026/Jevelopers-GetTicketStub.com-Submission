@@ -221,10 +221,17 @@ test/offline and simulated billing, with mock authorization callbacks. This gran
 no real permission or domain acceptance. The first three stages retain the original
 CLI command, and all eight original protocol controls retain their assertions.
 The latter holds the original Node pidfd from initial authenticated binding before
-request delivery. Before every signal it checks that held handle, start time,
-executable inode/argv, role, namespace and cgroup; it never reopens a stored numeric
-PID to signal it. A rejected stale identity sends zero signals. It stops that Node
-through the held pidfd,
+request delivery. Initial stop checks that held handle, start time, executable
+inode/argv, role, namespace and cgroup. Subsequent pulses fully authenticate the
+already stopped Node, then send CONT, allow at most 500 microseconds within the
+original deadline, and send STOP through the same continuously held descriptor.
+No expensive `/proc` round trip occurs while the Node runs; the kernel handle
+cannot target a recycled PID, and a departed task fails without rebinding or retry.
+After each STOP, full identity authentication and observed T state are mandatory
+before any SQLite observation. It never reopens a stored numeric PID to signal it.
+A rejected stale identity sends zero signals. A native departed-child check requires
+both pulse signals to fail through its original held handle while a sentinel lives.
+It stops that Node through the held pidfd,
 and uses a readonly observer as the same nonroot container user. An explicit SQLite
 read transaction must observe the original request-bound compose operation,
 pending attempt and its `execution_started` event; actual opened DB/WAL/SHM
@@ -304,6 +311,15 @@ is 225610 bytes and exceeded the reader's 64 KiB bound. The successor retains a
 finite 256 KiB fixture bound, tests original-size and hostile replacements, and
 requires confirmed WAL selection and actual regular sidecars before native tamper
 checks. No active-compose or hostile-sidecar acceptance is claimed from that run.
+The `d5a1c11` dispatch passed all sixteen lifecycle/native and fifteen guarded cases;
+only active-compose failed. Its retained samples reached the real stopped-owner
+observer twice while the schema was not ready or locked, then recorded a host-side
+AssertionError before phase confirmation. The exact assertion location was lost
+to discarded creator stderr, so a sampling gap remains a hypothesis. The successor
+retains bounded, allowlisted source/function/line exception locations and one
+root-owned phase/state marker, with no messages, source lines, locals or absolute
+paths. Held-handle pulses separate owner progress from expensive observation while
+preserving the deadline and every actual pending/start/key/inode acceptance oracle.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,

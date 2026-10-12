@@ -1,6 +1,7 @@
 """Real temporary-directory custody under simulated unknown teardown boundaries."""
 
 import errno
+import json
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,12 +14,35 @@ from component_tests.guarded_print import (
     GuardedPrint,
     InvocationState,
     PrintDocker,
+    exception_frames,
     reserve_custody,
 )
 from integration_evals.artifacts import load_record
 from integration_evals.errors import InvalidArtifactError
 from integration_evals.print_setup import PROFILE_PATH, PrintProfile
 from integration_evals.processes import ProcessSettings
+
+
+def test_failure_locations_are_bounded_and_exclude_private_messages_and_locals() -> None:
+    def nested(depth: int) -> None:
+        private = "PRIVATE_DIAGNOSTIC_CANARY"
+        if depth:
+            nested(depth - 1)
+        raise AssertionError(private)
+
+    try:
+        nested(20)
+    except AssertionError as error:
+        frames = exception_frames(error)
+    else:
+        pytest.fail("Expected controlled diagnostic failure")
+    assert len(frames) == 8
+    assert all(set(frame) == {"source", "function", "line"} for frame in frames)
+    assert all(isinstance(frame["line"], int) and frame["line"] > 0 for frame in frames)
+    assert all(frame["source"] == "component_tests/test_guarded_custody.py" for frame in frames)
+    assert len(json.dumps(frames)) <= 4096
+    assert "PRIVATE_DIAGNOSTIC_CANARY" not in json.dumps(frames)
+    assert exception_frames(None) == []
 
 
 @pytest.mark.parametrize("failure", ["expired-budget", "receipt-write", "teardown-write"])

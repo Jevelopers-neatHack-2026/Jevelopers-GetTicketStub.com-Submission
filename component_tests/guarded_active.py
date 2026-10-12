@@ -12,8 +12,56 @@ from pydantic import JsonValue, TypeAdapter
 
 from component_tests.container_docker import Docker
 from component_tests.container_pidfd import send_pidfd_signal
+from component_tests.container_records import Observation
 from component_tests.guarded_identity import OwnerBinding, authenticate_owner
 from integration_evals.artifacts import digest, read_bytes
+
+STEP_QUANTUM = 0.0005
+
+
+def phase(docker: Docker, name: str, owner: OwnerBinding, state: str | None = None) -> None:
+    """Keep one bounded root-side phase marker without owner data or exception text."""
+    if monotonic() >= docker.deadline:
+        raise subprocess.TimeoutExpired(("compose-active",), 30)
+    _ = (docker.configuration.directory / "compose-phase.json").write_text(
+        json.dumps(
+            {
+                "phase": name,
+                "host_owner_pid": owner.host_owner.pid,
+                "state": state,
+                "quantum_seconds": STEP_QUANTUM,
+            }
+        )
+    )
+
+
+def stopped_owner(docker: Docker, binding: OwnerBinding, descriptor: int) -> Observation:
+    current = authenticate_owner(binding, descriptor, docker.configuration.owner, docker.deadline)
+    while current.status["State"].split()[0] != "T":
+        phase(docker, "awaiting-stopped-state", binding, current.status["State"][:64])
+        assert current.status["State"].split()[0] in {"R", "S"}
+        if monotonic() >= docker.deadline:
+            raise subprocess.TimeoutExpired(("compose-stop",), 30)
+        sleep(0.0001)
+        current = authenticate_owner(
+            binding, descriptor, docker.configuration.owner, docker.deadline
+        )
+    return current
+
+
+def step_owner(docker: Docker, binding: OwnerBinding, descriptor: int) -> Observation:
+    """Pulse the same held task reference from a fully authenticated stopped state."""
+    current = authenticate_owner(binding, descriptor, docker.configuration.owner, docker.deadline)
+    assert current.status["State"].split()[0] == "T"
+    remaining = docker.deadline - monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(("compose-active",), 30)
+    send_pidfd_signal(descriptor, signal.SIGCONT)
+    # No numeric PID, reopen, or /proc round trip while the original task runs.
+    # A dead held task raises ESRCH; it is never rebound to a replacement process.
+    sleep(min(STEP_QUANTUM, remaining))
+    send_pidfd_signal(descriptor, signal.SIGSTOP)
+    return stopped_owner(docker, binding, descriptor)
 
 
 def positive_key(docker: Docker, binding: OwnerBinding) -> tuple[str, dict[str, str]]:
@@ -48,6 +96,8 @@ def positive_key(docker: Docker, binding: OwnerBinding) -> tuple[str, dict[str, 
 
 def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descriptor: int) -> None:
     """Keep the bound Node stopped only after an unfinished real compose is observed."""
+    sampling_started = monotonic()
+    samples = 0
     binding = OwnerBinding.model_validate_json(
         read_bytes(
             docker.configuration.directory / "print-owner-binding.json",
@@ -55,7 +105,9 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
             deadline=docker.deadline,
         )
     )
+    phase(docker, "initial-authentication", binding)
     _ = authenticate_owner(binding, descriptor, docker.configuration.owner, docker.deadline)
+    phase(docker, "original-fixture-key", binding)
     key, key_source = positive_key(docker, binding)
     artifact = home / "artifacts" / f"pp-{namespace}"
     database = artifact / "state.sqlite"
@@ -64,27 +116,21 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
     )
     # Original positive-control creates the real source DB, but no mapping artifact.
     # WAL readiness only starts sampling; it does not establish a started compose.
+    phase(docker, "wal-readiness", binding)
     while not Path(str(database) + "-wal").exists():
         if monotonic() >= docker.deadline:
             raise subprocess.TimeoutExpired(("compose-active",), 30)
         sleep(0.0001)
+    phase(docker, "before-stop-authentication", binding)
+    _ = authenticate_owner(binding, descriptor, docker.configuration.owner, docker.deadline)
+    send_pidfd_signal(descriptor, signal.SIGSTOP)
+    phase(docker, "after-stop-authentication", binding)
+    current = stopped_owner(docker, binding, descriptor)
     while True:
         if monotonic() >= docker.deadline:
             raise subprocess.TimeoutExpired(("compose-active",), 30)
-        _ = authenticate_owner(binding, descriptor, docker.configuration.owner, docker.deadline)
-        send_pidfd_signal(descriptor, signal.SIGSTOP)
-        current = authenticate_owner(
-            binding, descriptor, docker.configuration.owner, docker.deadline
-        )
-        while current.status["State"].split()[0] != "T":
-            assert current.status["State"].split()[0] in {"R", "S"}
-            if monotonic() >= docker.deadline:
-                raise subprocess.TimeoutExpired(("compose-stop",), 30)
-            sleep(0.0001)
-            current = authenticate_owner(
-                binding, descriptor, docker.configuration.owner, docker.deadline
-            )
         assert current.status["State"].split()[0] == "T"
+        phase(docker, "sqlite-observation", binding, current.status["State"][:64])
         raw = docker.run(
             (
                 "exec",
@@ -101,6 +147,7 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
             )
         )
         attempt = TypeAdapter(dict[str, JsonValue]).validate_json(raw)
+        samples += 1
         with (docker.configuration.directory / "compose-probes.jsonl").open("a") as progress:
             _ = progress.write(
                 json.dumps(
@@ -112,6 +159,9 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
                         "database_inode": attempt.get("database_inode"),
                         "wal_inode": attempt.get("wal_inode"),
                         "shm_inode": attempt.get("shm_inode"),
+                        "sample": samples,
+                        "quantum_seconds": STEP_QUANTUM,
+                        "elapsed_seconds": monotonic() - sampling_started,
                     }
                 )
                 + "\n"
@@ -128,6 +178,9 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
                         "command": binding.command,
                         "key_source": key_source,
                         "qualification": "synthetic offline/simulated; no real authority",
+                        "samples": samples,
+                        "quantum_seconds": STEP_QUANTUM,
+                        "elapsed_seconds": monotonic() - sampling_started,
                         "pidfd_target": str(Path(f"/proc/self/fd/{descriptor}").readlink()),
                         "pidfd_fdinfo": info.decode(),
                         "pidfd_inheritable": os.get_inheritable(descriptor),
@@ -138,6 +191,5 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
                 )
             )
             return
-        _ = authenticate_owner(binding, descriptor, docker.configuration.owner, docker.deadline)
-        send_pidfd_signal(descriptor, signal.SIGCONT)
-        sleep(0.0001)
+        phase(docker, "before-continue-authentication", binding, current.status["State"][:64])
+        current = step_owner(docker, binding, descriptor)

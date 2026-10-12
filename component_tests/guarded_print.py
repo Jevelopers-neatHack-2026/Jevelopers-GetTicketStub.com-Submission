@@ -10,8 +10,10 @@ import sys
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
+from itertools import islice
 from pathlib import Path
 from time import monotonic, sleep
+from traceback import walk_tb
 from typing import override
 from uuid import uuid4
 
@@ -40,6 +42,38 @@ from integration_evals.contracts import runtime_digest
 from integration_evals.errors import InvalidArtifactError, fail
 from integration_evals.print_setup import PrintProfile, verify_source
 from integration_evals.processes import ProcessSettings
+
+
+def exception_frames(error: BaseException | None) -> list[dict[str, str | int]]:
+    """Bounded source locations only: never exception messages, source text or locals."""
+    if error is None:
+        return []
+    root = Path(__file__).resolve().parents[1]
+    allowed = {
+        "component_tests/guarded_print.py",
+        "component_tests/guarded_active.py",
+        "component_tests/guarded_identity.py",
+        "component_tests/guarded_git.py",
+        "component_tests/container_docker.py",
+        "component_tests/container_facts.py",
+        "component_tests/container_records.py",
+        "component_tests/container_pidfd.py",
+        "component_tests/test_guarded_custody.py",
+        "src/integration_evals/artifacts.py",
+        "src/integration_evals/validation.py",
+        "src/integration_evals/print_setup.py",
+    }
+    result: list[dict[str, str | int]] = []
+    for frame, line in islice(walk_tb(error.__traceback__), 8):
+        source = Path(frame.f_code.co_filename)
+        if source.is_relative_to(root):
+            name = source.relative_to(root).as_posix()
+            if name in allowed:
+                result.append(
+                    {"source": name, "function": frame.f_code.co_name[:128], "line": line}
+                )
+    return result
+
 
 LIMIT = 1048576
 ENVIRONMENT = frozenset(
@@ -633,6 +667,7 @@ class GuardedPrint:
                 "clients_reaped": clients_reaped,
                 "namespace_stopped_and_removed": stopped,
                 "error": type(failure).__name__ if failure else None,
+                "error_frames": exception_frames(failure),
             }
             _ = (config.directory / "invocation.json").write_text(json.dumps(receipt, indent=2))
             if stopped:
