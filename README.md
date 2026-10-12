@@ -27,12 +27,21 @@ This is a hackathon prototype. Implemented in this repository:
 - An opt-in `TICKETSTUB_RUNTIME_MODE=live` development mode with direct Anthropic/OpenAI paths or per-capability OpenRouter routing ([`src/server/ai/providers.ts`](src/server/ai/providers.ts)).
 - Offline provider tests and a production smoke script, run by the [runtime workflow](.github/workflows/runtime.yml).
 
+Verified on the published host (getticketstub.com, GoDaddy Plus Launch) on 2026-10-11 and 2026-10-12:
+
+- Magic-link sign-in, server-side SQLite storage and file-backed artwork ([PR #20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20)) are merged, and [PR #33](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/33) fixed the emailed sign-in confirmation (`bad_origin` when the browser sent no referrer).
+- `/api/health` reports `mode=live`, `storage=ok` and `persistence=configured`, with `TICKETSTUB_DB=/private/ticketstub.sqlite` and `TICKETSTUB_FILES=/private/files`.
+- Resend delivered a real sign-in email. Live mode never returns sandbox links.
+- A synthetic stub and its artwork saved through `/api/wall/sync` survived a Live redeploy (saved 2026-10-11T20:05Z, read again 2026-10-12T03:27Z).
+- A fixture-mode backup and restore drill passes ([PR #63](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/63), [evidence](docs/operations/evidence/auth-storage-2026-10-12)). Restoring a real host backup has not been demonstrated; see the [owner runbook](docs/operations/deployed-auth-storage-runbook.md).
+
 Pending or outside this repository's current state:
 
-- Publishing to Live needs separate authorization; the preview deployment is not a production release.
-- Production identity, budget and URL access controls ([#7](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/7)–[#13](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/13)) and the WP02 customer application epic ([#1](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1)) are not done. Live mode is not a production deployment.
-- PR [#20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20) adds magic-link sign-in, server-side SQLite storage and file-backed artwork. Real email delivery, target-host storage durability and integrated release acceptance remain unverified. Wallet passes, QR codes and checkout remain simulated.
-- All [acceptance criteria](docs/architecture/ACCEPTANCE.md) remain planned in the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
+- Real payment: Dodo ([#66](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/66)) and Stripe ([#71](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/71)) are open, so checkout is still sandbox.
+- Paid download and order authorization ([#61](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/61), [#41](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/41), [#76](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/76)) and artwork approvals ([#37](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/37), [#75](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/75)) are open.
+- Wallet passes and QR codes remain simulated.
+- Publishing to Live needs separate authorization, and production identity, budget and URL access controls ([#7](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/7)–[#13](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/13)) and the WP02 customer application epic ([#1](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1)) are not done.
+- Integrated v1 acceptance ([#6](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/6)) is not met. All [acceptance criteria](docs/architecture/ACCEPTANCE.md) remain planned in the [master checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.md).
 
 ## Quickstart
 
