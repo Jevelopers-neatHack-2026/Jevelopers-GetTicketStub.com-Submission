@@ -65,6 +65,42 @@ def test_guest_mapping_reader_rejects_owner_replacements(tmp_path: Path, replace
         _ = bounded_file(path, 4096)
 
 
+def test_no_pending_diagnostics_distinguish_registration_admission_and_completion() -> None:
+    """Readonly primitive fixture; none of these states establishes active execution."""
+    with closing(sqlite3.connect(":memory:")) as connection:
+        _ = connection.executescript(
+            """CREATE TABLE attempts(id TEXT, operation TEXT, started INTEGER, outcome TEXT);
+               CREATE TABLE operations(id TEXT, key TEXT);
+               CREATE TABLE observations(attempt TEXT, kind TEXT);"""
+        )
+        expected = hashlib.sha256(b'["composeArtifact","original-key"]').hexdigest()
+        result = pending_attempt(connection, "original-key")
+        assert result == {
+            "pending": False,
+            "phase": "operation-not-registered",
+            "expected_operation_rows": 0,
+            "attempt_rows": 0,
+        }
+        _ = connection.execute("INSERT INTO operations VALUES (?,?)", ("operation", expected))
+        result = pending_attempt(connection, "original-key")
+        assert result == {
+            "pending": False,
+            "phase": "operation-not-admitted",
+            "expected_operation_rows": 1,
+            "attempt_rows": 0,
+        }
+        _ = connection.execute(
+            "INSERT INTO attempts VALUES (?,?,?,?)", ("attempt", "operation", 123, "succeeded")
+        )
+        result = pending_attempt(connection, "original-key")
+        assert result == {
+            "pending": False,
+            "phase": "attempt-not-pending",
+            "expected_operation_rows": 1,
+            "attempt_rows": 1,
+        }
+
+
 @pytest.mark.parametrize("replacement", ["original-size", "oversized", "fifo", "symlink"])
 def test_positive_fixture_key_reader_bounds_original_size_and_replacements(
     tmp_path: Path, replacement: str

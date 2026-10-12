@@ -16,7 +16,7 @@ from component_tests.container_records import Observation
 from component_tests.guarded_identity import OwnerBinding, authenticate_owner
 from integration_evals.artifacts import digest, read_bytes
 
-STEP_QUANTUM = 0.0005
+STEP_QUANTUM = 0.005
 
 
 def phase(docker: Docker, name: str, owner: OwnerBinding, state: str | None = None) -> None:
@@ -158,6 +158,8 @@ def stop_active(docker: Docker, identity: str, namespace: str, home: Path, descr
                         "state": current.status["State"],
                         "pending": attempt["pending"],
                         "phase": attempt.get("phase"),
+                        "expected_operation_rows": attempt.get("expected_operation_rows"),
+                        "attempt_rows": attempt.get("attempt_rows"),
                         "database_inode": attempt.get("database_inode"),
                         "wal_inode": attempt.get("wal_inode"),
                         "shm_inode": attempt.get("shm_inode"),

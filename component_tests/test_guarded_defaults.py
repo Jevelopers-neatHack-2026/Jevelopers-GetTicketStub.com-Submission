@@ -262,9 +262,11 @@ def test_stale_held_owner_identity_is_rejected_before_any_signal(
     assert signals == []
 
 
-@pytest.mark.parametrize("exited", [False, True])
+@pytest.mark.parametrize(
+    ("exited", "remaining"), [(False, 1.0), (False, 0.001), (True, 1.0), (False, 0.0)]
+)
 def test_stopped_identity_authorizes_only_same_handle_pulse_then_reauthentication(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exited: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exited: bool, remaining: float
 ) -> None:
     owner = Observation(
         pid=1,
@@ -284,7 +286,7 @@ def test_stopped_identity_authorizes_only_same_handle_pulse_then_reauthenticatio
     )
     docker = Docker(
         Configuration(producer=tmp_path, directory=tmp_path, name="ie-lifetime-" + "a" * 32),
-        monotonic() + 1,
+        2.0 + remaining,
     )
     events: list[str] = []
 
@@ -299,13 +301,19 @@ def test_stopped_identity_authorizes_only_same_handle_pulse_then_reauthenticatio
             raise ProcessLookupError
 
     def quantum(duration: float) -> None:
-        assert 0 < duration <= 0.0005
+        assert 0 < duration <= 0.005
+        assert duration == pytest.approx(min(0.005, remaining))
         events.append("quantum")
 
     monkeypatch.setattr("component_tests.guarded_active.authenticate_owner", authenticated)
     monkeypatch.setattr("component_tests.guarded_active.send_pidfd_signal", sent)
     monkeypatch.setattr("component_tests.guarded_active.sleep", quantum)
-    if exited:
+    monkeypatch.setattr("component_tests.guarded_active.monotonic", lambda: 2.0)
+    if remaining == 0:
+        with pytest.raises(subprocess.TimeoutExpired):
+            _ = step_owner(docker, binding, 7)
+        assert events == ["authenticate"]
+    elif exited:
         with pytest.raises(ProcessLookupError):
             _ = step_owner(docker, binding, 7)
         assert events == ["authenticate", "SIGCONT", "quantum", "SIGSTOP"]

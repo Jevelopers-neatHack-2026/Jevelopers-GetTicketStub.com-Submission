@@ -223,7 +223,7 @@ CLI command, and all eight original protocol controls retain their assertions.
 The latter holds the original Node pidfd from initial authenticated binding before
 request delivery. Initial stop checks that held handle, start time, executable
 inode/argv, role, namespace and cgroup. Subsequent pulses fully authenticate the
-already stopped Node, then send CONT, request a 500-microsecond scheduling quantum
+already stopped Node, then send CONT, request a 5-millisecond scheduling quantum
 subject to scheduler delay and the unchanged absolute deadline, and send STOP
 through the same continuously held descriptor.
 No expensive `/proc` round trip occurs while the Node runs; the kernel handle
@@ -330,6 +330,13 @@ only actual T permits SQLite or checkpoint proof. Persistent D still times out,
 and departed, zombie, wrong-identity and unknown states remain rejected. It retains
 the deepest eight allowlisted exception frames so the failing assertion survives
 the fixed diagnostic bound. The prior run supplies no pending/active acceptance.
+The `e0ef085` dispatch again passed seventeen lifecycle/native and fifteen guarded
+cases, but active-compose expired after 298 actual stopped snapshots without an
+unfinished attempt. Its 500-microsecond quantum requests sum to about 149 ms;
+this is requested scheduling time, not measured owner CPU progress. The successor
+requests 5 ms per pulse within the same deadline and records bounded readonly
+registration/admission/completion counts when no attempt is pending. Those
+diagnostics are never phase acceptance; a completed or missed window still fails.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,

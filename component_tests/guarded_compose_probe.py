@@ -35,16 +35,39 @@ def bounded_file(path: Path, cap: int) -> bytes:
 
 
 def pending_attempt(connection: sqlite3.Connection, key: str) -> dict[str, str | int | bool | None]:
+    expected = hashlib.sha256(
+        json.dumps(["composeArtifact", key], separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
     query = """SELECT a.id,a.operation,a.started,o.key FROM attempts a
                JOIN operations o ON o.id=a.operation WHERE a.outcome IS NULL LIMIT 2"""
     rows = cast("list[tuple[str, str, int, str]]", connection.execute(query).fetchall())
     if not rows:
-        return {"pending": False}
+        # Diagnose only: bounded readonly rows never establish an unfinished compose.
+        operations = cast(
+            "list[tuple[str]]",
+            connection.execute(
+                "SELECT id FROM operations WHERE key=? LIMIT 2", (expected,)
+            ).fetchall(),
+        )
+        if not operations:
+            return {
+                "pending": False,
+                "phase": "operation-not-registered",
+                "expected_operation_rows": 0,
+                "attempt_rows": 0,
+            }
+        assert len(operations) == 1
+        attempts = connection.execute(
+            "SELECT outcome FROM attempts WHERE operation=? LIMIT 2", (operations[0][0],)
+        ).fetchall()
+        return {
+            "pending": False,
+            "phase": "attempt-not-pending" if attempts else "operation-not-admitted",
+            "expected_operation_rows": len(operations),
+            "attempt_rows": len(attempts),
+        }
     assert len(rows) == 1
     attempt, operation, started, operation_key = rows[0]
-    expected = hashlib.sha256(
-        json.dumps(["composeArtifact", key], separators=(",", ":"), ensure_ascii=False).encode()
-    ).hexdigest()
     assert operation_key == expected
     observed = cast(
         "tuple[int]",
