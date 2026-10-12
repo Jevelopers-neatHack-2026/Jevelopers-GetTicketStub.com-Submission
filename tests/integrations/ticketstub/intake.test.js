@@ -13,13 +13,13 @@ import {
   ticketstubOutboxEntry,
   validateTicketstubEvent
 } from '@jevelopers/agent-harness-runtime/ticketstub';
-import { NEATLOGS_OUTBOX_LIMITS } from '../../../src/observability/private/neatlogs-outbox.js';
+import { NEATLOGS_DELIVERY_QUEUE_LIMITS as NEATLOGS_OUTBOX_LIMITS } from '../../../src/observability/private/neatlogs-delivery-queue.js';
 import {
   FAKE_INGEST_KEY,
   FAKE_PROJECT_ID,
   FAKE_READ_TOKEN,
   fakeNeatlogs
-} from '../../observability/neatlogs-outbox/fake-neatlogs.js';
+} from '../../observability/neatlogs-delivery-queue/fake-neatlogs.js';
 
 const KEY_HEX = '3c'.repeat(32);
 const REQUEST_ID = 'req_SYNTHETICcanary01';

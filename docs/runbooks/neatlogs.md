@@ -83,13 +83,12 @@ Only `verified` sets `deliveryConfirmed: true` in evidence. The completion marke
 
 The live verifier above does not touch the durable telemetry cursor. Continuous delivery goes through the outbox below.
 
-## Durable outbox: continuous delivery
+## Delivery queue for long-running hosts
 
-`src/observability/private/neatlogs-outbox.js` holds the "sent, awaiting readback" state, in its own SQLite file (WAL, `synchronous=FULL`), separate from the workflow store.
+`src/observability/private/neatlogs-delivery-queue.js` keeps the "sent, awaiting readback" state in SQLite (WAL, `synchronous=FULL`), separate from the workflow store, for a host process that hands the harness events in-process and drains on a schedule. The harness worker's own telemetry cursor uses the file outbox in `neatlogs-outbox.js` (see "Runtime path").
 
-- **Producers enqueue locally.** `NeatlogsOutbox.enqueue(entries)` is one local transaction, idempotent by event token, and capped at 5,000 unsettled rows (further rows are refused and counted). Entries hold only `tok1_` tokens, a fixed event type, canonical input JSON, and up to 24 scalar attributes whose names may not start with `neatlogs.`.
-- **Telemetry cursor.** `createNeatlogsOutboxSink(outbox)` is a `TelemetryExporter` sink. The cursor advances when the local insert commits, well inside the 500 ms sink budget. Replays after a crash re-insert the same tokens and add nothing. Record types the Neatlogs mapper does not export (`operations_*`) are acknowledged without a row.
-- **Drain.** `drainNeatlogsOutbox(outbox, config, { tags })` takes a cross-process lease, then:
+- **Producers enqueue locally.** `NeatlogsDeliveryQueue.enqueue(entries)` is one local transaction, idempotent by event token, and capped at 5,000 unsettled rows (further rows are refused and counted). Entries hold only `tok1_` tokens, a fixed event type, canonical input JSON, and up to 24 scalar attributes whose names may not start with `neatlogs.`.
+- **Drain.** `drainNeatlogsDeliveryQueue(queue, config, { tags })` takes a cross-process lease, then:
   1. With a readback token, it reads back `sent` rows older than 30 s (one poll per pass): `verified` settles; `mismatch` (including `dlq`) settles as `failed`; a trace still 404 after 10 minutes moves to the next generation and is re-queued; after generation 3 it settles as `failed`. Pending for over a day settles as `failed` (`NOT_FINALIZED_IN_TIME`).
   2. It sends due `queued` rows, at most 32 per request and 4 requests per pass. `receiver_accepted` and `partially_rejected` become `sent` (readback decides which spans landed). Other outcomes retry with backoff from 30 s to 30 min, and settle as `failed` after 8 attempts.
   3. It deletes settled rows older than 7 days.

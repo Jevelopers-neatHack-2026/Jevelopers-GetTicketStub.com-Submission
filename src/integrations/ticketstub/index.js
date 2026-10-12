@@ -2,10 +2,10 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { loadNeatlogsConfig } from '../../observability/private/neatlogs-config.js';
 import {
   NEATLOGS_TICKETSTUB_WORKFLOW_NAME,
-  NeatlogsOutbox,
-  drainNeatlogsOutbox,
-  validateNeatlogsOutboxEntry
-} from '../../observability/private/neatlogs-outbox.js';
+  NeatlogsDeliveryQueue,
+  drainNeatlogsDeliveryQueue,
+  validateNeatlogsQueueEntry
+} from '../../observability/private/neatlogs-delivery-queue.js';
 import { validateNeatlogsTags } from '../../observability/private/neatlogs-otlp.js';
 
 // TicketStub hand-off: the customer app gives the harness its already
@@ -177,7 +177,7 @@ export function ticketstubOutboxEntry(event, tokenize) {
     requestToken: request,
     fields: valid.fields
   });
-  return validateNeatlogsOutboxEntry({
+  return validateNeatlogsQueueEntry({
     eventToken: tokenize('ticketstub.event', JSON.stringify(valid)),
     workflowName: NEATLOGS_TICKETSTUB_WORKFLOW_NAME,
     sessionId: project ?? request,
@@ -210,7 +210,7 @@ export function createTicketstubHarnessExporter({
   if (!Number.isSafeInteger(drainDelayMs) || drainDelayMs < 0 || drainDelayMs > 60_000) {
     throw new TicketstubIntakeError('INVALID_OPTION');
   }
-  const outbox = NeatlogsOutbox.open({ databasePath, ...(clock ? { clock } : {}), ...outboxOptions });
+  const outbox = NeatlogsDeliveryQueue.open({ databasePath, ...(clock ? { clock } : {}), ...outboxOptions });
   const ownerId = `ticketstub-${randomUUID()}`;
   const counters = { accepted: 0, duplicates: 0, refused: 0, invalid: 0, drains: 0, drainErrors: 0 };
   let timer = null;
@@ -223,7 +223,7 @@ export function createTicketstubHarnessExporter({
     if (running) return running;
     running = (async () => {
       try {
-        lastDrain = await drainNeatlogsOutbox(outbox, config, { tags: validatedTags, fetch, ownerId });
+        lastDrain = await drainNeatlogsDeliveryQueue(outbox, config, { tags: validatedTags, fetch, ownerId });
         counters.drains += 1;
         return lastDrain;
       } catch {

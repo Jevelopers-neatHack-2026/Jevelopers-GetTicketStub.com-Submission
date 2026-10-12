@@ -4,29 +4,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, before, describe, test } from 'node:test';
-import {
-  DurableWorkflowStore,
-  createHmacTokenizer,
-  createTelemetryExporter
-} from '@jevelopers/agent-harness-runtime';
 import { loadNeatlogsConfig } from '../../../src/observability/private/neatlogs-config.js';
-import { NEATLOGS_LIVE_WORKFLOW_NAME, deterministicNeatlogsIds } from '../../../src/observability/private/neatlogs-otlp.js';
+import { deterministicNeatlogsIds } from '../../../src/observability/private/neatlogs-otlp.js';
 import {
-  NEATLOGS_OUTBOX_LIMITS,
-  NeatlogsOutbox,
-  NeatlogsOutboxError,
-  createNeatlogsOutboxSink,
-  drainNeatlogsOutbox,
-  validateNeatlogsOutboxEntry
-} from '../../../src/observability/private/neatlogs-outbox.js';
+  NEATLOGS_DELIVERY_QUEUE_LIMITS as NEATLOGS_OUTBOX_LIMITS,
+  NeatlogsDeliveryQueue as NeatlogsOutbox,
+  NeatlogsDeliveryQueueError as NeatlogsOutboxError,
+  drainNeatlogsDeliveryQueue as drainNeatlogsOutbox,
+  validateNeatlogsQueueEntry as validateNeatlogsOutboxEntry
+} from '../../../src/observability/private/neatlogs-delivery-queue.js';
 import { FAKE_INGEST_KEY, FAKE_PROJECT_ID, FAKE_READ_TOKEN, fakeNeatlogs } from './fake-neatlogs.js';
 
-const CANARY = 'SYNTHETIC_OUTBOX_CANARY_person@example.invalid';
+const CANARY = 'SYNTHETIC_QUEUE_CANARY_person@example.invalid';
 const token = n => `tok1_${n.toString(16).padStart(64, '0')}`;
 
 let scratch;
 let counter = 0;
-before(() => { scratch = mkdtempSync(join(tmpdir(), 'neatlogs-outbox-')); });
+before(() => { scratch = mkdtempSync(join(tmpdir(), 'neatlogs-delivery-queue-')); });
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 function dbPath() {
@@ -103,7 +97,7 @@ describe('entries', () => {
     const path = dbPath();
     NeatlogsOutbox.open({ databasePath: path }).close();
     const raw = new DatabaseSync(path);
-    raw.prepare("UPDATE neatlogs_outbox_meta SET value = '99' WHERE key = 'schema_version'").run();
+    raw.prepare("UPDATE neatlogs_delivery_queue_meta SET value = '99' WHERE key = 'schema_version'").run();
     raw.close();
     assert.throws(() => NeatlogsOutbox.open({ databasePath: path }), { code: 'UNSUPPORTED_SCHEMA_VERSION' });
   });
@@ -287,47 +281,6 @@ describe('drain', () => {
       assert.equal(outbox.diagnostics().counts.verified, 0);
     } finally {
       outbox.close();
-    }
-  });
-});
-
-describe('telemetry cursor sink', () => {
-  test('the cursor advances on the local outbox write; the drain delivers and verifies', async () => {
-    const store = DurableWorkflowStore.open({ databasePath: dbPath(), clock: () => 5_000 });
-    const clock = clockAt(10_000);
-    const outbox = NeatlogsOutbox.open({ databasePath: dbPath(), clock: clock.fn });
-    const neatlogs = fakeNeatlogs();
-    const tokenizer = createHmacTokenizer(Buffer.alloc(32, 0x5a));
-    try {
-      const workflowId = `workflow:${CANARY}`;
-      store.createWorkflow({ workflowId, checkpoint: { email: CANARY } });
-      const lease = store.acquireLease({ workflowId, ownerId: 'w', ttlMs: 10_000 });
-      store.transitionWorkflow({ ...lease, expectedRevision: 0, toState: 'running' });
-      const sink = createNeatlogsOutboxSink(outbox);
-      const delivered = [];
-      const exporter = createTelemetryExporter({
-        store, tokenizer, sink: records => { delivered.push(...records); return sink(records); }
-      });
-      const flushed = await exporter.flush();
-      assert.equal(flushed.pendingRecords, 0);
-      assert.equal(store.getTelemetryCursor(), 3);
-      assert.equal(outbox.diagnostics().counts.queued, 3);
-
-      // A replay of the same records (the cursor is at-least-once) adds nothing.
-      assert.deepEqual(sink(delivered), { accepted: true, acceptedCount: 3 });
-      assert.equal(outbox.diagnostics().counts.queued, 3);
-
-      await drainNeatlogsOutbox(outbox, config(), { fetch: neatlogs.fetchImpl, sleep: noSleep });
-      clock.now += NEATLOGS_OUTBOX_LIMITS.defaults.readbackDelayMs;
-      const verified = await drainNeatlogsOutbox(outbox, config(), { fetch: neatlogs.fetchImpl, sleep: noSleep });
-      assert.equal(verified.verified, 3);
-      for (const trace of neatlogs.stored.values()) assert.equal(trace.workflowName, NEATLOGS_LIVE_WORKFLOW_NAME);
-      for (const body of neatlogs.bodies) assert.equal(body.toString('latin1').includes(CANARY), false);
-      await exporter.close();
-    } finally {
-      tokenizer.destroy?.();
-      outbox.close();
-      store.close();
     }
   });
 });
