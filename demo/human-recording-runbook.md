@@ -23,8 +23,8 @@ Checked 2026-10-12 at [neatlogs.com/hackathon](https://neatlogs.com/hackathon): 
 
 | Entry field | Value | State |
 | --- | --- | --- |
-| Team | Jevelopers | **Known** (`CLAIM-X-DEST-TEAM-001`); wording review pending |
-| Project | TicketStub | **Known** (`CLAIM-X-DEST-PROJECT-001`); wording review pending. Project name only; product availability is unverified. |
+| Team | Jevelopers | **Known** (`CLAIM-X-DEST-TEAM-001` for the X post; `CLAIM-RUNBOOK-ENTRY-FIELDS-001` for the runbook title card); wording review pending |
+| Project | TicketStub | **Known** (`CLAIM-X-DEST-PROJECT-001` for the X post; `CLAIM-RUNBOOK-ENTRY-FIELDS-001` for the runbook title card); wording review pending. Required qualifier: project name only; product availability is unverified. |
 | Public repository | `https://github.com/Jevelopers-neatHack-2026/getticketstub.com` | **Known** (`CLAIM-X-DEST-REPO-001`); wording review pending. Locator only. |
 | Business plan | `https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/f375fcf20584f5c98dbd4f3b69f884c52994224e/evidence/cfo-ai/2026-10-11-r2` | **Known and required** (`CLAIM-X-DEST-PLAN-001`); wording review pending. Locator only; not Finance approval; `CFO-R2-001` unresolved. |
 | Name (submitter) | | **Unknown.** Human submitter's own name. |
@@ -57,7 +57,7 @@ Checked 2026-10-12 at [neatlogs.com/hackathon](https://neatlogs.com/hackathon): 
 5. The cleared example input (section 4).
 6. Whether a recovery moment is selected (section 5).
 7. The Discord cutoff, official post URL, demo URL and posted URL (section 2).
-8. Claim rows for any spoken line marked draft in section 7.
+8. A claim row for any product line, or any use of the sponsor wording outside this runbook (section 7).
 
 ## 4. Safe example, privacy and redaction
 
@@ -81,14 +81,14 @@ Shot modes depend on the producer-confirmed deployed build. Until it is confirme
 
 | # | Time | Device | Shot (what the human does) | On-screen mode label | Claim IDs |
 | ---: | --- | --- | --- | --- | --- |
-| 1 | 0:00–0:12 | Desktop | Title card: Team Jevelopers, Project TicketStub. | `PLANNED LIVE DEMO`, plus the confirmed build's mode | `CLAIM-X-DEST-TEAM-001`, `CLAIM-X-DEST-PROJECT-001` (wording review pending) |
+| 1 | 0:00–0:12 | Desktop | Title card: Team Jevelopers, Project TicketStub. | `PLANNED LIVE DEMO`, plus the confirmed build's mode | `CLAIM-RUNBOOK-ENTRY-FIELDS-001` (planned, pending; project name only, product availability unverified) |
 | 2 | 0:12–0:30 | Phone | **Input:** open the confirmed deployed URL, enter the cleared example. | build mode as reported | `CLAIM-PRODUCT-CAPABILITY-001` (pending-only wording) |
 | 3 | 0:30–0:50 | Phone | **Research:** show the research result. | build mode as reported | same |
 | 4 | 0:50–1:10 | Phone | **Edit and approve:** make one change, then approve it as the human reviewer. | `HUMAN REVIEW`, build mode | `CLAIM-HUMAN-APPROVAL-CONCEPT-001`, `REHEARSAL-HOLD-REVISE-001` (both planned) |
 | 5 | 1:10–1:20 | Phone | **Save and download:** save, download the file; show Card/Print/Framed as preview only. | `SANDBOX`, `PREVIEW ONLY` | `CLAIM-PRODUCT-CAPABILITY-001` |
-| 6 | 1:20–1:45 | Desktop | **Neatlogs** (five facets). | `SOURCE AVAILABLE` | `SPN-01`, `CLAIM-SPN-01-NEATLOGS-001` |
-| 7 | 1:45–2:10 | Desktop | **Entire** (five facets). | `SOURCE AVAILABLE` | `SPN-02`, `CLAIM-SPN-02-ENTIRE-001` |
-| 8 | 2:10–2:35 | Desktop | **CFO.ai**, reviewer workbook (five facets). | `HYPOTHETICAL FORECAST`; workbook hash on screen | `SPN-03`, `CLAIM-SPN-03-CFO-001` |
+| 6 | 1:20–1:45 | Desktop | **Neatlogs** (five facets). | `SOURCE AVAILABLE` | `SPN-01`, `CLAIM-RUNBOOK-SPN-01-AVAIL-001` (planned, pending); `CLAIM-SPN-01-NEATLOGS-001` unchanged |
+| 7 | 1:45–2:10 | Desktop | **Entire** (five facets). | `SOURCE AVAILABLE` | `SPN-02`, `CLAIM-RUNBOOK-SPN-02-AVAIL-001` (planned, pending); `CLAIM-SPN-02-ENTIRE-001` unchanged |
+| 8 | 2:10–2:35 | Desktop | **CFO.ai**, reviewer workbook (five facets). | `HYPOTHETICAL FORECAST`; workbook hash on screen | `SPN-03`, `CLAIM-RUNBOOK-SPN-03-AVAIL-001` (planned, pending); `CLAIM-SPN-03-CFO-001` unchanged |
 | 9 | 2:35–2:50 | Desktop | Close: submission fields and docs call to action. | `STATUS` | `EVENT-SUBMISSION-FIELDS-001`, `CTA-REPOSITORY-DOCS-001`, `CLAIM-EVAL02-COMPARISON-001` |
 
 ### 15-cell coverage matrix
@@ -139,24 +139,36 @@ CFO.ai: forecasts are hypothetical; owner acceptance was relayed, then an indepe
 
 A count of 14 repositories is not asserted; only the ten published snapshots are shown.
 
-## 7. Spoken lines
+## 7. Beat text and spoken lines
 
-Nothing below is approved for public speaking or captioning. "Approved CTA" means exact docs-CTA text and docs-only target already carry wording and route approval; that is not publication approval. "Draft" lines are proposed, unapproved, bounded to what the cited public source states, and need a claims row before use. Until then a draft line stays silent. No figures: no financial, latency, savings or performance numbers, no "every step/session" claims.
+Nothing below is approved for public speaking, captioning or publication. "Approved CTA" means exact docs-CTA text and docs-only target already carry wording and route approval; that is not publication approval. No figures: no financial, latency, savings or performance numbers, no "every step/session" claims.
+
+**Canonical runbook rows (planned, review pending).** The wording below is copied exactly from `messaging/claims.json`. Each row's destination is this runbook only. It describes what the visible public artifacts show in the beat. It is not a caption, narration, X post or external copy, so it is not a spoken line. Using it in any other destination needs its own claim row and review.
+
+| Shot | Exact allowed wording (runbook beat text) | Row and required qualifier |
+| ---: | --- | --- |
+| 1 | Team Jevelopers. Project TicketStub. | `CLAIM-RUNBOOK-ENTRY-FIELDS-001`. Qualifier: project name only; product availability is unverified. Field review pending. Not the X-only `CLAIM-X-DEST-*` review. |
+| 6 | The published integration-evals evidence at the pinned commit includes Neatlogs trace screenshots and a trace export from selected TicketStub runs. | `CLAIM-RUNBOOK-SPN-01-AVAIL-001`. Listed runs only; cost is provider-reported and partial; no `EVAL-02` comparison; owner acceptance is not independent review; `NL-R1/2/3` stand. |
+| 7 | The published integration-evals evidence at the pinned commit includes Entire graph snapshots from manual GitHub Actions runs on ten repository commits, and one historical checkpoint record. | `CLAIM-RUNBOOK-SPN-02-AVAIL-001`. Manual runs, no agent session or live hook; checkpoint bound to `3358f0d` only; no agent-decision or transcript claim; no total repository count. |
+| 8 | This hypothetical business-plan workbook is the CFO.ai export with four blank-safe opening-cash guards added by the CFO.ai assistant. It is not actual sales, and the generic export has a documented limitation. | `CLAIM-RUNBOOK-SPN-03-AVAIL-001`. Shows no figures; `CFO-R2-001` unresolved; no Finance, package or generic-export waiver; Excel verification is agent-prepared. |
+
+**Existing rows for the close (shot 9).**
 
 | Shot | Proposed line | Basis | State |
 | ---: | --- | --- | --- |
-| 1 | "Team Jevelopers. Project TicketStub." | `CLAIM-X-DEST-TEAM-001`, `-PROJECT-001` | wording review pending |
-| 2 | "[If the confirmed build shows it] Start from an example event." | Confirmed build and rehearsal | draft, conditional |
-| 3 | "[If the confirmed build shows it] Research results show where each fact came from." | Producer script, comment 6118223199; confirmed build | draft, conditional |
-| 4 | "A person reviews and approves each change before it is applied." | Confirmed build; `CLAIM-HUMAN-APPROVAL-CONCEPT-001` is the planned ledger form | draft, conditional |
-| 5 | "[If the confirmed build shows it] Save and download the file. Card, Print and Framed are previews only; checkout is a sandbox." | Confirmed build; producer script | draft, conditional |
-| 6 | "Public Neatlogs trace screenshots and a trace export from selected TicketStub runs are in the repository." | NL README at `31b4f53b` | draft, SOURCE-AVAILABLE |
-| 7 | "Entire graph snapshots from manual GitHub Actions runs on ten repository commits are in the repository, along with one historical checkpoint." | EN README at `a9d68ef0` | draft, SOURCE-AVAILABLE |
-| 8 | "This hypothetical business-plan workbook was exported from CFO.ai. It shows assumptions and blank-safe opening-cash guards; it is not actual sales, and the generic export has a documented limitation." | CFO README at `6420af49` | draft, SOURCE-AVAILABLE |
 | 9 | "Quote-post the official neatlogs post with team, name, project, public repository and demo link." | `EVENT-SUBMISSION-FIELDS-001` | planned |
 | 9 | "Explore the repository docs." | `CTA-REPOSITORY-DOCS-001` | approved CTA text; docs-only target |
 
-Do not say or caption: the brand slogan, "Every …" claims about tracing or checkpointing, "live" or "available now" product claims, a style count, or any financial, latency, savings or performance figure. The requests for new claim rows for the draft lines are returned to the claims owner; the existing sponsor ledger rows allow only "pending" wording, so the draft lines are not yet usable.
+**Product beats (shots 2 to 5): instruction-only.** No product claim row was added, so these shots carry no spoken line and no caption. The human performs the step and the screen shows only what the producer-confirmed deployed build does:
+
+- Shot 2: enter the cleared example event.
+- Shot 3: show the research result and any source marks the build shows.
+- Shot 4: make one change and approve it as the human reviewer, if the build has that step.
+- Shot 5: save and download, with Card, Print and Framed shown as previews and checkout as sandbox, if the build behaves so.
+
+These steps stay conditional until the producer confirms the deployed build, the cleared example, the mode label, the approval step and the download behavior. A product line needs a new claim row for the confirmed build. `CLAIM-PRODUCT-CAPABILITY-001` and `CLAIM-HUMAN-APPROVAL-CONCEPT-001` are unchanged and do not turn the old concept wording into proof of the live build.
+
+Do not say or caption: the brand slogan, "Every …" claims about tracing or checkpointing, "live" or "available now" product claims, a style count, or any financial, latency, savings or performance figure.
 
 ## 8. Pre-take checklist (human)
 
@@ -168,7 +180,7 @@ Do not say or caption: the brand slogan, "Every …" claims about tracing or che
 - [ ] Pins on the card: Neatlogs `31b4f53b`, Entire `a9d68ef0`, CFO.ai r2 `6420af49` and reviewer workbook hash `43884eaf…12a14`; the generic workbook is not shown as accepted.
 - [ ] CFO.ai page, if opened live, is the owner-authorised plan only, with login, credentials, workspace list and unapproved content redacted; otherwise the public screenshot is used.
 - [ ] Recovery decision made; if selected, labelled `DEMO`.
-- [ ] Every spoken line is either an approved line, a draft that now has a claims row, or silent.
+- [ ] Every spoken line is an approved line or has its own claim row for that destination; the four runbook rows are not speech or caption approval. Product beats stay silent until a product row exists.
 - [ ] Editor and submitter confirmed; submitter uses their own X account and name.
 - [ ] Official post URL and Discord cutoff rechecked just before submission.
 - [ ] Team, project, repository and plan link entered by the human submitter; the demo URL is added after publishing.
