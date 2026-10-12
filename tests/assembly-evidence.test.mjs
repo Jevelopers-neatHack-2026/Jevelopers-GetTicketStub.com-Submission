@@ -343,6 +343,76 @@ test("CLI: writes only to ignored or external paths and verify exits non-zero on
   } finally { rmSync(external, { force: true }); }
 }));
 
+test("local git replace refs cannot substitute HEAD content", withRepo((root) => {
+  const clean = buildManifest(root);
+  const original = git(root, "rev-parse", "HEAD:fixtures/approval/index.json").trim();
+  const forged = execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: root, input: "{\"forged\":true}\n", encoding: "utf8" }).trim();
+  git(root, "replace", original, forged);
+  assert.equal(git(root, "status", "--porcelain").trim(), ""); // replace refs are invisible to status
+  const replaced = buildManifest(root);
+  assert.equal(replaced.fixtures["fixtures/approval"].digest, clean.fixtures["fixtures/approval"].digest);
+  assert.deepEqual(verifyManifest(root, clean), []);
+  // Even if the environment asks git to honour replacements, the tool does not.
+  process.env.GIT_NO_REPLACE_OBJECTS = "0";
+  try { assert.equal(buildManifest(root).fixtures["fixtures/approval"].digest, clean.fixtures["fixtures/approval"].digest); }
+  finally { delete process.env.GIT_NO_REPLACE_OBJECTS; }
+}));
+
+test("verify never throws on malformed components.required", withRepo((root) => {
+  const manifest = buildManifest(root);
+  for (const required of [5, null, "x", {}, [null], [5], [{}]]) {
+    let problems;
+    assert.doesNotThrow(() => { problems = reseal(root, manifest, (m) => { m.components.required = required; }); }, JSON.stringify(required));
+    assert.ok(problems.length > 0, JSON.stringify(required));
+  }
+}));
+
+function cli(root) {
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  writeFileSync(join(root, "scripts/assembly-evidence.mjs"), readFileSync(CLI));
+  commit(root, "script");
+  return (...args) => {
+    try { return { code: 0, out: execFileSync("node", [join(root, "scripts/assembly-evidence.mjs"), ...args], { encoding: "utf8", stdio: "pipe" }) }; }
+    catch (error) { return { code: error.status, out: `${error.stdout}${error.stderr}` }; }
+  };
+}
+
+test("--out never clobbers existing secrets, tracked files (including via aliases) or non-manifest files", withRepo((root) => {
+  put(root, ".gitignore", "/out/\n.env*\nnotes.txt\n");
+  commit(root, "ignore");
+  const run = cli(root);
+  put(root, ".env.local", "SECRET=hunter2\n");
+  put(root, "out/keep.pem", "PEM\n");
+  put(root, "notes.txt", "mine\n");
+  const trackedBefore = readFileSync(join(root, "package.json"), "utf8");
+  for (const target of [".env.local", "out/keep.pem", "out/.env", "notes.txt"]) {
+    const result = run("build", "--out", target);
+    assert.equal(result.code, 1, target);
+  }
+  assert.equal(readFileSync(join(root, ".env.local"), "utf8"), "SECRET=hunter2\n");
+  assert.equal(readFileSync(join(root, "out/keep.pem"), "utf8"), "PEM\n");
+  assert.equal(readFileSync(join(root, "notes.txt"), "utf8"), "mine\n");
+
+  // A symlinked alias of the repo directory must still be recognised as in-repo, and the tracked file left alone.
+  const alias = join(tmpdir(), `assembly-alias-${process.pid}`);
+  symlinkSync(root, alias);
+  try {
+    const result = run("build", "--out", join(alias, "package.json"));
+    assert.equal(result.code, 1);
+    assert.match(result.out, /tracked file/);
+    assert.equal(run("build", "--out", join(alias, "docs-out.json")).code, 1); // in-repo, not ignored
+    assert.equal(run("build", "--out", join(alias, ".env.local")).code, 1);
+  } finally { rmSync(alias, { force: true }); }
+  assert.equal(readFileSync(join(root, "package.json"), "utf8"), trackedBefore);
+  assert.equal(readFileSync(join(root, ".env.local"), "utf8"), "SECRET=hunter2\n");
+
+  // A previous manifest may be replaced; no stray temp files remain.
+  assert.equal(run("build").code, 0);
+  assert.equal(run("build").code, 0);
+  assert.equal(run("verify").code, 0);
+  assert.deepEqual(execFileSync("ls", ["-A", join(root, "out/assembly-evidence")], { encoding: "utf8" }).trim().split("\n"), ["manifest.json"]);
+}));
+
 test("the real checkout's inputs build a manifest whose pending pins stay pending", () => {
   const manifest = buildManifest(REAL_ROOT, { allowDirty: true });
   const pending = manifest.components.required.filter((c) => c.status === "pending").map((c) => c.name);

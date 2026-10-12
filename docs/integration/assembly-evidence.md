@@ -22,6 +22,10 @@ repo, or inside it only if git ignores it and it is not tracked, so the app SHA 
 - Two things cannot be recomputed later and are **build-time self-reports**: `toolchain.runtime` (whatever the building
   process said about itself) and `app.dirty` / `app.dirtyPaths` / `app.reproducible` (a dirty build relabelled clean
   after cleaning the tree is not detectable). `verify` checks only that they are well-formed and internally consistent.
+- A vendored `commit` is copied from the tracked `MANIFEST.json`; it is **not** verified against the upstream repository
+  (impossible offline). The repository URL is derived from the inventory, the commit is what the committed manifest says.
+- Git is run with `--no-replace-objects` and without inherited `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`, so local
+  `refs/replace` objects cannot substitute HEAD content.
 - Snapshot only: no command results, no acceptance, no release claim.
 
 ## What is recorded (all from committed HEAD blobs)
@@ -52,8 +56,10 @@ such manifests unless `--allow-dirty` is passed.
 ## Path safety
 
 Vendored paths must be plain relative paths (no `..`, backslash, absolute, NUL, `.env*` or `.pem`) naming regular
-tracked HEAD blobs; symlinks and submodules are refused. `--out` must have a value, may not go through a symlink, and
-in-repo targets must be git-ignored and untracked.
+tracked HEAD blobs; symlinks and submodules are refused. `--out` must have a value, may not go through a symlink, may not be named `.env*`/`*.pem`, and is compared by real
+location (so `/tmp` vs `/private/tmp` aliases of the repo count as in-repo): in-repo targets must be git-ignored and
+untracked. An existing target is overwritten only if it is a regular file that is itself an assembly-evidence manifest;
+new files are created exclusively (temp file + link), previous manifests replaced by atomic rename.
 
 ## Verify
 

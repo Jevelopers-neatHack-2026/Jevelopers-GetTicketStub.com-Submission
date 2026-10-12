@@ -12,8 +12,8 @@
 // untracked or locally modified content is ever opened), and the manifest digest is unkeyed, not an authenticity proof.
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { existsSync, lstatSync, linkSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const SCHEMA = "ticketstub.assembly-evidence/1";
@@ -25,7 +25,13 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const HEX40 = /^[0-9a-f]{40}$/;
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const gitBytes = (root, ...args) => execFileSync("git", args, { cwd: root, maxBuffer: 256 << 20, stdio: ["ignore", "pipe", "pipe"] });
+// Local refs/replace objects and inherited GIT_* location variables must not change what "HEAD" means.
+const gitEnv = () => {
+  const env = { ...process.env, GIT_NO_REPLACE_OBJECTS: "1" };
+  for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR"]) delete env[name];
+  return env;
+};
+const gitBytes = (root, ...args) => execFileSync("git", ["--no-replace-objects", ...args], { cwd: root, env: gitEnv(), maxBuffer: 256 << 20, stdio: ["ignore", "pipe", "pipe"] });
 const git = (root, ...args) => gitBytes(root, ...args).toString("utf8");
 
 // Every identity below is read from committed HEAD blobs (never the working tree), so ignored, untracked,
@@ -258,7 +264,8 @@ export function verifyManifest(root, manifest, { allowDirty = false } = {}) {
   for (const key of ["lockfile", "vendored", "components", "fixtures", "executed", "acceptance"]) {
     if (canonical(manifest[key]) !== canonical(expected[key])) fail(`${key} differs from what HEAD derives`);
   }
-  for (const component of manifest.components?.required ?? []) {
+  const required = Array.isArray(manifest.components?.required) ? manifest.components.required : [];
+  for (const component of required) {
     if (component?.status === "pending" && (component.commit || component.sha256)) fail(`pending component ${component.name} carries a pin`);
   }
   return problems;
@@ -279,22 +286,53 @@ function parseArgs(argv) {
   return args;
 }
 
-// Default/explicit output must not land on a tracked path or inside an un-ignored part of the repo.
+// Resolves symlinks in every existing ancestor, so /tmp vs /private/tmp style aliases compare by real location.
+function realTarget(full) {
+  const missing = [];
+  let current = full;
+  while (!existsSync(current) && dirname(current) !== current) { missing.unshift(current.slice(dirname(current).length + 1)); current = dirname(current); }
+  return join(realpathSync(current), ...missing);
+}
+
+// Default/explicit output must not land on a tracked path or inside an un-ignored part of the repo, must never be a
+// secret-like name, and may only replace a regular file that is itself a previous assembly-evidence manifest.
 function checkOutputPath(root, out) {
   const full = resolve(root, out);
-  const rel = relative(root, full);
-  if (rel === "") throw new Error("--out must be a file path");
-  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return full; // explicit user-chosen path outside the repo
-  let current = root;
-  for (const part of rel.split(sep)) {
-    current = join(current, part);
-    if (existsSync(current) && lstatSync(current).isSymbolicLink()) throw new Error(`refusing to write through a symlink: ${relative(root, current)}`);
+  if (/^\.env/i.test(basename(full)) || /\.pem$/i.test(full)) throw new Error(`refusing secret-like output name: ${basename(full)}`);
+  const lexical = relative(root, full);
+  if (lexical === "") throw new Error("--out must be a file path");
+  if (!(lexical === ".." || lexical.startsWith(`..${sep}`) || isAbsolute(lexical))) {
+    let current = root;
+    for (const part of lexical.split(sep)) {
+      current = join(current, part);
+      if (existsSync(current) && lstatSync(current).isSymbolicLink()) throw new Error(`refusing to write through a symlink: ${relative(root, current)}`);
+    }
   }
-  const tracked = git(root, "ls-files", "--", rel).trim();
-  if (tracked) throw new Error(`refusing to overwrite tracked file: ${rel}`);
-  try { execFileSync("git", ["check-ignore", "-q", "--", rel], { cwd: root }); }
-  catch { throw new Error(`refusing to write inside the repo to a non-ignored path: ${rel} (the app SHA must not be committed)`); }
-  return full;
+  const real = realTarget(full);
+  const rel = relative(realpathSync(root), real);
+  if (rel === "") throw new Error("--out must be a file path");
+  if (!(rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel))) {
+    if (git(root, "ls-files", "--", rel).trim()) throw new Error(`refusing to overwrite tracked file: ${rel}`);
+    try { gitBytes(root, "check-ignore", "-q", "--", rel); }
+    catch { throw new Error(`refusing to write inside the repo to a non-ignored path: ${rel} (the app SHA must not be committed)`); }
+  }
+  if (existsSync(real)) {
+    let previous = null;
+    if (lstatSync(real).isFile()) { try { previous = JSON.parse(readFileSync(real, "utf8")); } catch { previous = null; } }
+    if (previous?.schema !== SCHEMA) throw new Error(`refusing to overwrite an existing file that is not an assembly-evidence manifest: ${real}`);
+  }
+  return real;
+}
+
+// Write to a private temp file, then link (fails if the target appeared) or, for a validated previous manifest, rename.
+function writeOutput(target, text, replacing) {
+  mkdirSync(dirname(target), { recursive: true });
+  const temp = join(dirname(target), `.${basename(target)}.${process.pid}.tmp`);
+  writeFileSync(temp, text, { flag: "wx", mode: 0o644 });
+  try {
+    if (replacing) renameSync(temp, target);
+    else linkSync(temp, target);
+  } finally { if (existsSync(temp)) unlinkSync(temp); }
 }
 
 function main() {
@@ -305,8 +343,7 @@ function main() {
     if (command === "build") {
       const target = checkOutputPath(root, args.out ?? DEFAULT_OUT);
       const manifest = buildManifest(root, { allowDirty: args.allowDirty });
-      mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, `${JSON.stringify(manifest, null, 2)}\n`);
+      writeOutput(target, `${JSON.stringify(manifest, null, 2)}\n`, existsSync(target));
       const pending = manifest.components.required.filter((c) => c.status === "pending").map((c) => c.name);
       console.log(`wrote ${target}\napp ${manifest.app.sha} dirty=${manifest.app.dirty} mode=${MODE} acceptance=not_accepted\npending pins: ${pending.join(", ") || "none"}`);
     } else if (command === "verify") {
