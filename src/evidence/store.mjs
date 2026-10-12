@@ -19,6 +19,11 @@ import { readTextPdf, PDF_TEXT_READER_LIMITS } from '../extraction/pdf/index.mjs
 import { PDF_DECODER_VERSION, PDF_READER_CONFIG_VERSION } from '../extraction/pdf/constants.mjs';
 import { DETERMINISTIC_EXTRACTION_VERSION, extractDeterministically } from '../extraction/index.mjs';
 import { hasSensitiveUrlMaterial, parseAndValidateUrl } from '../security/url-policy.mjs';
+import {
+  isCompletedControlledSvgFetch,
+  verifyControlledSvgIngestWitness,
+} from '../security/internal/fetch-lifecycle.mjs';
+import { inspectSafeAssetBytes, SAFE_ASSET_POLICY_VERSION } from '../security/assets/inspect.mjs';
 
 const SUPPORTED_SOURCE_KINDS = new Set(['external', 'customer_supplied']);
 const FACT_STATUSES = new Set(['sourced', 'inferred', 'customer_supplied', 'missing', 'conflicting']);
@@ -94,6 +99,9 @@ const ASSET_SOURCE_LIMITATIONS = Object.freeze([
   'ZERO_REDIRECT_DOCUMENTS_ONLY',
   'NO_ASSET_BYTES_FETCHED_OR_INSPECTED',
 ]);
+const CONTROLLED_ASSET_ACQUISITION_POLICY_VERSION = 'ei-private-svg-acquisition/1';
+const CONTROLLED_ASSET_MAX_SOURCE_BYTES = 128 * 1024;
+const CONTROLLED_ASSET_MAX_TRANSFORMED_BYTES = 512 * 1024;
 // These profiles validate immutable encrypted derivations. When extraction or
 // selector output changes, add the new writer pair and retain every still-
 // readable historical pair here; never reparse or rewrite a sealed bundle.
@@ -1101,6 +1109,293 @@ function assetDerivationMaterial(sourceContentHash, assetSource, positions) {
   };
 }
 
+function normalizeControlledAssetProvenance(value) {
+  const raw = ownDataRecord(value, new Set([
+    'schemaVersion', 'policyVersion', 'policyId', 'role', 'inspectionPolicyVersion',
+    'sourceEvidenceId', 'sourceEvidenceVersion', 'sourceContentHash', 'sourceDerivationDigest',
+    'sourceUrl', 'candidateId', 'positionIndex', 'sourceForm', 'sourceLocator', 'excerptHash', 'field', 'value',
+    'assetUrl', 'sourceBytesHash', 'transformedBytesHash',
+  ]));
+  if (!raw || raw.schemaVersion !== 1 || raw.policyVersion !== CONTROLLED_ASSET_ACQUISITION_POLICY_VERSION
+    || typeof raw.policyId !== 'string' || !/^[A-Za-z0-9._:-]{1,96}$/.test(raw.policyId)
+    || !['fetched-source', 'transformed'].includes(raw.role)
+    || raw.inspectionPolicyVersion !== 'svg-static-geometry/1'
+    || !validUuid(raw.sourceEvidenceId) || !Number.isSafeInteger(raw.sourceEvidenceVersion) || raw.sourceEvidenceVersion < 1
+    || !isDigest(raw.sourceContentHash) || !isDigest(raw.sourceDerivationDigest)
+    || typeof raw.sourceUrl !== 'string' || raw.sourceUrl.length > 8_192
+    || typeof raw.candidateId !== 'string' || !/^asset-[0-9]{2}$/.test(raw.candidateId)
+    || !Number.isSafeInteger(raw.positionIndex) || raw.positionIndex < 0 || raw.positionIndex >= 64
+    || !ASSET_SOURCE_FORMS.has(raw.sourceForm) || !isDigest(raw.excerptHash)
+    || typeof raw.field !== 'string' || raw.field.length < 1 || raw.field.length > 160 || !isWellFormed(raw.field)
+    || typeof raw.value !== 'string' || raw.value.length < 1 || raw.value.length > 8_192 || !isWellFormed(raw.value)
+    || typeof raw.assetUrl !== 'string' || raw.assetUrl.length < 1 || raw.assetUrl.length > 8_192
+    || typeof raw.sourceBytesHash !== 'string' || !isDigest(raw.sourceBytesHash)
+    || !isDigest(raw.transformedBytesHash)) fail('EVIDENCE_INVALID');
+  const copiedSourceLocator = copyLocator(raw.sourceLocator);
+  if (copiedSourceLocator.kind !== 'text-range') fail('EVIDENCE_INVALID');
+  // Receipt plaintext is wiped after sealing. Own a mutable locator here so
+  // cleanup never attempts to mutate a frozen object returned by copyLocator.
+  const sourceLocator = { ...copiedSourceLocator };
+  const sourceUrl = raw.sourceUrl;
+  validateUrl(sourceUrl);
+  const assetUrl = validateUrl(raw.assetUrl).href;
+  if (hasSensitiveAssetQuery(sourceUrl) || assetUrl !== raw.assetUrl || hasSensitiveAssetQuery(assetUrl)) fail('EVIDENCE_INVALID');
+  return {
+    schemaVersion: 1,
+    policyVersion: raw.policyVersion,
+    policyId: raw.policyId,
+    role: raw.role,
+    inspectionPolicyVersion: raw.inspectionPolicyVersion,
+    sourceEvidenceId: raw.sourceEvidenceId,
+    sourceEvidenceVersion: raw.sourceEvidenceVersion,
+    sourceContentHash: raw.sourceContentHash,
+    sourceDerivationDigest: raw.sourceDerivationDigest,
+    sourceUrl,
+    candidateId: raw.candidateId,
+    positionIndex: raw.positionIndex,
+    sourceForm: raw.sourceForm,
+    sourceLocator,
+    excerptHash: raw.excerptHash,
+    field: raw.field,
+    value: raw.value,
+    assetUrl,
+    sourceBytesHash: raw.sourceBytesHash,
+    transformedBytesHash: raw.transformedBytesHash,
+  };
+}
+
+function controlledAssetProvenanceMatchesBytes(provenance, bytes, contentHash) {
+  if (!provenance || provenance.role === undefined || contentHash !== digest(bytes)) return false;
+  return provenance.role === 'fetched-source'
+    ? provenance.sourceBytesHash === contentHash && bytes.byteLength <= CONTROLLED_ASSET_MAX_SOURCE_BYTES
+    : provenance.transformedBytesHash === contentHash && bytes.byteLength <= CONTROLLED_ASSET_MAX_TRANSFORMED_BYTES;
+}
+
+function controlledAssetSourceMatches(provenance, evidence) {
+  const metadata = evidence?.metadata;
+  const source = evidence?.source;
+  const matches = source?.assetSource?.candidates?.filter((entry) => entry.candidateId === provenance?.candidateId) ?? [];
+  const candidate = evidence?.candidate ?? (matches.length === 1 ? matches[0] : null);
+  const excerptPosition = candidate ? evidence.positions?.[candidate.positionIndex] : null;
+  let excerptMatches = false;
+  if (typeof candidate?.value === 'string') {
+    const bytes = Buffer.from(candidate.value, 'utf8');
+    excerptMatches = isWellFormed(candidate.value) && bytes.toString('utf8') === candidate.value
+      && digest(bytes) === provenance?.excerptHash && candidate.value === provenance?.value;
+    bytes.fill(0);
+  } else if (excerptPosition?.contentBase64 && excerptPosition.contentHash === provenance?.excerptHash) {
+    try {
+      const excerpt = Buffer.from(excerptPosition.contentBase64, 'base64');
+      excerptMatches = excerpt.toString('base64') === excerptPosition.contentBase64
+        && digest(excerpt) === provenance.excerptHash
+        && excerpt.toString('utf8') === provenance.value
+        && Buffer.from(provenance.value, 'utf8').equals(excerpt);
+      excerpt.fill(0);
+    } catch {
+      excerptMatches = false;
+    }
+  } else if (excerptPosition && excerptPosition.contentHash === provenance?.excerptHash) {
+    // Generic materialization deliberately omits excerpt bytes. Callers that
+    // authenticate controlled purpose must separately reopen the exact stored
+    // candidate with readAssetSourceCandidateBinding before accepting it.
+    excerptMatches = true;
+  }
+  return Boolean(provenance && metadata && source && candidate && excerptMatches
+    && metadata.evidenceId === provenance.sourceEvidenceId
+    && metadata.version === provenance.sourceEvidenceVersion
+    && metadata.contentHash === provenance.sourceContentHash
+    && metadata.representation === ASSET_SOURCE_EXCERPT_REPRESENTATION
+    && metadata.derivationDigest === provenance.sourceDerivationDigest
+    && source.sourceUrl === provenance.sourceUrl
+    && source.contentHash === provenance.sourceContentHash
+    && source.redirectChain.length === 0
+    && source.assetSource.derivationDigest === provenance.sourceDerivationDigest
+    && candidate.positionIndex === provenance.positionIndex
+    && candidate.sourceForm === provenance.sourceForm
+    && candidate.field === provenance.field
+    && candidate.fetchSuggestion === provenance.assetUrl
+    && candidate.quarantineReason === null
+    && candidate.excerptHash === provenance.excerptHash
+    && JSON.stringify(candidate.locator) === JSON.stringify(provenance.sourceLocator));
+}
+
+function normalizeAssetAcquisitionBinding(value) {
+  const raw = ownDataRecord(value, new Set([
+    'schemaVersion', 'policyVersion', 'policyId', 'sourceEvidenceId', 'sourceEvidenceVersion',
+    'sourceContentHash', 'sourceDerivationDigest', 'sourceUrl', 'candidateId', 'positionIndex',
+    'sourceForm', 'sourceLocator', 'excerptHash', 'field', 'value', 'assetUrl',
+  ]));
+  if (!raw || raw.schemaVersion !== 1 || raw.policyVersion !== CONTROLLED_ASSET_ACQUISITION_POLICY_VERSION
+    || typeof raw.policyId !== 'string' || !/^[A-Za-z0-9._:-]{1,96}$/.test(raw.policyId)
+    || !validUuid(raw.sourceEvidenceId) || !Number.isSafeInteger(raw.sourceEvidenceVersion) || raw.sourceEvidenceVersion < 1
+    || !isDigest(raw.sourceContentHash) || !isDigest(raw.sourceDerivationDigest)
+    || typeof raw.sourceUrl !== 'string' || raw.sourceUrl.length > 8_192
+    || typeof raw.candidateId !== 'string' || !/^asset-[0-9]{2}$/.test(raw.candidateId)
+    || !Number.isSafeInteger(raw.positionIndex) || raw.positionIndex < 0 || raw.positionIndex >= 64
+    || !ASSET_SOURCE_FORMS.has(raw.sourceForm) || !isDigest(raw.excerptHash)
+    || typeof raw.field !== 'string' || raw.field.length < 1 || raw.field.length > 160 || !isWellFormed(raw.field)
+    || typeof raw.value !== 'string' || raw.value.length < 1 || raw.value.length > 8_192 || !isWellFormed(raw.value)
+    || typeof raw.assetUrl !== 'string' || raw.assetUrl.length < 1 || raw.assetUrl.length > 8_192) fail('EVIDENCE_INVALID');
+  const copiedSourceLocator = copyLocator(raw.sourceLocator);
+  if (copiedSourceLocator.kind !== 'text-range') fail('EVIDENCE_INVALID');
+  const sourceLocator = { ...copiedSourceLocator };
+  const sourceUrl = raw.sourceUrl;
+  validateUrl(sourceUrl);
+  const assetUrl = validateUrl(raw.assetUrl).href;
+  if (assetUrl !== raw.assetUrl || hasSensitiveAssetQuery(sourceUrl) || hasSensitiveAssetQuery(assetUrl)) fail('EVIDENCE_INVALID');
+  return {
+    schemaVersion: 1,
+    policyVersion: raw.policyVersion,
+    policyId: raw.policyId,
+    sourceEvidenceId: raw.sourceEvidenceId,
+    sourceEvidenceVersion: raw.sourceEvidenceVersion,
+    sourceContentHash: raw.sourceContentHash,
+    sourceDerivationDigest: raw.sourceDerivationDigest,
+    sourceUrl,
+    candidateId: raw.candidateId,
+    positionIndex: raw.positionIndex,
+    sourceForm: raw.sourceForm,
+    sourceLocator,
+    excerptHash: raw.excerptHash,
+    field: raw.field,
+    value: raw.value,
+    assetUrl,
+  };
+}
+
+function normalizeAssetSuggestionBindings(value) {
+  const suggestions = safeArray(value, 16);
+  if (!suggestions) fail('EVIDENCE_INVALID');
+  const normalized = suggestions.map(normalizeAssetAcquisitionBinding);
+  const keys = normalized.map((item) => JSON.stringify([item.sourceEvidenceId, item.candidateId, item.assetUrl]));
+  if (new Set(keys).size !== keys.length || new Set(normalized.map((item) => item.assetUrl)).size !== normalized.length) {
+    fail('EVIDENCE_INVALID');
+  }
+  return normalized;
+}
+
+function normalizeAssetAcquisitionCompletion(value) {
+  const raw = ownDataRecord(value, new Set([
+    'schemaVersion', 'policyVersion', 'inspectionPolicyVersion', 'binding',
+    'sourceBytesHash', 'transformedBytesHash', 'originalEvidence', 'transformedEvidence',
+  ]));
+  if (!raw || raw.schemaVersion !== 1 || raw.policyVersion !== CONTROLLED_ASSET_ACQUISITION_POLICY_VERSION
+    || raw.inspectionPolicyVersion !== 'svg-static-geometry/1'
+    || !isDigest(raw.sourceBytesHash) || !isDigest(raw.transformedBytesHash)) fail('EVIDENCE_INVALID');
+  const binding = normalizeAssetAcquisitionBinding(raw.binding);
+  const evidence = (input) => {
+    const item = ownDataRecord(input, new Set(['evidenceId', 'version', 'contentHash', 'byteLength']));
+    if (!item || !validUuid(item.evidenceId) || !Number.isSafeInteger(item.version) || item.version < 1
+      || !isDigest(item.contentHash) || !Number.isSafeInteger(item.byteLength) || item.byteLength < 1
+      || item.byteLength > CONTROLLED_ASSET_MAX_TRANSFORMED_BYTES) fail('EVIDENCE_INVALID');
+    return { evidenceId: item.evidenceId, version: item.version, contentHash: item.contentHash, byteLength: item.byteLength };
+  };
+  const originalEvidence = evidence(raw.originalEvidence);
+  const transformedEvidence = evidence(raw.transformedEvidence);
+  if (originalEvidence.evidenceId === transformedEvidence.evidenceId
+    || originalEvidence.contentHash !== raw.sourceBytesHash
+    || transformedEvidence.contentHash !== raw.transformedBytesHash
+    || originalEvidence.byteLength > CONTROLLED_ASSET_MAX_SOURCE_BYTES) fail('EVIDENCE_INVALID');
+  return {
+    schemaVersion: 1,
+    policyVersion: raw.policyVersion,
+    inspectionPolicyVersion: raw.inspectionPolicyVersion,
+    binding,
+    sourceBytesHash: raw.sourceBytesHash,
+    transformedBytesHash: raw.transformedBytesHash,
+    originalEvidence,
+    transformedEvidence,
+  };
+}
+
+function validateAssetReceiptCrossBinding(candidateBinding, acquisition, evidenceRefs, outcome = null, code = 'EVIDENCE_INVALID') {
+  if (candidateBinding === undefined && acquisition === undefined) return;
+  if (candidateBinding && !acquisition && ['failed', 'access_restricted'].includes(outcome)) {
+    const reference = evidenceRefs.find((item) => item.evidenceId === candidateBinding.sourceEvidenceId);
+    if (!reference || reference.version !== candidateBinding.sourceEvidenceVersion
+      || reference.contentHash !== candidateBinding.sourceContentHash
+      || reference.representation !== ASSET_SOURCE_EXCERPT_REPRESENTATION
+      || reference.derivationDigest !== candidateBinding.sourceDerivationDigest) fail(code);
+    return;
+  }
+  if (!candidateBinding || !acquisition
+    || JSON.stringify(candidateBinding) !== JSON.stringify(acquisition.binding)) fail(code);
+  const byId = new Map(evidenceRefs.map((item) => [item.evidenceId, item]));
+  for (const artifact of [acquisition.originalEvidence, acquisition.transformedEvidence]) {
+    const reference = byId.get(artifact.evidenceId);
+    if (!reference || reference.version !== artifact.version || reference.contentHash !== artifact.contentHash
+      || reference.representation !== 'raw' || reference.derivationDigest !== null
+      || reference.positions.length < 1 || reference.positions.length > 128) fail(code);
+    let endByte = 0;
+    for (const position of reference.positions) {
+      if (position.locator.kind !== 'text-range' || position.locator.startByte !== endByte
+        || position.locator.endByte <= endByte) fail(code);
+      endByte = position.locator.endByte;
+    }
+    if (endByte !== artifact.byteLength) fail(code);
+  }
+}
+
+function validateAssetReceiptMaterialized(candidateBinding, acquisition, evidenceViews, outcome = null, code = 'EVIDENCE_INVALID') {
+  if (candidateBinding === undefined && acquisition === undefined) return;
+  if (!candidateBinding || (!acquisition && !['failed', 'access_restricted'].includes(outcome))) fail(code);
+  const byId = new Map(evidenceViews.map((item) => [item.metadata.evidenceId, item]));
+  const source = byId.get(candidateBinding.sourceEvidenceId);
+  if (!controlledAssetSourceMatches(candidateBinding, source)) fail(code);
+  if (!acquisition) return;
+  for (const [artifact, role, hash] of [
+    [acquisition.originalEvidence, 'fetched-source', acquisition.sourceBytesHash],
+    [acquisition.transformedEvidence, 'transformed', acquisition.transformedBytesHash],
+  ]) {
+    const view = byId.get(artifact.evidenceId);
+    const controlled = view?.source?.controlledAsset;
+    if (!view || view.metadata.version !== artifact.version || view.metadata.contentHash !== artifact.contentHash
+      || artifact.contentHash !== hash || view.source.sourceUrl !== candidateBinding.assetUrl
+      || view.source.redirectChain.length !== 0 || view.source.contentType.toLowerCase().split(';', 1)[0].trim() !== 'image/svg+xml'
+      || !controlled || controlled.role !== role
+      || controlled.policyVersion !== candidateBinding.policyVersion
+      || controlled.policyId !== candidateBinding.policyId
+      || controlled.sourceEvidenceId !== candidateBinding.sourceEvidenceId
+      || controlled.sourceEvidenceVersion !== candidateBinding.sourceEvidenceVersion
+      || controlled.sourceContentHash !== candidateBinding.sourceContentHash
+      || controlled.sourceDerivationDigest !== candidateBinding.sourceDerivationDigest
+      || controlled.candidateId !== candidateBinding.candidateId
+      || controlled.positionIndex !== candidateBinding.positionIndex
+      || controlled.sourceForm !== candidateBinding.sourceForm
+      || JSON.stringify(controlled.sourceLocator) !== JSON.stringify(candidateBinding.sourceLocator)
+      || controlled.excerptHash !== candidateBinding.excerptHash
+      || controlled.field !== candidateBinding.field || controlled.value !== candidateBinding.value
+      || controlled.assetUrl !== candidateBinding.assetUrl
+      || controlled.sourceBytesHash !== acquisition.sourceBytesHash
+      || controlled.transformedBytesHash !== acquisition.transformedBytesHash) fail(code);
+  }
+}
+
+function validateAssetSuggestionBindings(assetSuggestions, suggestions, evidenceRefs, evidenceViews,
+  code = 'EVIDENCE_INVALID') {
+  const byId = new Map(evidenceRefs.map((item) => [item.evidenceId, item]));
+  const materializedById = new Map(evidenceViews.map((item) => [item.metadata.evidenceId, item]));
+  for (const binding of assetSuggestions) {
+    const reference = byId.get(binding.sourceEvidenceId);
+    const materialized = materializedById.get(binding.sourceEvidenceId);
+    if (!reference || reference.version !== binding.sourceEvidenceVersion
+      || reference.contentHash !== binding.sourceContentHash
+      || reference.representation !== ASSET_SOURCE_EXCERPT_REPRESENTATION
+      || reference.derivationDigest !== binding.sourceDerivationDigest) fail(code);
+    if (!controlledAssetSourceMatches(binding, materialized)) fail(code);
+    const ref = {
+      evidenceId: binding.sourceEvidenceId,
+      contentHash: binding.sourceContentHash,
+      locator: binding.sourceLocator,
+      field: binding.field,
+      value: binding.assetUrl,
+    };
+    const found = suggestions.some((suggestion) => suggestion.url === binding.assetUrl
+      && suggestion.sourceRefs.some((candidateRef) => JSON.stringify(candidateRef) === JSON.stringify(ref)));
+    if (!found) fail(code);
+  }
+}
+
 function assetJsonPointerParts(value) {
   if (typeof value !== 'string' || value.length > 2_048 || !isWellFormed(value)
     || (value !== '' && !value.startsWith('/')) || /~(?![01])/.test(value)) return null;
@@ -1546,7 +1841,7 @@ export function createEvidenceStore(options) {
       || !isWellFormed(input.runId) || /[\u0000-\u001f\u007f]/.test(input.runId)
       || !isDigest(input.configHash)) fail('EVIDENCE_INVALID');
     const rawCandidate = ownDataRecord(input.candidate,
-      new Set(['candidateId', 'canonicalUrl', 'suppliedUrl', 'depth', 'seed', 'sourceRefs']));
+      new Set(['candidateId', 'canonicalUrl', 'suppliedUrl', 'depth', 'seed', 'sourceRefs', 'assetAcquisition']));
     if (!rawCandidate || !isDigest(rawCandidate.candidateId) || typeof rawCandidate.canonicalUrl !== 'string'
       || rawCandidate.canonicalUrl.length > 8_192 || !Number.isSafeInteger(rawCandidate.depth)
       || rawCandidate.depth < 0 || rawCandidate.depth > 2 || typeof rawCandidate.seed !== 'boolean') fail('EVIDENCE_INVALID');
@@ -1589,6 +1884,8 @@ export function createEvidenceStore(options) {
       depth: rawCandidate.depth,
       seed: rawCandidate.seed,
       sourceRefs,
+      ...(Object.hasOwn(rawCandidate, 'assetAcquisition')
+        ? { assetAcquisition: normalizeAssetAcquisitionBinding(rawCandidate.assetAcquisition) } : {}),
     };
     const rawClaim = ownDataRecord(input.claim, new Set(['claimKey', 'workerId', 'leaseToken']));
     if (!rawClaim || typeof rawClaim.claimKey !== 'string' || rawClaim.claimKey.length < 1 || rawClaim.claimKey.length > 192
@@ -1607,6 +1904,7 @@ export function createEvidenceStore(options) {
     const input = ownDataRecord(value, new Set([
       'completionKey', 'outcome', 'suggestions', 'limitations', 'identity',
       'truncatedCount', 'omittedSuggestions', 'sourceLinkCandidatesOmittedCount',
+      'assetAcquisition', 'assetSuggestions',
     ]));
     if (!input || typeof input.completionKey !== 'string' || input.completionKey.length < 1
       || input.completionKey.length > 192 || !/^[A-Za-z0-9._:-]+$/.test(input.completionKey)
@@ -1645,6 +1943,10 @@ export function createEvidenceStore(options) {
       suggestions,
       limitations: [...limitationsInput],
       identity,
+      ...(Object.hasOwn(input, 'assetAcquisition')
+        ? { assetAcquisition: normalizeAssetAcquisitionCompletion(input.assetAcquisition) } : {}),
+      ...(Object.hasOwn(input, 'assetSuggestions')
+        ? { assetSuggestions: normalizeAssetSuggestionBindings(input.assetSuggestions) } : {}),
     };
     if (!hasOmissionMetadata) return completion;
     const truncatedCount = input.truncatedCount;
@@ -2380,6 +2682,7 @@ export function createEvidenceStore(options) {
     }
     const storedSource = ownDataRecord(bundle.source, new Set([
       'sourceUrl', 'canonicalUrl', 'redirectChain', 'contentType', 'sourceKind', 'retrievedAt', 'retrievedAtMs', 'contentHash',
+      'controlledAsset',
     ]));
     if (!storedSource || !SUPPORTED_SOURCE_KINDS.has(storedSource.sourceKind)
       || typeof storedSource.sourceUrl !== 'string' || typeof storedSource.canonicalUrl !== 'string'
@@ -2393,6 +2696,12 @@ export function createEvidenceStore(options) {
     const redirects = safeArray(storedSource.redirectChain, 20);
     if (!redirects || redirects.some((url) => typeof url !== 'string')) fail('EVIDENCE_INTEGRITY');
     for (const url of redirects) validateUrl(url);
+
+    const controlledAsset = storedSource.controlledAsset === undefined
+      ? null : normalizeControlledAssetProvenance(storedSource.controlledAsset);
+    if (controlledAsset && (storedSource.sourceKind !== 'external'
+      || storedSource.contentType.toLowerCase().split(';', 1)[0].trim() !== 'image/svg+xml'
+      || storedSource.sourceUrl !== controlledAsset.assetUrl || redirects.length !== 0)) fail('EVIDENCE_INTEGRITY');
 
     const sourceDescriptorBytes = 256 + Buffer.byteLength(
       storedSource.sourceUrl + storedSource.canonicalUrl + storedSource.contentType
@@ -2467,13 +2776,16 @@ export function createEvidenceStore(options) {
     if (!bundledPositions || bundledPositions.length !== record.positionIds.length) fail('EVIDENCE_INTEGRITY');
     const positionById = new Map();
     let recordPositionBytes = 0;
+    let controlledAssetCoveredBytes = 0;
+    const controlledAssetChunks = [];
     const seenPageText = new Set();
     for (const value of bundledPositions) {
       const stored = ownDataRecord(value, new Set(['id', 'locator', 'contentHash', 'content']));
       if (!stored || !validUuid(stored.id) || !isDigest(stored.contentHash) || typeof stored.content !== 'string'
         || positionById.has(stored.id)) fail('EVIDENCE_INTEGRITY');
       const positionBytes = base64DecodedByteLength(stored.content);
-      if (positionBytes > Math.min(limits.maxPositionBytes, SELECTED_BATCH_LIMITS.positionRecordBytes)) fail('EVIDENCE_INVALID');
+      const recordPositionLimit = Math.min(limits.maxPositionBytes, SELECTED_BATCH_LIMITS.positionRecordBytes);
+      if (positionBytes > recordPositionLimit) fail('EVIDENCE_INVALID');
       recordPositionBytes += positionBytes;
       if (!Number.isSafeInteger(recordPositionBytes)
         || recordPositionBytes > Math.min(limits.maxStoredPayloadBytes, SELECTED_BATCH_LIMITS.evidencePositionBytes)) fail('EVIDENCE_INVALID');
@@ -2500,6 +2812,12 @@ export function createEvidenceStore(options) {
       try {
         if (bytes.toString('base64') !== stored.content || bytes.byteLength !== positionBytes
           || digest(bytes) !== stored.contentHash || record.positionHashes[stored.id] !== stored.contentHash) fail('EVIDENCE_INTEGRITY');
+        if (controlledAsset) {
+          if (locator.kind !== 'text-range' || locator.startByte !== controlledAssetCoveredBytes
+            || locator.endByte - locator.startByte !== bytes.byteLength) fail('EVIDENCE_INTEGRITY');
+          controlledAssetCoveredBytes = locator.endByte;
+          controlledAssetChunks.push(Buffer.from(bytes));
+        }
       } finally {
         bytes.fill(0);
       }
@@ -2507,8 +2825,17 @@ export function createEvidenceStore(options) {
         locator,
         contentHash: stored.contentHash,
         byteLength: positionBytes,
-        ...(representation === ASSET_SOURCE_EXCERPT_REPRESENTATION ? { contentBase64: stored.content } : {}),
+        ...(representation === ASSET_SOURCE_EXCERPT_REPRESENTATION || controlledAsset ? { contentBase64: stored.content } : {}),
       });
+    }
+    if (controlledAsset) {
+      const completeBytes = Buffer.concat(controlledAssetChunks, controlledAssetCoveredBytes);
+      try {
+        if (!controlledAssetProvenanceMatchesBytes(controlledAsset, completeBytes, record.contentHash)) fail('EVIDENCE_INTEGRITY');
+      } finally {
+        completeBytes.fill(0);
+        for (const chunk of controlledAssetChunks) chunk.fill(0);
+      }
     }
     if (record.positionIds.some((id) => !positionById.has(id))) fail('EVIDENCE_INTEGRITY');
     if (representation === PDF_DERIVED_REPRESENTATION) {
@@ -2556,6 +2883,7 @@ export function createEvidenceStore(options) {
         contentHash: storedSource.contentHash,
         ...(derivedPdf ? { derivedPdf: deepFreeze(cloneJsonValue(derivedPdf)) } : {}),
         ...(assetSource ? { assetSource } : {}),
+        ...(controlledAsset ? { controlledAsset: deepFreeze(cloneJsonValue(controlledAsset)) } : {}),
       }),
       positions: Object.freeze(positions),
     });
@@ -2812,7 +3140,8 @@ export function createEvidenceStore(options) {
     return scope;
   }
 
-  async function ingestEvidence(scope, inputValue, signal, snapshotAttempt = 0) {
+  async function ingestEvidenceInternal(scope, inputValue, signal, snapshotAttempt = 0,
+    controlledAsset = null, retentionCeiling = null) {
     const info = scopeInfo(scope);
     checkCancellation(signal);
     const input = ownDataRecord(inputValue, new Set([
@@ -2828,8 +3157,16 @@ export function createEvidenceStore(options) {
     const redirectChainInput = input.redirectChain === undefined ? [] : safeArray(input.redirectChain, 20);
     if (!redirectChainInput) fail('EVIDENCE_INVALID');
     const redirectChain = redirectChainInput.map((item) => validateUrl(item).href);
-    const sourceBytes = copyBytes(input.content, limits.maxSourceBytes);
+    const sourceByteLimit = controlledAsset
+      ? Math.min(limits.maxSourceBytes, controlledAsset.role === 'fetched-source'
+        ? CONTROLLED_ASSET_MAX_SOURCE_BYTES : CONTROLLED_ASSET_MAX_TRANSFORMED_BYTES)
+      : limits.maxSourceBytes;
+    const sourceBytes = copyBytes(input.content, sourceByteLimit);
     const sourceContentHash = digest(sourceBytes);
+    if (controlledAsset && !controlledAssetProvenanceMatchesBytes(controlledAsset, sourceBytes, sourceContentHash)) {
+      sourceBytes.fill(0);
+      fail('EVIDENCE_INVALID');
+    }
     const positionInputs = safeArray(input.positions, limits.maxPositionCount);
     if (!positionInputs) {
       sourceBytes.fill(0);
@@ -2842,9 +3179,13 @@ export function createEvidenceStore(options) {
         const position = ownDataRecord(item, new Set(['locator', 'content']));
         if (!position || !Object.hasOwn(position, 'locator') || !Object.hasOwn(position, 'content')) fail('EVIDENCE_INVALID');
         const locator = copyLocator(position.locator);
-        const bytes = copyBytes(position.content, limits.maxPositionBytes);
+        const bytes = copyBytes(position.content, controlledAsset
+          ? Math.min(limits.maxPositionBytes, SELECTED_BATCH_LIMITS.positionRecordBytes)
+          : limits.maxPositionBytes);
         positionTotal += bytes.byteLength;
-        if (positionTotal > limits.maxStoredPayloadBytes) fail('EVIDENCE_INVALID');
+        if (positionTotal > (controlledAsset
+          ? Math.min(limits.maxStoredPayloadBytes, SELECTED_BATCH_LIMITS.evidencePositionBytes)
+          : limits.maxStoredPayloadBytes)) fail('EVIDENCE_INVALID');
         checkSnapshot(sourceBytes, locator, bytes);
         positions.push({ id: randomUUID(), locator, contentHash: digest(bytes), bytes });
       }
@@ -2869,7 +3210,7 @@ export function createEvidenceStore(options) {
       sealed?.bytes.fill(0);
       duplicateBytes?.fill(0);
       for (const key of historicalIndexKeys) key.fill(0);
-      return ingestEvidence(scope, inputValue, signal, snapshotAttempt + 1);
+      return ingestEvidenceInternal(scope, inputValue, signal, snapshotAttempt + 1, controlledAsset, retentionCeiling);
     };
     try {
       const sourceKind = input.sourceKind;
@@ -2879,17 +3220,29 @@ export function createEvidenceStore(options) {
       checkCancellation(signal);
       activeIndexKey = await resolveKey(info, 'source-index', undefined, signal);
       checkCancellation(signal);
-      const sourceIdentity = `${sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}`;
+      const sourceIdentity = controlledAsset
+        ? `controlled-svg:${controlledAsset.policyVersion}:${controlledAsset.policyId}:${controlledAsset.role}\u0000${sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}`
+        : `${sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}`;
       directory = await tenantDirectory(info);
       const snapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         const transactionTime = currentTime();
         await expireRecords(database, manifest, transactionTime);
-        if (retention.expiresAtMs <= transactionTime) fail('EVIDENCE_EXPIRED');
+        let expiresAtMs = retention.expiresAtMs;
+        if (retentionCeiling) {
+          const ceilingRecord = manifest.records[retentionCeiling.evidenceId];
+          if (!ceilingRecord || ceilingRecord.state !== 'available'
+            || ceilingRecord.version !== retentionCeiling.version
+            || ceilingRecord.contentHash !== retentionCeiling.contentHash
+            || ceilingRecord.expiresAtMs <= transactionTime) fail('EVIDENCE_EXPIRED');
+          expiresAtMs = Math.min(expiresAtMs, ceilingRecord.expiresAtMs);
+        }
+        if (expiresAtMs <= transactionTime) fail('EVIDENCE_EXPIRED');
         const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
         const document = row?.document ?? null;
         return {
           document,
+          expiresAtMs,
           manifest: document === null ? emptyManifest(info.tenantHash) : validateManifest(JSON.parse(document), info.tenantHash),
         };
       }, signal);
@@ -2912,6 +3265,7 @@ export function createEvidenceStore(options) {
       const latestId = priorIds.at(-1);
       const latest = latestId ? snapshot.manifest.records[latestId] : null;
       if (latest?.state === 'available' && latest.contentHash === sourceContentHash) {
+        if (retentionCeiling && latest.expiresAtMs > snapshot.expiresAtMs) fail('EVIDENCE_INVALID');
         const duplicateRecord = copyEvidenceRecord(latest);
         duplicateBytes = await withExpiryAwareTenantLock(info, directory, async (database) => {
           const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
@@ -2926,6 +3280,9 @@ export function createEvidenceStore(options) {
         );
         try {
           const view = materializeEvidenceBundle(info, duplicateRecord, existing, budget);
+          if (controlledAsset && JSON.stringify(view.source.controlledAsset) !== JSON.stringify(controlledAsset)) {
+            fail('EVIDENCE_INTEGRITY');
+          }
           if (currentTime() >= latest.expiresAtMs) fail('EVIDENCE_EXPIRED');
           const stillCurrent = await withExpiryAwareTenantLock(info, directory, async (database, lockSignal) => {
             checkCancellation(lockSignal);
@@ -2966,6 +3323,7 @@ export function createEvidenceStore(options) {
           retrievedAt: input.retrievedAt,
           retrievedAtMs,
           contentHash: sourceContentHash,
+          ...(controlledAsset ? { controlledAsset } : {}),
         },
         positions: positions.map((position) => ({
           id: position.id,
@@ -2978,7 +3336,7 @@ export function createEvidenceStore(options) {
       sealedBytes = sealed.bytes;
       checkCancellation(signal);
       const committedAtMs = currentTime();
-      if (retention.expiresAtMs <= committedAtMs) fail('EVIDENCE_EXPIRED');
+      if (snapshot.expiresAtMs <= committedAtMs) fail('EVIDENCE_EXPIRED');
       const duplicateGroupId = digest(Buffer.from(`event-intelligence:duplicate:v1:${info.tenantHash}:${sourceContentHash}`, 'utf8'));
       const record = {
         id: evidenceId,
@@ -2990,7 +3348,7 @@ export function createEvidenceStore(options) {
         createdAt: new Date(committedAtMs).toISOString(),
         createdAtMs: committedAtMs,
         retrievedAtMs,
-        expiresAtMs: retention.expiresAtMs,
+        expiresAtMs: snapshot.expiresAtMs,
         policyId: retention.policyId,
         policyVersion: retention.policyVersion,
         state: 'available',
@@ -3002,7 +3360,7 @@ export function createEvidenceStore(options) {
         checkCancellation(lockSignal);
         const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
         if ((row?.document ?? null) !== snapshot.document) return false;
-        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        if (snapshot.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         const manifest = snapshot.document === null
           ? emptyManifest(info.tenantHash)
           : validateManifest(JSON.parse(row.document), info.tenantHash);
@@ -3025,7 +3383,7 @@ export function createEvidenceStore(options) {
         await commitNewBundle(database, 'evidence', evidenceId, sealedBytes);
         await writeManifest(database, manifest);
         checkCancellation(lockSignal);
-        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        if (snapshot.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         return true;
       }, signal);
       if (!committed) return await retryWithFreshSnapshot();
@@ -3047,6 +3405,103 @@ export function createEvidenceStore(options) {
       sealed?.bytes.fill(0);
       duplicateBytes?.fill(0);
       for (const key of historicalIndexKeys) key.fill(0);
+    }
+  }
+
+  async function ingestEvidence(scope, input, signal) {
+    return ingestEvidenceInternal(scope, input, signal);
+  }
+
+  async function ingestControlledAssetEvidence(scope, inputValue, request, signal) {
+    const info = scopeInfo(scope);
+    const input = ownDataRecord(inputValue, new Set([
+      'document', 'retentionHandle', 'retentionCeiling', 'provenance', 'witness',
+    ]));
+    const ceilingInput = ownDataRecord(input?.retentionCeiling, new Set(['evidence', 'version', 'contentHash']));
+    const document = ownDataRecord(input?.document, new Set(['url', 'contentType', 'bytes', 'fetchedAt', 'redirects']));
+    if (!input || !document || !validTimestamp(document.fetchedAt) || !input.retentionHandle
+      || typeof input.retentionHandle !== 'object'
+      || !ceilingInput || !Number.isSafeInteger(ceilingInput.version) || ceilingInput.version < 1
+      || !isDigest(ceilingInput.contentHash)) fail('EVIDENCE_INVALID');
+    const ceilingInfo = evidenceInfo(scope, ceilingInput.evidence);
+    if (ceilingInfo.tenantHash !== info.tenantHash || ceilingInfo.tenantId !== info.tenantId) fail('EVIDENCE_DENIED');
+    const provenance = normalizeControlledAssetProvenance(input.provenance);
+    if (provenance.sourceEvidenceId !== ceilingInfo.evidenceId
+      || provenance.sourceEvidenceVersion !== ceilingInput.version
+      || provenance.sourceContentHash !== ceilingInput.contentHash) fail('EVIDENCE_INVALID');
+    if (document.url !== provenance.assetUrl || document.contentType !== 'image/svg+xml'
+      || document.redirects !== 0 || !isCompletedControlledSvgFetch(input.document, provenance.assetUrl)
+      || !(await verifyControlledSvgIngestWitness(input.witness, input.document, provenance, 'before-ingest'))) {
+      fail('EVIDENCE_INVALID');
+    }
+    const maximum = Math.min(limits.maxSourceBytes, CONTROLLED_ASSET_MAX_SOURCE_BYTES);
+    const sourceBytes = copyBytes(document.bytes, maximum);
+    let storedBytes;
+    let inspection;
+    try {
+      if (digest(sourceBytes) !== provenance.sourceBytesHash
+        || sourceBytes.byteLength > CONTROLLED_ASSET_MAX_SOURCE_BYTES) fail('EVIDENCE_INVALID');
+      await authorize(info, request, 'ingest_controlled_asset_evidence', [ceilingInfo.evidenceId], [], signal);
+      authorizeCurrent(info, request, 'ingest_controlled_asset_evidence', [ceilingInfo.evidenceId], []);
+      const sourceHandle = ceilingInput.evidence;
+      const currentSource = await materializeSelectedInternal(
+        scope,
+        { evidence: [sourceHandle], facts: [] },
+        request,
+        signal,
+        'ingest_controlled_asset_evidence',
+        'selected',
+        1,
+      );
+      const parent = currentSource.evidence[0];
+      if (!controlledAssetSourceMatches(provenance, parent)) fail('EVIDENCE_INVALID');
+      inspection = inspectSafeAssetBytes(sourceBytes, { contentType: 'image/svg+xml', signal });
+      if (!inspection || inspection.action !== 'transformed'
+        || inspection.policyVersion !== SAFE_ASSET_POLICY_VERSION
+        || inspection.sourceHash !== provenance.sourceBytesHash
+        || inspection.transformedHash !== provenance.transformedBytesHash) fail('EVIDENCE_INVALID');
+      const transformed = inspection.copyTransformedBytes();
+      storedBytes = provenance.role === 'fetched-source' ? Buffer.from(sourceBytes) : copyBytes(transformed, Math.min(
+        limits.maxSourceBytes,
+        CONTROLLED_ASSET_MAX_TRANSFORMED_BYTES,
+        SELECTED_BATCH_LIMITS.evidencePositionBytes,
+      ));
+      transformed.fill(0);
+      if (!controlledAssetProvenanceMatchesBytes(provenance, storedBytes, digest(storedBytes))) fail('EVIDENCE_INVALID');
+      const chunkMaximum = Math.min(limits.maxPositionBytes, SELECTED_BATCH_LIMITS.positionRecordBytes);
+      if (!Number.isSafeInteger(chunkMaximum) || chunkMaximum < 1
+        || storedBytes.byteLength > Math.min(limits.maxStoredPayloadBytes, SELECTED_BATCH_LIMITS.evidencePositionBytes)) fail('EVIDENCE_INVALID');
+      const positions = [];
+      for (let startByte = 0; startByte < storedBytes.byteLength; startByte += chunkMaximum) {
+        if (positions.length >= Math.min(limits.maxPositionCount, SELECTED_BATCH_LIMITS.positionCount)) fail('EVIDENCE_INVALID');
+        const endByte = Math.min(storedBytes.byteLength, startByte + chunkMaximum);
+        positions.push({
+          locator: Object.freeze({ kind: 'text-range', startByte, endByte }),
+          content: storedBytes.subarray(startByte, endByte),
+        });
+      }
+      const stored = await ingestEvidenceInternal(scope, {
+        sourceUrl: provenance.assetUrl,
+        content: storedBytes,
+        contentType: 'image/svg+xml',
+        retrievedAt: document.fetchedAt,
+        sourceKind: 'external',
+        positions,
+        retentionHandle: input.retentionHandle,
+      }, signal, 0, provenance, {
+        evidenceId: ceilingInfo.evidenceId,
+        version: ceilingInput.version,
+        contentHash: ceilingInput.contentHash,
+      });
+      if (!(await verifyControlledSvgIngestWitness(input.witness, input.document, provenance, 'after-ingest'))) {
+        fail('EVIDENCE_INVALID');
+      }
+      authorizeCurrent(info, request, 'ingest_controlled_asset_evidence', [ceilingInfo.evidenceId, stored.metadata.evidenceId], []);
+      return Object.freeze({ outcome: 'stored', ...stored });
+    } finally {
+      sourceBytes.fill(0);
+      storedBytes?.fill(0);
+      inspection?.dispose?.();
     }
   }
 
@@ -3887,15 +4342,21 @@ export function createEvidenceStore(options) {
     );
   }
 
-  async function withPrivatePayload(scope, handle, request) {
+  async function withPrivatePayloadInternal(scope, handle, request, signal, controlledAssetRead = false,
+    assetSourceCandidateId = null) {
     const info = evidenceInfo(scope, handle);
-    if (typeof config.consumePrivatePayload !== 'function') fail('EVIDENCE_DENIED');
+    if (!controlledAssetRead && assetSourceCandidateId === null
+      && typeof config.consumePrivatePayload !== 'function') fail('EVIDENCE_DENIED');
+    checkCancellation(signal);
     const directory = await tenantDirectory(info);
     const budget = newMaterializationBudget();
     let snapshot;
     let bundle;
     let finalVerifier;
     let positions = [];
+    let assetBytes;
+    let sourceSnapshot;
+    let authorizationEvidenceIds = [info.evidenceId];
     try {
       snapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
@@ -3907,9 +4368,9 @@ export function createEvidenceStore(options) {
         const sealed = readSealedBundle(database, 'evidence', record.id);
         if (copied.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         return { ...copied, sealed, budget };
-      });
-      await authorize(info, request, 'read_private_evidence', [info.evidenceId]);
-      bundle = await decryptSealedBundle(info, info.evidenceId, 'evidence', snapshot.sealed, snapshot.encryptionKeyId, resolveKey, budget);
+      }, signal);
+      await authorize(info, request, 'read_private_evidence', [info.evidenceId], [], signal);
+      bundle = await decryptSealedBundle(info, info.evidenceId, 'evidence', snapshot.sealed, snapshot.encryptionKeyId, resolveKey, budget, signal);
       const view = materializeEvidenceBundle(info, snapshot, bundle, budget);
       let privatePayloadBytes = 0;
       positions = bundle.positions.map((position) => {
@@ -3923,52 +4384,158 @@ export function createEvidenceStore(options) {
           content: Buffer.from(position.content, 'base64'),
         });
       });
-      finalVerifier = makeFinalStateVerifier(info, directory, [info.evidenceId], []);
-      authorizeCurrent(info, request, 'read_private_evidence', [info.evidenceId]);
-      finalVerifier.check({ evidence: [snapshot], facts: [] });
+      if (controlledAssetRead) {
+        const controlled = view.source.controlledAsset;
+        if (!controlled || positions.length < 1) fail('EVIDENCE_INTEGRITY');
+        const sourceHandle = newEvidenceHandle(info, controlled.sourceEvidenceId);
+        const currentSource = await readAssetSourceCandidateBinding(
+          scope, sourceHandle, controlled.candidateId, request, signal,
+        );
+        if (!controlledAssetSourceMatches(controlled, currentSource)) fail('EVIDENCE_EXPIRED');
+        sourceSnapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
+          const manifest = await readManifest(database, info.tenantHash);
+          await expireRecords(database, manifest, currentTime());
+          const record = manifest.records[controlled.sourceEvidenceId];
+          if (!record || record.state !== 'available' || record.version !== controlled.sourceEvidenceVersion
+            || record.contentHash !== controlled.sourceContentHash || record.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+          return copyEvidenceRecord(record, Math.min(limits.maxPositionCount, SELECTED_BATCH_LIMITS.positionCount), budget);
+        }, signal);
+        authorizationEvidenceIds = [info.evidenceId, controlled.sourceEvidenceId];
+        const ordered = [...positions].sort((left, right) => left.locator.startByte - right.locator.startByte);
+        const chunks = [];
+        let covered = 0;
+        try {
+          for (const position of ordered) {
+            if (position.locator.kind !== 'text-range' || position.locator.startByte !== covered
+              || position.locator.endByte - position.locator.startByte !== position.content.byteLength) fail('EVIDENCE_INTEGRITY');
+            covered = position.locator.endByte;
+            chunks.push(position.content);
+          }
+          assetBytes = Buffer.concat(chunks, covered);
+        } catch (error) {
+          for (const chunk of chunks) if (chunk !== assetBytes) chunk.fill(0);
+          throw error;
+        }
+        if (!controlledAssetProvenanceMatchesBytes(controlled, assetBytes, snapshot.contentHash)) fail('EVIDENCE_INTEGRITY');
+      }
+      let assetSourceCandidate;
+      if (assetSourceCandidateId !== null) {
+        if (typeof assetSourceCandidateId !== 'string' || !/^asset-[0-9]{2}$/.test(assetSourceCandidateId)
+          || snapshot.representation !== ASSET_SOURCE_EXCERPT_REPRESENTATION || !view.source.assetSource
+          || view.source.assetSource.sourceUrl !== view.source.sourceUrl
+          || view.source.redirectChain.length !== 0) fail('EVIDENCE_INVALID');
+        const matches = view.source.assetSource.candidates.filter((candidate) => candidate.candidateId === assetSourceCandidateId);
+        if (matches.length !== 1) fail('EVIDENCE_INVALID');
+        const candidate = matches[0];
+        const position = positions[candidate.positionIndex];
+        if (!position || candidate.quarantineReason !== null || candidate.fetchSuggestion === null
+          || candidate.excerptHash !== position.contentHash
+          || JSON.stringify(candidate.locator) !== JSON.stringify(position.locator)
+          || position.content.byteLength < 1 || position.content.byteLength > ASSET_SOURCE_MAX_EXCERPT_BYTES
+          || digest(position.content) !== candidate.excerptHash) fail('EVIDENCE_INTEGRITY');
+        let value;
+        try {
+          value = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(position.content);
+        } catch {
+          fail('EVIDENCE_INTEGRITY');
+        }
+        if (!isWellFormed(value) || value.length < 1 || value.length > 8_192
+          || !Buffer.from(value, 'utf8').equals(position.content)) fail('EVIDENCE_INTEGRITY');
+        assetSourceCandidate = Object.freeze({
+          candidateId: candidate.candidateId,
+          positionIndex: candidate.positionIndex,
+          sourceForm: candidate.sourceForm,
+          locator: deepFreeze(cloneJsonValue(candidate.locator)),
+          excerptHash: candidate.excerptHash,
+          field: candidate.field,
+          fetchSuggestion: candidate.fetchSuggestion,
+          quarantineReason: candidate.quarantineReason,
+          value,
+        });
+      }
+      finalVerifier = makeFinalStateVerifier(info, directory, authorizationEvidenceIds, []);
+      authorizeCurrent(info, request, 'read_private_evidence', authorizationEvidenceIds);
+      finalVerifier.check({ evidence: [snapshot, ...(sourceSnapshot ? [sourceSnapshot] : [])], facts: [] });
       if (currentTime() >= snapshot.expiresAtMs) fail('EVIDENCE_EXPIRED');
       let consumed;
-      try {
-        consumed = config.consumePrivatePayload(Object.freeze({
-          tenantId: info.tenantId,
-          evidenceId: info.evidenceId,
-          metadata: frozenMetadata(snapshot),
-          source: view.source,
-          positions: Object.freeze(positions),
-          request,
-        }));
-      } catch {
-        fail('EVIDENCE_DENIED');
+      if (controlledAssetRead) {
+        if (!assetBytes) fail('EVIDENCE_INTEGRITY');
+      } else if (assetSourceCandidateId === null) {
+        try {
+          consumed = config.consumePrivatePayload(Object.freeze({
+            tenantId: info.tenantId,
+            evidenceId: info.evidenceId,
+            metadata: frozenMetadata(snapshot),
+            source: view.source,
+            positions: Object.freeze(positions),
+            request,
+          }));
+        } catch {
+          fail('EVIDENCE_DENIED');
+        }
       }
-      if (utilTypes.isPromise(consumed)) {
+      if (!controlledAssetRead && assetSourceCandidateId === null && utilTypes.isPromise(consumed)) {
         observeNativeRejectedPromise(consumed);
         fail('EVIDENCE_DENIED');
       }
-      try {
-        consumed = copySynchronousConsumerResult(consumed);
-      } catch {
-        fail('EVIDENCE_DENIED');
+      if (!controlledAssetRead && assetSourceCandidateId === null) {
+        try {
+          consumed = copySynchronousConsumerResult(consumed);
+        } catch {
+          fail('EVIDENCE_DENIED');
+        }
       }
       // The trusted consumer is synchronous, but it can reenter the host and
       // mutate the request or the persisted record. Revalidate before returning
       // its result, with no awaited work or write transaction held.
-      authorizeCurrent(info, request, 'read_private_evidence', [info.evidenceId]);
-      finalVerifier.check({ evidence: [snapshot], facts: [] });
+      authorizeCurrent(info, request, 'read_private_evidence', authorizationEvidenceIds);
+      finalVerifier.check({ evidence: [snapshot, ...(sourceSnapshot ? [sourceSnapshot] : [])], facts: [] });
       if (currentTime() >= snapshot.expiresAtMs) fail('EVIDENCE_EXPIRED');
+      if (controlledAssetRead) {
+        const result = Object.freeze({
+          evidenceId: info.evidenceId,
+          metadata: frozenMetadata(snapshot),
+          source: view.source,
+          bytes: assetBytes,
+        });
+        assetBytes = undefined;
+        return result;
+      }
+      if (assetSourceCandidateId !== null) {
+        return Object.freeze({
+          evidenceId: info.evidenceId,
+          metadata: frozenMetadata(snapshot),
+          source: view.source,
+          candidate: assetSourceCandidate,
+        });
+      }
       return consumed;
     } catch (error) {
       if (error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED') {
-        try { await persistExpirySweep(info, directory); } catch (cleanupError) { throw safePublicError(cleanupError); }
+        try { await persistExpirySweep(info, directory, signal); } catch (cleanupError) { throw safePublicError(cleanupError); }
       } else if (!(error instanceof EvidenceStoreError)) {
-        try { await persistExpirySweep(info, directory); } catch (cleanupError) { throw safePublicError(cleanupError); }
+        try { await persistExpirySweep(info, directory, signal); } catch (cleanupError) { throw safePublicError(cleanupError); }
       }
       throw safePublicError(error);
     } finally {
+      assetBytes?.fill(0);
       for (const position of positions) position.content.fill(0);
       snapshot?.sealed.fill(0);
       if (bundle) wipePrivateTree(bundle);
       finalVerifier?.close();
     }
+  }
+
+  async function withPrivatePayload(scope, handle, request) {
+    return withPrivatePayloadInternal(scope, handle, request, undefined, false);
+  }
+
+  async function readAssetSourceCandidateBinding(scope, handle, candidateId, request, signal) {
+    return withPrivatePayloadInternal(scope, handle, request, signal, false, candidateId);
+  }
+
+  async function readControlledAssetBytes(scope, handle, request, signal) {
+    return withPrivatePayloadInternal(scope, handle, request, signal, true);
   }
 
   async function parseFactInput(inputValue) {
@@ -4512,6 +5079,18 @@ export function createEvidenceStore(options) {
 
       const { evidenceRefs, factRefs } = receiptReferencesForMaterialized(info, materialized);
       validatePrivateReceiptSuggestionEvidence(completion, evidenceRefs);
+      validateAssetReceiptCrossBinding(base.candidate.assetAcquisition, completion.assetAcquisition,
+        evidenceRefs, completion.outcome);
+      validateAssetReceiptMaterialized(base.candidate.assetAcquisition, completion.assetAcquisition,
+        materialized?.evidence ?? [], completion.outcome);
+      validateAssetSuggestionBindings(completion.assetSuggestions ?? [], completion.suggestions,
+        evidenceRefs, materialized?.evidence ?? []);
+      for (const binding of completion.assetSuggestions ?? []) {
+        const currentCandidate = await readAssetSourceCandidateBinding(
+          scope, newEvidenceHandle(info, binding.sourceEvidenceId), binding.candidateId, request, signal,
+        );
+        if (!controlledAssetSourceMatches(binding, currentCandidate)) fail('EVIDENCE_EXPIRED');
+      }
       const evidenceIds = evidenceRefs.map((reference) => reference.evidenceId);
       const factIds = factRefs.map((reference) => reference.factId);
       if (evidenceRefs.length > 8 || factRefs.length > 128
@@ -4668,6 +5247,8 @@ export function createEvidenceStore(options) {
         factRefs: body.factRefs,
       });
       validatePrivateReceiptSuggestionEvidence(completion, evidenceRefs, 'EVIDENCE_INTEGRITY');
+      validateAssetReceiptCrossBinding(base.candidate.assetAcquisition, completion.assetAcquisition,
+        evidenceRefs, completion.outcome, 'EVIDENCE_INTEGRITY');
       if (evidenceRefs.length === 0 && factRefs.length === 0
         && (completion.identity.entityCandidates.length > 0 || completion.identity.occurrenceCandidates.length > 0
           || completion.identity.transitionLinks.length > 0 || completion.identity.unresolvedTransitions.length > 0
@@ -4688,6 +5269,8 @@ export function createEvidenceStore(options) {
             || JSON.stringify(actual.factRefs) !== JSON.stringify(factRefs)) fail('EVIDENCE_INTEGRITY');
           if (currentTime() >= row.expiresAtMs
             || !privateReceiptRowMatchesSync(info, directory, receiptKey, row)) fail('EVIDENCE_EXPIRED');
+        validateAssetSuggestionBindings(completion.assetSuggestions ?? [], completion.suggestions,
+          evidenceRefs, current.evidence, 'EVIDENCE_INTEGRITY');
           authorizeCurrent(info, request, 'read_private_run_receipt', evidenceIds, factIds);
           checkCancellation(signal);
           finalVerifier.check(snapshot);
@@ -4715,6 +5298,10 @@ export function createEvidenceStore(options) {
           || !privateReceiptRowMatchesSync(info, directory, receiptKey, row)) fail('EVIDENCE_EXPIRED');
         materialized = { evidence: Object.freeze([]), facts: Object.freeze([]) };
       }
+      validateAssetReceiptMaterialized(base.candidate.assetAcquisition, completion.assetAcquisition,
+        materialized.evidence, completion.outcome, 'EVIDENCE_INTEGRITY');
+      validateAssetSuggestionBindings(completion.assetSuggestions ?? [], completion.suggestions,
+        evidenceRefs, materialized.evidence, 'EVIDENCE_INTEGRITY');
       const result = deepFreeze({
         state: 'complete',
         runId: base.runId,
@@ -4730,6 +5317,8 @@ export function createEvidenceStore(options) {
         sourceLinkCandidatesOmittedCount: completion.sourceLinkCandidatesOmittedCount ?? 0,
         limitations: completion.limitations,
         identity: completion.identity,
+        ...(completion.assetAcquisition ? { assetAcquisition: completion.assetAcquisition } : {}),
+        ...(completion.assetSuggestions ? { assetSuggestions: completion.assetSuggestions } : {}),
         evidenceIds: Object.freeze(evidenceIds),
         facts: materialized.facts,
       });
@@ -4745,6 +5334,7 @@ export function createEvidenceStore(options) {
   return Object.freeze({
     scopeForAuthenticatedRequest: createScope,
     ingestEvidence,
+    ingestControlledAssetEvidence,
     ingestAssetSourceEvidence,
     ingestDerivedPdfEvidence,
     lookupEvidence,
@@ -4752,6 +5342,8 @@ export function createEvidenceStore(options) {
     listEvidencePositions,
     materializeSelected,
     withPrivatePayload,
+    readAssetSourceCandidateBinding,
+    readControlledAssetBytes,
     appendFact,
     lookupFact,
     readFact,
