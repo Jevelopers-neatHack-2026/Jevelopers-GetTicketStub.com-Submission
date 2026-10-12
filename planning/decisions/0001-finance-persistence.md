@@ -20,8 +20,8 @@
 | --- | --- | --- | --- |
 | A. SQLite on `/private` | None. It would mean rewriting the triggers, numeric, jsonb and advisory-lock concurrency, and dropping the tested Postgres 16 path. | Free, already mounted | Correctness rewrite. Preview and Publish share a file. Single writer. Restore unproven. |
 | B. Host's managed MySQL | None. Same rewrite in a different dialect. | Bundled with host (check current pricing) | Same as A. Also not what the tests run. |
-| C. **Neon** managed Postgres | Full. Supports 14-18 (16.15 as of Aug 2026). Region selectable. | Usage-based Free / Launch / Scale plans (check current pricing). PITR history window: Free 6 h, Launch up to 7 days, Scale up to 30 days. Uptime SLA on Scale only. | Free tier scales to zero after 5 min (cold start on first ledger write). Pooled endpoint is PgBouncer **transaction mode**. |
-| D. **Supabase** Postgres | Full Postgres | Free / Pro / Team (check current pricing). Daily backups on Pro (7 days), none on Free. PITR add-on priced separately. | Direct host is IPv6-only unless you buy the IPv4 add-on. From an IPv4-only host you must use the Supavisor session pooler. Extra platform surface (auth, storage) we don't need. |
+| C. **Neon** managed Postgres | Full. Supports 14-18 (16.15 as of Aug 2026). Region selectable. | Usage-based Free / Launch / Scale plans (check current pricing). PITR history window: Free 6 h, Launch up to 7 days, Scale up to 30 days. Uptime SLA on Scale only. | **Every plan, including Launch, scales to zero after 5 min idle by default** (cold start on the next ledger write). Free cannot change this; paid plans can disable it per compute. Pooled endpoint is PgBouncer **transaction mode**. |
+| D. **Supabase** Postgres | Full Postgres | Free / Pro / Team (check current pricing). Daily backups on Pro (7 days), none on Free. PITR is a separately priced add-on and needs at least the Small compute add-on. | Direct host is IPv6-only unless you buy the IPv4 add-on. The shared Supavisor pooler is IPv4 in both session and transaction mode; prefer session mode, because transaction mode does not support prepared statements. Extra platform surface (auth, storage) we don't need. |
 | E. Self-managed Postgres (VPS / container) | Full | Owner runs patching, backups, TLS | Operational load the team hasn't staffed |
 
 Connection notes (from the provider docs):
@@ -37,23 +37,23 @@ Connection notes (from the provider docs):
 - Keep finance data in its own database, separate from the customer-app SQLite. This keeps single data ownership (ARC-02) and leaves the app's storage migration as a separate decision.
 - Use the **direct** endpoint for migrations, and the direct endpoint or a small app-side `pg` pool for the ledger at hackathon volumes. Use the pooled endpoint only after the ledger and pricing suites pass against it.
 
-Supabase (D) is the fallback if the owner already has an account there. It requires session-mode pooling or the IPv4 add-on.
+Supabase (D) is the fallback if the owner already has an account there. From the IPv4 host it needs the Supavisor pooler (session mode preferred) or the IPv4 add-on.
 
 SQLite (A) and MySQL (B) are rejected because they would discard the tested correctness design.
 
 ## Consequences
 
-- Finance writes leave the host. Ledger availability now depends on network and Neon uptime. The ledger already fails closed when unavailable (architecture section 6: stop billable work that cannot be accounted for).
+- Finance writes leave the host. Ledger availability now depends on network and Neon uptime. Failing closed when the ledger is unavailable (architecture section 6: stop billable work that cannot be accounted for) is a **design requirement, not shipped behaviour**: `ingestFinancial` in `cost-intelligence` `src/ledger/index.ts` is still a `blockedBoundary` stub ("not available until the accounting leaf is delivered"). The composition must enforce it.
 - Two backup domains: Neon PITR for finance, and SQLite `VACUUM INTO` for the app. LIVE-02 must restore both to a consistent point and record it.
 - Credentials are a new production secret, stored only in the GoDaddy environment (Preview and Publish). **Use separate Neon branches or databases for Preview and Publish.** They share `/private`, so they must not share a finance database.
-- A Free-tier cold start adds latency to the first write after idle. Acceptable for demos, but not on a live checkout path.
+- Scale to zero is on by default on every Neon plan, so the first write after 5 min idle pays a cold start. Acceptable for preview and demos, not on a live checkout path: disable it on the production compute (paid plans only; owner action 3).
 - The composition (host-injected pool, adapter in getticketstub.com) still has to be built. It is blocked behind CI-05A/B for reservations, but the ledger and pricing stores can be wired first.
 
 ## Owner actions
 
 1. **Decide:** Neon (recommended), Supabase, or another option. Also decide the plan tier and region.
 2. **Account and terms:** create the provider organization under the company identity and accept its terms of service and data processing addendum yourself. Agents must not do this. Check current pricing and set a spend cap or alert.
-3. **Create** project `cost-intelligence`, Postgres **16**, with two databases or branches (`preview`, `production`). Each gets a least-privilege application role (no CREATEDB, no superuser) and a separate migration role. **Do not** add the disposable-database marker.
+3. **Create** project `cost-intelligence`, Postgres **16**, with two databases or branches (`preview`, `production`). Each gets a least-privilege application role (no CREATEDB, no superuser) and a separate migration role. **Do not** add the disposable-database marker. **Disable scale to zero on the `production` compute** (requires a paid plan); decide whether `preview` keeps it.
 4. **Secrets:** put the connection strings into GoDaddy Preview and Publish environment variables under a production name such as `FINANCE_DATABASE_URL` (the name is final once the adapter PR fixes it). Never use `CI_TEST_DATABASE_URL` for this, and never paste values into issues or evidence.
 5. **Backups:** confirm the PITR window. Approve a restore rehearsal for LIVE-02.
 6. **Then:** authorize the adapter and migration PRs (cost-intelligence owners, getticketstub.com composition) and a run of the ledger/pricing suites against a *separate disposable* branch.
@@ -62,7 +62,8 @@ SQLite (A) and MySQL (B) are rejected because they would discard the tested corr
 
 - Neon connection pooling: https://neon.com/docs/connect/connection-pooling
 - Neon plans: https://neon.com/docs/introduction/plans (check current pricing)
+- Neon scale to zero (5 min default; fixed on Free, can be disabled on paid plans): https://neon.com/docs/introduction/scale-to-zero
 - Neon Postgres versions: https://neon.com/docs/postgresql/postgres-version-policy
-- Supabase connecting: https://supabase.com/docs/guides/database/connecting-to-postgres
-- Supabase backups: https://supabase.com/docs/guides/platform/backups (check current pricing)
+- Supabase connecting (shared pooler IPv4 in both modes; no prepared statements in transaction mode): https://supabase.com/docs/guides/database/connecting-to-postgres
+- Supabase backups (PITR needs at least the Small compute add-on): https://supabase.com/docs/guides/platform/backups (check current pricing)
 - GoDaddy Node.js hosting: https://www.godaddy.com/hosting/nodejs (lists managed MySQL; confirm in dashboard)
