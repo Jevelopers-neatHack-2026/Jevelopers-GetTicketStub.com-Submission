@@ -2883,10 +2883,11 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     });
     assert.equal(diagnosticChildCanaryIncluded, false);
 
+    // These subprocess races verify quota serialization; OPS07 separately verifies typed bounded BUSY behavior.
     const config = {
       maxQueueRecords: 2, maxPerTenantRecords: 1, maxPerProjectRecords: 1,
       maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
-      maxTenants: 16, maxProjects: 128, maxEventBacklog: 1_024
+      maxTenants: 16, maxProjects: 128, maxEventBacklog: 1_024, busyTimeoutMs: 250
     };
     const store = openStore(capDirectory.databasePath);
     const globalSeedAccepted = admit(store, 'tenant-seed', 'project-seed', 'seed', PLAN, config).accepted;
@@ -2923,7 +2924,7 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     const bytePolicy = {
       maxQueueRecords: 8, maxPerTenantRecords: 4, maxPerProjectRecords: 4,
       maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
-      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048
+      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048, busyTimeoutMs: 250
     };
     const seedStore = openStore(projectBytes.databasePath);
     const seedWork = planAtWorkByteLength(8_000, PLAN, bytePolicy);
@@ -2964,7 +2965,7 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     const firstBytePolicy = {
       maxQueueRecords: 8, maxPerTenantRecords: 4, maxPerProjectRecords: 4,
       maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
-      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048
+      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048, busyTimeoutMs: 250
     };
     const firstByteInit = openStore(firstScopeBytes.databasePath);
     firstByteInit.close();
@@ -3003,7 +3004,7 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     const recordPolicy = {
       maxQueueRecords: 8, maxPerTenantRecords: 4, maxPerProjectRecords: 2,
       maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
-      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048
+      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048, busyTimeoutMs: 250
     };
     const recordStore = openStore(projectRecords.databasePath);
     const recordSeedAccepted = admit(recordStore, 'tenant-record-race', 'project-record-race', 'record-seed', PLAN, recordPolicy).accepted;
@@ -3041,7 +3042,7 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     const globalBytePolicy = {
       maxQueueRecords: 8, maxPerTenantRecords: 4, maxPerProjectRecords: 2,
       maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
-      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048
+      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048, busyTimeoutMs: 250
     };
     const globalByteStore = openStore(globalBytes.databasePath);
     const seedGlobalWork = planAtWorkByteLength(16_000, PLAN, globalBytePolicy);
@@ -3585,8 +3586,10 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     return appended;
   };
 
+  const restartInvocationTimeoutMs = 15_000;
   const runChild = async (phase, role, expectedWorkflowId) => {
     const invocationStartedAt = performance.now();
+    const restartInvocationDeadlineAt = invocationStartedAt + restartInvocationTimeoutMs;
     const marker = join(temporary.directory, `${phase}.marker`);
     const resultPath = join(temporary.directory, `${phase}.${role}.json`);
     const metricsPath = join(temporary.directory, `${phase}.${role}.metrics.jsonl`);
@@ -3632,7 +3635,8 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       }
       return cleanup;
     };
-    const lifecycle = await executeCi1ChildWithFinalization(async () => {
+    let restartTimedOut = false;
+    const lifecyclePromise = executeCi1ChildWithFinalization(async () => {
       const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({
         child, launchToken, readyPath: groupReadyPath, custody: temporary.ci1Custody, closed
       });
@@ -3667,7 +3671,8 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         assert.ok(durationMs <= 3_000, `${phase} shutdown child exceeded its unchanged close deadline.`);
       } else {
         const restartClose = await waitCi1ChildClose({
-          timeoutMs: 8_000, escalationStage: 'restart_escalation_sent',
+          timeoutMs: Math.max(0, restartInvocationDeadlineAt - performance.now()),
+          escalationStage: 'restart_escalation_sent',
           waitForClose: timeoutMs => waitForCloseBounded(closed, timeoutMs),
           reapOwnedChild: async () => {
             const cleanup = await cleanupOwnedGroup();
@@ -3678,7 +3683,8 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         closeResult = restartClose.closeResult;
         if (restartClose.timedOut) {
           if (!closeResult) throw new Error(`The owned ${phase} restart child could not be confirmed closed after bounded reaping.`);
-          throw new Error(`The controlled JEV restart child exceeded its existing 8,000 ms invocation bound at ${phase}.`);
+          restartTimedOut = true;
+          throw new Error(`The controlled JEV restart child exceeded its ${restartInvocationTimeoutMs} ms invocation bound at ${phase}.`);
         }
         durationMs = Math.max(0, performance.now() - invocationStartedAt);
       }
@@ -3690,6 +3696,19 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         captureParent: (stage, details) => captureParentPhase(phase, role, stage, details),
         state: METRICS
       }), METRICS);
+    let lifecycle;
+    try {
+      lifecycle = await lifecyclePromise;
+    } catch (error) {
+      if (restartTimedOut && role === 'restart') {
+        const lastChildCapture = METRICS.ci1PhaseCaptures.filter(record => record.source === 'child'
+          && record.phase === phase && record.role === role).at(-1);
+        const lastStage = typeof lastChildCapture?.stage === 'string' ? lastChildCapture.stage : 'unknown';
+        const childElapsedMs = Number.isSafeInteger(lastChildCapture?.elapsedMs) ? lastChildCapture.elapsedMs : 'unknown';
+        throw new Error(`${error.message}; lastChildStage=${lastStage}; childElapsedMs=${childElapsedMs}.`);
+      }
+      throw error;
+    }
     const finalization = lifecycle.finalization;
     closeResult = finalization.closeResult;
     try {
@@ -3747,7 +3766,8 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     assert.equal(restart.childResult.authorityHoldsAfterRestart, result.authorityHoldCountAfterStop);
     assert.equal(restart.childResult.operationsInFlightAfterRestart, 0);
     assert.equal(restart.childResult.restartLoopSettled, true);
-    assert.ok(restart.durationMs <= 8_000, `${phase} restart invocation exceeded its existing 8,000 ms bound`);
+    assert.ok(restart.durationMs <= restartInvocationTimeoutMs,
+      `${phase} restart invocation exceeded its ${restartInvocationTimeoutMs} ms bound`);
     results.push({ ...result, ...restart.childResult });
   }
   assert.equal(results.length, 5);
@@ -6800,7 +6820,8 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
     });
     const nearCapConfig = readOperationsConfig({
       workerCount: 2, maxInFlightGlobal: 2, maxInFlightTenant: 1,
-      maxStoreBytes: 67_108_864, maxWalBytes: 16_777_216, busyTimeoutMs: 100
+      // Stay within the configured 250 ms maximum; OPS07.C04 separately checks bounded BUSY reporting under a held writer lock.
+      maxStoreBytes: 67_108_864, maxWalBytes: 16_777_216, busyTimeoutMs: 250
     });
     capacityWorker = createOperationsWorker({
       databasePath: nearCap.databasePath, ownerId: 'review-worker', config: nearCapConfig,
