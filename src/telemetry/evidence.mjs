@@ -1,6 +1,6 @@
 import { executeMeteredAttempt, MeteringContractError, validateMeteredAttempt, validateUsageObservation } from "../contracts/metering.mjs";
 import { canonicalSerialize } from "../contracts/validation.mjs";
-import { types as utilTypes } from "node:util";
+import { snapshotBoundedPlainJson } from "../contracts/plain-json.mjs";
 import { assertSafePublicIdentifier, isSensitivePublicField, projectPublicTelemetry, TelemetryPrivacyError } from "./privacy.mjs";
 
 export const CREATIVE_TELEMETRY_SCHEMA = "creative.telemetry.evidence/v1";
@@ -303,37 +303,10 @@ function bindMeteringPort(port, capture, { observationOutbox, attempt, trustedSc
 function snapshotExecutionTarget(value, attempt) {
   if (value === undefined) return undefined;
   try {
-    let nodes = 0;
-    let bytes = 0;
-    const seen = new Set();
-    const check = (current, depth) => {
-      if (++nodes > 20_000 || depth > 64) throw new Error();
-      if (typeof current === "string") {
-        bytes += Buffer.byteLength(current, "utf8");
-        if (current.length > 128_000 || bytes > 1024 * 1024) throw new Error();
-        return;
-      }
-      if (current === null || typeof current === "boolean" ||
-          typeof current === "number" && Number.isFinite(current)) return;
-      if (!current || typeof current !== "object" || utilTypes.isProxy(current) || seen.has(current) ||
-          !Array.isArray(current) && ![Object.prototype, null].includes(Object.getPrototypeOf(current))) throw new Error();
-      seen.add(current);
-      if (Array.isArray(current) && current.length > 20_000) throw new Error();
-      for (const key of Reflect.ownKeys(current)) {
-        if (typeof key !== "string") throw new Error();
-        bytes += Buffer.byteLength(key, "utf8");
-        if (key.length > 256 || bytes > 1024 * 1024) throw new Error();
-        const descriptor = Object.getOwnPropertyDescriptor(current, key);
-        if (!Object.hasOwn(descriptor, "value")) throw new Error();
-        if (Array.isArray(current) && key === "length") continue;
-        check(descriptor.value, depth + 1);
-      }
-      seen.delete(current);
-    };
-    check(value, 0);
-    if (Object.keys(value).some((key) => !["target_binding", "target_binding_sha256", "deadline_at"].includes(key)) ||
-        !/^sha256:[a-f0-9]{64}$/.test(value.target_binding_sha256) || !validTimestamp(value.deadline_at)) throw new Error();
-    const serialized = canonicalSerialize(value);
+    const snapshot = snapshotBoundedPlainJson(value);
+    if (Object.keys(snapshot).some((key) => !["target_binding", "target_binding_sha256", "deadline_at"].includes(key)) ||
+        !/^sha256:[a-f0-9]{64}$/.test(snapshot.target_binding_sha256) || !validTimestamp(snapshot.deadline_at)) throw new Error();
+    const serialized = canonicalSerialize(snapshot);
     if (Buffer.byteLength(serialized, "utf8") > 1024 * 1024) throw new Error();
     const captured = JSON.parse(serialized);
     const target = captured.target_binding?.contract === "DecisionExecutionTarget"
