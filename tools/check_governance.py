@@ -52,8 +52,8 @@ def check_sim_records(sim, heads, labels, errors):
             if not re.search(rf"^- \*\*{re.escape(lab)}:\*\*[ \t]*\S", rec, re.M):
                 errors.append(f"simulation record {i} missing or empty field: {lab}")
         rel = re.findall(r"^- \*\*Release eligible:\*\*\s*(.*)$", rec, re.M)
-        if len(rel) != 1 or not re.fullmatch(r"no\b.*", rel[0].strip(), re.I):
-            errors.append(f"simulation record {i} must state exactly one 'Release eligible: no'")
+        if len(rel) != 1 or rel[0].strip().casefold() != "no":
+            errors.append(f"simulation record {i} must state exactly one 'Release eligible: no' with no extra text")
         for row in re.findall(r"^\| .*\| ([0-9a-fA-F]{8,}) \|$", rec, re.M):
             if not re.fullmatch(r"[0-9a-f]{64}", row):
                 errors.append(f"simulation record {i} has a non-64-hex SHA-256: {row}")
