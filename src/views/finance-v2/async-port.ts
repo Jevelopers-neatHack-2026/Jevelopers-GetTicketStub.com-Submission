@@ -91,8 +91,13 @@ export type FinanceV2PortResolution =
 export function resolveFinanceV2Port(mode: FinanceV2DataMode, port: unknown): FinanceV2PortResolution {
   if (mode !== 'SYNTHETIC_PROPOSAL') return { status: 'unavailable', reason: 'integrated-port-not-accepted' };
   if (port === undefined || port === null) return { status: 'unavailable', reason: 'no-port' };
-  if (typeof port !== 'object' || (port as { kind?: unknown }).kind !== 'SYNTHETIC_PROPOSAL' || typeof (port as { read?: unknown }).read !== 'function') return { status: 'unavailable', reason: 'port-kind-mismatch' };
-  return { status: 'available', port: port as FinanceV2SyntheticReadPort };
+  try {
+    if (typeof port !== 'object' || (port as { kind?: unknown }).kind !== 'SYNTHETIC_PROPOSAL' || typeof (port as { read?: unknown }).read !== 'function') return { status: 'unavailable', reason: 'port-kind-mismatch' };
+    return { status: 'available', port: port as FinanceV2SyntheticReadPort };
+  } catch {
+    // An unreadable injected port is unavailable; never let its metadata escape during rendering.
+    return { status: 'unavailable', reason: 'port-kind-mismatch' };
+  }
 }
 
 export type FinanceV2ReadOptions = Readonly<{
@@ -231,7 +236,11 @@ export function useFinanceV2Read(options: FinanceV2ReadOptions): FinanceV2ReadRe
     if (!active) return undefined;
     const { options: o, trail: trailNow, cursor: cursorNow } = latest.current;
     const resolved = resolveFinanceV2Port(o.mode, o.port);
-    if (resolved.status !== 'available') return undefined;
+    if (resolved.status !== 'available') {
+      // The host can replace or invalidate metadata between render and setup. Settle instead of leaving a read with no timer.
+      setSettled({ key: readKey, attempt, state: { phase: 'unavailable', reason: resolved.reason } });
+      return () => { setSettled(null); };
+    }
     const controller = new AbortController();
     let live = true;
     const finish = (state: FinanceV2ReadState) => { if (!live) return; live = false; clearTimeout(timer); setSettled({ key: readKey, attempt, state }); };
