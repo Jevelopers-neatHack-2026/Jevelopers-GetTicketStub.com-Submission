@@ -12,6 +12,7 @@
 | Final assembly / editing | Not confirmed | Open. No assignment is invented. |
 | Selected submission video(s) | Not confirmed | Open until the owner chooses. Submitting both videos is not required; the owner selects the submission video(s); the final human receipt is chosen later. |
 | Submitter (human X account) | Not confirmed | The user's reply "likely lejefa/completedotech" is tentative. No role mapping is recorded and no handle is inferred. Whoever submits uses their own X account and name for the entry. |
+| Submission-form leader | Not confirmed | The authorized human team leader verifies their check-in email and submits for the team. Do not infer this role from a video contributor or X account. |
 | Product / deployment owner | Product owner | Confirms the deployed build (section 3). |
 | Source owners | Per sponsor, section 6 | Keep evidence, finance, brand, rights and destination authority. |
 | Agents | None | **No agent records, posts, uploads or submits.** Agent capture is `CANCELLED_USER_REQUEST_NO_RESTART`; restarting it needs a separate, fresh, explicit authorization. The owner's choice of a recorder does not reauthorize it. |
@@ -20,7 +21,11 @@ The user-assigned marketing-material supervisor stays accountable for this copy.
 
 ## 2. What the organizer and the entry require
 
-Checked 2026-10-12 at [neatlogs.com/hackathon](https://neatlogs.com/hackathon): the video is **at most three minutes** and must cover architecture, implementation, runtime, reasoning and result for **each** of Neatlogs, Entire and CFO.ai. The page gives no aspect ratio or file-size limit; do not invent one. The entry is a quote-post of the official neatlogs post on X with team, name, project, public repository and demo link, plus the business plan required by the owner's [issue 22](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22) entry list. The final cutoff is announced on Discord.
+Submission procedure rechecked on 2026-10-12 against the [organizer page](https://neatlogs.com/hackathon) and [submission page](https://neatlogs.com/submission): an authorized teammate attaches the demo video to a public quote-post of the official launch post and includes `@neatlogs`, `@EntireHQ` and `@arithecfo`. The authorized team leader also verifies their check-in email and completes the three-step submission form. **Both steps are required.** Record the posted-entry URL and a redacted final form acknowledgement separately; opening or saving a draft is not submission.
+
+The organizer FAQ confirms the **at most three minutes** limit and coverage of all three tools. Preserve architecture, implementation, runtime, reasoning and result for **each** of Neatlogs, Entire and CFO.ai as a repository acceptance requirement under [MM-03 #9](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9). That more detailed five-facet wording was not reverified on the currently served organizer pages. Do not weaken the local requirement or invent an aspect ratio or file-size limit. The team, project, repository and business-plan fields and their claim, Finance and permission limits below are unchanged. The latest organizer deadline on Discord remains authoritative and requires confirmation by the human submitter.
+
+These are internal planning instructions, not an entry, permission to publish, or a completed submission. No agent recording, upload, post or form submission is authorized by this update.
 
 | Entry field | Value | State |
 | --- | --- | --- |
@@ -33,6 +38,9 @@ Checked 2026-10-12 at [neatlogs.com/hackathon](https://neatlogs.com/hackathon): 
 | Official neatlogs post URL | | **Unknown.** Recheck before submitting. |
 | Discord cutoff | | **Unknown.** Recheck before submitting. |
 | Posted entry URL | | **Unknown** until a human posts. |
+| Submission form | `https://neatlogs.com/submission` | Known organizer locator; form completion remains pending. |
+| Submission-form leader | | **Unknown.** Confirm the authorized human team leader separately from the X submitter. |
+| Final form acknowledgement | | **Unknown** until the human leader submits. Record a redacted confirmation reference and timestamp, not private form contents. |
 
 ## 3. Known versus must-confirm before the take
 
@@ -57,7 +65,7 @@ Checked 2026-10-12 at [neatlogs.com/hackathon](https://neatlogs.com/hackathon): 
 4. Who does final assembly and editing, which video or videos are selected for submission, and the human submitter, with the submitter's own account and name.
 5. The cleared example input (section 4).
 6. Whether a recovery moment is selected (section 5).
-7. The Discord cutoff, official post URL, demo URL and posted URL (section 2).
+7. Prepare the submission fields in section 2 and confirm the intended human roles. Final demo and posted-entry URLs and the final form acknowledgement are collected after the take (section 9); they are not prerequisites for starting the human recording. Recheck the official post and Discord cutoff before submission.
 8. A claim row for any product line, or any use of the sponsor wording outside this runbook (section 7).
 
 ## 4. Safe example, privacy and redaction
@@ -160,6 +168,8 @@ Nothing below is approved for public speaking, captioning or publication. "Appro
 | 9 | "Quote-post the official neatlogs post with team, name, project, public repository and demo link." | `EVENT-SUBMISSION-FIELDS-001` | planned |
 | 9 | "Explore the repository docs." | `CTA-REPOSITORY-DOCS-001` | approved CTA text; docs-only target |
 
+The existing planned `EVENT-SUBMISSION-FIELDS-001` line describes the quote-post only; it is not a complete submission procedure. Its exact ledger wording and pending state are preserved. Follow section 9 for the additional form step. Any replacement public line needs its own exact claim wording and review before use.
+
 **Product beats (shots 2 to 5): instruction-only.** No product claim row was added, so these shots carry no spoken line and no caption. The human performs the step and the screen shows only what the producer-confirmed deployed build does:
 
 - Shot 2: enter the cleared example event.
@@ -183,10 +193,19 @@ Do not say or caption: the brand slogan, "Every …" claims about tracing or che
 - [ ] Recovery decision made; if selected, labelled `DEMO`.
 - [ ] Every spoken line is an approved line or has its own claim row for that destination; the four runbook rows are not speech or caption approval. Product beats stay silent until a product row exists.
 - [ ] Final assembly owner, selected submission video(s) and submitter confirmed; submitter uses their own X account and name.
-- [ ] Official post URL and Discord cutoff rechecked just before submission.
-- [ ] Team, project, repository and plan link entered by the human submitter; the demo URL is added after publishing.
-- [ ] Real runtime measured and under 180 seconds; captions and transcript match the audio; redaction checked on rendered pixels.
+Final runtime, captions, transcript, public links and the form receipt are checked after the take below, not asserted before recording.
 
 ## 9. After the take
 
 Whoever does final assembly reviews each selected export end to end and records its real runtime. A human does any posting, upload or submission. Nothing in this runbook shows that a recording, QA, a teammate dry run or a submission has happened.
+
+
+### Final media and submission checklist (human, after the take)
+
+- [ ] Review the selected final video, captions and transcript against the exact claims and source revisions. Measure runtime (at most 180 seconds), check rendered-pixel redaction, and obtain applicable rights, brand, accessibility and destination decisions before public use. The internal rehearsal does not substitute for this media.
+- [ ] Recheck the official launch post via the organizer submission page and the authoritative Discord cutoff. Confirm the human X submitter and the submission-form leader separately; no tentative handle mapping becomes an assignment.
+- [ ] The authorized teammate creates a public quote-post of that official launch post, includes `@neatlogs`, `@EntireHQ` and `@arithecfo`, and must attach the demo video before posting. Include the required team, name, project, public repository, demo and business-plan information; retain the hypothetical-plan limitation. Verify the published links and record the posted-entry URL.
+- [ ] The authorized team leader verifies their check-in email at [the submission form](https://neatlogs.com/submission), enters the quote-post link and required project/team/tool details, reviews the entry and selects `Submit project`. The leader's submission covers the team. `Continue` saves a draft; it does not complete the entry.
+- [ ] Record the posted-entry URL and a separate redacted final form acknowledgement reference and timestamp in [issue #22](https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/22). **Both receipts are required** for the submission-completion check; neither a post alone nor a form alone is a completed entry. Missing or unreviewed evidence keeps the submission gate blocked; these receipts alone do not clear other acceptance, media or permission requirements.
+
+Do not commit the verification email, authentication links, private form fields, workspace information or unredacted screenshots. Record only the minimum sanitized confirmation reference. This checklist performs no action and grants no publication or submission permission. Agent capture remains `CANCELLED_USER_REQUEST_NO_RESTART`.
