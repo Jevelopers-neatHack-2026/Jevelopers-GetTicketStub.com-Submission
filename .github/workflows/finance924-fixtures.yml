@@ -1,0 +1,49 @@
+name: Finance924 captured fixture consumer
+on:
+  pull_request:
+    paths:
+      - finance_component_tests/candidate924.mjs
+      - finance_component_tests/candidate924.test.mjs
+      - finance_component_tests/fixture-schema.mjs
+      - finance_component_tests/fixtures/finance924/**
+      - finance_component_tests/run.mjs
+      - finance_component_tests/custody.mjs
+      - finance_component_tests/receipt.mjs
+      - contracts/finance924-fixture-pin.json
+      - .github/workflows/finance924-fixtures.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  captured-fixture-consumer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - name: Check captured fixtures and existing receipt guards without networking
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/finance924-temp"
+          sudo -n unshare --net -- runuser -u "$(id -un)" -- env -i PATH="$PATH" TMPDIR="$RUNNER_TEMP/finance924-temp" \
+            node --test finance_component_tests/candidate924.test.mjs finance_component_tests/receipt.test.mjs \
+            > "$RUNNER_TEMP/finance924-tests.tap" 2>&1
+      - name: Record bounded synthetic consumer ACK without producer execution
+        shell: bash
+        run: |
+          sudo -n unshare --net -- runuser -u "$(id -un)" -- env -i PATH="$PATH" TMPDIR="$RUNNER_TEMP/finance924-temp" \
+            node finance_component_tests/run.mjs --candidate-924-fixtures "$RUNNER_TEMP/finance924-consumer"
+      - name: Preserve captured consumer test and custody evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: finance924-captured-consumer-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/finance924-tests.tap
+            ${{ runner.temp }}/finance924-consumer/**
+          if-no-files-found: error
+          retention-days: 30

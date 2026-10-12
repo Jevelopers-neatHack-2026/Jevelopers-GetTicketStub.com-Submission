@@ -1,0 +1,516 @@
+{
+  "captureVersion": "1.0.0",
+  "status": "TESTED_SYNTHETIC_REFUSAL_CAPTURE_NOT_CURRENT_HOST_GRANT",
+  "baseRevision": "815c3f9f9a2979d2c695b687ea26863c99e01d3a",
+  "snapshotId": "sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c",
+  "queryContentHash": "sha256:7288e98f5ac9273db9d8f0aa50e42b4531935e4900e92f11a40ad76a358dda12",
+  "summaryContentHash": "sha256:e0465f3ee6f6715fd4e2ac107571bc19dc58eb718eddbda08be936d6c4a7685a",
+  "observations": [
+    {
+      "name": "unsigned_cursor_forgery",
+      "request": {
+        "schemaVersion": "2.0.0",
+        "requestId": "synthetic-query",
+        "idempotencyKey": "synthetic-query",
+        "scope": {
+          "tenantId": "11111111-1111-4111-8111-111111111111",
+          "projectId": "22222222-2222-4222-8222-222222222222",
+          "actorId": "synthetic-reporting-service",
+          "environment": "test",
+          "billingMode": "live"
+        },
+        "period": {
+          "start": "2026-10-10T00:00:00.000Z",
+          "end": "2026-10-11T00:00:00.000Z"
+        },
+        "timezone": "America/New_York",
+        "policyVersion": "ci08-reporting-policy-2.0.0",
+        "pageSize": 2,
+        "filters": {
+          "environments": [
+            "test"
+          ],
+          "billingModes": [
+            "live"
+          ]
+        },
+        "groupings": [
+          "provider",
+          "model",
+          "feature",
+          "repo",
+          "workflowId",
+          "productId",
+          "orderId",
+          "channel"
+        ],
+        "snapshotId": "sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c",
+        "cursor": "eyJjb250ZW50SGFzaCI6InNoYTI1Njo2NGRhMzhmMDM0MjVjMjVhN2RiZGM2ZDM4MTkyMjg0NGM4ZGJkZTNiNDY5YTBhZGY2MDZkYjhhZDM5N2YxNTA1Iiwib2Zmc2V0Ijo0LCJwYWdlU2l6ZSI6MiwicXVlcnlIYXNoIjoic2hhMjU2OjcyODhlOThmNWFjOTI3M2RiOWQ4ZjBhYTUwZTQyYjQ1MzE5MzVlNDkwMGU5MmYxMWE0MGFkNzZhMzU4ZGRhMTIiLCJzbmFwc2hvdElkIjoic2hhMjU2OjRjYjc2MWIxOTQyZDllZWY5YTFmNzkyMzBlOTdkYTBkZWUxMWY2MDhiNGQ5MDNhMDA3NGI0MDFmN2M2MzkxNWMiLCJ2ZXJzaW9uIjoyfQ"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "schemaVersion": "1.0.0",
+          "module": "reporting",
+          "operation": "querySummary",
+          "code": "VALIDATION_ERROR",
+          "retryable": false,
+          "safe_message": "The continuation cursor does not match this snapshot and query.",
+          "diagnostic_ref": "ci1:b5fffde3-3721-4831-835e-554304b81303"
+        }
+      },
+      "readsBefore": 184,
+      "readsAfter": 192,
+      "requestRecordHash": "sha256:335999cfeed5659cefafc98e3f93c2f435f4ef5c5956699e180245080acd4de6",
+      "resultRecordHash": "sha256:6bddde347f680558fb2ad1ca3b3d22f24c34eaaca1d6ad991089c0d84dc8f961"
+    },
+    {
+      "name": "cursor_page_size_mismatch",
+      "request": {
+        "schemaVersion": "2.0.0",
+        "requestId": "synthetic-query",
+        "idempotencyKey": "synthetic-query",
+        "scope": {
+          "tenantId": "11111111-1111-4111-8111-111111111111",
+          "projectId": "22222222-2222-4222-8222-222222222222",
+          "actorId": "synthetic-reporting-service",
+          "environment": "test",
+          "billingMode": "live"
+        },
+        "period": {
+          "start": "2026-10-10T00:00:00.000Z",
+          "end": "2026-10-11T00:00:00.000Z"
+        },
+        "timezone": "America/New_York",
+        "policyVersion": "ci08-reporting-policy-2.0.0",
+        "pageSize": 3,
+        "filters": {
+          "environments": [
+            "test"
+          ],
+          "billingModes": [
+            "live"
+          ]
+        },
+        "groupings": [
+          "provider",
+          "model",
+          "feature",
+          "repo",
+          "workflowId",
+          "productId",
+          "orderId",
+          "channel"
+        ],
+        "snapshotId": "sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c",
+        "cursor": "eyJjb250ZW50SGFzaCI6InNoYTI1NjpkZDRjZWMwY2EzODQ4MDVkNWE3Y2JiMmZlOWNkYWNjMWFjMmM3ZGIyMzYwYzgzYjkzNWIwMWViOGYyMzg5ZGFmIiwib2Zmc2V0IjoyLCJwYWdlU2l6ZSI6MiwicXVlcnlIYXNoIjoic2hhMjU2OjcyODhlOThmNWFjOTI3M2RiOWQ4ZjBhYTUwZTQyYjQ1MzE5MzVlNDkwMGU5MmYxMWE0MGFkNzZhMzU4ZGRhMTIiLCJzbmFwc2hvdElkIjoic2hhMjU2OjRjYjc2MWIxOTQyZDllZWY5YTFmNzkyMzBlOTdkYTBkZWUxMWY2MDhiNGQ5MDNhMDA3NGI0MDFmN2M2MzkxNWMiLCJ2ZXJzaW9uIjoyfQ"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "schemaVersion": "1.0.0",
+          "module": "reporting",
+          "operation": "querySummary",
+          "code": "IDEMPOTENCY_CONFLICT",
+          "retryable": false,
+          "safe_message": "The snapshot is bound to a different query.",
+          "diagnostic_ref": "ci1:6367510f-486e-46b5-8e0a-6ab7f78a0f0e"
+        }
+      },
+      "readsBefore": 192,
+      "readsAfter": 200,
+      "requestRecordHash": "sha256:247b7123e8cafb35652a3ef3d7f971ec78e24ea179dd43292e455ed8d2d69df0",
+      "resultRecordHash": "sha256:383007283af564fbc25fd894715b919fa848afe0eb62b23f5f70837dbe552d44"
+    },
+    {
+      "name": "snapshot_period_mismatch",
+      "request": {
+        "schemaVersion": "2.0.0",
+        "requestId": "synthetic-query",
+        "idempotencyKey": "synthetic-query",
+        "scope": {
+          "tenantId": "11111111-1111-4111-8111-111111111111",
+          "projectId": "22222222-2222-4222-8222-222222222222",
+          "actorId": "synthetic-reporting-service",
+          "environment": "test",
+          "billingMode": "live"
+        },
+        "period": {
+          "start": "2026-10-10T00:00:00.000Z",
+          "end": "2026-10-10T13:00:00.000Z"
+        },
+        "timezone": "America/New_York",
+        "policyVersion": "ci08-reporting-policy-2.0.0",
+        "pageSize": 2,
+        "filters": {
+          "environments": [
+            "test"
+          ],
+          "billingModes": [
+            "live"
+          ]
+        },
+        "groupings": [
+          "provider",
+          "model",
+          "feature",
+          "repo",
+          "workflowId",
+          "productId",
+          "orderId",
+          "channel"
+        ],
+        "snapshotId": "sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "schemaVersion": "1.0.0",
+          "module": "reporting",
+          "operation": "querySummary",
+          "code": "IDEMPOTENCY_CONFLICT",
+          "retryable": false,
+          "safe_message": "The snapshot is bound to a different query.",
+          "diagnostic_ref": "ci1:bf5755f0-7c83-410e-9742-8782fafcde7e"
+        }
+      },
+      "readsBefore": 200,
+      "readsAfter": 208,
+      "requestRecordHash": "sha256:32d407d0b77a8330a59a06dd2fd094ce00fa833466983e573876ac9bd95002db",
+      "resultRecordHash": "sha256:7ee76edf3990544863d02f222b4bdd8ed98729f3ad02e2b79e1be96a532168e6"
+    },
+    {
+      "name": "snapshot_filter_mismatch",
+      "request": {
+        "schemaVersion": "2.0.0",
+        "requestId": "synthetic-query",
+        "idempotencyKey": "synthetic-query",
+        "scope": {
+          "tenantId": "11111111-1111-4111-8111-111111111111",
+          "projectId": "22222222-2222-4222-8222-222222222222",
+          "actorId": "synthetic-reporting-service",
+          "environment": "test",
+          "billingMode": "live"
+        },
+        "period": {
+          "start": "2026-10-10T00:00:00.000Z",
+          "end": "2026-10-11T00:00:00.000Z"
+        },
+        "timezone": "America/New_York",
+        "policyVersion": "ci08-reporting-policy-2.0.0",
+        "pageSize": 2,
+        "filters": {
+          "environments": [
+            "test"
+          ],
+          "billingModes": [
+            "live"
+          ],
+          "providers": [
+            "provider-a"
+          ]
+        },
+        "groupings": [
+          "provider",
+          "model",
+          "feature",
+          "repo",
+          "workflowId",
+          "productId",
+          "orderId",
+          "channel"
+        ],
+        "snapshotId": "sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "schemaVersion": "1.0.0",
+          "module": "reporting",
+          "operation": "querySummary",
+          "code": "IDEMPOTENCY_CONFLICT",
+          "retryable": false,
+          "safe_message": "The snapshot is bound to a different query.",
+          "diagnostic_ref": "ci1:62e19b9b-c3ae-4e33-81cc-835838e3c113"
+        }
+      },
+      "readsBefore": 208,
+      "readsAfter": 216,
+      "requestRecordHash": "sha256:1f2972a44c82d8fbbac418a0909cf1ebf057131e99c697cd7c2c18b63896c5c0",
+      "resultRecordHash": "sha256:b5e72d18afe3be40df18a788adbe6e3e115190c968a03fda389ec3328c3796be"
+    },
+    {
+      "name": "foreign_scope",
+      "request": {
+        "schemaVersion": "2.0.0",
+        "requestId": "synthetic-query",
+        "idempotencyKey": "synthetic-query",
+        "scope": {
+          "tenantId": "11111111-1111-4111-8111-111111111111",
+          "projectId": "49d546a5-38ae-4c2b-bca3-e012275bbbd9",
+          "actorId": "synthetic-reporting-service",
+          "environment": "test",
+          "billingMode": "live"
+        },
+        "period": {
+          "start": "2026-10-10T00:00:00.000Z",
+          "end": "2026-10-11T00:00:00.000Z"
+        },
+        "timezone": "America/New_York",
+        "policyVersion": "ci08-reporting-policy-2.0.0",
+        "pageSize": 2,
+        "filters": {
+          "environments": [
+            "test"
+          ],
+          "billingModes": [
+            "live"
+          ]
+        },
+        "groupings": [
+          "provider",
+          "model",
+          "feature",
+          "repo",
+          "workflowId",
+          "productId",
+          "orderId",
+          "channel"
+        ],
+        "snapshotId": "sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "schemaVersion": "1.0.0",
+          "module": "reporting",
+          "operation": "querySummary",
+          "code": "FORBIDDEN_SCOPE",
+          "retryable": false,
+          "safe_message": "The requested financial scope is not authorized.",
+          "diagnostic_ref": "ci1:d580d39e-1bf0-4d2b-b188-d7870612e779"
+        }
+      },
+      "readsBefore": 216,
+      "readsAfter": 216,
+      "requestRecordHash": "sha256:ff2e68c0532838021dd7066ebc69c625c1d7c8712790f83b6e85da30249ec120",
+      "resultRecordHash": "sha256:87b1af023d86825ebc09eec3619e1ad9d625b851f6d8f49fcc99230b8cd533db"
+    },
+    {
+      "name": "cross_version_snapshot",
+      "request": {
+        "schemaVersion": "1.0.0",
+        "requestId": "synthetic-query",
+        "idempotencyKey": "synthetic-query",
+        "scope": {
+          "tenantId": "11111111-1111-4111-8111-111111111111",
+          "projectId": "22222222-2222-4222-8222-222222222222",
+          "actorId": "synthetic-reporting-service",
+          "environment": "test",
+          "billingMode": "live"
+        },
+        "period": {
+          "start": "2026-10-10T00:00:00.000Z",
+          "end": "2026-10-11T00:00:00.000Z"
+        },
+        "timezone": "America/New_York",
+        "pageSize": 2,
+        "filters": {
+          "environments": [
+            "test"
+          ],
+          "billingModes": [
+            "live"
+          ]
+        },
+        "snapshotId": "sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "schemaVersion": "1.0.0",
+          "module": "reporting",
+          "operation": "querySummary",
+          "code": "IDEMPOTENCY_CONFLICT",
+          "retryable": false,
+          "safe_message": "The snapshot is bound to a different query.",
+          "diagnostic_ref": "ci1:482c1a15-fe0c-49bf-9996-e4a897cd4ac4"
+        }
+      },
+      "readsBefore": 216,
+      "readsAfter": 224,
+      "requestRecordHash": "sha256:1b1e032a3e6efb875a8a67959c94b80363bfe60a4c3f4f44658858bdea782943",
+      "resultRecordHash": "sha256:b1da63c177abd1882e53fdc96f20f0c832d565008fb4644c78fd2edb04347a13"
+    },
+    {
+      "name": "current_grant_denied",
+      "request": {
+        "schemaVersion": "2.0.0",
+        "requestId": "synthetic-query",
+        "idempotencyKey": "synthetic-query",
+        "scope": {
+          "tenantId": "11111111-1111-4111-8111-111111111111",
+          "projectId": "22222222-2222-4222-8222-222222222222",
+          "actorId": "synthetic-reporting-service",
+          "environment": "test",
+          "billingMode": "live"
+        },
+        "period": {
+          "start": "2026-10-10T00:00:00.000Z",
+          "end": "2026-10-11T00:00:00.000Z"
+        },
+        "timezone": "America/New_York",
+        "policyVersion": "ci08-reporting-policy-2.0.0",
+        "pageSize": 2,
+        "filters": {
+          "environments": [
+            "test"
+          ],
+          "billingModes": [
+            "live"
+          ]
+        },
+        "groupings": [
+          "provider",
+          "model",
+          "feature",
+          "repo",
+          "workflowId",
+          "productId",
+          "orderId",
+          "channel"
+        ],
+        "snapshotId": "sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "schemaVersion": "1.0.0",
+          "module": "reporting",
+          "operation": "querySummary",
+          "code": "FORBIDDEN_SCOPE",
+          "retryable": false,
+          "safe_message": "The current principal is not authorized for this financial operation.",
+          "diagnostic_ref": "ci1:1da74a8c-6d0f-43c6-942f-d798df4faa80"
+        }
+      },
+      "readsBefore": 674,
+      "readsAfter": 674,
+      "requestRecordHash": "sha256:b7886dbbec30efd9615648b7b1aa2659de5fd70052ec26693fd7001fb8fc31bb",
+      "resultRecordHash": "sha256:87f4d262df4a25a1becf73b867d4a136da94d7f407da5ca60ac246ad8eaf0293"
+    },
+    {
+      "name": "stale_current_grant",
+      "request": {
+        "schemaVersion": "2.0.0",
+        "requestId": "synthetic-query",
+        "idempotencyKey": "synthetic-query",
+        "scope": {
+          "tenantId": "11111111-1111-4111-8111-111111111111",
+          "projectId": "22222222-2222-4222-8222-222222222222",
+          "actorId": "synthetic-reporting-service",
+          "environment": "test",
+          "billingMode": "live"
+        },
+        "period": {
+          "start": "2026-10-10T00:00:00.000Z",
+          "end": "2026-10-11T00:00:00.000Z"
+        },
+        "timezone": "America/New_York",
+        "policyVersion": "ci08-reporting-policy-2.0.0",
+        "pageSize": 2,
+        "filters": {
+          "environments": [
+            "test"
+          ],
+          "billingModes": [
+            "live"
+          ]
+        },
+        "groupings": [
+          "provider",
+          "model",
+          "feature",
+          "repo",
+          "workflowId",
+          "productId",
+          "orderId",
+          "channel"
+        ]
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "schemaVersion": "1.0.0",
+          "module": "reporting",
+          "operation": "querySummary",
+          "code": "FORBIDDEN_SCOPE",
+          "retryable": false,
+          "safe_message": "The current financial authorization does not match this scope and operation.",
+          "diagnostic_ref": "ci1:8333ba57-4f50-4143-8ff8-344af5db9119"
+        }
+      },
+      "readsBefore": 674,
+      "readsAfter": 674,
+      "requestRecordHash": "sha256:a2dda4041acab76b88dfdd92e183a42e2aa37caa7ee1e779c800703a61a2e7c2",
+      "resultRecordHash": "sha256:fe3c8ffefeea19befad63b26a79cab6d7bf9e08ab55b21e13a7f0a8c1817f9bb"
+    },
+    {
+      "name": "revoked_after_commit",
+      "request": {
+        "schemaVersion": "2.0.0",
+        "requestId": "synthetic-query",
+        "idempotencyKey": "synthetic-query",
+        "scope": {
+          "tenantId": "11111111-1111-4111-8111-111111111111",
+          "projectId": "22222222-2222-4222-8222-222222222222",
+          "actorId": "synthetic-reporting-service",
+          "environment": "test",
+          "billingMode": "live"
+        },
+        "period": {
+          "start": "2026-10-10T00:00:00.000Z",
+          "end": "2026-10-11T00:00:00.000Z"
+        },
+        "timezone": "America/New_York",
+        "policyVersion": "ci08-reporting-policy-2.0.0",
+        "pageSize": 2,
+        "filters": {
+          "environments": [
+            "test"
+          ],
+          "billingModes": [
+            "live"
+          ]
+        },
+        "groupings": [
+          "provider",
+          "model",
+          "feature",
+          "repo",
+          "workflowId",
+          "productId",
+          "orderId",
+          "channel"
+        ],
+        "snapshotId": "sha256:4cb761b1942d9eef9a1f79230e97da0dee11f608b4d903a0074b401f7c63915c"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "schemaVersion": "1.0.0",
+          "module": "reporting",
+          "operation": "querySummary",
+          "code": "FORBIDDEN_SCOPE",
+          "retryable": false,
+          "safe_message": "The current principal is not authorized for this financial operation.",
+          "diagnostic_ref": "ci1:48659335-dbc4-4c93-baab-6c3b9140ffd7"
+        }
+      },
+      "readsBefore": 674,
+      "readsAfter": 674,
+      "requestRecordHash": "sha256:b7886dbbec30efd9615648b7b1aa2659de5fd70052ec26693fd7001fb8fc31bb",
+      "resultRecordHash": "sha256:0fcfd9f21aca4607426baf5691bde7dab087adcf57cf71b2044f799db3e68e94"
+    }
+  ]
+}

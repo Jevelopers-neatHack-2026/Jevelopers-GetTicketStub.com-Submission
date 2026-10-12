@@ -97,3 +97,53 @@ and parent QA/review. The previous owner's 161 hosted summaries had no uploaded
 manifests; the retrieved raw log hash differed from the owner's quoted hash.
 That custody gap is preserved and none of those logs is borrowed as this
 consumer's execution proof.
+
+## Finance924 captured-fixture consumer mode
+
+The additive `--candidate-924-fixtures` mode consumes the exact owner-accepted
+synthetic pagination capture from producer `924cdd2b5489681434790b5d1d7aac138198ccfd`
+(tree `88c0bcaeaaee050678ca59261229c5f9ad1bfd13`), candidate run `38248332764`.
+`contracts/finance924-fixture-pin.json` admits the exact committed capture bytes,
+trusted schemas and independent definition registry. It preserves the original
+payload's synthetic source placeholder and its historical baseRevision; these
+fields are not substituted with the accepted producer head.
+
+```sh
+node --test finance_component_tests/candidate924.test.mjs
+node finance_component_tests/run.mjs --candidate-924-fixtures /absolute/new-output
+```
+
+Use Node22.23.3 and a clean evaluator checkout. This mode requires no producer
+checkout, npm, build, database, grant, provider or account connection. Execute
+under OS network denial with task-scoped artifact writes for local qualification.
+It records consumer revision/tree, exact fixture hashes and ten executed
+assertion groups in a separate `synthetic-captured-fixture-consumer` receipt.
+
+The three pages retain six unique ordered detail IDs, frozen query/summary/
+reference hashes, snapshot identity, aggregate and watermark. Continuation sends
+the prior opaque nextCursor unchanged; the third page is terminal. Money remains
+exact decimal strings, including `1.000000000000000001` USD direct costs, and
+per-currency detail sums use BigInt scale18 arithmetic without FX inference.
+All nine typed refusals retain their expected error codes. Captured read counters
+are not used to claim zero SQL reads, particularly for revocation after COMMIT.
+
+The trusted FinancialSummaryPageSchema is explicitly a partial wrapper.
+Validation therefore also resolves the pinned proposal-only FinancialSummary
+schema and its offline CommonEnvelope/ErrorEnvelope dependencies, checks scope,
+unknown coverage, registry policy/metric references and content hashes, and
+recomputes summary/query/record/reference hashes. The bounded schema interpreter
+rejects unsupported validation vocabulary and unpinned external references.
+This is evaluation-owned combined fixture validation; no producer query or
+canonical SDK business operation is represented as having executed.
+
+The partial simulated subtotal `5`, null total and one unknown amount are a
+separate unchanged Finance22 fixture. Its receipt keeps source `22a3237`; the
+Finance924 pagination capture itself contains six recognized details. The page
+schema and registry retain their Finance22 heritage and were verified byte-identical
+against producer924 Git blobs. No historical22 fixture is relabelled as924.
+
+Any consumer ACK is `SCOPED_SYNTHETIC_FIXTURE_CONFORMANCE_ONLY`, bound to the
+immutable consumer commit and exact capture hashes. It cannot establish current
+grants, live billing, producer execution, PostgreSQL acceptance, export adoption,
+selected release or a full verification run. The existing4f3 producer pin, default
+finance workflow and old PR50 evidence remain unchanged.
