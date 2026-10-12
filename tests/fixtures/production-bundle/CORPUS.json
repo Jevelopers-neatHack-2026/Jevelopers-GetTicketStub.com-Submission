@@ -7,7 +7,7 @@
   "canonical_usage_intake": "unavailable",
   "finance_receipt": null,
   "usage_refs": [],
-  "production_revision": "300f997c87e36077a93dd1c4951420878a5c847c",
+  "production_revision": "01a7b13813b27e5b925b1363543c2577e860ffff",
   "shared_contracts_pin": {
     "package": "@jevelopers/shared-contracts",
     "version": "0.9.7",
@@ -25,8 +25,8 @@
   },
   "manifest": {
     "schema_version": "2.0.0",
-    "bundle_id": "ce50cacc-9ad3-41ec-a207-59e3740322ad",
-    "bundle_hash": "sha256:df2e9274ea5157ac500a6d9e62d313b30d1a499b9a3a97c40b2c3d7bae980257"
+    "bundle_id": "a66be59e-f7d2-4c44-a6c4-212a5e1ac05c",
+    "bundle_hash": "sha256:ca9c78c3ac7823ea2b81b395a6f91acae2abe0b347f65bcf0ff067dce7993ea4"
   },
   "runtime": {
     "node": "v24.21.0",
@@ -37,22 +37,22 @@
     {
       "name": "archive.zip",
       "length": 846407,
-      "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+      "sha256": "e0cb794adf898dd34b67068c0e3521758931169a6b208499781f9d39c12b1a87"
     },
     {
       "name": "detached.json",
       "length": 1286,
-      "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+      "sha256": "1fe1d3070deed2b8695301a3af853c32df2f89ca67e8c40c330d2966bab94f86"
     },
     {
       "name": "lineage.json",
       "length": 13886,
-      "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+      "sha256": "b3010c35095a4af3cd7820d1790d79e14d226a2060f24e52deffd396bc33f5b7"
     },
     {
       "name": "manifest.json",
       "length": 7357,
-      "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+      "sha256": "e5c210dbe69436e68467ebbf581b9a716022b3e33a3776c7b231d1ff12363b3d"
     },
     {
       "name": "output.pdf",
@@ -72,7 +72,7 @@
     {
       "name": "preflight.json",
       "length": 7419,
-      "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+      "sha256": "e02757ffc40c40b2a07cd816db771fc7cf706325eb3ddb57bb9db1297f0fe44b"
     }
   ],
   "variants": [
@@ -90,22 +90,22 @@
         {
           "name": "archive.zip",
           "length": 846407,
-          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+          "sha256": "e0cb794adf898dd34b67068c0e3521758931169a6b208499781f9d39c12b1a87"
         },
         {
           "name": "detached.json",
           "length": 1286,
-          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+          "sha256": "1fe1d3070deed2b8695301a3af853c32df2f89ca67e8c40c330d2966bab94f86"
         },
         {
           "name": "lineage.json",
           "length": 13886,
-          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+          "sha256": "b3010c35095a4af3cd7820d1790d79e14d226a2060f24e52deffd396bc33f5b7"
         },
         {
           "name": "manifest.json",
           "length": 7357,
-          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+          "sha256": "e5c210dbe69436e68467ebbf581b9a716022b3e33a3776c7b231d1ff12363b3d"
         },
         {
           "name": "output.pdf",
@@ -125,7 +125,7 @@
         {
           "name": "preflight.json",
           "length": 7419,
-          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+          "sha256": "e02757ffc40c40b2a07cd816db771fc7cf706325eb3ddb57bb9db1297f0fe44b"
         }
       ],
       "conforms": true
@@ -148,22 +148,22 @@
         {
           "name": "archive.zip",
           "length": 846407,
-          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+          "sha256": "e0cb794adf898dd34b67068c0e3521758931169a6b208499781f9d39c12b1a87"
         },
         {
           "name": "detached.json",
           "length": 1286,
-          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+          "sha256": "1fe1d3070deed2b8695301a3af853c32df2f89ca67e8c40c330d2966bab94f86"
         },
         {
           "name": "lineage.json",
           "length": 13886,
-          "sha256": "f18017aaab52d39679c002b76d1faa86179c33ca971b3fa00b5c583b20be49c6"
+          "sha256": "dd891c7d5282a21dc51294248120e5ec8324a20b38e8a9806b3d9be36b4e4659"
         },
         {
           "name": "manifest.json",
           "length": 7357,
-          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+          "sha256": "e5c210dbe69436e68467ebbf581b9a716022b3e33a3776c7b231d1ff12363b3d"
         },
         {
           "name": "output.pdf",
@@ -183,7 +183,7 @@
         {
           "name": "preflight.json",
           "length": 7419,
-          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+          "sha256": "e02757ffc40c40b2a07cd816db771fc7cf706325eb3ddb57bb9db1297f0fe44b"
         }
       ],
       "conforms": true
@@ -206,22 +206,22 @@
         {
           "name": "archive.zip",
           "length": 846407,
-          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+          "sha256": "e0cb794adf898dd34b67068c0e3521758931169a6b208499781f9d39c12b1a87"
         },
         {
           "name": "detached.json",
           "length": 1286,
-          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+          "sha256": "1fe1d3070deed2b8695301a3af853c32df2f89ca67e8c40c330d2966bab94f86"
         },
         {
           "name": "lineage.json",
           "length": 13886,
-          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+          "sha256": "b3010c35095a4af3cd7820d1790d79e14d226a2060f24e52deffd396bc33f5b7"
         },
         {
           "name": "manifest.json",
           "length": 7357,
-          "sha256": "987f29c64f9ae103c51512c5e5df7aac39bf266373bd70d3f69da12e3b3818ad"
+          "sha256": "c6b416fd9504088fc3f684b2c13b2fece104ea5821f0f04ef387a65fa26b23cc"
         },
         {
           "name": "output.pdf",
@@ -241,7 +241,7 @@
         {
           "name": "preflight.json",
           "length": 7419,
-          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+          "sha256": "e02757ffc40c40b2a07cd816db771fc7cf706325eb3ddb57bb9db1297f0fe44b"
         }
       ],
       "conforms": true
@@ -264,22 +264,22 @@
         {
           "name": "archive.zip",
           "length": 846407,
-          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+          "sha256": "e0cb794adf898dd34b67068c0e3521758931169a6b208499781f9d39c12b1a87"
         },
         {
           "name": "detached.json",
           "length": 1286,
-          "sha256": "59382c72b4b588b272232590906bae4d9dcbe5d1f7fd989cd54477004e040798"
+          "sha256": "7c532cc2e251f09713c786da1c7f9a94ddc8f94cacafb5188f4c8ecff3e26852"
         },
         {
           "name": "lineage.json",
           "length": 13886,
-          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+          "sha256": "b3010c35095a4af3cd7820d1790d79e14d226a2060f24e52deffd396bc33f5b7"
         },
         {
           "name": "manifest.json",
           "length": 7357,
-          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+          "sha256": "e5c210dbe69436e68467ebbf581b9a716022b3e33a3776c7b231d1ff12363b3d"
         },
         {
           "name": "output.pdf",
@@ -299,7 +299,7 @@
         {
           "name": "preflight.json",
           "length": 7419,
-          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+          "sha256": "e02757ffc40c40b2a07cd816db771fc7cf706325eb3ddb57bb9db1297f0fe44b"
         }
       ],
       "conforms": true
@@ -322,17 +322,17 @@
         {
           "name": "archive.zip",
           "length": 846407,
-          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+          "sha256": "e0cb794adf898dd34b67068c0e3521758931169a6b208499781f9d39c12b1a87"
         },
         {
           "name": "detached.json",
           "length": 1286,
-          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+          "sha256": "1fe1d3070deed2b8695301a3af853c32df2f89ca67e8c40c330d2966bab94f86"
         },
         {
           "name": "manifest.json",
           "length": 7357,
-          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+          "sha256": "e5c210dbe69436e68467ebbf581b9a716022b3e33a3776c7b231d1ff12363b3d"
         },
         {
           "name": "output.pdf",
@@ -352,7 +352,7 @@
         {
           "name": "preflight.json",
           "length": 7419,
-          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+          "sha256": "e02757ffc40c40b2a07cd816db771fc7cf706325eb3ddb57bb9db1297f0fe44b"
         }
       ],
       "conforms": true
@@ -375,17 +375,17 @@
         {
           "name": "archive.zip",
           "length": 846407,
-          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+          "sha256": "e0cb794adf898dd34b67068c0e3521758931169a6b208499781f9d39c12b1a87"
         },
         {
           "name": "detached.json",
           "length": 1286,
-          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+          "sha256": "1fe1d3070deed2b8695301a3af853c32df2f89ca67e8c40c330d2966bab94f86"
         },
         {
           "name": "lineage.json",
           "length": 13886,
-          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+          "sha256": "b3010c35095a4af3cd7820d1790d79e14d226a2060f24e52deffd396bc33f5b7"
         },
         {
           "name": "output.pdf",
@@ -405,7 +405,7 @@
         {
           "name": "preflight.json",
           "length": 7419,
-          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+          "sha256": "e02757ffc40c40b2a07cd816db771fc7cf706325eb3ddb57bb9db1297f0fe44b"
         }
       ],
       "conforms": true
@@ -428,12 +428,12 @@
         {
           "name": "archive.zip",
           "length": 846407,
-          "sha256": "5e0130ee03607ddd842963d94db8e487d46868ae2cf8bf828cbbccc007341017"
+          "sha256": "e0cb794adf898dd34b67068c0e3521758931169a6b208499781f9d39c12b1a87"
         },
         {
           "name": "detached.json",
           "length": 1286,
-          "sha256": "a1b1fc4ae5b7ed103ab0e52b4154d5a82dad7f6decc0dc28371f613bfb486124"
+          "sha256": "1fe1d3070deed2b8695301a3af853c32df2f89ca67e8c40c330d2966bab94f86"
         },
         {
           "name": "extra.bin",
@@ -443,12 +443,12 @@
         {
           "name": "lineage.json",
           "length": 13886,
-          "sha256": "5fd5225fc25926b6cbec0e5238c9a2a284f8ac7376f4de53918dce40ca13e325"
+          "sha256": "b3010c35095a4af3cd7820d1790d79e14d226a2060f24e52deffd396bc33f5b7"
         },
         {
           "name": "manifest.json",
           "length": 7357,
-          "sha256": "06997583efbd588cd6498aeff720eeb60ce4192d6d3fc9541607ec32cee337f2"
+          "sha256": "e5c210dbe69436e68467ebbf581b9a716022b3e33a3776c7b231d1ff12363b3d"
         },
         {
           "name": "output.pdf",
@@ -468,7 +468,7 @@
         {
           "name": "preflight.json",
           "length": 7419,
-          "sha256": "3843e6a099cb560c5d94affdc659ba35e44e4b0e7646ddc4329d0a9a016d80c5"
+          "sha256": "e02757ffc40c40b2a07cd816db771fc7cf706325eb3ddb57bb9db1297f0fe44b"
         }
       ],
       "conforms": true
@@ -499,7 +499,7 @@
     {
       "name": "trusted-commitment.json",
       "length": 6258,
-      "sha256": "3450bfc30e854bb6d78db0573750e32d17ec91cb61e567f85c7ceef776b43a21",
+      "sha256": "b7fa86a6e9dbff06febc8cc28aad66a7a56eb12267d5a50c6120968cac424e49",
       "role": "owner-verifier-trusted-commitment"
     }
   ]

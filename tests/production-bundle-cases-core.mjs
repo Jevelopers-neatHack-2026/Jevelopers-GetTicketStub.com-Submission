@@ -76,11 +76,12 @@ export function register(define) {
       assert.equal(source.synthetic, true); assert.equal(source.accepted, false); assert.equal(source.handoffEligible, false);
       assert.equal(source.finance_receipt, null); assert.equal(source.canonical_usage_intake, "unavailable"); assert.deepEqual(source.usage_refs, []);
     }
-    assert.equal(f.provenance.producer.revision, "300f997c87e36077a93dd1c4951420878a5c847c");
-    assert.equal(f.provenance.producer.linuxRun, 38205370188);
-    assert.equal(f.provenance.producer.artifactId, 11727293834);
-    assert.equal(f.provenance.producer.artifactZipSha256, "c92b8571ef6fe646284eec7b810ccf669651075124a98494409b64abe4fdc43d");
-    assert.equal(f.provenance.producer.corpusJsonSha256, "0d8422683915890b15607724c25420326d97be0676651df8f88673e36395bef9");
+    // The producer's own receipt (FC issue 10, comment 6120259654): final selected source, actual Linux run, artifact and digests.
+    assert.equal(f.provenance.producer.revision, "01a7b13813b27e5b925b1363543c2577e860ffff");
+    assert.equal(f.provenance.producer.linuxRun, 38216826905);
+    assert.equal(f.provenance.producer.artifactId, 11733229451);
+    assert.equal(f.provenance.producer.artifactZipSha256, "eb9af5b9aae788561d2a7f8f67f3fce579cb53323751856e079f8c77db4d0300");
+    assert.equal(f.provenance.producer.corpusJsonSha256, "d3e5560d1f7030ac4bf1d7164530a1137234acd1ebedd39043c356bf5604949f");
     assert.equal(f.provenance.sharedContractsPin.archive_sha256, contract.OWNER_PACKAGE_PIN.archiveSha256);
     assert.equal(f.provenance.sharedContractsPin.integrity, contract.OWNER_PACKAGE_PIN.integrity);
     assert.equal(f.provenance.sharedContractsPin.accepted, false);
@@ -97,6 +98,64 @@ export function register(define) {
     assert.ok(!JSON.stringify(f.provenance).includes("0c273eda"));
     const report = await runGate(baselineWorld());
     assert.deepEqual(report.specRef, { state: "declared_by_manifest_unverified", contentHash: derived });
+  });
+
+  define("provenance.new-source-crossbound-to-manifest-corpus-receipt-and-owner-pin", async () => {
+    const revision = f.provenance.producer.revision;
+    // Every place that names the producer source agrees, and none of them is the superseded one.
+    assert.equal(f.baselineManifest.producer.source_revision, revision);
+    assert.equal(f.corpus.production_revision, revision);
+    assert.notEqual(revision, f.provenance.supersedes.producerRevision);
+    assert.equal(f.provenance.supersedes.producerRevision, "300f997c87e36077a93dd1c4951420878a5c847c");
+    // The owner package is unchanged: the same pin is recorded by the corpus and by this repository.
+    assert.equal(f.corpus.shared_contracts_pin.version, contract.OWNER_PACKAGE_PIN.version);
+    assert.equal(f.corpus.shared_contracts_pin.source_revision, contract.OWNER_PACKAGE_PIN.sourceRevision);
+    assert.equal(f.corpus.shared_contracts_pin.archive_sha256, contract.OWNER_PACKAGE_PIN.archiveSha256);
+    assert.equal(f.corpus.shared_contracts_pin.integrity, contract.OWNER_PACKAGE_PIN.integrity);
+    assert.equal(f.provenance.supersedes.sharedContractsPinUnchanged, true);
+    // Bundle identity: corpus summary, manifest, host-anchored commitment and the consumer's report are one and the same bundle.
+    assert.equal(f.corpus.manifest.bundle_hash, f.BUNDLE_HASH); assert.equal(f.corpus.manifest.bundle_id, f.BUNDLE_REF.id);
+    assert.equal(f.baselineManifest.bundle_hash, f.BUNDLE_HASH); assert.equal(f.baselineManifest.bundle_id, f.BUNDLE_REF.id);
+    assert.equal(f.provenance.bundle.hash, f.BUNDLE_HASH);
+    assert.notEqual(f.BUNDLE_HASH, f.provenance.supersedes.bundle.hash);
+    const report = await runGate(baselineWorld());
+    assert.equal(report.bundle.hash, f.BUNDLE_HASH); assert.equal(report.bundle.id, f.BUNDLE_REF.id);
+    assert.equal(report.anchor.commitmentSha256, f.sha256Tagged(f.baseline().commitmentBytes));
+    assert.equal(report.anchor.commitmentSha256, `sha256:${f.provenance.trustedCommitment.sha256}`);
+    assert.equal(report.specRef.contentHash, f.baselineManifest.spec_ref.content_hash);
+    // The corpus's historic word "accepted" for the valid variant is an integrity expectation only; it is never an approval here.
+    const valid = f.corpus.variants.find((variant) => variant.id === "valid");
+    assert.equal(valid.expected, "accepted"); assert.equal(valid.ownerVerifier.detail, "integrity=passed;eligibility=blocked");
+    assert.deepEqual({ verdict: report.verdict, eligibility: report.eligibility, accepted: report.accepted, handoffEligible: report.handoffEligible, authorityIssued: report.authorityIssued },
+      { verdict: "integrity_passed_blocked", eligibility: "blocked", accepted: false, handoffEligible: false, authorityIssued: false });
+    assert.equal(f.corpus.accepted, false); assert.equal(f.corpus.handoffEligible, false);
+  });
+
+  define("provenance.superseded-input-recorded-by-digest-with-computed-delta", () => {
+    const old = f.provenance.supersedes;
+    assert.equal(old.artifactId, 11727293834); assert.equal(old.linuxRun, 38205370188);
+    assert.equal(old.artifactZipSha256, "c92b8571ef6fe646284eec7b810ccf669651075124a98494409b64abe4fdc43d");
+    assert.equal(old.corpusJsonSha256, "0d8422683915890b15607724c25420326d97be0676651df8f88673e36395bef9");
+    assert.match(old.provenanceSha256, /^[0-9a-f]{64}$/);
+    assert.match(old.source, /^git:60e075da382de6d6388f2320b0c95d374b0007ea:/);
+    // The computed delta covers every path exactly once, equals the producer receipt's own claim, and the unchanged files are the outputs.
+    const paths = f.provenance.pins.map((pin) => pin.path).sort();
+    assert.deepEqual([...old.delta.changed, ...old.delta.unchanged].sort(), paths);
+    assert.equal(old.deltaMatchesReceiptChangesFromEarlierCorpus, true);
+    assert.equal(old.delta.changed.length, 40); assert.equal(old.delta.unchanged.length, 25);
+    for (const name of ["output.pdf", "output.png", "output.svg"]) assert.ok(old.delta.unchanged.includes(`bundle/${name}`), name);
+    for (const name of ["manifest.json", "detached.json", "lineage.json", "preflight.json", "archive.zip", "trusted-commitment.json"]) assert.ok(old.delta.changed.includes(`bundle/${name}`), name);
+    assert.ok(old.delta.changed.includes("CORPUS.json"));
+    // The in-tree superseded files are byte copies of the old artifact, recorded by digest, and are the OLD bundle.
+    const dir = new URL("./fixtures/production-bundle/superseded/", import.meta.url);
+    assert.deepEqual(old.keptFiles.map((kept) => kept.path), ["detached.json", "manifest.json", "trusted-commitment.json"]);
+    for (const kept of old.keptFiles) {
+      const bytes = new Uint8Array(readFileSync(new URL(kept.path, dir)));
+      assert.equal(f.sha256Hex(bytes), kept.sha256, kept.path); assert.equal(bytes.length, kept.size);
+    }
+    const oldManifest = JSON.parse(readFileSync(new URL("manifest.json", dir), "utf8"));
+    assert.equal(oldManifest.bundle_hash, old.bundle.hash); assert.equal(oldManifest.producer.source_revision, old.producerRevision);
+    assert.notEqual(oldManifest.bundle_hash, f.BUNDLE_HASH);
   });
 
   // ---- anchor -----------------------------------------------------------------------------------------------
@@ -205,6 +264,45 @@ export function register(define) {
     assert.equal(report.eligibility, "blocked"); assert.equal(report.handoffEligible, false); assert.equal(report.authorityIssued, false); assert.equal(report.accepted, false);
     assert.ok(report.openCriticalCodes.includes("OWNER_ACCEPTANCE_PENDING"));
     assert.equal(criterion(report, "owner_eligibility").state, "blocked");
+  });
+
+  define("anchor.superseded-commitment-and-manifest-cannot-bind-the-new-bundle", async () => {
+    const dir = new URL("./fixtures/production-bundle/superseded/", import.meta.url);
+    const oldFile = (name) => new Uint8Array(readFileSync(new URL(name, dir)));
+    const oldCommitment = oldFile("trusted-commitment.json");
+    const pinOf = (bytes) => ({ length: bytes.length, sha256: sha(bytes) });
+    assert.equal(oldCommitment.length, f.baseline().commitmentBytes.length, "same length, so only the pin can tell the two commitments apart");
+    // (a) The host pins the NEW commitment but the byte store serves the OLD one: rejected by the pin, before parsing.
+    const swapped = baselineWorld();
+    swapped.hooks.read = async (request, dflt) => (request.role === "commitment" ? { status: "found", bytes: f.clone(oldCommitment) } : dflt());
+    assert.equal(criterion(await runGate(swapped), "anchor_resolution").code, "COMMITMENT_PIN_MISMATCH");
+    // (b) The host (wrongly) pins the OLD commitment under the NEW digest: the commitment's own bundle_ref disagrees with the lookup digest.
+    const crossed = f.createWorld();
+    crossed.bundles.set(f.BUNDLE_HASH, { files: f.baseline().files, commitmentBytes: oldCommitment, pin: pinOf(oldCommitment) });
+    const crossedReport = await runGate(crossed);
+    assert.equal(criterion(crossedReport, "anchor_resolution").code, "COMMITMENT_BUNDLE_MISMATCH");
+    assert.equal(crossed.calls.read.length, 1);
+    // (c) Asking for the OLD bundle hash against a host that only published the new bundle resolves nothing.
+    const oldDigest = f.provenance.supersedes.bundle.hash;
+    const unpublished = baselineWorld();
+    const lookup = await runGate(unpublished, { bundleDigest: oldDigest });
+    assert.equal(criterion(lookup, "anchor_resolution").code, "BUNDLE_UNPUBLISHED"); assert.equal(unpublished.calls.read.length, 0);
+    // (d) An envelope that names the old bundle while the command digest names the new one is refused before any port.
+    const mismatch = baselineWorld();
+    const refused = await runGate(mismatch, { envelopeBundle: { ...f.BUNDLE_REF, content_hash: oldDigest } });
+    assert.equal(criterion(refused, "anchor_resolution").code, "ENVELOPE_REFERENCE_MISMATCH"); assert.equal(mismatch.calls.resolve.length, 0);
+    // (e) Under the NEW anchor, the OLD manifest and OLD detached file (same lengths) are caught as integrity failures and named.
+    const anchor = await issuedAnchor();
+    for (const name of ["manifest.json", "detached.json"]) {
+      const files = f.baseline().files; files.set(name, oldFile(name));
+      assert.equal(files.get(name).length, f.baseline().files.get(name).length);
+      const report = validateFiles(filesOf(files), anchor);
+      assert.equal(report.verdict, "integrity_failed", name); assert.equal(criterion(report, "owner_integrity").state, "failed", name);
+      assert.deepEqual(report.diagnostic.attribution.problems, [`hash-mismatch:${name}`], name);
+      assert.equal(report.unchanged, true);
+    }
+    // (f) The control: the new bundle through the new anchor still passes.
+    assert.equal((await runGate(baselineWorld())).verdict, "integrity_passed_blocked");
   });
 
   define("anchor.unpublished-fails", async () => {

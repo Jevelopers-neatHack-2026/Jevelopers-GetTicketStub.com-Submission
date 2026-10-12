@@ -366,6 +366,10 @@ export function register(define_) {
     const before = process.memoryUsage().arrayBuffers;
     // Assert on a small summary: if the code were wrong the result would hold 8 MiB of bytes, and rendering a diff of that must not exhaust the runner.
     const oversized = snap(new Uint8Array(8 * MiB), 1024);
+    // The strict rejection shape of the original deepEqual is kept, using only small metadata: a plain-object prototype and EXACTLY the own keys
+    // {ok, reason} are checked BEFORE the summary is compared, so an unrelated extra field (for example `bytes`) can never slip through the projection.
+    assert.equal(Object.getPrototypeOf(oversized), Object.prototype);
+    assert.deepEqual(Object.keys(oversized), ["ok", "reason"]);
     assert.deepEqual({ ok: oversized.ok, reason: oversized.reason }, { ok: false, reason: "over_cap" });
     assert.ok(process.memoryUsage().arrayBuffers - before < 9 * MiB);
     const copy = snap(new Uint8Array(1024), 1024);

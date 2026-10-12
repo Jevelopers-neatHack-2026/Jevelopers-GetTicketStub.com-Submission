@@ -1,5 +1,6 @@
 // SIMULATED ONLY. Fixtures for the ProductionBundle consumer suite.
-// Real bytes: the print-production Linux corpus (run 38205370188, artifact 11727293834) at 300f997. Synthetic, unaccepted,
+// Real bytes: the print-production Linux corpus (run 38216826905, artifact 11733229451) at 01a7b13. Synthetic, unaccepted,
+// (It supersedes the earlier run 38205370188 / artifact 11727293834 at 300f997, recorded in provenance.json `supersedes`.)
 // handoffEligible:false. Nothing here is an approved bundle, an authority, or a production publication record.
 //
 // Test-only helpers in this file (NOT production code and never importable from src/):
