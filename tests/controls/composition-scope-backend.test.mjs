@@ -65,6 +65,21 @@ for (const [a,b,actionA,actionB] of pairs) test(`public composition Apply/replay
     assert.equal(adapter.inflight.size,2);
     assert.deepEqual([...adapter.inflight.keys()].sort(),[canonical([a.tenant_id,a.project_id,actionA]),canonical([b.tenant_id,b.project_id,actionB])].sort());
     const same=adapter.apply(a,inputs[0]); assert.equal(adapter.inflight.size,2);
+    const heldRow=adapter.row(a,actionA), heldCounts=hosts.map(host=>host.counts());
+    // A duplicate must validate the durable request before joining a promise.
+    // Test both hash corruption and a wrong scope/action with a recomputed hash.
+    for (const field of ['tenant_id','project_id','action_id']) for (const rehash of [false,true]) {
+      const corrupt={...JSON.parse(heldRow.request_json),[field]:`wrong-${field}`};
+      adapter.db.prepare('UPDATE control_composition_actions_v1 SET request_json=?,request_hash=? WHERE tenant_id=? AND project_id=? AND action_id=?')
+        .run(canonical(corrupt),rehash?canonicalHash(corrupt):heldRow.request_hash,a.tenant_id,a.project_id,actionA);
+      try {
+        assert.equal((await adapter.apply(a,inputs[0])).ok,false,`Reject corrupted ${field}, rehash=${rehash}, before in-flight join`);
+        assert.equal(adapter.inflight.size,2); assert.deepEqual(hosts.map(host=>host.counts()),heldCounts);
+      } finally {
+        adapter.db.prepare('UPDATE control_composition_actions_v1 SET request_json=?,request_hash=? WHERE tenant_id=? AND project_id=? AND action_id=?')
+          .run(heldRow.request_json,heldRow.request_hash,a.tenant_id,a.project_id,actionA);
+      }
+    }
     hostA.release(); hostB.release();
     const all=await Promise.all([pendingA,pendingB,same]); results=all.slice(0,2); assert.deepEqual(all[2],all[0]);
   } finally {

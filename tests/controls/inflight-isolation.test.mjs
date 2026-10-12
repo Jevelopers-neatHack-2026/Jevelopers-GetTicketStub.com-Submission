@@ -72,7 +72,7 @@ for (const [a, b, actionA, actionB] of pairs) test(`composition Apply isolates c
   db.prepare('UPDATE control_composition_actions_v1 SET request_json=?,request_hash=? WHERE tenant_id=? AND project_id=? AND action_id=?')
     .run(canonical(wrong), canonicalHash(wrong), a.tenant_id, a.project_id, actionA);
   let invoked = 0; adapter.api = { invoke: async () => { invoked++; throw Error('Must not invoke'); } };
-  assert.equal((await adapter.apply(a, inputA)).code, 'unavailable'); assert.equal(invoked, 0);
+  assert.equal((await adapter.apply(a, inputA)).ok, false); assert.equal(invoked, 0);
   assert.equal(adapter.inflight.size, 0);
 });
 

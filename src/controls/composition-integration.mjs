@@ -157,6 +157,10 @@ export class CompositionControlsAdapter {
     const row = this.db.prepare('SELECT * FROM control_composition_actions_v1 WHERE tenant_id=? AND project_id=? AND action_id=?').get(principal.tenant_id, principal.project_id, action_id);
     if (row && row.actor_id !== principal.actor_id) throw new TypeError('Permission');
     if (row && (canonicalHash(snapshotControlJson(JSON.parse(row.action_json))) !== row.action_hash || JSON.parse(row.action_json).action_id !== row.action_id)) throw new TypeError('Corrupt stored action');
+    if (row) {
+      const request = snapshotCompositionJson(JSON.parse(row.request_json));
+      if (canonicalHash(request) !== row.request_hash || request.action_id !== row.action_id || request.tenant_id !== row.tenant_id || request.project_id !== row.project_id) throw new TypeError('Corrupt stored request');
+    }
     return row;
   }
   async apply(principal, rawAction) {
