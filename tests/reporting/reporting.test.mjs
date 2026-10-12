@@ -36,7 +36,12 @@ function makePorts(pool,scope,clock,overrides={}) {
   return {ports,state};
 }
 async function checked(result) { const actual=await result;assert.equal(actual.ok,true,JSON.stringify(actual));return actual.value; }
-async function allDetails(first,q,ports) { const rows=[...first.details];let page=first;while(page.hasMore){page=await checked(root.querySummary({...q,snapshotId:page.snapshotId,cursor:page.nextCursor},ports));rows.push(...page.details);}return rows; }
+async function allDetails(first,q,ports,capture) {
+  const rows=[...first.details];let page=first;
+  capture?.push({request:structuredClone(q),response:structuredClone(first)});
+  while(page.hasMore){const request={...q,snapshotId:page.snapshotId,cursor:page.nextCursor};page=await checked(root.querySummary(request,ports));capture?.push({request:structuredClone(request),response:structuredClone(page)});rows.push(...page.details);}
+  return rows;
+}
 
 await test('CI-08 real scoped PostgreSQL public query and immutable financial oracle',async t=>{
   const admin=new pg.Pool({...databaseConfigFromEnvironment('CI_TEST_DB'),max:2});
@@ -48,7 +53,8 @@ await test('CI-08 real scoped PostgreSQL public query and immutable financial or
     const s={...scope(),tenantId:'11111111-1111-4111-8111-111111111111',projectId:'22222222-2222-4222-8222-222222222222'};const clock={value:'2026-10-12T22:00:00.000Z'};const {ports,state}=makePorts(pool,s,clock);
     const requests=[];
     for(const row of oracle.postings){const req=appendRequest(s,row.id,row);requests.push(req);await checked(root.appendLedgerEvent(req,ports));}
-    const q=query(s);let first;
+    const q=query(s);let first;const refusalObservations=[];
+    const retainRefusal=(name,request,result,readsBefore)=>{assert.equal(result.ok,false);refusalObservations.push({name,request:structuredClone(request),result:structuredClone(result),readsBefore,readsAfter:state.readCount});};
     await run('public root and reporting subpath expose the same database implementation',async()=>{
       assert.equal(root.querySummary,reporting.querySummary);first=await checked(root.querySummary(q,ports));await mkdir(new URL('../../artifacts/reporting/',import.meta.url),{recursive:true});await writeFile(new URL('../../artifacts/reporting/producer-v2-page.json',import.meta.url),JSON.stringify(first,null,2)+'\n');assert.equal(first.detailCount,6);assert.equal(first.canonicalSummaries.length,2);assert.equal(reporting.validateFinancialSummaryPageV2Boundary(first).ok,true);
     });
@@ -69,15 +75,31 @@ await test('CI-08 real scoped PostgreSQL public query and immutable financial or
       assert.equal(first.summary.unitCosts[0].status,'unknown');assert.equal(first.summary.coverage.expected,null);assert.equal(first.summary.coverage.status,'partial');
     });
     await run('all scoped redacted detail sums equal exact aggregate inputs before any rounding',async()=>{
-      const rows=await allDetails(first,q,ports);assert.equal(new Set(rows.map(row=>row.detailId)).size,6);
+      const pages=[];const rows=await allDetails(first,q,ports,pages);assert.equal(new Set(rows.map(row=>row.detailId)).size,6);assert.equal(pages.length,3);
+      const references=page=>page.canonicalSummaries.map(summary=>({summaryId:summary.summary_id,policy:summary.policy_ref,metrics:Object.fromEntries(Object.entries(summary.metrics).map(([name,value])=>[name,value.definition_ref]))}));
+      const referenceHash=hash(references(first));
+      for(const [index,observed]of pages.entries()){
+        const page=observed.response;assert.equal(reporting.validateFinancialSummaryPageV2Boundary(page).ok,true);assert.equal(hash(page.summary),first.summaryContentHash);
+        for(const key of ['snapshotId','queryContentHash','summaryContentHash','asOf','detailCount'])assert.equal(page[key],first[key]);
+        for(const key of ['scope','period','filters','watermark','summary','canonicalSummaries'])assert.deepEqual(page[key],first[key]);
+        assert.equal(hash(references(page)),referenceHash);assert.equal(page.details.length,2);
+        if(index>0){assert.equal(observed.request.snapshotId,first.snapshotId);assert.equal(observed.request.cursor,pages[index-1].response.nextCursor);}
+      }
+      assert.equal(pages.at(-1).response.hasMore,false);assert.equal(pages.at(-1).response.nextCursor,null);
+      const binding={snapshotId:first.snapshotId,queryContentHash:first.queryContentHash,summaryContentHash:first.summaryContentHash,referenceHash,asOf:first.asOf,scope:first.scope};
+      const capture={captureVersion:'1.0.0',status:'TESTED_SYNTHETIC_PAGINATION_CAPTURE_NOT_CONSUMER_ACK',baseRevision:'815c3f9f9a2979d2c695b687ea26863c99e01d3a',producerPayloadRevisionMeaning:'explicit synthetic placeholder; actual test source/run bound by CI checkout and manifest',billingEvidence:'mocked synthetic fixture, requested live billing mode is not actual provider billing proof',binding,pages:pages.map((observed,index)=>({...observed,index,requestRecordHash:hash(observed.request),responseRecordHash:hash(observed.response)})),orderedDetailIds:rows.map(row=>row.detailId),detailCount:rows.length,terminal:true};
       for(const currency of first.summary.currencies)for(const key of ['grossSales','netSales','directCosts','contribution'])assert.equal(rows.filter(row=>row.currency===currency.currency).reduce((sum,row)=>sum+parse(row.metrics[key]),0n),parse(currency.metrics[key].knownSubtotal??'0'));
-      const serialized=JSON.stringify(first);for(const key of ['event_payload','sourceEventId','providerRequestId','actor_reference','cursorSigningKey','sourceRevision'])assert.equal(serialized.includes(key),key==='sourceRevision'?false:false);
+      const serialized=JSON.stringify(pages.map(observed=>observed.response));for(const key of ['event_payload','sourceEventId','providerRequestId','actor_reference','cursorSigningKey','sourceRevision'])assert.equal(serialized.includes(key),key==='sourceRevision'?false:false);
+      await writeFile(new URL('../../artifacts/reporting/producer-v2-pagination-page.json',import.meta.url),JSON.stringify(capture,null,2)+'\n');
     });
     await run('tampered cursor, rehashed forgery, wrong filters, scope, period, page size and version are rejected',async()=>{
       const token=JSON.parse(Buffer.from(first.nextCursor,'base64url'));token.offset=4;token.contentHash=hash(Object.fromEntries(Object.entries(token).filter(([key])=>key!=='contentHash')));
       const forged=Buffer.from(canonical(token)).toString('base64url');
-      for(const change of [{cursor:forged},{pageSize:3,cursor:first.nextCursor},{period:{...q.period,end:'2026-10-10T13:00:00.000Z'}},{filters:{...q.filters,providers:['provider-a']}},{scope:{...s,projectId:randomUUID()}}])assert.equal((await root.querySummary({...q,snapshotId:first.snapshotId,...change},ports)).ok,false);
-      const legacy={...q,schemaVersion:'1.0.0',snapshotId:first.snapshotId};delete legacy.policyVersion;delete legacy.groupings;assert.equal((await root.querySummary(legacy,ports)).ok,false);
+      for(const [name,change]of [['unsigned_cursor_forgery',{cursor:forged}],['cursor_page_size_mismatch',{pageSize:3,cursor:first.nextCursor}],['snapshot_period_mismatch',{period:{...q.period,end:'2026-10-10T13:00:00.000Z'}}],['snapshot_filter_mismatch',{filters:{...q.filters,providers:['provider-a']}}],['foreign_scope',{scope:{...s,projectId:randomUUID()}}]]){
+        const request={...q,snapshotId:first.snapshotId,...change};const reads=state.readCount;const result=await root.querySummary(request,ports);retainRefusal(name,request,result,reads);
+        if(name==='foreign_scope'){assert.equal(result.error.code,'FORBIDDEN_SCOPE');assert.equal(state.readCount,reads);}
+      }
+      const legacy={...q,schemaVersion:'1.0.0',snapshotId:first.snapshotId};delete legacy.policyVersion;delete legacy.groupings;const reads=state.readCount;retainRefusal('cross_version_snapshot',legacy,await root.querySummary(legacy,ports),reads);
     });
     await run('legacy v1 uses the real reader for representable single-currency UUID scope',async()=>{
       const legacy={...q,schemaVersion:'1.0.0',filters:{...q.filters,currency:'USD'}};delete legacy.policyVersion;delete legacy.groupings;
@@ -106,11 +128,12 @@ await test('CI-08 real scoped PostgreSQL public query and immutable financial or
       const a=await checked(root.querySummary(q,ports));const b=await checked(root.querySummary({...q,requestId:'new-request',idempotencyKey:'new-transport'},ports));assert.equal(a.snapshotId,b.snapshotId);assert.equal(a.summaryContentHash,b.summaryContentHash);
     });
     await run('denied, absent, stale and late-revoked current grants fail closed without guessed authority',async()=>{
-      state.denied=true;const reads=state.readCount;assert.equal((await root.querySummary({...q,snapshotId:first.snapshotId},ports)).error.code,'FORBIDDEN_SCOPE');assert.equal(state.readCount,reads);state.denied=false;
+      state.denied=true;const reads=state.readCount;const request={...q,snapshotId:first.snapshotId};const denied=await root.querySummary(request,ports);retainRefusal('current_grant_denied',request,denied,reads);assert.equal(denied.error.code,'FORBIDDEN_SCOPE');assert.equal(state.readCount,reads);state.denied=false;
       const no={...ports};delete no.financeAuthority;assert.equal((await root.querySummary(q,no)).ok,false);
-      const stale={...ports,financeAuthority:{authorizeCurrent:async request=>({status:'allowed',decisionId:'old',operation:request.operation,permission:request.permission,scope:s,principal:{kind:'service',actorId:s.actorId,serviceStatus:'active',serviceGrantRevision:'old'},verifiedAt:'2026-10-10T00:00:00.000Z',expiresAt:'2026-10-10T00:01:00.000Z'})}};assert.equal((await root.querySummary(q,stale)).ok,false);
+      const stale={...ports,financeAuthority:{authorizeCurrent:async request=>({status:'allowed',decisionId:'old',operation:request.operation,permission:request.permission,scope:s,principal:{kind:'service',actorId:s.actorId,serviceStatus:'active',serviceGrantRevision:'old'},verifiedAt:'2026-10-10T00:00:00.000Z',expiresAt:'2026-10-10T00:01:00.000Z'})}};const staleReads=state.readCount;const staleResult=await root.querySummary(q,stale);retainRefusal('stale_current_grant',q,staleResult,staleReads);assert.equal(staleResult.error.code,'FORBIDDEN_SCOPE');assert.equal(state.readCount,staleReads);
       const revoked={...ports,reporting:{...ports.reporting,database:{connect:async()=>{const c=await pool.connect();return {query:async(sql,values)=>{const r=await c.query(sql,values);if(sql==='COMMIT')state.denied=true;return r;},release:()=>c.release()};}}}};
-      assert.equal((await root.querySummary({...q,snapshotId:first.snapshotId},revoked)).error.code,'FORBIDDEN_SCOPE');state.denied=false;
+      const revokedReads=state.readCount;const revokedResult=await root.querySummary(request,revoked);retainRefusal('revoked_after_commit',request,revokedResult,revokedReads);assert.equal(revokedResult.error.code,'FORBIDDEN_SCOPE');state.denied=false;
+      await writeFile(new URL('../../artifacts/reporting/producer-v2-refusals-page.json',import.meta.url),JSON.stringify({captureVersion:'1.0.0',status:'TESTED_SYNTHETIC_REFUSAL_CAPTURE_NOT_CURRENT_HOST_GRANT',baseRevision:'815c3f9f9a2979d2c695b687ea26863c99e01d3a',snapshotId:first.snapshotId,queryContentHash:first.queryContentHash,summaryContentHash:first.summaryContentHash,observations:refusalObservations.map(observed=>({...observed,requestRecordHash:hash(observed.request),resultRecordHash:hash(observed.result)}))},null,2)+'\n');
     });
     await run('privacy quarantine prevents replay and false-zero projections',async()=>{
       await admin.query(`INSERT INTO cost_intelligence.financial_privacy_quarantine(tenant_id,project_id,environment,billing_mode,record_kind,record_hash,reason_code) VALUES ($1,$2,$3,$4,'ledger_event','sha256:'||repeat('a',64),'legacy_sensitive_event_data')`,[s.tenantId,s.projectId,s.environment,s.billingMode]);
