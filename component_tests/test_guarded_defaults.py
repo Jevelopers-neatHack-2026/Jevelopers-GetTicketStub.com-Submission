@@ -323,8 +323,8 @@ def test_stopped_identity_authorizes_only_same_handle_pulse_then_reauthenticatio
             raise ProcessLookupError
 
     def quantum(duration: float) -> None:
-        assert 0 < duration <= 0.005
-        assert duration == pytest.approx(min(0.005, remaining))
+        assert 0 < duration <= 0.020
+        assert duration == pytest.approx(min(0.020, remaining))
         events.append("quantum")
 
     monkeypatch.setattr("component_tests.guarded_active.authenticate_owner", authenticated)

@@ -251,7 +251,7 @@ CLI command, and all eight original protocol controls retain their assertions.
 The latter holds the original Node pidfd from initial authenticated binding before
 request delivery. Initial stop checks that held handle, start time, executable
 inode/argv, role, namespace and cgroup. Subsequent pulses fully authenticate the
-already stopped Node, then send CONT, request a 5-millisecond scheduling quantum
+already stopped Node, then send CONT, request a 20-millisecond scheduling quantum
 subject to scheduler delay and the unchanged absolute deadline, and send STOP
 through the same continuously held descriptor.
 No expensive `/proc` round trip occurs while the Node runs; the kernel handle
@@ -387,6 +387,26 @@ null outcome, one `execution_started`, the request-bound fixture key, authentica
 stopped Node/held pidfd and matching DB/WAL/SHM identities at 25.356 seconds; its
 creator-death assertion passed. This is actual synthetic test/offline/simulated
 execution, with no real authorization or product/domain acceptance grant.
+The fresh ordinary `118967e` PR run then passed thirty-two cases and expired its
+active checkpoint. Artifact `11751143419` has ZIP SHA-256
+`3e18e636d3c41cdf3df3aaa55e473daf0d8d4a1dd7f440c16beb3df0e724131d`.
+Its 297 stopped snapshots included 296 schema-ready observations with both global
+operation and attempt counts zero, under the same original command, key fixture
+and source-bound DB path. This establishes no observed registration; starvation
+is a hypothesis, and the prior passing run does not cure this failed merge gate.
+The successor requests a fixed 20 ms pulse, clipped to the same remaining absolute
+30-second budget, then authenticates T before the unchanged pending/start/key and
+DB/WAL/SHM oracle. Requested scheduling time is neither measured CPU progress nor
+a guaranteed runtime bound. The five-second reap, no-retry/held-task identity,
+D-wait, source/profile, production defaults and all acceptance assertions remain
+unchanged. Fresh exact review and all thirty-three normal CI cases are required.
+The same `118967e` unprivileged offline-read run passed all 122 native cases but
+then collected unrelated print tests without their image, inputs or host role.
+Its final retrieval step now selects the unchanged `test_retrieval.py` collector
+explicitly, preserving all seventeen retrieval cases and their assertions. No
+native, canonical, environment, security or unprivileged checks change; all
+thirty-three print cases and four privacy tests remain mandatory in their assigned
+jobs. This corrects collection scope rather than converting failed tests to passes.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,

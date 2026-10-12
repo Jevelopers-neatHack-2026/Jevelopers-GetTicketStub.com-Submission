@@ -16,7 +16,7 @@ from component_tests.container_records import Observation
 from component_tests.guarded_identity import OwnerBinding, authenticate_owner
 from integration_evals.artifacts import digest, read_bytes
 
-STEP_QUANTUM = 0.005
+STEP_QUANTUM = 0.020
 
 
 def phase(docker: Docker, name: str, owner: OwnerBinding, state: str | None = None) -> None:
