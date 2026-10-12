@@ -33,6 +33,16 @@ Rows: `CLAIM-X-DEST-TEAM-001`, `CLAIM-X-DEST-PROJECT-001`, `CLAIM-X-DEST-REPO-00
 - [ ] Count the assembled quote-post against the 280-character limit using realistic maximum-length placeholders; the final composer check is a human step.
 - [ ] Submitter name and authorization, demo URL, the official neatlogs post URL and the Discord-governed cutoff stay bracketed/pending. Agents do not post.
 
+## Planned human recording runbook claim rows (pending)
+
+Rows: `CLAIM-RUNBOOK-SPN-01-AVAIL-001`, `CLAIM-RUNBOOK-SPN-02-AVAIL-001`, `CLAIM-RUNBOOK-SPN-03-AVAIL-001`, `CLAIM-RUNBOOK-ENTRY-FIELDS-001`. All are `planned`/`pending` with `reviewDate` null, scoped to the internal `DEMO-HUMAN-RECORDING-RUNBOOK-001` only. No reviewer is credited. They do not approve captions, narration, publication, sponsor eligibility, a Finance waiver, actual sales, or any EVAL/SPN master status, and the older sponsor rows are unchanged.
+
+- [ ] `CLAIM-RUNBOOK-SPN-01-AVAIL-001`: wording names the published integration-evals evidence at the pinned commit `31b4f53b` (screenshots are not copied into marketing) and describes visible artifacts only. Listed runs only; NL-R1/2/3 and the chat-relayed owner acceptance stay distinct; no EVAL-02, every-step, receiver-loss or billing claim.
+- [ ] `CLAIM-RUNBOOK-SPN-02-AVAIL-001`: pin `a9d68ef0`; ten manual Actions graph outputs plus one historical manual checkpoint bound to one commit; no live hook, agent-decision, transcript or every-session claim.
+- [ ] `CLAIM-RUNBOOK-SPN-03-AVAIL-001`: pin `6420af49` (merged `f375fcf2`), reviewer workbook SHA-256 `43884eaf…12a14`; hypothetical forecast, no figures or new math, not actual sales; `CFO-R2-001` unresolved, generic export `969941ba…9416` not accepted, no Finance or package approval.
+- [ ] `CLAIM-RUNBOOK-ENTRY-FIELDS-001`: exact “Team Jevelopers. Project TicketStub.” from the issue 22 body snapshot (SHA-256 `c8b8607c…a652f`, mutable record); name only, no product availability; not reusing the X-only or concept-art reviews.
+- [ ] Product-build instruction rows (start, research provenance, approval, download) are not added: no immutable deployed build is confirmed. The runbook keeps them as conditional instructions pending the product owner's confirmed build; `CLAIM-PRODUCT-CAPABILITY-001` and `CLAIM-HUMAN-APPROVAL-CONCEPT-001` are unchanged.
+
 ## Required exercises
 
 - [ ] Reject “fully automated” capability wording.
