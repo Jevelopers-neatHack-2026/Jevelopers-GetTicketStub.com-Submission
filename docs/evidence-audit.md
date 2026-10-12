@@ -6,7 +6,7 @@
 python3 tools/audit_evidence.py [--root .] [--evidence evidence] \
   [--checklist-json planning/acceptance-checklist.json] \
   [--checklist-md planning/acceptance-checklist.md]
-python3 -m unittest discover -s tests
+python3 -m unittest -v tests.test_audit_evidence
 ```
 
 Exit code `0` means no errors; `1` means one or more errors. Stdout is deterministic, key-sorted JSON.

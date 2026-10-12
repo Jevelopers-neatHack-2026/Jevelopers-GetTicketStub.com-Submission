@@ -343,7 +343,7 @@ def run(root, evidence="evidence", checklist_json="planning/acceptance-checklist
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     ap.add_argument("--root", default=".", help="repository root (default: .)")
     ap.add_argument("--evidence", default="evidence")
     ap.add_argument("--checklist-json", default="planning/acceptance-checklist.json")

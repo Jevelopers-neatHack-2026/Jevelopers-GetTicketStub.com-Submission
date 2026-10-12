@@ -1,0 +1,1 @@
+{"tenant":"tenant-b","project":null,"event":"delivery-1","version":"999.0","enum":"invalid"}

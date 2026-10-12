@@ -1,0 +1,143 @@
+{
+  "schema_version": "1.0",
+  "frozen_at": "2026-10-10T22:28:47Z",
+  "corpus_digest": "2a03a473486a5d18422cc209558d97d750756c6999fe05791ebc9fe3acab5834",
+  "required_questions": [
+    "source-type",
+    "relevance",
+    "identity-conflict",
+    "injection",
+    "creative-route",
+    "repair"
+  ],
+  "thresholds": [
+    {
+      "id": "EI-relevance-recall",
+      "question": "relevance",
+      "stratum": "*",
+      "metric": "recall",
+      "relation": "minimum",
+      "limit": "0.98",
+      "owner": "event-intelligence",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "EI-relevance-language-noise",
+      "question": "relevance",
+      "stratum": "*",
+      "metric": "recall",
+      "relation": "minimum",
+      "limit": "0.95",
+      "owner": "event-intelligence",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "EI-identity-precision",
+      "question": "identity-conflict",
+      "stratum": "*",
+      "metric": "precision",
+      "relation": "minimum",
+      "limit": "0.97",
+      "owner": "event-intelligence",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "EI-conflict-precision",
+      "question": "identity-conflict",
+      "stratum": "*",
+      "metric": "precision",
+      "relation": "minimum",
+      "limit": "0.95",
+      "owner": "event-intelligence",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "CE-routing-f1",
+      "question": "creative-route",
+      "stratum": "*",
+      "metric": "macro_f1",
+      "relation": "minimum",
+      "limit": "0.90",
+      "owner": "creative-engine",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "CE-routing-precision",
+      "question": "creative-route",
+      "stratum": "*",
+      "metric": "precision",
+      "relation": "minimum",
+      "limit": "0.98",
+      "owner": "creative-engine",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "CE-routing-recall",
+      "question": "creative-route",
+      "stratum": "*",
+      "metric": "recall",
+      "relation": "minimum",
+      "limit": "0.90",
+      "owner": "creative-engine",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "CE-routing-abstention",
+      "question": "creative-route",
+      "stratum": "*",
+      "metric": "abstention_rate",
+      "relation": "maximum",
+      "limit": "0.20",
+      "owner": "creative-engine",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "CE-defect-recall",
+      "question": "repair",
+      "stratum": "*",
+      "metric": "recall",
+      "relation": "minimum",
+      "limit": "0.95",
+      "owner": "creative-engine",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "CE-inspection-abstention",
+      "question": "repair",
+      "stratum": "*",
+      "metric": "abstention_rate",
+      "relation": "maximum",
+      "limit": "0.25",
+      "owner": "creative-engine",
+      "decision_ref": null,
+      "ratified": false
+    },
+    {
+      "id": "CE-p95-latency",
+      "question": "creative-route",
+      "stratum": "*",
+      "metric": "p95_latency_ms",
+      "relation": "maximum",
+      "limit": "2000",
+      "owner": "creative-engine",
+      "decision_ref": null,
+      "ratified": false
+    }
+  ],
+  "required_mode": "live",
+  "minimum_cost_reduction": "0.20",
+  "maximum_f1_loss": "0.02",
+  "uncertainty_rule_ref": null,
+  "cost_policy_ref": null,
+  "latency_policy_ref": null,
+  "required_trials": 1
+}

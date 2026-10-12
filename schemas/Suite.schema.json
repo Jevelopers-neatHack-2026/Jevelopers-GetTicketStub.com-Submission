@@ -1,0 +1,260 @@
+{
+  "$defs": {
+    "Assertion": {
+      "additionalProperties": false,
+      "description": "Compare an owner-produced named observation to a frozen oracle.",
+      "properties": {
+        "observation": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Observation",
+          "type": "string"
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected"
+        }
+      },
+      "required": [
+        "observation",
+        "expected"
+      ],
+      "title": "Assertion",
+      "type": "object"
+    },
+    "Case": {
+      "additionalProperties": false,
+      "description": "Declarative verification scenario with no competing domain implementation.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "requirements": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Requirements",
+          "type": "array"
+        },
+        "fixtures": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fixtures",
+          "type": "array"
+        },
+        "component": {
+          "title": "Component",
+          "type": "string"
+        },
+        "interface": {
+          "title": "Interface",
+          "type": "string"
+        },
+        "invariant": {
+          "title": "Invariant",
+          "type": "string"
+        },
+        "assertions": {
+          "items": {
+            "$ref": "#/$defs/Assertion"
+          },
+          "minItems": 1,
+          "title": "Assertions",
+          "type": "array"
+        },
+        "artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "modes": {
+          "items": {
+            "$ref": "#/$defs/Mode"
+          },
+          "minItems": 1,
+          "title": "Modes",
+          "type": "array"
+        },
+        "provider_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Provider Ids",
+          "type": "array"
+        },
+        "operations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Operations",
+          "type": "array"
+        },
+        "platform": {
+          "default": "any",
+          "enum": [
+            "any",
+            "linux"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "safety": {
+          "default": false,
+          "title": "Safety",
+          "type": "boolean"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "enum": [
+                "functional",
+                "safety",
+                "authorization",
+                "benchmark"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "quarantined": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quarantined"
+        },
+        "mandatory": {
+          "default": true,
+          "title": "Mandatory",
+          "type": "boolean"
+        },
+        "timeout_seconds": {
+          "default": 30,
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "fault": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fault"
+        },
+        "dependencies": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "artifact_producers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Producers",
+          "type": "array"
+        },
+        "required_evidence_kinds": {
+          "default": [
+            "evaluation"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Evidence Kinds",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "requirements",
+        "fixtures",
+        "component",
+        "interface",
+        "invariant",
+        "assertions",
+        "artifacts",
+        "modes"
+      ],
+      "title": "Case",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Checked-in scenario selection and ownership map.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/Case"
+      },
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "cases"
+  ],
+  "title": "Suite",
+  "type": "object"
+}

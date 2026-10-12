@@ -1,0 +1,163 @@
+{
+  "$defs": {
+    "CorpusRow": {
+      "additionalProperties": false,
+      "description": "Labeled question with independent adjudication and family-level splitting.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "family": {
+          "title": "Family",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "language": {
+          "title": "Language",
+          "type": "string"
+        },
+        "stratum": {
+          "title": "Stratum",
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "calibration",
+            "held-out"
+          ],
+          "title": "Split",
+          "type": "string"
+        },
+        "input_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "allowed_abstention": {
+          "title": "Allowed Abstention",
+          "type": "boolean"
+        },
+        "permission": {
+          "title": "Permission",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "reviewer_a": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewer A"
+        },
+        "reviewer_b": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewer B"
+        },
+        "adjudication": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adjudication"
+        }
+      },
+      "required": [
+        "id",
+        "family",
+        "question",
+        "language",
+        "stratum",
+        "split",
+        "input_digest",
+        "label",
+        "allowed_abstention",
+        "permission",
+        "rationale"
+      ],
+      "title": "CorpusRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Immutable corpus revision and original owner-approved collection targets.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/CorpusRow"
+      },
+      "title": "Rows",
+      "type": "array"
+    },
+    "required_questions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Questions",
+      "type": "array"
+    },
+    "minimum_calibration": {
+      "minimum": 1,
+      "title": "Minimum Calibration",
+      "type": "integer"
+    },
+    "minimum_held_out": {
+      "minimum": 1,
+      "title": "Minimum Held Out",
+      "type": "integer"
+    },
+    "minimum_per_stratum": {
+      "minimum": 1,
+      "title": "Minimum Per Stratum",
+      "type": "integer"
+    },
+    "ratified": {
+      "default": false,
+      "title": "Ratified",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "rows",
+    "required_questions",
+    "minimum_calibration",
+    "minimum_held_out",
+    "minimum_per_stratum"
+  ],
+  "title": "Corpus",
+  "type": "object"
+}

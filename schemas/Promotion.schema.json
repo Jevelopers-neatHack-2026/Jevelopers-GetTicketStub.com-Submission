@@ -1,0 +1,40 @@
+{
+  "additionalProperties": false,
+  "description": "A blocked or failed promotion preserves all negative findings.",
+  "properties": {
+    "verdict": {
+      "enum": [
+        "blocked",
+        "failed",
+        "eligible-for-owner-review"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    },
+    "reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    },
+    "corpus_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Corpus Digest",
+      "type": "string"
+    },
+    "policy_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Policy Digest",
+      "type": "string"
+    }
+  },
+  "required": [
+    "verdict",
+    "reasons",
+    "corpus_digest",
+    "policy_digest"
+  ],
+  "title": "Promotion",
+  "type": "object"
+}

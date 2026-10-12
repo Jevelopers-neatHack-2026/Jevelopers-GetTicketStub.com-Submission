@@ -1,0 +1,6 @@
+{
+  "case_id": "ssrf-egress",
+  "mode": "mock-only",
+  "producer_revision": "d91e08d666abc243ae456a7f9f1bc9c745ca4f8d",
+  "node_version": "22.23.3"
+}

@@ -1,0 +1,187 @@
+{
+  "$defs": {
+    "Fixture": {
+      "additionalProperties": false,
+      "description": "Permission-reviewed inert fixture catalog entry.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "family": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Family",
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "source_ref": {
+          "title": "Source Ref",
+          "type": "string"
+        },
+        "collected_at": {
+          "format": "date-time",
+          "title": "Collected At",
+          "type": "string"
+        },
+        "creator": {
+          "title": "Creator",
+          "type": "string"
+        },
+        "permission": {
+          "title": "Permission",
+          "type": "string"
+        },
+        "tenant_scope": {
+          "title": "Tenant Scope",
+          "type": "string"
+        },
+        "redaction": {
+          "title": "Redaction",
+          "type": "string"
+        },
+        "retention": {
+          "title": "Retention",
+          "type": "string"
+        },
+        "revoked": {
+          "default": false,
+          "title": "Revoked",
+          "type": "boolean"
+        },
+        "quarantined": {
+          "default": false,
+          "title": "Quarantined",
+          "type": "boolean"
+        },
+        "requirements": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Requirements",
+          "type": "array"
+        },
+        "expected": {
+          "title": "Expected",
+          "type": "string"
+        },
+        "modes": {
+          "items": {
+            "$ref": "#/$defs/Mode"
+          },
+          "minItems": 1,
+          "title": "Modes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "sha256",
+        "media_type",
+        "family",
+        "origin",
+        "source_ref",
+        "collected_at",
+        "creator",
+        "permission",
+        "tenant_scope",
+        "redaction",
+        "retention",
+        "requirements",
+        "expected",
+        "modes"
+      ],
+      "title": "Fixture",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "Origin": {
+      "description": "Where the actual artifact originated.",
+      "enum": [
+        "synthetic",
+        "recorded",
+        "sandbox-derived",
+        "live"
+      ],
+      "title": "Origin",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Content-addressed fixture inventory.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "fixtures": {
+      "items": {
+        "$ref": "#/$defs/Fixture"
+      },
+      "title": "Fixtures",
+      "type": "array"
+    },
+    "upstream_revision": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Upstream Revision"
+    },
+    "canonical_schema_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Canonical Schema Digest"
+    }
+  },
+  "required": [
+    "fixtures"
+  ],
+  "title": "Catalog",
+  "type": "object"
+}

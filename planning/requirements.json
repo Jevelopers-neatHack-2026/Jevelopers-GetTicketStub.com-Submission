@@ -1,0 +1,600 @@
+{
+  "schema_version": "1.0",
+  "source_digest": "d6806d3486009aca24e7cfa637f24eebbb72967b89bc00d15b9c28e2d269199d",
+  "leaves": [
+    {
+      "id": "IE-12.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22",
+      "criterion": "Required fixture families exist with reviewed provenance/permissions, immutable hashes, correct origin labels and requirement mappings; catalog and negative validation cases pass.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-12.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22",
+      "criterion": "Canonical contract tests are runnable against pinned shared-contracts artifacts and declared producer/consumer interfaces; missing canonical packages or required interfaces block the affected conformance criteria. No copied substitute schema may clear them.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-12.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22",
+      "criterion": "The complete IE-04 happy path and key IE-05 failure/recovery/concurrency scenarios are defined and executable through the documented runner, with passing mandatory offline cases and explicit per-boundary blocked/mocked results where real execution is unavailable. Preserve original WP09 obligations via IE-05D.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-12.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22",
+      "criterion": "The JEV corpus/split, labels, numeric policy register and deterministic/generative/JEV comparison methodology are frozen, validated and reviewed. Insufficient held-out samples, unresolved targets or missing actual receipts prevent promotion. GPT Image evidence validation has separate mock/recorded/gated profiles and concrete blockers.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-12.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22",
+      "criterion": "Reporting schemas, machine-readable requirement export, canonical tracker update procedure, flake/rerun policy and sanitized evidence packaging/labeling rules are implemented and validated. Every mandatory requirement maps to a case/artifact or explicit blocker; no orphan tests, skipped-as-pass, required quarantine hidden as green, or forged live claims.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-12.AC6",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22",
+      "criterion": "A clean pinned CI execution records exact integration/component/schema/fixture/config revisions and modes, preserves failures and cleanup evidence, and runs mandatory deterministic security/privacy regressions with zero authorization/leak/containment failures among executed cases. Any required owner boundary not executed remains blocked for product acceptance; zero executed tests is not a pass.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-12.AC7",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22",
+      "criterion": "Release reviewer records two separate decisions: repository verification-tooling readiness and integrated product/provider acceptance. Tooling readiness requires all mandatory leaf deliverables and runnable offline checks below; an honest blocked provider profile can satisfy scaffolding only. Product/live criteria remain blocked/unverified until their exact required-mode upstream evidence is supplied. This issue may close for tooling readiness only with a linked limitations/blocker record; closure must never auto-verify EVAL/SPN criteria.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-09B.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/21",
+      "criterion": "Track first-run and every rerun result with run/parent IDs, unchanged pin/fixture/config hashes, attempt index, seed and rationale. Never overwrite a failure with a later pass; report flaky, consistently failed and blocked separately.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-09B.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/21",
+      "criterion": "Define bounded rerun policy: at most two diagnostic offline reruns with identical pins/inputs after the original failure; no automatic rerun for authorization/safety failures, live provider calls or ambiguous dispatch. Live reruns require explicit budget/current authority and owner reconciliation through IE-05C.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-09B.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/21",
+      "criterion": "Require flake records to include case/requirement, frequency denominator, last good/bad revisions, failure signature, owner, linked remediation issue, quarantine reason/expiry and reproduction command. Mandatory quarantined/skipped cases remain blocked for release and cannot improve pass rate silently.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-09B.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/21",
+      "criterion": "Separate benchmark stochastic variation from infrastructure flakes using declared repeats/statistics; preserve all samples. Document minimal reproduction export, local replay, CI triage routing and conditions for removing quarantine.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-08.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20",
+      "criterion": "Define a versioned evidence index linking requirement/case/run ID, actual producing component and SHA, timestamps/original cutoff, provider mode, origin class, artifact digest, sanitized reviewer-accessible reference, permission/redaction review and limitations. Preserve failed/pending/blocked entries without creating fake artifacts.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-08.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20",
+      "criterion": "Support Neatlogs runtime/recovery traces and comparable improvement, Entire development checkpoints/repository graph tied to code revisions, JEV request/decision receipts with question/candidate IDs, GPT Image generation/edit outputs, and acceptance-run summaries with exact manifests. Require producer artifacts; wrappers, screenshots of mocks and architecture docs do not establish sponsor use.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-08.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20",
+      "criterion": "Validate reference accessibility for intended reviewers, digest/provenance joins, missing/stale references and honest claim labels. Keep live, sandbox-derived, recorded and synthetic sources distinct and unknown/estimated financial values explicit.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-08.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20",
+      "criterion": "Sanitize credentials, customer/account details, prompts/source bodies where restricted, metadata and signed access URLs; preserve original private artifacts in approved storage and package safe derivatives. Run IE-11B leakage checks before export.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-08.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20",
+      "criterion": "Produce an offline sample package from clearly synthetic artifacts and a missing-provider/sponsor blocker register. Preserve CFO.ai FinancialSummary/business-plan handoff to cost-intelligence/marketing; a generic export is not proof of an actual CFO.ai plan. Submission narrative/publication and sponsor account setup remain with their owners.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-11B.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/19",
+      "criterion": "Use two synthetic tenants/projects and roles. Swap tenant/project/order/design/artifact IDs, source refs and correlation IDs at APIs, queued jobs, cache reuse, downloads and dashboards; require trusted server scope and no cross-tenant reads/writes or observable private data.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-11B.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/19",
+      "criterion": "Replay, forge, revoke and expire approval references; mutate selected version/hash/facts, permission grants or principal. Confirm app-owned verification rejects unauthorized/stale approval and creative/print/fulfillment cannot hand off or dispatch. Reuse semantic fixtures from IE-03B; do not build a second verifier.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-11B.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/19",
+      "criterion": "Exercise malformed/truncated/polyglot/oversized images and SVG with scripts, event handlers, external references, embedded active content, dangerous links and malformed XML. Ensure owner-provided asset handling rejects/quarantines safely, never executes active content or fetches unexpected resources, and rechecks approval/rights.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-11B.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/19",
+      "criterion": "Seed fake secret/PII canaries in requests, error payloads, usage events and provider responses; scan exported reports, traces, screenshots/metadata, fixture history and evidence indexes. Require sanitization and safe reference-only outputs, with useful correlation retained. Never seed actual credentials/customer data.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-11B.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/19",
+      "criterion": "Test access revocation between collection and evidence read/export, and validate reviewer access without widening artifact visibility. Require zero deterministic authorization/secret-leak failures; preserve sanitized diagnostic evidence for failures.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-11A.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/18",
+      "criterion": "Create controlled URL cases for unsupported schemes, loopback/private/link-local/metadata destinations, IPv4/IPv6 encodings, DNS rebinding, redirect-to-private and redirect loops. Verify each resolved destination/redirect is checked by the owning retrieval boundary, with time/size/redirect/resource limits and no private target reached.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-11A.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/18",
+      "criterion": "Use an isolated test network with mock metadata/internal endpoints and authoritative egress capture; never probe real private infrastructure. Distinguish unit URL parser evidence from actual boundary/redirect/egress verification.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-11A.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/18",
+      "criterion": "Inject hostile instructions into HTML, JSON-LD, email/text, screenshots/OCR and asset metadata. Verify content stays untrusted evidence and cannot modify budgets, tool allowlists, tenant scope, question policy, approval state, credentials or downstream instructions with authority.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-11A.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/18",
+      "criterion": "Assert rejection/quarantine/uncertainty is preserved in research package, JEV routing and creative handoff with sanitized provenance; no unauthorized network request, privileged action or secret appears in traces/artifacts. Deterministic containment assertions require 100% pass.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-07.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/17",
+      "criterion": "Define separate mock-fixture, recorded-example replay and sandbox/live-gated profiles. A recorded response retains original provenance/date but a replay is offline; a synthetic image or mock adapter cannot satisfy provider integration criteria. If the provider has no sandbox, explicitly record controlled live mode rather than inventing one.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-07.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/17",
+      "criterion": "Validate through creative-engine owned adapter results: generation and edit inputs/permission refs, exact provider/model/config and adapter revision, request/response or provider receipt identity when available, output artifact hashes/media properties, immutable DesignVersion parent/usage references and actual/unknown usage. Never require fictional IDs/usage fields the provider does not supply.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-07.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/17",
+      "criterion": "Exercise malformed/empty output, unsupported settings, timeout/ambiguous dispatch, moderation/refusal, missing usage, duplicate response and cancellation/late completion through declared mock/recorded cases. Assert structured result/error and preservation of cost uncertainty.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-07.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/17",
+      "criterion": "Publish a gated preflight/runbook with credential presence, account eligibility, approved budget cap, allowed modes/operations, asset permission, endpoint/model version, cleanup and stop conditions. Capture blocked-by-credentials/budget/interface reasons per criterion with owner and next action; do not silently downgrade or dispatch as part of triage.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-07.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/17",
+      "criterion": "For approved live evidence later, link original generation plus one structured revision/edit, actual output bytes/hash, usage/unknown status, request timestamps, correlation and exact approved handoff. Apply owner-defined quality rubric separately from provider connectivity; one live call does not prove the whole creative release.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06B.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16",
+      "criterion": "Execute deterministic rules, the pinned JEV candidate via agent-harness DecisionPort, and a pinned generative baseline on identical frozen held-out inputs. Record candidate/model, question/prompt/config digests, seeds, temperature where applicable, revision, environment/mode, order/warmup/concurrency, sample size and repeated-trial policy; use existing owner runners/adapters, not new JEV transport.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06B.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16",
+      "criterion": "Report per-question and per-stratum TP/FP/FN, macro-F1, precision/recall, critical false negatives, abstention and coverage, calibration where scores are meaningful, p50/p95 latency, total and downstream cost per successful outcome, unknown-cost rate and failures. Use paired family/bootstrap 95% confidence intervals and raw per-case results; never pool away a bad safety slice.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06B.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16",
+      "criterion": "Freeze numeric thresholds before evaluation with specialist owners. Starting proposals from EI #15: relevance recall >=.98 overall/>=.95 language-noise slices; identity precision >=.97; conflict precision >=.95; accepted support correctness >=.98; source refs 100%; no-answer recall >=.95; adequate-evidence coverage >=.60. All deterministic safety cases must pass 100%. These are proposals until ratified, not claims of achieved scores.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06B.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16",
+      "criterion": "Starting CE #8 proposals: routing macro-F1 >=.90, auto-route precision >=.98, each intent recall >=.90, abstention <=.20; inspection defect recall >=.95, false-repair <=.05, abstention <=.25; JEV within .02 macro-F1 of best baseline, >=20% lower total cost/success than generative baseline, p95 <=2 seconds; safety 100%. Source-type/injection and any uncovered question require explicit numeric per-class targets from agent #6; unresolved EI latency/currency budget/tradeoff blocks promotion.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06B.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16",
+      "criterion": "Promotion requires ratified complete target register, adequate adjudicated samples, zero deterministic safety regressions, threshold and uncertainty-rule compliance, compatible pinned interfaces, actual required-mode receipts and total-cost evidence. Preserve negative findings, owner decision and rollback comparison; mock/recorded runs validate methodology only and cannot promote live routing.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06A.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/15",
+      "criterion": "Catalog labeled source-type classification, passage relevance, event identity/conflict triage, injection signals, creative intent routing and repair/quality triage. Record versioned question/option IDs, expected label or allowed abstention, evidence rationale, provenance/permission, language/noise/ambiguity strata and owning requirement. Specialist question semantics stay with event-intelligence and creative-engine.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06A.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/15",
+      "criterion": "Use independent labeling by two reviewers with adjudication/disagreement records for ambiguous cases; retain hard negatives, conflicting events, noisy/multilingual sources, malicious instructions, Noul/no-answer and cases where no repair is appropriate. Exclude unnecessary personal/private content.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06A.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/15",
+      "criterion": "Freeze dataset/annotation/question-schema digests and disjoint calibration/development versus held-out evaluation splits by source/event/template family, not row randomization. Deduplicate semantically related variants across splits; forbid prompt/threshold tuning on held-out labels and version any later changes.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06A.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/15",
+      "criterion": "Reconcile minimum dataset sizes with upstream policies: EI proposed at least 120 calibration +240 held-out, at least 20 held-out per family and 40 non-English across four languages; creative proposed 160 routing calibration +400 held-out across eight intents plus 160 safety cases, and 56 inspection calibration +140 held-out across seven classes. Record any agreed change with rationale before evaluation; smoke fixtures do not satisfy these targets.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-06A.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/15",
+      "criterion": "Provide a corpus validator for required families, permissions, labels/adjudication, class/stratum coverage, split leakage and immutable hashes. Reference upstream exports with provenance rather than copying unreviewed data. Publish reviewer-access rules and an explicit pending list if collection/adjudication is incomplete.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05D.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/14",
+      "criterion": "Extend the correlated synthetic journey through owner-provided deterministic personalization/print preflight, bundle hash verification, sandbox quote, explicit synthetic purchase authorization, submission/callback and financial report. Reject invalid dimensions/bleed/resolution, missing fonts or mismatched hashes and verify exact personalized text.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05D.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/14",
+      "criterion": "Prove quote does not incur expense or submit an order; mutation of quantity, destination, bundle hash, currency or authorized amount invalidates purchase authorization. Reuse IE-05C duplicate/ambiguous supplier observations and prohibit real purchase.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05D.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/14",
+      "criterion": "Consume cost-intelligence expected financial fixture outputs for FIN-01 attempt metering; FIN-02 duplicate observations; FIN-03 distinct billed attempts; FIN-04 unknown usage; FIN-05 $1→$1.10 reconciliation; FIN-06 aggregate invoice coverage without double counting; FIN-07 subcent precision; FIN-08 shared research allocation conservation; FIN-09 sale/fee/refund/tax/credit/payout/reimbursement classification; and FIN-10 billing-mode isolation. Exercise public ingestion/projection interfaces, not a second ledger.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05D.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/14",
+      "criterion": "DASH-01: compare dashboard totals/drilldowns to the same period/currency/mode projection. DASH-02: show unknown/estimated/unreconciled data. DASH-03: enforce member reads versus authorized commands with actor audit. DASH-04: reconcile FinancialSummary definitions, period, assumptions, coverage and sources.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05D.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/14",
+      "criterion": "Map each original P0 criterion to exact case/output; preserve blocking upstream dependencies. BUD-04 remains P1/non-v1 and LIVE-01–03 remain Production/non-v1, explicitly excluded from this v1 verification gate rather than erased or marked verified.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05C.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/13",
+      "criterion": "Simulate provider acceptance followed by timeout, worker lease expiry and missing completion/usage data. Retain unknown/estimated cost and conservative financial hold; reconcile the existing provider identity before any owner-authorized redispatch. Never invent zero cost or declare cancellation means no charge.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05C.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/13",
+      "criterion": "Build explicit identity cases: replayed observation keeps event identity; safe transport redelivery of the same provider operation does not create a second logical effect; a new billable attempt has its own identity/cost; deliberate user reissue creates a new operation linked to the original and requires current authority/budget. No unsafe automatic reissue after ambiguous send.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05C.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/13",
+      "criterion": "Lose usage before local persistence, during outbox publish and after consumer receipt; restore/replay through owner interfaces and verify eventual at-least-once delivery with idempotent effect. Matching direct usage and trace observations must not double count. Distinct billed retries must retain both expenses.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05C.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/13",
+      "criterion": "Reconcile an explicit $1.00 estimate to $1.10 confirmed cost with traceable adjustment, settle/release only justified capacity, preserve unexplained differences and isolate actual paid test costs from synthetic sales.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05C.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/13",
+      "criterion": "For supplier ambiguity/repeated callback use sandbox or explicit simulation and inspect one intended supplier order/no duplicate transition. No paid fulfillment or real purchase is performed by this suite by default.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05B.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/12",
+      "criterion": "Inject JEV timeout before send and after dispatch, rate limit, provider error, malformed/truncated response, unknown question/option ID, invalid enum, NaN/infinite/out-of-range score, invalid distribution and missing receipt/usage. Check typed outcomes and no invented confidence for Noul/no-answer.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05B.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/12",
+      "criterion": "Verify bounded retries and deterministic safe fallback/escalation per owner policy; no multiplicative SDK-plus-harness retries, unapproved additional provider calls, authority expansion or silent conversion of absent decisions into facts.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05B.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/12",
+      "criterion": "Exercise unsupported/hostile URLs, redirect rejection, oversized content and access-denied sources via controlled fixtures; preserve uncertainty and rejection provenance without unsafe fetch or tool dispatch. Detailed network isolation is in IE-11A.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05B.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/12",
+      "criterion": "Use conflicting dates/venues, same-name different occurrence, duplicate sources, stale evidence and multilingual/noisy passages. Require material conflicts and field-level provenance to survive research package and brief handoff; unsupported facts must not become auto-approved identity.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05B.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/12",
+      "criterion": "Record question/config/candidate IDs, classification outcome, fallback decision and all attempt/usage references with exact pins/modes. An unavailable production boundary is blocked; a stubbed failure proves only the defined fixture behavior.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05A.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/11",
+      "criterion": "Kill/restart the owning worker immediately before dispatch, after a completed durable step, after external success before checkpoint, and during evidence/usage publication. Resume through the real harness interface; assert no repeated committed step and preserve unresolved dispatch ambiguity for reconciliation.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05A.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/11",
+      "criterion": "Replay identical user actions/events and race two workers on the same operation. Assert one logical action and legitimate immutable version history, stable redelivery ID, preserved distinct billable attempts and no double order/expense or lost update.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05A.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/11",
+      "criterion": "Cancel before dispatch and while a provider call is in flight; verify no new work after cancellation, late outputs do not publish as the selected design, already incurred costs remain recorded, and uncertain cost holds remain until reconciled.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05A.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/11",
+      "criterion": "Use synchronized barriers to contend for remaining shared project budget and the same design parent/head. Verify atomic reservation acceptance, capacity conservation, conflict/branch handling, consumption and unused release without exceeding the limit.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-05A.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/11",
+      "criterion": "Bound fault recovery by configured attempts, wall time and cost; collect authoritative checkpoints/version states and teardown. Test hooks belong to owning repositories; missing hooks block the relevant case.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-04.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/10",
+      "criterion": "Define one fictional event/tenant/project with safe URL/HTML and permission-approved assets. Execute URL intake → sourced EventIntelligencePackage → CreativeBrief → initial DesignVersion → structured revision with immutable parent/child → app-authorized exact selected-version handoff → evidence summary.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-04.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/10",
+      "criterion": "Use an exact release manifest covering app, shared-contracts, agent-harness, event-intelligence, creative-engine, cost-intelligence and integration-evals, plus any actual handoff consumer. Record SHAs, contract versions, fixture digests, provider/model modes and environment; refuse drifting refs.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-04.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/10",
+      "criterion": "Assert material facts have source/uncertainty references, brief preserves permissions/conflicts, design versions retain separate hashes and usage/parent links, revision preserves unaffected fields, and approval binds selected version/hash, event facts and asset rights. Handoff bytes/digest must match approved output.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-04.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/10",
+      "criterion": "Correlate logical operation, transport and billable attempt IDs, JEV decisions/receipts where present, image outputs, unknown/confirmed usage and cost attribution with sanitized trace/evidence references. Verify summary claims match actual modes.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-04.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/10",
+      "criterion": "Provide offline mocked/recorded rehearsal and gated real-boundary execution profiles. Missing canonical interfaces, app approval authority, JEV/GPT access or budget yields exact blocked criteria. IE-04 ends at approval-bound handoff; full original EVAL-01 commerce/financial acceptance additionally requires IE-05D and may not be marked verified by this slice alone.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-10.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/9",
+      "criterion": "Consume the integration assembly manifest from getticketstub.com and validate full immutable commit SHAs for every participating repository, contract/fixture digests, runtime/tool versions, dependency lockfiles and image digests where used. Do not resolve main/latest or treat open-PR claims as accepted releases.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-10.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/9",
+      "criterion": "Verify fetched commit identity and clean checkout, save actual resolved tree/revisions, and fail on omitted/mismatched pins, dirty releases or unsupported compatibility combinations. Pin integration-evals itself and archive the manifest digest with each result.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-10.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/9",
+      "criterion": "Create deterministic offline PR jobs for catalog, report/schema validators and mock suites; select component contract/scenario suites through a checked-in coverage map. Use isolated workspaces and cache keys including all relevant pins/modes; reject missing mandatory suite selection.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-10.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/9",
+      "criterion": "Provide manually gated sandbox/live jobs with per-provider preflight, explicit credential/budget authorization, spend caps and redacted configuration. Missing credentials/budget yields blocked; real-provider failures never fall back silently to mocks. No secrets are exposed to untrusted PR execution.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-10.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/9",
+      "criterion": "Archive sanitized results and reproduction instructions on failures and passes; document pin-update review and old/new compatibility comparison. Verify cleanup/cancellation and artifact retention.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-09A.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/8",
+      "criterion": "Define versioned run and case result schemas: run/case/requirement IDs, UTC timestamps, exact integration and dependency SHAs, manifest digest, environment/runtime/config fingerprints, fixture digests, provider modes/model versions, observed outcome, duration/cost/unknowns, evidence refs, limitations and blocker owner. Produce JSON plus a human-readable report and CI-compatible test results.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-09A.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/8",
+      "criterion": "Separate execution outcome (passed/failed/skipped/error), criterion status (canonical planned/in_progress/blocked/verified/deferred), and evidence class/provider mode. Display pending as canonical planned; mocked means mock evidence and cannot replace verified status for a required real boundary. Recorded replay and missing credentials never become live proof. Preserve failures and never convert a skipped mandatory case to pass.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-09A.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/8",
+      "criterion": "Export requirement→case→run→artifact→implementation issue/dependency mappings for IE-01–IE-12 and all relevant original acceptance IDs. Validate no orphan tests, missing mandatory requirements, dangling references or unverifiable claims; list P1/Production exclusions explicitly.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-09A.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/8",
+      "criterion": "Keep planning/acceptance-checklist.json and Markdown authoritative and consistent, preserving IDs, priorities, owners and original verification/evidence text. Implement a reviewed evidence-update procedure; do not auto-mark criteria verified from issue closure, docs or mocks.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-09A.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/8",
+      "criterion": "Schema-test mixed-provider runs, unknown costs, blocked credentials, partial runs, stale pins, failed cases and sanitized reports. Human summary must explain exactly which criteria remain pending, blocked or only mocked.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03B.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/7",
+      "criterion": "Build a requirement-owned semantic matrix for wrong tenant/project/resource owner, inaccessible source references, forged or invalid IDs, unsupported controls, privileged actions and privacy-sensitive payloads. Validate at API, queued job and artifact-read boundaries.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03B.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/7",
+      "criterion": "Change design version/hash, parent, selected artwork, event facts/package revision or approved asset rights after approval; require typed stale/revoked rejection and no downstream handoff. Replay and forged references must never authorize a fresh output. Consume approval authority from the app-owned verifier.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03B.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/7",
+      "criterion": "Assert producers export only permitted fields and consumers recheck current authorization/rights. Correlation IDs, payload tenant claims, model output and a fixture approval object are not authority. Verify cross-tenant and revoked-source references cannot be resolved.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03B.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/7",
+      "criterion": "Capture ownership and write-path observations demonstrating one authoritative writer per record. Keep local contract validation and server authorization separate, and fail the case if a correct error still causes a persisted unauthorized artifact or billable dispatch.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03A.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/6",
+      "criterion": "Import the exact published shared-contracts schema/validator/fixture revision; fail blocked if missing, never silently invent an equivalent schema. Maintain explicit supported-version and additive/unknown-field policies agreed by the canonical owner.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03A.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/6",
+      "criterion": "Cover ProjectRequest (app→harness), EventIntelligencePackage (research→harness/creative), CreativeBrief (creative→harness/image path), DesignControlSchema (creative→UI), DesignVersion (creative→app/print), ProductionBundle (print→app/fulfillment), FulfillmentQuote (fulfillment→app), OrderAuthorization (app→harness/fulfillment), UsageEvent (metered modules→cost), BudgetReservation (cost→metered clients), FinancialSummary (cost→dashboard/export), and EvaluationEvidence (evals→submission hub). Record every concrete pinned producer and consumer.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03A.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/6",
+      "criterion": "Execute positive, missing required field, invalid identifier, unsupported enum, older compatible/incompatible version, unknown additive field and unsupported major-version fixtures at both production and consumption boundaries. Require typed actionable rejection with no side effects for invalid inputs.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03A.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/6",
+      "criterion": "Check common envelope version, stable delivery event ID, trusted tenant/project scope, correlation (never authority), producer/build revision, UTC timestamps, environment/billing mode and source refs; required-versus-optional fields follow the actual published schema. Unknown IDs remain explicit unknown/omitted per schema.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03A.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/6",
+      "criterion": "Verify deterministic serialization/hash rules, exact decimal/currency and subcent amounts, and separation of logical operation, billable attempt, transport attempt, provider request and ingestion IDs. Export requirement-linked per-boundary compatibility results.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-03A.AC6",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/6",
+      "criterion": "Extend the boundary inventory to all interfaces in the newly scoped canonical backlog: ResearchRequest; research correction/invalidation events; DecisionPort Choice/Score/Noul and DecisionReceipt; external ApprovalReference/ApprovalReceipt; ArtifactHandoffManifest; typed errors/partial failures; async status/cancellation/resume; and normalized fulfillment status. Pin producer/consumer pairs and test version/error/privacy/replay behavior. Resolve conflicting local Score/envelope/ResearchPackage alias proposals through shared-contracts owner decisions before marking compatibility verified.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-02B.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/5",
+      "criterion": "Provide versioned event URLs and inert HTML snapshots, valid/malformed/ambiguous JSON-LD, screenshots/image inputs, synthetic text/email evidence and brand assets; include conflicts, unknown facts, hostile instructions, unsupported URLs and access-restricted content.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-02B.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/5",
+      "criterion": "Provide creative briefs, immutable parent/child design versions, structured revision commands, exact version/hash/fact-bound approval references, missing/stale/forged approvals and approved/denied/expired asset-permission examples.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-02B.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/5",
+      "criterion": "Provide valid and malformed payloads (missing fields, invalid IDs, enum/version mismatches, wrong tenant/owner, sensitive data) plus usage/metering events for duplicate delivery, distinct billable attempts, unknown usage, estimates/reconciliation, subcent costs and billing modes.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-02B.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/5",
+      "criterion": "Include minimally one positive and one negative case for each listed family, expected result and owning requirement. Keep asset bytes safe or quarantined; reference active SVG security cases as inert input to controlled test endpoints.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-02B.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/5",
+      "criterion": "Pin upstream fixture/schema revisions and content hashes; document regeneration, semantic expectations and catalog validation. Do not assert synthetic approval objects are authentic runtime authorizations.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-02A.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/4",
+      "criterion": "Define a versioned catalog with stable fixture ID, digest, media type, source reference, collection/generation date, creator/owner, permission/license basis, tenant scope, redaction record, retention/revocation rule, requirement IDs, expected outputs and supported modes.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-02A.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/4",
+      "criterion": "Require origin labels synthetic, recorded, sandbox-derived or live evidence. Keep origin separate from execution provider mode, estimated/confirmed cost and criterion state; a recorded real response replay is not a fresh live call. Mixed runs label each artifact.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-02A.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/4",
+      "criterion": "Reject fixtures with missing permission/provenance, secrets, unnecessary personal data, broken hashes or unowned requirements. Use fictional reserved domains and fake identities by default; keep hostile payloads inert and never render active content during catalog validation.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-02A.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/4",
+      "criterion": "Document restricted artifact storage/access, sanitized derivatives and reviewer access; remove or quarantine revoked material without losing a tombstone/digest audit. Explicitly prohibit redistributing customer/private sponsor data without suitable permission.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-01.AC1",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/3",
+      "criterion": "Publish an execution ADR and runnable thin verification entrypoint using the integration workspace supplied by getticketstub.com; document setup, discovery, isolation, seed/clock control, timeout, teardown, failure injection and read-only state observations. Do not implement domain business logic in the harness.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-01.AC2",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/3",
+      "criterion": "Expose local-developer and CI execution contexts independently from provider mode. Support mock-only (offline, no provider secrets/egress), recorded replay (offline provenance), and explicitly gated sandbox/live checks. A run may have mixed per-provider modes, all recorded. Local mode supports chosen pinned components and reports any missing boundary.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-01.AC3",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/3",
+      "criterion": "Preflight each required dependency, credential availability (boolean only), configured endpoint, explicit budget authority, cap, provider mode and cleanup support. Missing prerequisites yield blocked with owner/reason; an intentional unselected criterion remains pending. No silent fallback from sandbox/live to mocks and no paid calls by default.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-01.AC4",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/3",
+      "criterion": "Require every case to declare owning requirement IDs, input fixture IDs, component interfaces, expected invariant, provider capabilities and artifact outputs. Reject orphan tests and unsupported mode combinations before dispatch.",
+      "status": "planned"
+    },
+    {
+      "id": "IE-01.AC5",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/3",
+      "criterion": "Run against isolated tenant/project namespaces; use supported APIs/adapters and fault hooks owned by component repos; capture exit status and always perform bounded cleanup. Publish exact runnable examples for local, CI, mock-only and gated provider execution.",
+      "status": "planned"
+    }
+  ]
+}

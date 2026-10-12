@@ -1,0 +1,13 @@
+import type { UsageEvent_1_0_0, UsageEvent_2_0_0, ContractMap } from '@jevelopers/shared-contracts';
+import type { ProductionMeteringPort } from '@jevelopers/shared-contracts/production-operations';
+import type { UsageContext } from '@jevelopers/shared-contracts/operations';
+import type { UsageReportedContext } from '@jevelopers/shared-contracts/usage-reported-unsettled';
+declare const observeV1: (value: UsageEvent_1_0_0) => ReturnType<ProductionMeteringPort['observe']>;
+export const port: ProductionMeteringPort = { observe: observeV1 };
+declare const oldValue: UsageEvent_1_0_0;
+void port.observe(oldValue);
+type Assert<T extends true> = T;
+export type OldPortV1 = Assert<Parameters<ProductionMeteringPort['observe']>[0]['schema_version'] extends '1.0.0' ? true : false>;
+export type OldPriorV1 = Assert<NonNullable<UsageContext['prior']>['schema_version'] extends '1.0.0' ? true : false>;
+export type NewPriorV2 = Assert<NonNullable<UsageReportedContext['prior']>['schema_version'] extends '2.0.0' ? true : false>;
+export type RootContainsV2 = Assert<UsageEvent_2_0_0 extends ContractMap['UsageEvent'] ? true : false>;
