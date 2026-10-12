@@ -152,13 +152,17 @@ def scan(stage, scratch):
     # Explicit default rules prevent source .gitleaks.toml / ignore comments suppressing findings.
     config = scratch / 'gitleaks.toml'
     config.write_text('[extend]\nuseDefault = true\n')
+    report_fd, report_name = tempfile.mkstemp(prefix='ticketstub-secret-scan-', suffix='.json')
+    os.close(report_fd)
     result = subprocess.run(['gitleaks', 'dir', str(stage), '--config', str(config),
                              '--gitleaks-ignore-path', str(scratch / 'no-ignore-file'),
                              '--ignore-gitleaks-allow', '--redact', '--no-banner',
-                             '--max-archive-depth', '2'], capture_output=True, text=True)
+                             '--max-archive-depth', '2', '--report-format', 'json',
+                             '--report-path', report_name], capture_output=True, text=True)
     if result.returncode:
         # Gitleaks --redact ensures diagnostics never expose matched secret values.
-        raise RuntimeError('Secret scan failed; nothing was published.\n' + result.stderr)
+        raise RuntimeError(f'Secret scan failed; nothing was published. Redacted report: {report_name}\n' + result.stderr)
+    Path(report_name).unlink(missing_ok=True)
     print('Secret scan passed.', flush=True)
 
 
