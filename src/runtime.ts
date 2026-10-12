@@ -4,7 +4,9 @@ import type {
   AdapterCallContext,
   AttemptEffectState,
   AuthorizationClaimResult,
+  AuthorizationClaimed,
   AuthorizationCheck,
+  AuthorizationDispatchResult,
   BudgetRequest,
   CancelCommand,
   CancelResult,
@@ -391,6 +393,13 @@ export class FulfillmentConnectorRuntime {
           ],
           quoteAmount: quoteAmountEvidence(command.quote.totalMinor, command.quote.currency)
         },
+        ...(typeof this.dependencies.authorizationVerifier.revalidateBeforeDispatch === "function" ? {
+          beforeTransport: (transportCalled: boolean) => this.revalidateAuthorizationBeforeDispatch(
+            authorization,
+            authorizationClaim,
+            transportCalled
+          )
+        } : {}),
         assertPreDispatch: (transportCalled) => this.assertQuoteCurrent(
           command.quote,
           transportCalled ? "possible" : "not_dispatched"
@@ -915,6 +924,33 @@ export class FulfillmentConnectorRuntime {
   ): void {
     if (Date.parse(quote.expiresAt) <= this.dependencies.clock.now()) {
       throw this.failure("submit", "stale_quote", sideEffectState);
+    }
+  }
+
+  /**
+   * A claim is not a promise that the authority holds at dispatch. Budget,
+   * persistence and metering all run between the claim and the transport, so an
+   * optional verifier revalidates immediately before every transport request.
+   */
+  private async revalidateAuthorizationBeforeDispatch(
+    authorization: AuthorizationCheck,
+    claim: AuthorizationClaimed,
+    transportCalled: boolean
+  ): Promise<void> {
+    const sideEffectState: AttemptEffectState = transportCalled ? "possible" : "not_dispatched";
+    const verifier = this.dependencies.authorizationVerifier;
+    let result: AuthorizationDispatchResult;
+    try {
+      if (typeof verifier.revalidateBeforeDispatch !== "function") throw new TypeError("missing revalidation");
+      result = await verifier.revalidateBeforeDispatch(authorization, Object.freeze({ ...claim }));
+    } catch {
+      throw this.failure("submit", "authorization_unavailable", sideEffectState);
+    }
+    if (result !== null && typeof result === "object" && result.status === "rejected") {
+      throw this.failure("submit", "stale_authorization", sideEffectState);
+    }
+    if (result === null || typeof result !== "object" || result.status !== "dispatchable") {
+      throw this.failure("submit", "authorization_unavailable", sideEffectState);
     }
   }
 

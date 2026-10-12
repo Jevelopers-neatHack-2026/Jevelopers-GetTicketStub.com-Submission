@@ -70,3 +70,6 @@ jobs:
 
       - name: Verify private bounded PNG byte inspection fixtures
         run: npm run verify:png-inspection
+
+      - name: Verify the simulated order authorization consumer and dispatch revalidation
+        run: npm run verify:order-authorization

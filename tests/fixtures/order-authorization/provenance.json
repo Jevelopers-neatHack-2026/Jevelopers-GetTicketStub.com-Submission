@@ -1,0 +1,87 @@
+{
+  "description": "Exact subset of the TicketStub app fixtures/order-authorization/ directory, copied byte for byte from git objects at the pinned commit. FIXTURE ONLY, NEVER PRODUCTION. Not consumer-conformance evidence and not an accepted shared-contracts binding.",
+  "sourceRepository": "getticketstub.com (merged application checkout)",
+  "appCommit": "7d2dd17810425f0b06e07dadbba3e173800ea5fd",
+  "appTree": "b20931363cb86e60bdb87f650ed2b444d30ca8ea",
+  "mergeOf": "PR #41",
+  "vendoredSubset": "index.json lists the producer's full fixture set; only the files below are vendored.",
+  "files": [
+    {
+      "path": "README.md",
+      "source": "fixtures/order-authorization/README.md",
+      "byteLength": 13181,
+      "gitBlobSha1": "e296587700e97640b7fd55a85fc0fb10558ace24",
+      "sha256": "a874bb1bd2f6bb49329333a11c37a11c1f6d21c31caf2f3d6dbf616fee943ca2"
+    },
+    {
+      "path": "content.json",
+      "source": "fixtures/order-authorization/content.json",
+      "byteLength": 1537,
+      "gitBlobSha1": "687c5e4261e5aa7e06b26b5e9bbbfc337feea675",
+      "sha256": "b8526f2bbb5fdd1428ee0d4004a1af5c3ed613bc9a26e363228438faca9691a3"
+    },
+    {
+      "path": "fixture-key.json",
+      "source": "fixtures/order-authorization/fixture-key.json",
+      "byteLength": 999,
+      "gitBlobSha1": "9434580b024ed95944ebddd848fcceab3d6a4a7d",
+      "sha256": "6ec844b38b75219eeb048f181dfd8119577a21e67452c7beb7558faa85061944"
+    },
+    {
+      "path": "index.json",
+      "source": "fixtures/order-authorization/index.json",
+      "byteLength": 3045,
+      "gitBlobSha1": "51b6d174166a41caac8230f1ae7d03ee2d68d45e",
+      "sha256": "f30b2ec60b50b5c404d0ff4a8c928085868ceb9923c883f13c1f97928ee856c7"
+    },
+    {
+      "path": "verify.mjs",
+      "source": "fixtures/order-authorization/verify.mjs",
+      "byteLength": 21585,
+      "gitBlobSha1": "f94870de7792a6049ebc15c53fb24ba70c6355c3",
+      "sha256": "8d2bff5239385fe8793f38a8380cb23429b39fb4f9691078ecec8e86557f9450"
+    },
+    {
+      "path": "valid-claim.json",
+      "source": "fixtures/order-authorization/valid-claim.json",
+      "byteLength": 4027,
+      "gitBlobSha1": "dddcaa5972c8671ed9f49cf085be26603d1c57bd",
+      "sha256": "d0532a2bcf57e74b6c00f60a521d1148ebdd09d619e97729de1bd38858fce437"
+    },
+    {
+      "path": "valid-claim-replay-same-key.json",
+      "source": "fixtures/order-authorization/valid-claim-replay-same-key.json",
+      "byteLength": 4137,
+      "gitBlobSha1": "47e075869f2034c0f6350038c77781a71f337739",
+      "sha256": "28519fa2b08a5cbd6ebf59decfcb49d16b707515a60b396505a23efda0607b69"
+    },
+    {
+      "path": "valid-revalidate.json",
+      "source": "fixtures/order-authorization/valid-revalidate.json",
+      "byteLength": 4130,
+      "gitBlobSha1": "6f584950533c24513af2bef9003176527fc67ed3",
+      "sha256": "5e97877ef9c603a6546a43bfc423098302f344001e839f4d3c6032a4aad3f4b7"
+    },
+    {
+      "path": "forged.json",
+      "source": "fixtures/order-authorization/forged.json",
+      "byteLength": 3966,
+      "gitBlobSha1": "8667fef018779d91c8ea84dc4f4436163dd9a3e5",
+      "sha256": "6c30851a4781ab7de76d36e0ff4b3ba3dfb0e8df2dab5710f7b378147d585596"
+    },
+    {
+      "path": "changed-terms-amount.json",
+      "source": "fixtures/order-authorization/changed-terms-amount.json",
+      "byteLength": 4208,
+      "gitBlobSha1": "692d8338625bbcdfda836498d25c8ccf504d9986",
+      "sha256": "a9e403025ae606c47e1a6b493c1a173b34806397e836f435e364df7500eb9dae"
+    },
+    {
+      "path": "revalidate-revoked-after-claim.json",
+      "source": "fixtures/order-authorization/revalidate-revoked-after-claim.json",
+      "byteLength": 4206,
+      "gitBlobSha1": "5e54e622eb82cb8a1bfec4fd244c9292c9cfb677",
+      "sha256": "f9dd152a09f440c64d2a8c888eaec67c40bd7990b82c37a79663077997cc5980"
+    }
+  ]
+}
