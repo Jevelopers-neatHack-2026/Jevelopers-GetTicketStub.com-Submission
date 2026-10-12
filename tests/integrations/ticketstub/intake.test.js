@@ -576,7 +576,7 @@ describe('host exporter', () => {
         raw.close();
       }
       assert.deepEqual(row, { state: 'queued', send_attempts: 1, last_status: 'not_accepted', next_attempt_at_ms: clock.now });
-      assert.deepEqual(attempt, { ordinal: 1, status: 'not_accepted', retry_after_minimum_ms: 0 });
+      assert.deepEqual(attempt, { ordinal: 1, status: 'not_accepted', retry_after_minimum_ms: null });
       assert.deepEqual(Buffer.from(body), neatlogs.bodies[0], 'the first rejected attempt and exact body are durable before close');
     } finally {
       await first.close();
