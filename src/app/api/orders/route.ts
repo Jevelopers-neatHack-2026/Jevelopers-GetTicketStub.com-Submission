@@ -9,7 +9,7 @@ import { refOf } from "@/server/events";
 import { sendReceipt } from "@/server/receipt";
 import { parseEmail, parseText } from "@/server/validate";
 import { DodoError, createCheckout, dodoConfig } from "@/server/payments/dodo";
-import { isDigitalOnly, verifiedTotalMinor } from "@/server/payments/pricing";
+import { allOrderable, isDigitalOnly, verifiedTotalMinor } from "@/server/payments/pricing";
 
 const MATERIALS = ["digital", "card", "print", "framed"];
 const FINISHES = ["matte", "foil", "holo"];
@@ -87,11 +87,12 @@ export const POST = route(async (req: Request) => {
     mode: "sandbox",
     createdAt: new Date().toISOString(),
   };
-  // An all-digital card or wallet order is paid through Dodo when it is configured. Anything else stays a sandbox order
-  // until a provider for physical goods exists (#64). Nothing is stored when the checkout can't be started.
+  // An all-digital card or wallet order of orderable variants is paid through Dodo when it is configured. Anything else
+  // (a physical line, or a preview such as digital holo) stays a sandbox order
+  // until it can be charged (#64). Nothing is stored when the checkout can't be started.
   const dodo = dodoConfig();
   let checkoutUrl: string | undefined;
-  if (dodo && isDigitalOnly(order) && PAID_METHODS.has(order.method)) {
+  if (dodo && isDigitalOnly(order) && allOrderable(order) && PAID_METHODS.has(order.method)) {
     const amountMinor = verifiedTotalMinor(order);
     try {
       const c = await createCheckout(dodo, { orderId: order.id, amountMinor, email, returnUrl: `${appOrigin(req)}/payment/return?order=${encodeURIComponent(order.id)}` });

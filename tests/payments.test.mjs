@@ -48,7 +48,7 @@ Object.assign(process.env, {
 });
 delete process.env.RESEND_API_KEY;
 
-const { verifiedTotalMinor, isDigitalOnly } = await import("../src/server/payments/pricing.ts");
+const { verifiedTotalMinor, isDigitalOnly, allOrderable } = await import("../src/server/payments/pricing.ts");
 const { dodoConfig, verifyWebhook } = await import("../src/server/payments/dodo.ts");
 const { getStorage } = await import("../src/server/index.ts");
 const { POST } = await import("../src/app/api/payments/dodo/webhook/route.ts");
@@ -71,6 +71,9 @@ test("verifies a paid order's amounts against the price list", () => {
   assert.equal(isDigitalOnly({ lines: [line("digital", "matte", 900)] }), true);
   assert.equal(isDigitalOnly({ lines: [line("digital", "matte", 900), line("card", "matte", 2900)] }), false);
   assert.equal(isDigitalOnly({ lines: [] }), false);
+  assert.equal(allOrderable({ lines: [{ ...line("digital", "matte", 900), variantStatus: "orderable" }] }), true);
+  assert.equal(allOrderable({ lines: [{ ...line("digital", "holo", 900), variantStatus: "preview" }] }), false, "holo is a preview");
+  assert.equal(allOrderable({ lines: [line("digital", "matte", 900)] }), false, "an unknown status is not orderable");
 });
 
 test("turns payments off unless every setting and an explicit environment are present", () => {

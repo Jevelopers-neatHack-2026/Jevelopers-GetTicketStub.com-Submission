@@ -25,6 +25,12 @@ export function verifiedTotalMinor(order: Priced): number {
   return total;
 }
 
+/**
+ * Only a variant confirmed orderable can be charged. Its status is derived on the server from the capability map
+ * (orders route), never taken from the browser. A preview (an unconfirmed print SKU, or holo) stays a sandbox order.
+ */
+export const allOrderable = (order: Pick<Order, "lines">) => order.lines.length > 0 && order.lines.every((l) => l.variantStatus === "orderable");
+
 /** Dodo Payments only accepts digitally delivered goods, so only an all-digital order can be paid there. */
 export const isDigitalOnly = (order: Pick<Order, "lines">) => order.lines.length > 0 && order.lines.every((l) => l.material === "digital");
 
