@@ -1,9 +1,11 @@
 # Recording and rehearsal handoff
 
 **Asset:** `DEMO-RECORDING-CHECKLIST-001` · **Acceptance:** MM-03-C
-**Current result:** local silent rehearsal may be rendered at 150 seconds. Final submission recording is **BLOCKED** pending evidence, official fields, permission, and review. A rehearsal does not satisfy or substitute for the final demo.
+**Current result:** the historical 150-second silent synthetic rehearsal exists. Agent capture remains `CANCELLED_USER_REQUEST_NO_RESTART`; this checklist does not authorize another render. Final submission recording is **BLOCKED** pending evidence, official fields, permission, and review. A rehearsal does not satisfy or substitute for the final demo.
 
-## Current rehearsal build
+## Historical rehearsal build recipe — not execution authorization
+
+The recipe below documents the existing concept rehearsal only. Agent capture is cancelled; do not execute it without separate, fresh authorization. Preserve the original narration, captions, transcript, media and render receipts.
 
 1. Read [`product-explanation.md`](product-explanation.md), [`storyboard.md`](storyboard.md), [`narration.md`](narration.md), [`rehearsal-scenes.json`](rehearsal-scenes.json), and [`rehearsal-transcript.md`](rehearsal-transcript.md) from the same candidate revision.
 2. Render locally as a silent video. Use the JSON `captionText` exactly; verify it equals `narration` and the transcript. Do not use TTS, paid providers, or unapproved external media.
@@ -49,6 +51,8 @@ For the final take, the producer's current build-specific pack on [#22](https://
 
 ## Human submission handoff (after the take)
 
+This is the current operational companion to [`narration.md`](narration.md), a frozen historical rehearsal input. Its original `scene-09-submission-gate` caption is a historical post-only close, not a complete current submission procedure or an approved final public close. The entire narration file is preserved byte-for-byte at SHA-256 `818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6` so the original render receipt stays bound to its actual input. Do not annotate that file in place, rewrite its receipt, or reuse the old closing line as current instructions. New final spoken copy needs its own exact claim, destination and media review; use the current human procedure below for submission.
+
 Rechecked 2026-10-12 against the [organizer FAQ](https://neatlogs.com/hackathon) and the human procedure in [the recording runbook](human-recording-runbook.md#9-after-the-take): **both steps are required**. An authorized human makes a public quote-post of the official launch post and must attach the demo video with `@neatlogs`, `@EntireHQ` and `@arithecfo`. The authorized team leader separately completes [the submission form](https://neatlogs.com/submission), reviews the entry and selects `Submit project`; `Continue` saves a draft, not a completed entry. Record the posted-entry URL and a separate redacted final form acknowledgement with a timestamp after the take. Those receipts do not replace media, rights or claim review; no agent recording, upload, post or submission is authorized.
 
 The website window on 2026-10-12 is 19:00–23:55 IST / 09:30–14:25 EDT / 13:30–18:25 UTC; the form cannot be pre-filled before opening. A later organizer Discord cutoff overrides the website window and must be confirmed by the human submitter. Leave private form values out of the repository; the runbook distinguishes public post contents, private leader fields and separately reviewed tool descriptions.
@@ -60,6 +64,8 @@ Agent capture is cancelled and stays stopped. Restarting any agent capture requi
 SPN-01 and SPN-02 remain `PENDING`. Entire's public source is available: saved GitHub Actions execution outputs and graph results, plus one limited historical checkpoint. That is source availability, not approval, and no live agent hook is claimed.
 
 ## Final capture sequence
+
+For authorized human teammates only. Agents must not execute this sequence; capture remains cancelled.
 
 1. Freeze the exact script, scene map, source revisions, supported runtime, and approved assets. Record their checksums and the final asset/claim/provenance IDs.
 2. Replace a pending scene only with evidence approved for that sponsor/class. Keep unavailable evidence explicitly pending; stop rather than fill the gap with simulated output.
@@ -81,4 +87,4 @@ SPN-01 and SPN-02 remain `PENDING`. Entire's public source is available: saved G
 | Brand, rights, accessibility, CTA | `PENDING` | Exact-source approvals, rendered checks, destination review |
 | Official post, cutoff, required links, submitter authority | `PENDING` | Current organizer/Discord information and confirmed fields |
 
-Review roles listed here are routing obligations only; no approval is claimed or requested by this document. The user-assigned marketing-material supervisor remains accountable for this candidate's copy and handoff, while source owners retain evidence, product, brand, rights, finance, and destination authority.
+Review roles listed here are routing obligations only; no approval is claimed or requested by this document. The user-assigned marketing-material supervisor remains accountable for this candidate's copy and handoff, while source owners retain evidence, product, brand, rights,finance, and destination authority.
