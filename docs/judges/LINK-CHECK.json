@@ -1,0 +1,131 @@
+{
+  "checked_at": "2026-10-12T17:15:18.029137+00:00",
+  "method": "Unauthenticated HTTP GET; does not prove form completion or page claims.",
+  "links": [
+    {
+      "url": "https://cli.github.com/",
+      "status": 200,
+      "final_url": "https://cli.github.com/"
+    },
+    {
+      "url": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst",
+      "status": 200,
+      "final_url": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst"
+    },
+    {
+      "url": "https://getticketstub.com/",
+      "status": 200,
+      "final_url": "https://getticketstub.com/"
+    },
+    {
+      "url": "https://github.com/CompleteDotTech",
+      "status": 200,
+      "final_url": "https://github.com/CompleteDotTech"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/app/api/research/route.ts",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/app/api/research/route.ts"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/agent/planner.ts",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/agent/planner.ts"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/fixtures.ts",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/fixtures.ts"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/server/ai/providers.ts",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/server/ai/providers.ts"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commit/6daafba1a3384b20ad181b957fd5d5715da29153",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commit/6daafba1a3384b20ad181b957fd5d5715da29153"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md"
+    },
+    {
+      "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commit/89141b4e9237d7cc1548254b99dbd0f01589eaa4",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commit/89141b4e9237d7cc1548254b99dbd0f01589eaa4"
+    },
+    {
+      "url": "https://github.com/gitleaks/gitleaks",
+      "status": 200,
+      "final_url": "https://github.com/gitleaks/gitleaks"
+    },
+    {
+      "url": "https://github.com/lajefahemp-collab",
+      "status": 200,
+      "final_url": "https://github.com/lajefahemp-collab"
+    },
+    {
+      "url": "https://github.com/lmvdz",
+      "status": 200,
+      "final_url": "https://github.com/lmvdz"
+    },
+    {
+      "url": "https://github.com/zwright8",
+      "status": 200,
+      "final_url": "https://github.com/zwright8"
+    },
+    {
+      "url": "https://neatlogs.com/hackathon",
+      "status": 200,
+      "final_url": "https://neatlogs.com/hackathon"
+    },
+    {
+      "url": "https://neatlogs.com/hackathon/sponsors/cfo.svg",
+      "status": 200,
+      "final_url": "https://neatlogs.com/hackathon/sponsors/cfo.svg"
+    },
+    {
+      "url": "https://neatlogs.com/hackathon/sponsors/entire.svg",
+      "status": 200,
+      "final_url": "https://neatlogs.com/hackathon/sponsors/entire.svg"
+    },
+    {
+      "url": "https://neatlogs.com/submission",
+      "status": 200,
+      "final_url": "https://neatlogs.com/submission"
+    }
+  ]
+}

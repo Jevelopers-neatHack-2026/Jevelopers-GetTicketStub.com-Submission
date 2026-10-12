@@ -1,0 +1,114 @@
+[
+  {
+    "repository": ".github",
+    "commit": "2f61f8551ecf38170f0c5b225305c950c7c3b222",
+    "author_date": "2026-10-12T08:39:16Z",
+    "committer_date": "2026-10-12T08:39:16Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/.github/commit/2f61f8551ecf38170f0c5b225305c950c7c3b222"
+  },
+  {
+    "repository": "agent-harness",
+    "commit": "0d5e5b1e379ecc0fb504d54c5d4f6ebf79ab09dd",
+    "author_date": "2026-10-12T16:28:48Z",
+    "committer_date": "2026-10-12T16:28:48Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/agent-harness/commit/0d5e5b1e379ecc0fb504d54c5d4f6ebf79ab09dd"
+  },
+  {
+    "repository": "brand-kit",
+    "commit": "3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4",
+    "author_date": "2026-10-12T10:10:44Z",
+    "committer_date": "2026-10-12T10:10:44Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/commit/3c48922b54bf0cc7d92bf9de1f59b1bd3cdad4a4"
+  },
+  {
+    "repository": "cost-intelligence",
+    "commit": "243f3a8a7e27eb1bdaef8f1386d49f88d9d15f2e",
+    "author_date": "2026-10-12T16:05:34Z",
+    "committer_date": "2026-10-12T16:05:34Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/commit/243f3a8a7e27eb1bdaef8f1386d49f88d9d15f2e"
+  },
+  {
+    "repository": "creative-engine",
+    "commit": "46766f97172af679f533d75106d7665a873e8b96",
+    "author_date": "2026-10-12T11:18:23Z",
+    "committer_date": "2026-10-12T11:18:23Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/creative-engine/commit/46766f97172af679f533d75106d7665a873e8b96"
+  },
+  {
+    "repository": "event-intelligence",
+    "commit": "29b5924f4faf38ea852e348d7b32a86dd8b54a83",
+    "author_date": "2026-10-12T16:33:39Z",
+    "committer_date": "2026-10-12T16:33:39Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence/commit/29b5924f4faf38ea852e348d7b32a86dd8b54a83"
+  },
+  {
+    "repository": "fulfillment-connectors",
+    "commit": "a1c04e6424626475c7c6db3d397cc6e3392c1600",
+    "author_date": "2026-10-12T13:13:06Z",
+    "committer_date": "2026-10-12T13:13:06Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/commit/a1c04e6424626475c7c6db3d397cc6e3392c1600"
+  },
+  {
+    "repository": "getticketstub.com",
+    "commit": "6daafba1a3384b20ad181b957fd5d5715da29153",
+    "author_date": "2026-10-12T16:05:42Z",
+    "committer_date": "2026-10-12T16:05:42Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commit/6daafba1a3384b20ad181b957fd5d5715da29153"
+  },
+  {
+    "repository": "integration-evals",
+    "commit": "89141b4e9237d7cc1548254b99dbd0f01589eaa4",
+    "author_date": "2026-10-12T15:44:33Z",
+    "committer_date": "2026-10-12T15:44:33Z",
+    "author_login": "zwright8",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commit/89141b4e9237d7cc1548254b99dbd0f01589eaa4"
+  },
+  {
+    "repository": "landing-page-repo",
+    "commit": "034785cb30aca697af13b5e47cbeea6cb7a9c158",
+    "author_date": "2026-10-12T15:06:12Z",
+    "committer_date": "2026-10-12T15:06:12Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/commit/034785cb30aca697af13b5e47cbeea6cb7a9c158"
+  },
+  {
+    "repository": "marketing-material",
+    "commit": "62742934652aad8872c388e4d3fa77dddf93cbc9",
+    "author_date": "2026-10-12T07:43:53Z",
+    "committer_date": "2026-10-12T07:43:53Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/commit/62742934652aad8872c388e4d3fa77dddf93cbc9"
+  },
+  {
+    "repository": "print-production",
+    "commit": "89b5dd63c0a23dc27e62cfc235daa40dfe6d2002",
+    "author_date": "2026-10-12T09:52:17Z",
+    "committer_date": "2026-10-12T09:52:17Z",
+    "author_login": "zwright8",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/print-production/commit/89b5dd63c0a23dc27e62cfc235daa40dfe6d2002"
+  },
+  {
+    "repository": "shared-contracts",
+    "commit": "7251a09c4eaddbb1232d444fd931a01c266095ac",
+    "author_date": "2026-10-12T11:13:57Z",
+    "committer_date": "2026-10-12T11:13:57Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/commit/7251a09c4eaddbb1232d444fd931a01c266095ac"
+  },
+  {
+    "repository": "team-dashboard",
+    "commit": "e7e9aece87eac258369ed551cb9800282575cc45",
+    "author_date": "2026-10-12T15:52:11Z",
+    "committer_date": "2026-10-12T15:52:11Z",
+    "author_login": "CompleteDotTech",
+    "html_url": "https://github.com/Jevelopers-neatHack-2026/team-dashboard/commit/e7e9aece87eac258369ed551cb9800282575cc45"
+  }
+]

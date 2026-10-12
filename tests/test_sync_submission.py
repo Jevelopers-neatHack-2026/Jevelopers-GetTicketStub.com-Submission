@@ -84,6 +84,12 @@ class SnapshotTests(unittest.TestCase):
 
     def test_update_deletes_removed_files_and_unchanged_snapshot_is_noop(self):
         (self.source / 'README.md').write_text('handwritten guide')
+        presentation = self.source / 'docs' / 'judges'
+        presentation.mkdir(parents=True)
+        (presentation / 'EVIDENCE.md').write_text('reviewed claims')
+        assets = self.source / 'docs' / 'assets' / 'submission'
+        assets.mkdir(parents=True)
+        (assets / 'banner.svg').write_text('<svg/>')
         old = self.source / 'repositories' / 'project'
         old.mkdir(parents=True)
         (old / 'removed').write_text('obsolete')
@@ -103,6 +109,8 @@ class SnapshotTests(unittest.TestCase):
         self.assertFalse((old / 'removed').exists())
         self.assertEqual((self.source / 'README.md').read_text(), 'handwritten guide')
         self.assertIn('repositories/project/ignored', git(self.source, 'ls-files'))
+        self.assertEqual((presentation / 'EVIDENCE.md').read_text(), 'reviewed claims')
+        self.assertEqual((assets / 'banner.svg').read_text(), '<svg/>')
 
     def test_scan_failure_does_not_apply_or_publish(self):
         stage = self.base / 'stage'

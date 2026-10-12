@@ -1,0 +1,95 @@
+{
+  "checked_at": "2026-10-12T17:09:36.371256+00:00",
+  "generation_tool": "built-in image_gen.imagegen",
+  "official_current_model": "gpt-image-2.5-sunburst",
+  "official_source": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst",
+  "actual_model_returned": null,
+  "model_limitation": "The built-in tool exposes no model selector and returned no model identifier. Latest-model execution cannot be verified. No paid API fallback was used.",
+  "assets": [
+    {
+      "file": "banner-prompt.txt",
+      "bytes": 1180,
+      "sha256": "9e32e34cca05456141f0ea01ba33d13f94aa221cefbf400b84e873d60edb27e8"
+    },
+    {
+      "file": "banner.jpg",
+      "bytes": 456926,
+      "sha256": "cd8afee00572d439a9cbed08d8ca7dc88f6701b87b6a87225be1d16ce92d21fd"
+    },
+    {
+      "file": "cfo-official.svg",
+      "bytes": 2910,
+      "sha256": "f325dbd0c07a2370b3839029e0703260f870234fad30f2761882e5d73a6e260b"
+    },
+    {
+      "file": "entire-official.svg",
+      "bytes": 2075,
+      "sha256": "b76053b525d0c5f48f906b5fe2cbb73bf29109d7a98065a88d9a888d568e2a5f"
+    },
+    {
+      "file": "journey-art.jpg",
+      "bytes": 417309,
+      "sha256": "90915b11f3e409d0d504d995711be44baa05cd50cdc6aa7d5ddce40e04e5145e"
+    },
+    {
+      "file": "journey-prompt.txt",
+      "bytes": 1263,
+      "sha256": "e5d925e8f611496cd58685ab52caaf3041cf9f670849b720800cb8213121a540"
+    },
+    {
+      "file": "journey.svg",
+      "bytes": 558657,
+      "sha256": "b3dfb83a0d4815a4536081c325b387c0340ad00c2ebc7595da48a03d805f673f"
+    },
+    {
+      "file": "sample-stub-download.png",
+      "bytes": 3399538,
+      "sha256": "f006017d5b252e844bc30c588545cd5d05e0238581a055cc85e7d002a9e780ea"
+    },
+    {
+      "file": "studio-demo-desktop.jpg",
+      "bytes": 163764,
+      "sha256": "283ccd0024f84cd788666d70493d6ca6641ade1f4135da7d086ef31b0b777a2d"
+    },
+    {
+      "file": "studio-demo-mobile.jpg",
+      "bytes": 43203,
+      "sha256": "9d41462b27bb431e1b5b88b8cdc90f9688ada41f111c9105b028fbadc6d3e827"
+    },
+    {
+      "file": "studio-demo-wall.jpg",
+      "bytes": 51560,
+      "sha256": "09fae982bffd82d53cc8b8d7b7125360734f256004b7229f8d26d77336d461fb"
+    },
+    {
+      "file": "system-dark.svg",
+      "bytes": 2370,
+      "sha256": "bafd137ec0b9e007e614891c4e63c737f023a9265edcd204238a1739f673d6a1"
+    },
+    {
+      "file": "system.svg",
+      "bytes": 2370,
+      "sha256": "b1fafab2f010e264fbbf6133d7b2530c04bc4e234d3b9289204a3251624afdf1"
+    },
+    {
+      "file": "ticketstub_judges_cut_animatic.mp4",
+      "bytes": 245679,
+      "sha256": "6f2f95c6b13c489324e466b07a44378abfb71077d4a6b598502b2a3351535770"
+    },
+    {
+      "file": "ticketstub_judges_cut_video_kit.zip",
+      "bytes": 2302827,
+      "sha256": "6cf0e1e5c2b1094ce5a905335350c9bfff448e7df7df3f14e20519df47afd78c"
+    },
+    {
+      "file": "tools-dark.svg",
+      "bytes": 8888,
+      "sha256": "bf293feb40b82b8fbe76f84f8b1641cb37af1d4235137da8ddd93304298b91a1"
+    },
+    {
+      "file": "tools.svg",
+      "bytes": 8888,
+      "sha256": "530bb8e7746608d3ad8dbba17a1c21c9eb5f3d61bb93758b475f4d4d3b101c08"
+    }
+  ]
+}
