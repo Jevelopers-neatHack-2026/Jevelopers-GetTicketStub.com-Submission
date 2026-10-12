@@ -394,7 +394,15 @@ export function mountLanding(ctx) {
     function dismissLoader(){ if (loaderEl.classList.contains('done')) return; loaderEl.classList.add('done'); lpRoot.classList.add('ready'); setTimeout(() => { loaderEl.hidden = true; }, 1200); }
     // no motion: the loader never shows (it would only slide away); the printed version is ready as soon as the page is
     if (STILL){ loaderEl.classList.add('done'); loaderEl.hidden = true; lpRoot.classList.add('ready'); }
-    const safety = setTimeout(() => { lpRoot.classList.add('no3d'); dismissLoader(); }, 8000);   // last resort if fonts or art stall
+    const safety = setTimeout(() => { lpRoot.classList.add('no3d'); dismissLoader(); }, 8000);
+    // Chrome keeps the ring's curved text (textPath) at its first layout: shown before its font loads (no loader with motion
+    // off), it stays small and off-centre. Lay it out again whenever fonts finish loading.
+    const relayoutRing = () => { if (disposed) return; qsa('.disc text').forEach(t => { t.style.display = 'none'; requestAnimationFrame(() => { t.style.display = ''; }); }); };
+    if (document.fonts){
+      document.fonts.ready.then(relayoutRing);
+      document.fonts.addEventListener('loadingdone', relayoutRing);
+      disposers.push(() => document.fonts.removeEventListener('loadingdone', relayoutRing));
+    }   // last resort if fonts or art stall
 
     /* =============================== DATA =============================== */
     // scene order matches the Blender flights S0..S7 (even = performer on the left, throws right)
