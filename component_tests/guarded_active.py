@@ -39,7 +39,9 @@ def stopped_owner(docker: Docker, binding: OwnerBinding, descriptor: int) -> Obs
     current = authenticate_owner(binding, descriptor, docker.configuration.owner, docker.deadline)
     while current.status["State"].split()[0] != "T":
         phase(docker, "awaiting-stopped-state", binding, current.status["State"][:64])
-        assert current.status["State"].split()[0] in {"R", "S"}
+        # Uninterruptible disk IO can delay an already-pending stop signal.
+        # D is only a waiting state: no SQL/phase proof occurs until authenticated T.
+        assert current.status["State"].split()[0] in {"R", "S", "D"}
         if monotonic() >= docker.deadline:
             raise subprocess.TimeoutExpired(("compose-stop",), 30)
         sleep(0.0001)

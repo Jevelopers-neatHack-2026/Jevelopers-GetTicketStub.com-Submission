@@ -321,6 +321,15 @@ retains bounded, allowlisted source/function/line exception locations and one
 root-owned phase/state marker, with no messages, source lines, locals or absolute
 paths. Held-handle pulses separate owner progress from expensive observation while
 preserving the deadline and every actual pending/start/key/inode acceptance oracle.
+The `e79cc1d` dispatch passed seventeen lifecycle/native and fifteen guarded cases.
+The remaining active failure is now identified by its root-owned phase marker:
+the authenticated original Node was in D (uninterruptible disk sleep) while waiting
+for a sent STOP to become effective. The waiter accepted only transient R/S states.
+The successor also waits through authenticated D within the original deadline;
+only actual T permits SQLite or checkpoint proof. Persistent D still times out,
+and departed, zombie, wrong-identity and unknown states remain rejected. It retains
+the deepest eight allowlisted exception frames so the failing assertion survives
+the fixed diagnostic bound. The prior run supplies no pending/active acceptance.
 
 Root-owned receipts outside owner-writable storage name the selected development
 backend and bind source/configuration/request hashes, actual owner process,

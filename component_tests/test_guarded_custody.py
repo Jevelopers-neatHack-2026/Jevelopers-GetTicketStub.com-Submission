@@ -24,11 +24,14 @@ from integration_evals.processes import ProcessSettings
 
 
 def test_failure_locations_are_bounded_and_exclude_private_messages_and_locals() -> None:
-    def nested(depth: int) -> None:
+    def diagnostic_leaf() -> None:
         private = "PRIVATE_DIAGNOSTIC_CANARY"
+        raise AssertionError(private)
+
+    def nested(depth: int) -> None:
         if depth:
             nested(depth - 1)
-        raise AssertionError(private)
+        diagnostic_leaf()
 
     try:
         nested(20)
@@ -40,6 +43,7 @@ def test_failure_locations_are_bounded_and_exclude_private_messages_and_locals()
     assert all(set(frame) == {"source", "function", "line"} for frame in frames)
     assert all(isinstance(frame["line"], int) and frame["line"] > 0 for frame in frames)
     assert all(frame["source"] == "component_tests/test_guarded_custody.py" for frame in frames)
+    assert frames[-1]["function"] == "diagnostic_leaf"
     assert len(json.dumps(frames)) <= 4096
     assert "PRIVATE_DIAGNOSTIC_CANARY" not in json.dumps(frames)
     assert exception_frames(None) == []

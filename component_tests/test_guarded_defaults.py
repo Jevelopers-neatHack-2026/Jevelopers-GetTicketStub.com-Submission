@@ -12,7 +12,7 @@ import pytest
 
 from component_tests.container_docker import Docker
 from component_tests.container_records import Configuration, Observation
-from component_tests.guarded_active import step_owner, stop_active
+from component_tests.guarded_active import step_owner, stop_active, stopped_owner
 from component_tests.guarded_git import CONFIG, git_command, minimal_git, verify_git_projection
 from component_tests.guarded_identity import OwnerBinding
 from component_tests.guarded_print import (
@@ -312,3 +312,60 @@ def test_stopped_identity_authorizes_only_same_handle_pulse_then_reauthenticatio
     else:
         assert step_owner(docker, binding, 7) is owner
         assert events == ["authenticate", "SIGCONT", "quantum", "SIGSTOP", "authenticate"]
+
+
+@pytest.mark.parametrize("persistent", [False, True])
+def test_authenticated_disk_wait_requires_actual_stopped_state_before_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, persistent: bool
+) -> None:
+    owner = Observation(
+        pid=1,
+        uid=61002,
+        gid=61002,
+        groups=(61002,),
+        status={"State": "D (disk sleep)"},
+        namespaces={},
+        cgroup="controlled-disk-wait",
+        apparmor="docker-default (enforce)",
+    )
+    binding = OwnerBinding(
+        host_owner=owner,
+        host_owner_start_ticks="0",
+        executable_identity=(0, 0),
+        command=("original-node",),
+    )
+    docker = Docker(
+        Configuration(producer=tmp_path, directory=tmp_path, name="ie-lifetime-" + "a" * 32),
+        2,
+    )
+    now = 1.0
+    calls = 0
+
+    def authenticated(*_: object) -> Observation:
+        nonlocal calls
+        calls += 1
+        return (
+            owner
+            if calls == 1 or persistent
+            else owner.model_copy(update={"status": {"State": "T (stopped)"}})
+        )
+
+    def tick(_duration: float) -> None:
+        nonlocal now
+        now = 3.0 if persistent else 1.5
+
+    def no_sql(*_: object) -> bytes:
+        pytest.fail("Stop-state waiting must not invoke Docker or SQLite")
+
+    monkeypatch.setattr("component_tests.guarded_active.authenticate_owner", authenticated)
+    monkeypatch.setattr("component_tests.guarded_active.sleep", tick)
+    monkeypatch.setattr("component_tests.guarded_active.monotonic", lambda: now)
+    monkeypatch.setattr(Docker, "run", no_sql)
+    if persistent:
+        with pytest.raises(subprocess.TimeoutExpired):
+            _ = stopped_owner(docker, binding, 7)
+    else:
+        assert stopped_owner(docker, binding, 7).status["State"] == "T (stopped)"
+    assert calls == 2
+    # This wait helper cannot invoke Docker/SQLite or publish a checkpoint.
+    assert not (tmp_path / "active-compose.json").exists()

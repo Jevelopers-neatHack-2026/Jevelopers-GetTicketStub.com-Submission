@@ -7,10 +7,10 @@ import shutil
 import socket
 import subprocess
 import sys
+from collections import deque
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from itertools import islice
 from pathlib import Path
 from time import monotonic, sleep
 from traceback import walk_tb
@@ -64,7 +64,7 @@ def exception_frames(error: BaseException | None) -> list[dict[str, str | int]]:
         "src/integration_evals/print_setup.py",
     }
     result: list[dict[str, str | int]] = []
-    for frame, line in islice(walk_tb(error.__traceback__), 8):
+    for frame, line in deque(walk_tb(error.__traceback__), maxlen=8):
         source = Path(frame.f_code.co_filename)
         if source.is_relative_to(root):
             name = source.relative_to(root).as_posix()
