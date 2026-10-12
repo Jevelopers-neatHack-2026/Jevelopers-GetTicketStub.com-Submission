@@ -12,6 +12,15 @@
       ]
     },
     {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/fixtures/outbox-intent-child.mjs",
+      "sha256": "78632bea09413a49e4a73c73960d305f00b4d50b4b9a4cae2f1c28bc9ed85072",
+      "reason": "Explicit synthetic ingest-key literal in an isolated mock outbox test; no operational credential.",
+      "reviewed_source_commit": "fce81e4f31f4047827d7de69a4e2da35415bc4c8",
+      "findings": [
+        "generic-api-key:43:4:43:63"
+      ]
+    },
+    {
       "path": "repositories/agent-harness/tests/observability/neatlogs-live/live.test.js",
       "sha256": "1a44380d12ee71591c249b79db89db144589b9e7038ad1de5c450417b5e5f98a",
       "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
@@ -22,6 +31,33 @@
         "generic-api-key:365:10:365:69",
         "generic-api-key:378:10:378:69",
         "generic-api-key:41:8:41:59"
+      ]
+    },
+    {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/outbox-admission.test.js",
+      "sha256": "88da4842dfc688d129a53f45b5d1350f240379363a6a0e7cd6cfc78b0c61dd6e",
+      "reason": "Explicit synthetic ingest-key literal in an isolated mock outbox test; no operational credential.",
+      "reviewed_source_commit": "fce81e4f31f4047827d7de69a4e2da35415bc4c8",
+      "findings": [
+        "generic-api-key:239:47:239:112"
+      ]
+    },
+    {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/outbox-intent.test.js",
+      "sha256": "40c754d0e1013097bc0a1c58f21544d0808c557e47b4aa245b2f4948cc32ae94",
+      "reason": "Explicit synthetic ingest-key literal in an isolated mock outbox test; no operational credential.",
+      "reviewed_source_commit": "fce81e4f31f4047827d7de69a4e2da35415bc4c8",
+      "findings": [
+        "generic-api-key:17:8:17:59"
+      ]
+    },
+    {
+      "path": "repositories/agent-harness/tests/observability/neatlogs-live/outbox-retry-after.test.js",
+      "sha256": "babcecfe9b63c9c948c9a8e6f36f88535b5b191ba17343cd06f574475ed4b877",
+      "reason": "Explicit synthetic ingest-key literal in an isolated mock outbox test; no operational credential.",
+      "reviewed_source_commit": "fce81e4f31f4047827d7de69a4e2da35415bc4c8",
+      "findings": [
+        "generic-api-key:15:4:15:63"
       ]
     },
     {
@@ -131,25 +167,37 @@
       ]
     },
     {
+      "path": "repositories/brand-kit/docs/accessibility/contrast-report.json",
+      "sha256": "ae86ac08cf8a955710c91360ffc5fcbde16587e71aeab2662962a15d33041279",
+      "reason": "SHA-256 of public design-token inputs, labeled as such in generated source/report metadata. tokens.json digest checked against the pinned public source.",
+      "reviewed_source_commit": "6222a745195e9f15a14069e79210ad45daa16c94",
+      "findings": [
+        "generic-api-key:13:14:13:93"
+      ]
+    },
+    {
       "path": "repositories/brand-kit/tokens/external-fonts-google.css",
-      "sha256": "e197c96f9db0463aee326cb5db657cd9b9952d47a08e60420de6c6db117ba458",
-      "reason": "Source-file SHA-256 integrity digests.",
+      "sha256": "1ef1548293ec7bc35b11c58a802fb283a4abf795d5344949c5ee0c62b4108595",
+      "reason": "SHA-256 of public design-token inputs, labeled as such in generated source/report metadata. tokens.json digest checked against the pinned public source.",
+      "reviewed_source_commit": "6222a745195e9f15a14069e79210ad45daa16c94",
       "findings": [
         "generic-api-key:6:25:6:101"
       ]
     },
     {
       "path": "repositories/brand-kit/tokens/tailwind.preset.js",
-      "sha256": "af3b702e62cb43965bef1d38385f880a9f90bc966b47e21979811240780b4fc1",
-      "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
+      "sha256": "44a48264838822b41954f946765264740196621b4504947258e54734b20c79ae",
+      "reason": "SHA-256 of public design-token inputs, labeled as such in generated source/report metadata. tokens.json digest checked against the pinned public source.",
+      "reviewed_source_commit": "6222a745195e9f15a14069e79210ad45daa16c94",
       "findings": [
         "generic-api-key:9:25:9:101"
       ]
     },
     {
       "path": "repositories/brand-kit/tokens/tokens.css",
-      "sha256": "a536e16aa1d25e45449a02e6ed46eeed376dfdbb71fa7c8a33cbc3a070f359b0",
-      "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
+      "sha256": "e34223aecf3b5459f046506f5bb97b415b0feeef1d237021d672c5cc59ef3f98",
+      "reason": "SHA-256 of public design-token inputs, labeled as such in generated source/report metadata. tokens.json digest checked against the pinned public source.",
+      "reviewed_source_commit": "6222a745195e9f15a14069e79210ad45daa16c94",
       "findings": [
         "generic-api-key:6:25:6:101"
       ]
@@ -987,11 +1035,12 @@
     },
     {
       "path": "repositories/creative-engine/tests/preflight/access-preflight.test.mjs",
-      "sha256": "4f81b30d0e535a31a7b799d0e124fee5148be7e5ff132a7220045d2dd299db3c",
-      "reason": "Two deliberately fake test token literals used to test credential rejection and redaction.",
+      "sha256": "573cbed97b7c6c9d399fc0edc8d60a88393f2c4934a2c8b5a8d6c11ae3798dd8",
+      "reason": "Two unchanged, deliberately synthetic percent-encoded GitHub-token-shaped URL fixtures on example.invalid; used to test credential rejection. Line numbers moved.",
+      "reviewed_source_commit": "5b0f354dd8871550345863aef4017b7bbba3bd86",
       "findings": [
-        "github-pat:591:40:591:83",
-        "github-pat:592:40:592:87"
+        "github-pat:617:40:617:83",
+        "github-pat:618:40:618:87"
       ]
     },
     {
@@ -1030,8 +1079,9 @@
     },
     {
       "path": "repositories/event-intelligence/tests/research/private-retrieval.test.mjs",
-      "sha256": "0307cba2f26c41c2c3e63dfa0bc226dc8c6394afb7fcde7bc215282b28515cc0",
-      "reason": "Reviewed synthetic test values, public identifiers, or source symbols; no operational credentials.",
+      "sha256": "2487d8229c5524d8bbd3f7eb104805c47f288dba696b9894148557eebaa3a831",
+      "reason": "Previously reviewed literal unchanged: test-only UUID deliberately overwrites the fixture SQLite claim lease in a tamper test. No operational credential.",
+      "reviewed_source_commit": "ef69133bb38320793e02f8530accdd67e59f90e3",
       "findings": [
         "generic-api-key:1964:55:1964:106"
       ]
