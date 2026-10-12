@@ -213,6 +213,31 @@ export async function observeLinuxContainerSecurity() {
 	}
 }
 
+const versionToken = (value: string) =>
+	/^[0-9A-Za-z._-]{1,32}$/.test(value) ? value : "unrecognized";
+
+/**
+ * Fixed-shape message for a local macOS host outside the recorded profile.
+ * Only bounded version tokens are echoed; anything else becomes "unrecognized".
+ */
+type MacosProfile = { arch: string; osRelease: string; osVersion: string };
+
+export function macosProfileMismatchMessage(
+	pinned: MacosProfile,
+	observed: MacosProfile,
+) {
+	const describe = (value: MacosProfile) =>
+		`macOS ${versionToken(value.osVersion)} / Darwin ${versionToken(value.osRelease)} / ${versionToken(value.arch)}`;
+	return (
+		"macOS calibration profile differs from its recorded pin " +
+		`(pinned ${describe(pinned)}; host ${describe(observed)}). ` +
+		"Local macOS renders are accepted only on the exact pinned OS; the " +
+		"pinned Linux CI runtime workflow is the authoritative evidence. " +
+		"Do not edit the pin to match this host: see docs/runtime/README.md " +
+		'"Authoritative evidence and the local macOS profile".'
+	);
+}
+
 export async function assertEnvironment() {
 	const pins = await loadPins();
 	requireCheck(
@@ -292,7 +317,11 @@ export async function assertEnvironment() {
 					release() === pins.local.osRelease &&
 					osVersion === pins.local.osVersion,
 				"ENVIRONMENT_PIN_MISMATCH",
-				"macOS calibration profile differs from its recorded pin.",
+				macosProfileMismatchMessage(pins.local, {
+					arch: arch(),
+					osRelease: release(),
+					osVersion,
+				}),
 			);
 			profile = "local-macos";
 			break;

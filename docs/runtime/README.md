@@ -120,6 +120,40 @@ This is an sRGB calibration profile, not CMYK/ICC, PDF/X, spot-color, trim/bleed
 supplier tolerance or printer certification. Renderer/font/profile changes need
 new fingerprints and evidence; old hashes cannot silently certify new output.
 
+## Authoritative evidence and the local macOS profile
+
+Decision for [issue #32](https://github.com/Jevelopers-neatHack-2026/print-production/issues/32),
+proposed in its PR and adopted only when the owner merges it: the pinned Linux CI
+`runtime` workflow (Ubuntu 24.04 amd64 image
+`mcr.microsoft.com/playwright:v1.64.0-noble@sha256:bc72a8df…`) is the
+**authoritative** runtime/calibration evidence. Local macOS evidence is a
+secondary, profile-specific check and is never required for acceptance.
+
+`pins.json` `local` (macOS 26.6.2 / Darwin 25.6.0 / arm64) identifies the one
+macOS host on which local renders were observed. On any other macOS release,
+`assertEnvironment()` fails closed with `ENVIRONMENT_PIN_MISMATCH`. The message
+names the pinned and observed profiles. Every test and verify suite that renders
+through the runtime guard then fails, along with tests that consume their
+receipts. This is expected and is not a defect in those suites.
+
+Do **not** edit `local.osVersion`/`local.osRelease` to match a newer host. The
+repository has no recorded macOS reference-render hashes to regenerate or compare.
+Receipts are produced per run, and the README states that no cross-OS byte
+identity is claimed. That means a string bump would let a new OS certify itself
+without review. A supported re-record would need a separately reviewed procedure that:
+
+1. runs `npm run verify -- --suite runtime --mode offline --evidence-dir out/evidence/local-macos-<version>`
+   on the new OS with the exact toolchain above;
+2. publishes the resulting decoded PNG RGBA, normalized PDF and PDF semantic
+   hashes and the render PNGs for human visual review against Linux CI and the
+   previous macOS receipts;
+3. keeps the previous profile's evidence for history; and
+4. changes the pin only in the same reviewed change as that evidence.
+
+Until such a procedure exists and is accepted, contributors on other macOS
+releases should rely on the `runtime` workflow for their branch. Locally, they
+can still run `npm run build`, `npm run typecheck` and `npm run format:check`.
+
 ## Evidence and remaining acceptance
 
 `out/evidence/<profile>/runtime.json` records Node/npm/tools, ICU 78.3, Unicode
