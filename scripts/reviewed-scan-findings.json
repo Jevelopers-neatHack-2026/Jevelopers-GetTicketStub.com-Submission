@@ -364,6 +364,15 @@
       ]
     },
     {
+      "path": "repositories/creative-engine/docs/verification/preflight-intrinsics-20261012.json",
+      "sha256": "70e9bb42b9e5e75e46dff30eabb6832c9af1781d146ee4d2338f6c0d03599082",
+      "reason": "Public source SHA-256 for provider-access.md inside source_sha256; not a provider credential.",
+      "reviewed_source_commit": "e3df42720b1a864e397244d7f0824353c8e32762",
+      "findings": [
+        "generic-api-key:30:23:30:109"
+      ]
+    },
+    {
       "path": "repositories/creative-engine/examples/frontend-action-roundtrip/tests/integrated.spec.mjs",
       "sha256": "84be02b783ce0d544c38987df2c4e2005badb3085f86215943d4b6aaee41fe99",
       "reason": "Explicit synthetic credential literals in validation or mocked integration tests; not operational credentials.",
@@ -2988,6 +2997,26 @@
       "reviewed_source_commit": "e2dadb052cefd93454e85cab8558c30447496293",
       "findings": [
         "generic-api-key:25:8:25:44"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/src/server/vendor/fulfillment-connectors/MANIFEST.json",
+      "sha256": "4132b8420527603b9ca892c9ff6864e74e7c4c504fd5a2ed1116a310fdc34af7",
+      "reason": "Public SHA-256 checksums of vendored prodigi-secrets.js and its type declarations; not secrets.",
+      "reviewed_source_commit": "6345f23f41d221502ce792aa4666098eea224ab8",
+      "findings": [
+        "generic-api-key:10:12:10:98",
+        "generic-api-key:11:12:11:100"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/tests/prodigi-callbacks.test.mjs",
+      "sha256": "6ac6ee205010052cbfdf1bf2fd6e2da5866a2f142619a8ffb4bd5bddc3acb238",
+      "reason": "Explicit test-only callback fixture and alphabetic redaction canary in offline tests. Test imports the network guard, clears real credential environment variables, and asserts zero network attempts.",
+      "reviewed_source_commit": "6345f23f41d221502ce792aa4666098eea224ab8",
+      "findings": [
+        "generic-api-key:69:8:69:60",
+        "generic-api-key:760:10:760:63"
       ]
     },
     {
