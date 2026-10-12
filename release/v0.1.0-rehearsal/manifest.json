@@ -3,7 +3,7 @@
   "packageVersion": "v0.1.0-rehearsal",
   "releaseClass": "draft_rehearsal_only",
   "lifecycleState": "draft_rehearsal_only",
-  "candidateSourceCommitAtGeneration": "246c257b309a50b442c4e91b7e927438d0802141",
+  "candidateSourceCommitAtGeneration": "abe783cb90ca00e31a39e8831bb64a3a55b92f07",
   "manifestGenerationTime": "Not self-certified; if needed, record the execution time in the separate release review record after this manifest is committed.",
   "contentAddresses": {
     "algorithm": "SHA-256",
@@ -632,7 +632,7 @@
   },
   "naming": {
     "pattern": "{family}-{assetId}-{revision}-{destination}-{dimensions}-{locale}-{variant}.{extension}",
-    "revision": "r07",
+    "revision": "r08",
     "example": "demo-demo-workflow-diagram-001-r01-repository-internal-review-1440x900-en-us-concept-workflow-presentation.png",
     "collisionPolicy": "An existing path with different bytes is a hard error. Never overwrite a prior version; increment the asset revision or package version and retain the old path."
   },
@@ -1066,7 +1066,7 @@
       "mediaClass": null,
       "role": "editable-copy-and-handoff",
       "variant": "concept-explainer",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -1100,24 +1100,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r07-repository-internal-review-text-en-us-concept-explainer.md",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r08-repository-internal-review-text-en-us-concept-explainer.md",
         "exists": true,
         "sha256": "466d020a4d8d3e13a3b870a8bac5508b43e1d36bded53f574ecb00f7287de75a",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "466d020a4d8d3e13a3b870a8bac5508b43e1d36bded53f574ecb00f7287de75a",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r07-repository-internal-review-text-en-us-concept-explainer.md",
-          "inventoryFileId": "FILE-1B0EFB15A9E5",
-          "recordId": "PROV-FILE-1B0EFB15A9E5",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r08-repository-internal-review-text-en-us-concept-explainer.md",
+          "inventoryFileId": "FILE-4672E9CC1C89",
+          "recordId": "PROV-FILE-4672E9CC1C89",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r07-repository-internal-review-text-en-us-concept-explainer.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r08-repository-internal-review-text-en-us-concept-explainer.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r07-repository-internal-review-text-en-us-concept-explainer.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-explainer-001-r08-repository-internal-review-text-en-us-concept-explainer.md",
             "sha256": "466d020a4d8d3e13a3b870a8bac5508b43e1d36bded53f574ecb00f7287de75a"
           },
           "permission": {
@@ -1327,7 +1327,7 @@
       "mediaClass": null,
       "role": "timed-storyboard-source",
       "variant": "150-second-rehearsal-plan",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -1361,24 +1361,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r07-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r08-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
         "exists": true,
         "sha256": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r07-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
-          "inventoryFileId": "FILE-47EBB19024C6",
-          "recordId": "PROV-FILE-47EBB19024C6",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r08-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+          "inventoryFileId": "FILE-C70E88920722",
+          "recordId": "PROV-FILE-C70E88920722",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r07-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r08-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r07-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-storyboard-001-r08-repository-internal-review-text-en-us-150-second-rehearsal-plan.md",
             "sha256": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467"
           },
           "permission": {
@@ -1479,7 +1479,7 @@
       "mediaClass": null,
       "role": "narration-source",
       "variant": "caption-exact-rehearsal-narration",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -1513,24 +1513,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r07-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r08-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
         "exists": true,
         "sha256": "818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r07-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
-          "inventoryFileId": "FILE-0C1339422D4F",
-          "recordId": "PROV-FILE-0C1339422D4F",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r08-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+          "inventoryFileId": "FILE-5236E378D497",
+          "recordId": "PROV-FILE-5236E378D497",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r07-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r08-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r07-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-narration-001-r08-repository-internal-review-text-en-us-caption-exact-rehearsal-narration.md",
             "sha256": "818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6"
           },
           "permission": {
@@ -1631,7 +1631,7 @@
       "mediaClass": null,
       "role": "final-recording-plan",
       "variant": "rehearsal-recording-plan",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -1665,24 +1665,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r07-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r08-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
         "exists": true,
         "sha256": "8193d82268d36030d6433ddedd6b350f657216527fc82dc46c1dd0f043947a74",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "8193d82268d36030d6433ddedd6b350f657216527fc82dc46c1dd0f043947a74",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r07-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
-          "inventoryFileId": "FILE-2E0190D72440",
-          "recordId": "PROV-FILE-2E0190D72440",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r08-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+          "inventoryFileId": "FILE-8C79223FD344",
+          "recordId": "PROV-FILE-8C79223FD344",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r07-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r08-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r07-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-recording-checklist-001-r08-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
             "sha256": "8193d82268d36030d6433ddedd6b350f657216527fc82dc46c1dd0f043947a74"
           },
           "permission": {
@@ -1783,17 +1783,17 @@
       "mediaClass": null,
       "role": "human-recording-guide",
       "variant": "planned-internal-human-guide",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": false,
       "releaseStatus": "draft",
       "file": {
         "path": "demo/human-recording-runbook.md",
         "exists": true,
-        "sha256": "a85de61e96c7c294c9dd22f1452133f6b7670008a9407c114e7a792f978956f6",
-        "sizeBytes": 29319,
-        "sourceCommitId": "3dc4636f7a68925abc629d46eeba66fd8955e149",
-        "blobObjectId": "5117e57790ba10bd55b72ec807ef20b94211568e",
+        "sha256": "90ba5a954549b324215ca2b8c7d9bdffdff503b61df1d73d66a3734eb751371d",
+        "sizeBytes": 29337,
+        "sourceCommitId": "3205c6b492be6e1eb58d4334c0c71cfd514e515c",
+        "blobObjectId": "b404693c3adff23d13727f94f98ff107a106377c",
         "tracked": true,
         "workingTreeClean": true,
         "sourcePinStatus": "pinned",
@@ -1811,31 +1811,31 @@
       },
       "source": {
         "path": "demo/human-recording-runbook.md",
-        "sha256": "a85de61e96c7c294c9dd22f1452133f6b7670008a9407c114e7a792f978956f6",
-        "sourceCommitId": "3dc4636f7a68925abc629d46eeba66fd8955e149",
+        "sha256": "90ba5a954549b324215ca2b8c7d9bdffdff503b61df1d73d66a3734eb751371d",
+        "sourceCommitId": "3205c6b492be6e1eb58d4334c0c71cfd514e515c",
         "sourcePinStatus": "pinned",
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r07-repository-internal-review-text-en-us-planned-internal-human-guide.md",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r08-repository-internal-review-text-en-us-planned-internal-human-guide.md",
         "exists": true,
-        "sha256": "a85de61e96c7c294c9dd22f1452133f6b7670008a9407c114e7a792f978956f6",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
-        "expectedSha256": "a85de61e96c7c294c9dd22f1452133f6b7670008a9407c114e7a792f978956f6",
+        "sha256": "90ba5a954549b324215ca2b8c7d9bdffdff503b61df1d73d66a3734eb751371d",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
+        "expectedSha256": "90ba5a954549b324215ca2b8c7d9bdffdff503b61df1d73d66a3734eb751371d",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r07-repository-internal-review-text-en-us-planned-internal-human-guide.md",
-          "inventoryFileId": "FILE-2E0DDA13290C",
-          "recordId": "PROV-FILE-2E0DDA13290C",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r08-repository-internal-review-text-en-us-planned-internal-human-guide.md",
+          "inventoryFileId": "FILE-E721068D008B",
+          "recordId": "PROV-FILE-E721068D008B",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r07-repository-internal-review-text-en-us-planned-internal-human-guide.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r08-repository-internal-review-text-en-us-planned-internal-human-guide.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r07-repository-internal-review-text-en-us-planned-internal-human-guide.md",
-            "sha256": "a85de61e96c7c294c9dd22f1452133f6b7670008a9407c114e7a792f978956f6"
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-human-recording-runbook-001-r08-repository-internal-review-text-en-us-planned-internal-human-guide.md",
+            "sha256": "90ba5a954549b324215ca2b8c7d9bdffdff503b61df1d73d66a3734eb751371d"
           },
           "permission": {
             "status": "authorized_internal_candidate_review_only",
@@ -1999,7 +1999,7 @@
       "mediaClass": null,
       "role": "submission-requirements-and-pending-fields",
       "variant": "submission-preflight",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -2033,24 +2033,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r07-repository-internal-review-text-en-us-submission-preflight.md",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r08-repository-internal-review-text-en-us-submission-preflight.md",
         "exists": true,
         "sha256": "5a3a3e16035268426447c585fecfcec4a6fd988d35b936f74f38a090ea069635",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "5a3a3e16035268426447c585fecfcec4a6fd988d35b936f74f38a090ea069635",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r07-repository-internal-review-text-en-us-submission-preflight.md",
-          "inventoryFileId": "FILE-216A3022D768",
-          "recordId": "PROV-FILE-216A3022D768",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r08-repository-internal-review-text-en-us-submission-preflight.md",
+          "inventoryFileId": "FILE-9F2DB0AA9B8E",
+          "recordId": "PROV-FILE-9F2DB0AA9B8E",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r07-repository-internal-review-text-en-us-submission-preflight.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r08-repository-internal-review-text-en-us-submission-preflight.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r07-repository-internal-review-text-en-us-submission-preflight.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-submission-narrative-001-r08-repository-internal-review-text-en-us-submission-preflight.md",
             "sha256": "5a3a3e16035268426447c585fecfcec4a6fd988d35b936f74f38a090ea069635"
           },
           "permission": {
@@ -2304,7 +2304,7 @@
       "mediaClass": null,
       "role": "timed-scene-and-caption-contract",
       "variant": "silent-rehearsal-scene-map",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -2338,24 +2338,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r07-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r08-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
         "exists": true,
         "sha256": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r07-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
-          "inventoryFileId": "FILE-C11DF4AAABAC",
-          "recordId": "PROV-FILE-C11DF4AAABAC",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r08-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+          "inventoryFileId": "FILE-797569D51274",
+          "recordId": "PROV-FILE-797569D51274",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r07-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r08-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r07-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-scenes-001-r08-repository-internal-review-text-en-us-silent-rehearsal-scene-map.json",
             "sha256": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca"
           },
           "permission": {
@@ -2456,7 +2456,7 @@
       "mediaClass": null,
       "role": "accessible-transcript",
       "variant": "caption-exact-transcript",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -2490,24 +2490,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r07-repository-internal-review-text-en-us-caption-exact-transcript.md",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r08-repository-internal-review-text-en-us-caption-exact-transcript.md",
         "exists": true,
         "sha256": "36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r07-repository-internal-review-text-en-us-caption-exact-transcript.md",
-          "inventoryFileId": "FILE-46063B4B3DB0",
-          "recordId": "PROV-FILE-46063B4B3DB0",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r08-repository-internal-review-text-en-us-caption-exact-transcript.md",
+          "inventoryFileId": "FILE-0FE4F816A7DF",
+          "recordId": "PROV-FILE-0FE4F816A7DF",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r07-repository-internal-review-text-en-us-caption-exact-transcript.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r08-repository-internal-review-text-en-us-caption-exact-transcript.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r07-repository-internal-review-text-en-us-caption-exact-transcript.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-transcript-001-r08-repository-internal-review-text-en-us-caption-exact-transcript.md",
             "sha256": "36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e"
           },
           "permission": {
@@ -2609,7 +2609,7 @@
       "mediaClass": "visual",
       "role": "editable-vector-source",
       "variant": "concept-workflow-vector",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -2643,24 +2643,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
         "exists": true,
         "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
-          "inventoryFileId": "FILE-DE26BDA4F1D1",
-          "recordId": "PROV-FILE-DE26BDA4F1D1",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+          "inventoryFileId": "FILE-04431F0265A9",
+          "recordId": "PROV-FILE-04431F0265A9",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-1440x900-en-us-concept-workflow-vector.svg",
             "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971"
           },
           "permission": {
@@ -2890,7 +2890,7 @@
       "mediaClass": "visual",
       "role": "rendered-raster-export",
       "variant": "concept-workflow-presentation-png",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -2924,24 +2924,24 @@
         "fileRole": "editable-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
         "exists": true,
         "sha256": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
-          "inventoryFileId": "FILE-221911C28B6F",
-          "recordId": "PROV-FILE-221911C28B6F",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+          "inventoryFileId": "FILE-823B2EDA692F",
+          "recordId": "PROV-FILE-823B2EDA692F",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-1440x900-en-us-concept-workflow-presentation-png.png",
             "sha256": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe"
           },
           "permission": {
@@ -3172,7 +3172,7 @@
       "mediaClass": "accessible-alternative",
       "role": "accessible-text-alternative",
       "variant": "concept-workflow-alt-text",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -3206,24 +3206,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
         "exists": true,
         "sha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
-          "inventoryFileId": "FILE-8D0E6B746299",
-          "recordId": "PROV-FILE-8D0E6B746299",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+          "inventoryFileId": "FILE-66B86372AC36",
+          "recordId": "PROV-FILE-66B86372AC36",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r07-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-workflow-diagram-001-r08-repository-internal-review-text-en-us-concept-workflow-alt-text.md",
             "sha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1"
           },
           "permission": {
@@ -3446,7 +3446,7 @@
       "mediaClass": "visual",
       "role": "editable-vector-source",
       "variant": "fictional-stub-concept-vector",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": false,
       "releaseStatus": "draft",
@@ -3480,24 +3480,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
         "exists": true,
         "sha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
-          "inventoryFileId": "FILE-75FAA64BC37D",
-          "recordId": "PROV-FILE-75FAA64BC37D",
+          "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+          "inventoryFileId": "FILE-25E4941FDB5B",
+          "recordId": "PROV-FILE-25E4941FDB5B",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-1200x900-en-us-fictional-stub-concept-vector.svg",
             "sha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2"
           },
           "permission": {
@@ -3700,7 +3700,7 @@
       "mediaClass": "visual",
       "role": "rendered-raster-export",
       "variant": "fictional-stub-concept-presentation-png",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": false,
       "releaseStatus": "draft",
@@ -3734,24 +3734,24 @@
         "fileRole": "editable-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
         "exists": true,
         "sha256": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
-          "inventoryFileId": "FILE-E7B13371635E",
-          "recordId": "PROV-FILE-E7B13371635E",
+          "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+          "inventoryFileId": "FILE-C3B81E4C83B1",
+          "recordId": "PROV-FILE-C3B81E4C83B1",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-1200x900-en-us-fictional-stub-concept-presentation-png.png",
             "sha256": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578"
           },
           "permission": {
@@ -3955,7 +3955,7 @@
       "mediaClass": "accessible-alternative",
       "role": "accessible-text-alternative",
       "variant": "fictional-stub-concept-alt-text",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": false,
       "releaseStatus": "draft",
@@ -3989,24 +3989,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+        "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
         "exists": true,
         "sha256": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
-          "inventoryFileId": "FILE-D33DB9240A9F",
-          "recordId": "PROV-FILE-D33DB9240A9F",
+          "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+          "inventoryFileId": "FILE-02B8E466E7BD",
+          "recordId": "PROV-FILE-02B8E466E7BD",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r07-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/screenshot-001-demo-screenshot-set-001-r08-repository-internal-review-text-en-us-fictional-stub-concept-alt-text.md",
             "sha256": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186"
           },
           "permission": {
@@ -4203,7 +4203,7 @@
       "mediaClass": "visual-with-text-equivalent",
       "role": "responsive-rehearsal-support-page",
       "variant": "concept-responsive-html",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": false,
       "releaseStatus": "draft",
@@ -4237,24 +4237,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r07-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+        "path": "release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r08-repository-internal-review-responsive-en-us-concept-responsive-html.html",
         "exists": true,
         "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r07-repository-internal-review-responsive-en-us-concept-responsive-html.html",
-          "inventoryFileId": "FILE-F57A0062911E",
-          "recordId": "PROV-FILE-F57A0062911E",
+          "path": "release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r08-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+          "inventoryFileId": "FILE-85FC92FC2ABE",
+          "recordId": "PROV-FILE-85FC92FC2ABE",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r07-repository-internal-review-responsive-en-us-concept-responsive-html.html",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r08-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r07-repository-internal-review-responsive-en-us-concept-responsive-html.html",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/view/demo/deck/deck-001-demo-deck-support-001-r08-repository-internal-review-responsive-en-us-concept-responsive-html.html",
             "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770"
           },
           "permission": {
@@ -4513,7 +4513,7 @@
       "mediaClass": null,
       "role": "announcement-and-update-copy-source",
       "variant": "pending-template-and-docs-update",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -4547,24 +4547,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r07-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r08-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
         "exists": true,
         "sha256": "31b61fceca4012e66054ce44d358042d5abe47ef5319b02e8a479218bbf36526",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "31b61fceca4012e66054ce44d358042d5abe47ef5319b02e8a479218bbf36526",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r07-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
-          "inventoryFileId": "FILE-7C62837DBB55",
-          "recordId": "PROV-FILE-7C62837DBB55",
+          "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r08-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+          "inventoryFileId": "FILE-99AA3AF318DC",
+          "recordId": "PROV-FILE-99AA3AF318DC",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r07-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r08-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r07-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/social-001-launch-x-copy-001-r08-repository-internal-review-text-en-us-pending-template-and-docs-update.md",
             "sha256": "31b61fceca4012e66054ce44d358042d5abe47ef5319b02e8a479218bbf36526"
           },
           "permission": {
@@ -4790,7 +4790,7 @@
       "mediaClass": "visual",
       "role": "editable-vector-source",
       "variant": "concept-announcement-vector",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -4824,24 +4824,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r08-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
         "exists": true,
         "sha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
-          "inventoryFileId": "FILE-EEF100D059A0",
-          "recordId": "PROV-FILE-EEF100D059A0",
+          "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r08-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+          "inventoryFileId": "FILE-C21A7655E67F",
+          "recordId": "PROV-FILE-C21A7655E67F",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r08-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r08-repository-internal-review-1200x675-en-us-concept-announcement-vector.svg",
             "sha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699"
           },
           "permission": {
@@ -5029,7 +5029,7 @@
       "mediaClass": "visual",
       "role": "rendered-raster-export",
       "variant": "concept-announcement-1200x675-png",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -5063,24 +5063,24 @@
         "fileRole": "editable-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r08-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
         "exists": true,
         "sha256": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
-          "inventoryFileId": "FILE-5D40F4238A49",
-          "recordId": "PROV-FILE-5D40F4238A49",
+          "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r08-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+          "inventoryFileId": "FILE-89382502188C",
+          "recordId": "PROV-FILE-89382502188C",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r08-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r07-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/social-001-launch-x-key-visual-001-r08-repository-internal-review-1200x675-en-us-concept-announcement-1200x675-png.png",
             "sha256": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee"
           },
           "permission": {
@@ -5269,7 +5269,7 @@
       "mediaClass": "accessible-alternative",
       "role": "accessible-text-alternative",
       "variant": "concept-announcement-alt-text",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft",
@@ -5303,24 +5303,24 @@
         "fileRole": "same-file-source"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r07-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+        "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r08-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
         "exists": true,
         "sha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
-        "sourceCommitId": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+        "sourceCommitId": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
         "expectedSha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554",
         "status": "present",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r07-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
-          "inventoryFileId": "FILE-CD8E6AB035B0",
-          "recordId": "PROV-FILE-CD8E6AB035B0",
+          "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r08-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+          "inventoryFileId": "FILE-D7007864AC3C",
+          "recordId": "PROV-FILE-D7007864AC3C",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r07-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r08-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r07-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/social-001-launch-x-alt-text-001-r08-repository-internal-review-text-en-us-concept-announcement-alt-text.md",
             "sha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554"
           },
           "permission": {
@@ -5498,7 +5498,7 @@
       ],
       "role": "silent-concept-rehearsal-video",
       "variant": "silent-concept-rehearsal",
-      "assetRevision": "r07",
+      "assetRevision": "r08",
       "locale": "en-US",
       "requiredForV1": true,
       "releaseStatus": "draft_rehearsal_only",
@@ -5543,22 +5543,22 @@
         ]
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r07-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r08-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
         "exists": true,
         "sha256": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace",
         "expectedSha256": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r07-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
-          "inventoryFileId": "FILE-D931A142DAEE",
-          "recordId": "PROV-FILE-D931A142DAEE",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r08-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+          "inventoryFileId": "FILE-A8D623671F5B",
+          "recordId": "PROV-FILE-A8D623671F5B",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r07-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r08-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r07-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-video-001-r08-repository-internal-review-1280x720-en-us-silent-concept-rehearsal.mp4",
             "sha256": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace"
           },
           "permission": {
@@ -6497,22 +6497,22 @@
         "mediaType": "application/x-subrip"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r08-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
         "exists": true,
         "sha256": "efb9159af59e22b5fa2f7781ed25e1bda245ee833eb09662c435ab19e197a610",
         "expectedSha256": "efb9159af59e22b5fa2f7781ed25e1bda245ee833eb09662c435ab19e197a610",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
-          "inventoryFileId": "FILE-06DBECEFECD9",
-          "recordId": "PROV-FILE-06DBECEFECD9",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r08-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+          "inventoryFileId": "FILE-1EA255D5FBF7",
+          "recordId": "PROV-FILE-1EA255D5FBF7",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r08-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r08-repository-internal-review-text-en-us-silent-rehearsal-captions.srt",
             "sha256": "efb9159af59e22b5fa2f7781ed25e1bda245ee833eb09662c435ab19e197a610"
           },
           "permission": {
@@ -6571,22 +6571,22 @@
         "mediaType": "application/octet-stream"
       },
       "packageCopy": {
-        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+        "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r08-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
         "exists": true,
         "sha256": "acd7579f4471f06fee0d7949185e4e000760f35f0a931fdad24eab29fc2a3322",
         "expectedSha256": "acd7579f4471f06fee0d7949185e4e000760f35f0a931fdad24eab29fc2a3322",
         "byteIdenticalToSource": true,
         "provenance": {
           "status": "joined_exact_bytes",
-          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
-          "inventoryFileId": "FILE-1649CE9B4212",
-          "recordId": "PROV-FILE-1649CE9B4212",
+          "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r08-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+          "inventoryFileId": "FILE-A7B5A957AE1C",
+          "recordId": "PROV-FILE-A7B5A957AE1C",
           "kind": "internal_package_copy",
           "source": {
-            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
-            "revision": "1fa5938acde956b2f33db3548f44cdf5c9eb2988",
+            "path": "release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r08-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+            "revision": "7f6df941b56d4ef48ff7bd8eacd98fa8610063ee",
             "revisionKind": "git_commit",
-            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1fa5938acde956b2f33db3548f44cdf5c9eb2988/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r07-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
+            "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/7f6df941b56d4ef48ff7bd8eacd98fa8610063ee/release/v0.1.0-rehearsal/assets/demo-001-demo-rehearsal-captions-001-r08-repository-internal-review-text-en-us-silent-rehearsal-captions.vtt",
             "sha256": "acd7579f4471f06fee0d7949185e4e000760f35f0a931fdad24eab29fc2a3322"
           },
           "permission": {
@@ -7906,7 +7906,7 @@
     {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "846ef7c8b25170c6b47df809b6f8c7f7faf02cc0695f1dac3891173db67221b9",
+      "sha256": "568793885aadb0e4376429b7e46e00512cc714e22a2260341415e884a02cecd8",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -7940,7 +7940,7 @@
     {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "90a59eb09da0aa3a8b0b7b95e99029a6f15921b7db541689938feadae3183031",
+      "sha256": "9046d99653ab71b3fe5fed18ea1829ec7c4dfbe71efb0d84da97bbfcb91bc34c",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -8122,7 +8122,7 @@
     "docs/collateral-inventory.json": {
       "path": "docs/collateral-inventory.json",
       "exists": true,
-      "sha256": "846ef7c8b25170c6b47df809b6f8c7f7faf02cc0695f1dac3891173db67221b9",
+      "sha256": "568793885aadb0e4376429b7e46e00512cc714e22a2260341415e884a02cecd8",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -8156,7 +8156,7 @@
     "review/provenance.json": {
       "path": "review/provenance.json",
       "exists": true,
-      "sha256": "90a59eb09da0aa3a8b0b7b95e99029a6f15921b7db541689938feadae3183031",
+      "sha256": "9046d99653ab71b3fe5fed18ea1829ec7c4dfbe71efb0d84da97bbfcb91bc34c",
       "sourceCommitId": null,
       "sourcePinStatus": "self_reference_projection",
       "format": {
@@ -8258,8 +8258,8 @@
     "release/v0.1.0-rehearsal/package-spec.json": {
       "path": "release/v0.1.0-rehearsal/package-spec.json",
       "exists": true,
-      "sha256": "ffca3fc73d5552eed50a14a5fc849b4cb015042e4961365180516dcc0aa23dfc",
-      "sourceCommitId": "9cd03e796de2a8a5f7a74abbb60e8e1b8ed7af43",
+      "sha256": "3141cfe9165b868bbf4a845a4cc5d3cf1c4280d6c6691885897ddbc0236c4eaf",
+      "sourceCommitId": "16f373f4916334bbf0f5c27ce33b842c62309f5b",
       "sourcePinStatus": "pinned",
       "format": {
         "extension": "json",

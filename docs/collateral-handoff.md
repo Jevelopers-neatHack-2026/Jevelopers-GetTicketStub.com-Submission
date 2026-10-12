@@ -10,9 +10,9 @@ New package copies use this deterministic form:
 {family}-{assetId}-{revision}-{destination}-{dimensions}-{locale}-{variant}.{extension}
 ```
 
-For example, the existing `demo/recording-checklist.md` source maps to `demo-001-demo-recording-checklist-001-r07-repository-internal-review-text-en-us-rehearsal-recording-plan.md`. A visual source and its export keep the same asset ID but have distinct variants and extensions. A dynamic rehearsal MP4 and its SRT/VTT sidecars receive distinct role and format records, exact hashes, scene references, and receipt checks. The `text` dimension token means dimensions do not apply; raster/video dimensions come from the actual bytes and are never inferred from a filename.
+For example, the existing `demo/recording-checklist.md` source maps to `demo-001-demo-recording-checklist-001-r08-repository-internal-review-text-en-us-rehearsal-recording-plan.md`. A visual source and its export keep the same asset ID but have distinct variants and extensions. A dynamic rehearsal MP4 and its SRT/VTT sidecars receive distinct role and format records, exact hashes, scene references, and receipt checks. The `text` dimension token means dimensions do not apply; raster/video dimensions come from the actual bytes and are never inferred from a filename.
 
-The older working names remain intact and are source paths, not release names. Existing r01 package-copy names remain immutable; the current rehearsal rebuild uses r07 after the human recording runbook and recording checklist sources were corrected to record Crystal and Lars as each doing a video (r02, r03, r04, r05 and r06 copies are likewise retained; r06 remains the prior revision):
+The older working names remain intact and are source paths, not release names. Existing r01 package-copy names remain immutable; the current rehearsal rebuild uses r08 after the human recording runbook wording was clarified (r02, r03, r04, r05, r06 and r07 copies are likewise retained; r07 remains the prior revision):
 
 | Existing source path | Stable package asset ID | Package role |
 | --- | --- | --- |
