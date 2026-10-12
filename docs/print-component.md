@@ -86,3 +86,53 @@ execution is characterization only and cannot establish Linux acceptance.
 The initial implementation's local execution was blocked (owner exit 1 and cleanup
 failure under existing macOS containment); Docker had no running daemon. Linux
 CI, independent review and producer acknowledgement remain required.
+
+## Guarded container lifetime investigation
+
+The authorized development investigation has not enabled a replacement backend.
+Its first proposed primitive is an evaluator-owned control lease: only the host
+evaluator holds the write end, a trusted container guard observes EOF, and guard
+exit causes namespace init to exit so the kernel terminates all namespace members.
+That requires a guard the hostile owner cannot stop, trace, or impersonate, and a
+control channel the owner cannot keep alive. Docker client exit, `--rm`, an EXIT
+trap, and ordinary `finally` cleanup do not establish that relationship.
+
+The initial distinct-UID design is blocked by the required identity binding.
+At producer revision `0ef7398`, `scripts/security/run-offline.mjs:18` requires
+`Config.User` to equal the submitted nonroot UID:GID, `Init=true`, all capabilities
+dropped, no new privileges, and the exact source security profile. Starting the
+guard as that container command gives an ordinary child guard the owner's UID.
+The source seccomp policy permits `kill`; a same-UID owner can therefore attempt
+to stop the guard with `SIGSTOP`. Nondumpable state alone does not remove signal
+permission. This is a design counterexample, not a recorded Linux exploit test.
+
+Starting the initial guard under another UID and the owner through `docker exec
+--user` would break the required binding between `Config.User` and the actual
+submitted owner identity. The inspection CLI accepts a caller-supplied `user`,
+while the runtime validator independently checks its own positive UID; passing
+both with different identities would not establish that binding. Conversely, an
+extra guard launched under a different UID cannot simply signal the original
+UID's init/child without signal permission. Adding a same-UID intermediary leaves
+that intermediary exposed to the same stopping problem.
+
+Before implementation, the producer/runtime owner must resolve how the guard and
+owner identities, launch authority, control-channel permissions, and init exit
+are bound together under the existing restrictions. An alternative same-UID
+mechanism needs an independently justified defense against every owner signal,
+ptrace and descriptor path; none has been implemented or validated here. This is
+not a proof that every possible mechanism is impossible. No source-validator
+change, extra privilege, replacement image, or broader mount permission follows
+from the investigation.
+
+Local Docker has no daemon. Parent death during create/start/attach, cancellation,
+timeout, hostile guard tampering, detached descendants with closed stdio,
+cross-run survival, and daemon/teardown failure remain unexecuted in the exact
+source image/profile. Any later primitive must preserve the 30-second case,
+`min(case.timeout_seconds, 30)` cleanup, five-second reap and 15-minute job budgets;
+create/start overhead counts. Unknown/live termination must yield ERROR and
+preserve staging/quarantine before retention or cleanup. The existing failing
+print baseline remains separate from prototype proof and ART-04 acceptance.
+
+Linux semantics supporting the design analysis: [signal permissions](https://man7.org/linux/man-pages/man2/kill.2.html),
+[namespace init termination](https://man7.org/linux/man-pages/man7/pid_namespaces.7.html),
+and [no-new-privileges](https://www.kernel.org/doc/html/latest/userspace-api/no_new_privs.html).
