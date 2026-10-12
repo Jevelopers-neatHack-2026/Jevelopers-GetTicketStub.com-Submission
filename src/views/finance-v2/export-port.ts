@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FINANCE_EXPORT, FINANCE_READ } from '../../access/permissions';
 import { classifyFinanceV2Fault, type FinanceV2Authorization, type FinanceV2DataMode } from './async-port';
 import {
-  FINANCE_V2_FORMAT_FILE, checkPreparedExport,
+  FINANCE_V2_FORMAT_FILE, checkPreparedExport, verifyPreparedFilesIntegrity,
   type FinanceV2ExportErrorCode, type FinanceV2ExportFormat, type FinanceV2PreparedExpectation, type FinanceV2PreparedFile, type FinanceV2PreparedManifestView, type FinanceV2PreparedRefusalCode,
 } from './export-check';
 import type { FinanceV2Page, OpaqueProductScope } from './types';
@@ -47,7 +47,7 @@ export type FinanceV2ExportAccessReader = () => FinanceV2ExportHostAccess | null
 
 export type FinanceV2ExportUnavailableReason =
   | 'integrated-port-not-accepted' | 'no-port' | 'port-kind-mismatch' | 'not-first-page'
-  | 'no-access' | 'access-stale' | 'scope-changed' | 'expired' | 'no-read-permission' | 'no-export-permission';
+  | 'no-access' | 'access-stale' | 'scope-changed' | 'expired' | 'no-read-permission' | 'no-export-permission' | 'source-changed';
 
 export type FinanceV2ExportPortResolution =
   | Readonly<{ status: 'available'; port: FinanceV2SyntheticExportPort }>
@@ -109,6 +109,7 @@ export const FINANCE_V2_EXPORT_UNAVAILABLE_COPY: Readonly<Record<FinanceV2Export
   expired: 'Your access has expired. Any prepared export was discarded and nothing was downloaded.',
   'no-read-permission': 'Export needs read access to this report, which the host does not currently state. No file is produced.',
   'no-export-permission': 'You do not have export permission for this report. Export is restricted and no file is produced.',
+  'source-changed': 'The report this export was prepared from changed. Any prepared export was discarded and nothing was downloaded.',
 };
 
 export type FinanceV2ExportState =
@@ -156,18 +157,46 @@ function identityOf(value: unknown): number {
   if (id === undefined) { id = nextIdentity++; identities.set(value, id); }
   return id;
 }
+let nextUnfingerprintable = 1;
+function canonical(value: unknown, depth: number): string {
+  if (depth > 64) throw new Error('too deep');
+  if (value === null) return 'null';
+  switch (typeof value) {
+    case 'string': return JSON.stringify(value);
+    case 'number': return Object.is(value, -0) ? '-0' : String(value);
+    case 'boolean': return String(value);
+    case 'undefined': return 'undefined';
+    case 'bigint': return `${String(value)}n`;
+    case 'object': return Array.isArray(value)
+      ? `[${Array.from(value as unknown[], (item) => canonical(item, depth + 1)).join(',')}]`
+      : `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key], depth + 1)}`).join(',')}}`;
+    default: throw new Error('not data');
+  }
+}
+/**
+ * Value fingerprint (canonical key order) of the WHOLE accepted source page: envelope, scope, filters, watermark, summary and its references. It is a change detector over what the host
+ * handed over, not a hash of anything financial and not a proof; nothing is recomputed from amounts. A page that cannot be read as plain data never equals itself, so it fails closed.
+ */
+function fingerprintOf(page: unknown): string {
+  try { return canonical(page, 0); } catch { return `unfingerprintable:${nextUnfingerprintable++}`; }
+}
 /** Everything whose change makes an in-flight or prepared export stale. The port and access reader are compared by identity, never by value. The token callback is not part of it. */
-function identityKey(o: FinanceV2PreparedExportOptions): string {
+function identityKey(o: FinanceV2PreparedExportOptions, pageFingerprint: string): string {
   const { scope } = o;
   return JSON.stringify([o.mode, identityOf(o.port), identityOf(o.access), scope.tenantId, scope.projectId, scope.environment, scope.billingMode, scope.actorId,
-    o.expectedSnapshotId, o.expectedQueryContentHash, o.expectedSummaryContentHash, o.authorization.revision, o.firstPage, o.resetKey ?? null, o.page.snapshotId]);
+    o.expectedSnapshotId, o.expectedQueryContentHash, o.expectedSummaryContentHash, o.authorization.revision, o.firstPage, o.resetKey ?? null, pageFingerprint]);
 }
-/** Everything that must hold RIGHT NOW. Synchronous, so it can be repeated immediately before and after every await and before disclosure. */
-function unavailableNow(o: FinanceV2PreparedExportOptions): FinanceV2ExportUnavailableReason | null {
+/**
+ * Everything that must hold RIGHT NOW. Synchronous, so it can be repeated immediately before and after every await and before disclosure. When the fingerprint the run started
+ * from is given, the CURRENT page object is re-read too, so an alias mutated in place (no re-render) is noticed as well.
+ */
+function unavailableNow(o: FinanceV2PreparedExportOptions, boundFingerprint?: string): FinanceV2ExportUnavailableReason | null {
   const resolved = resolveFinanceV2ExportPort(o.mode, o.port);
   if (resolved.status === 'unavailable') return resolved.reason;
   if (!o.firstPage) return 'not-first-page';
-  return evaluateFinanceV2ExportAccess(o.access, { revision: o.authorization.revision, scope: o.scope }, (o.now ?? Date.now)());
+  const access = evaluateFinanceV2ExportAccess(o.access, { revision: o.authorization.revision, scope: o.scope }, (o.now ?? Date.now)());
+  if (access !== null) return access;
+  return boundFingerprint !== undefined && fingerprintOf(o.page) !== boundFingerprint ? 'source-changed' : null;
 }
 /** The expectation the answer must be bound to: the host's own statements plus the identity of the accepted first page. */
 function expectationOf(o: FinanceV2PreparedExportOptions, format: FinanceV2ExportFormat): FinanceV2PreparedExpectation {
@@ -180,7 +209,7 @@ function expectationOf(o: FinanceV2PreparedExportOptions, format: FinanceV2Expor
 
 class Stale extends Error {}
 class Vetoed extends Error { constructor(readonly reason: FinanceV2ExportUnavailableReason) { super(reason); } }
-type Held = Readonly<{ key: string; format: FinanceV2ExportFormat; files: readonly FinanceV2PreparedFile[] }>;
+type Held = Readonly<{ key: string; fingerprint: string; format: FinanceV2ExportFormat; files: readonly FinanceV2PreparedFile[] }>;
 type Settled = Readonly<{ key: string; state: FinanceV2ExportState }>;
 
 /**
@@ -189,10 +218,11 @@ type Settled = Readonly<{ key: string; state: FinanceV2ExportState }>;
  */
 export function usePreparedExport(options: FinanceV2PreparedExportOptions): FinanceV2PreparedExportResult {
   const [format, setFormat] = useState<FinanceV2ExportFormat>('json');
-  const runKey = `${identityKey(options)}\u0000${format}`;
+  const fingerprint = fingerprintOf(options.page);
+  const runKey = `${identityKey(options, fingerprint)}\u0000${format}`;
   const unavailable = unavailableNow(options);
-  const latest = useRef({ options, runKey, format });
-  useLayoutEffect(() => { latest.current = { options, runKey, format }; });
+  const latest = useRef({ options, runKey, format, fingerprint });
+  useLayoutEffect(() => { latest.current = { options, runKey, format, fingerprint }; });
   const held = useRef<Held | null>(null);
   const active = useRef<{ cancel: () => void } | null>(null);
   const [settled, setSettled] = useState<Settled | null>(null);
@@ -213,18 +243,18 @@ export function usePreparedExport(options: FinanceV2PreparedExportOptions): Fina
     const timer = setInterval(() => {
       const now = latest.current;
       if (now.runKey !== runKey) return;
-      const veto = unavailableNow(now.options);
+      const veto = unavailableNow(now.options, fingerprint);
       if (veto === null) return;
       active.current?.cancel(); active.current = null;
       discard(runKey, veto);
     }, 250);
     return () => clearInterval(timer);
-  }, [watching, runKey]);
+  }, [watching, runKey, fingerprint]);
 
   const prepare = () => {
-    const { options: o, runKey: key, format: wanted } = latest.current;
+    const { options: o, runKey: key, format: wanted, fingerprint: bound } = latest.current;
     if (active.current !== null) return;
-    const veto = unavailableNow(o);
+    const veto = unavailableNow(o, bound);
     if (veto !== null) { discard(key, veto); return; }
     const resolved = resolveFinanceV2ExportPort(o.mode, o.port);
     if (resolved.status !== 'available') return;
@@ -241,29 +271,37 @@ export function usePreparedExport(options: FinanceV2PreparedExportOptions): Fina
       if (!live) throw new Stale();
       const now = latest.current;
       if (now.runKey !== key) throw new Stale();
-      const reason = unavailableNow(now.options);
+      const reason = unavailableNow(now.options, bound);
       if (reason !== null) throw new Vetoed(reason);
     };
     void (async () => {
       try {
         renew();
+        // An immutable copy of the accepted source: the request and the expectation use it, so a later in-place change of the host's page object cannot alter what this run is bound to.
+        const source = structuredClone(o.page);
         const token = await o.authorization.token(controller.signal);
         renew();
         if (typeof token !== 'string' || token.length === 0) { finish({ phase: 'failed', code: 'unauthorized' }); return; }
         const answer = await resolved.port.prepare({
           scope: o.scope, expectedSnapshotId: o.expectedSnapshotId, expectedQueryContentHash: o.expectedQueryContentHash, expectedSummaryContentHash: o.expectedSummaryContentHash,
-          format: wanted, destination: FINANCE_V2_EXPORT_DESTINATION, summarySnapshot: o.page, authorization: { token, revision: o.authorization.revision }, signal: controller.signal,
+          format: wanted, destination: FINANCE_V2_EXPORT_DESTINATION, summarySnapshot: source, authorization: { token, revision: o.authorization.revision }, signal: controller.signal,
         });
         renew();
-        const checked = checkPreparedExport(answer, expectationOf(o, wanted));
+        const checked = checkPreparedExport(answer, expectationOf({ ...o, page: source }, wanted));
         renew();
         if (!checked.ok) { finish(checked.kind === 'error' ? { phase: 'failed', code: checked.code } : { phase: 'refused', code: checked.code, path: checked.path }); return; }
-        held.current = { key, format: wanted, files: checked.files };
+        // Browser crypto is async: the declared hashes are checked against the exact bytes in hand, then everything is renewed once more before anything is kept.
+        const mismatch = await verifyPreparedFilesIntegrity(checked.files);
+        renew();
+        if (mismatch !== null) { finish({ phase: 'refused', code: 'CONTENT_MISMATCH', path: mismatch }); return; }
+        held.current = { key, fingerprint: bound, format: wanted, files: checked.files };
         finish({ phase: 'prepared', manifest: checked.manifest });
       } catch (error) {
-        held.current = null;
+        // A run that was cancelled or already finished owns nothing: it must not touch the held bytes or the state of a newer run.
+        if (!live) return;
         if (error instanceof Stale) return;
-        if (error instanceof Vetoed) { active.current = null; live = false; clearTimeout(timer); controller.abort(); discard(key, error.reason); return; }
+        held.current = null;
+        if (error instanceof Vetoed) { if (active.current === handle) active.current = null; live = false; clearTimeout(timer); controller.abort(); discard(key, error.reason); return; }
         // A rejection is classified from its numeric status or code only; its message and body are never read.
         const fault = classifyFinanceV2Fault(error);
         finish({ phase: 'failed', code: fault.outcome === 'unauthorized' ? 'unauthorized' : fault.outcome === 'restricted' ? 'FORBIDDEN_SCOPE' : 'failed' });
@@ -275,8 +313,8 @@ export function usePreparedExport(options: FinanceV2PreparedExportOptions): Fina
     const { options: o, runKey: key } = latest.current;
     const mine = held.current;
     if (mine === null || mine.key !== key) return null;
-    // Disclosure gate: the host's CURRENT access, checked synchronously with nothing awaited between this check and the hand-off below.
-    const veto = unavailableNow(o);
+    // Disclosure gate: the host's CURRENT access and the current source page, checked synchronously with nothing awaited between this check and the hand-off below.
+    const veto = unavailableNow(o, mine.fingerprint);
     if (veto !== null) { discard(key, veto); return null; }
     const file = mine.files.find((candidate) => candidate.fileName === FINANCE_V2_FORMAT_FILE[mine.format]);
     if (!file) return null;

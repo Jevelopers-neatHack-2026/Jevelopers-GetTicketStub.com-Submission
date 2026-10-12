@@ -42,7 +42,7 @@ function host(over: Partial<FinanceV2ExportHostAccess> = {}) {
   return { state, reader };
 }
 type Env = ReturnType<typeof host>;
-const settle = (ms = 0) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); });
+const settle = (ms = 25) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); });
 const props = (env: Env | null, port: FinanceV2SyntheticExportPort | undefined, over: Partial<FinanceV2ConnectedViewProps> = {}): FinanceV2ConnectedViewProps => ({
   mode: 'SYNTHETIC_PROPOSAL', view: 'budget', availability: { status: 'available' }, scope: SCOPE, expectedSnapshotId: ZERO.snapshotId, expectedQueryContentHash: ZERO.queryContentHash,
   expectedSummaryContentHash: ZERO.summaryContentHash, authorization: { revision: '1', token: async () => TOKEN }, port: stableRead,

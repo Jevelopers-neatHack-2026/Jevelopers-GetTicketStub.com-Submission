@@ -37,13 +37,30 @@ export const expectationZero = (over: Partial<FinanceV2PreparedExpectation> = {}
 export const ok = (value: unknown) => ({ ok: true as const, value });
 export const clone = <T>(value: T): T => structuredClone(value);
 
-/** Test-built variant: the content of one artifact is changed and its declared length is kept in step, so only the intended defect remains. */
+/**
+ * Test-built variant: the content of one artifact is changed and its declared length AND its declared SHA-256 (real, computed here over the new bytes) are kept in step in the artifact
+ * and in the manifest, so only the intended defect remains and the bytes are internally consistent.
+ */
 export function withContent(receipt: Receipt, fileName: 'summary.json' | 'metrics.csv', change: (content: string) => string): Receipt {
   const next = clone(receipt);
   const artifact = next.artifacts.find((item) => item.fileName === fileName)!;
   artifact.content = change(artifact.content);
   const length = Buffer.byteLength(artifact.content, 'utf8');
+  const hash = `sha256:${sha256(artifact.content)}`;
   artifact.byteLength = length;
-  next.manifest.artifacts.find((item: { fileName: string }) => item.fileName === fileName).byteLength = length;
+  artifact.contentHash = hash;
+  const ref = next.manifest.artifacts.find((item: { fileName: string }) => item.fileName === fileName);
+  ref.byteLength = length;
+  ref.contentHash = hash;
+  return next;
+}
+
+/** Test-built hostile variant: the bytes change (same length when `change` preserves it) while every DECLARED length and hash stays the original producer value. */
+export function tamperUnderDeclaredHash(receipt: Receipt, fileName: 'summary.json' | 'metrics.csv', change: (content: string) => string): Receipt {
+  const next = clone(receipt);
+  const artifact = next.artifacts.find((item) => item.fileName === fileName)!;
+  const before = artifact.content;
+  artifact.content = change(before);
+  if (artifact.content === before) throw new Error('tamper did not change the bytes');
   return next;
 }

@@ -13,7 +13,7 @@ export {
 } from './export-port';
 export { PreparedExportPanel } from './PreparedExport';
 export {
-  checkPreparedExport, FINANCE_V2_EXPORT_ERROR_CODES,
+  checkPreparedExport, checkPreparedExportIntegrity, FINANCE_V2_EXPORT_ERROR_CODES,
   type FinanceV2ExportErrorCode, type FinanceV2ExportFormat, type FinanceV2PreparedCheck, type FinanceV2PreparedExpectation, type FinanceV2PreparedFile, type FinanceV2PreparedManifestView, type FinanceV2PreparedRefusalCode,
 } from './export-check';
 export type {

@@ -20,6 +20,11 @@ Otherwise the section stays the fixed "Export unavailable" (no export props at a
   and before anything is kept, again on a 250 ms watch while something is preparing or prepared, and immediately before a download hands bytes to the browser. Any veto drops the
   held bytes for good. A change of port, access reader, scope, actor, authorization revision, snapshot, hashes, filter, format, unmount or timeout aborts the run and discards its
   late answer even if the port ignores the abort signal.
+* Source binding: the run is bound to a canonical-key-order value fingerprint of the WHOLE accepted source page (envelope, scope, filters, watermark, summary and its references), not
+  just its snapshot id. The request and the expected binding use an immutable copy taken at prepare time. Any change of that page, including one with the same snapshot id and one made
+  in place on the host's own object without a re-render, aborts a pending run, discards a prepared export and refuses the download. The fingerprint is a change detector, not a hash
+  of anything financial. This holds for `usePreparedExport` and `PreparedExportPanel` used on their own, outside the connected view.
+* An older run that was cancelled or replaced owns nothing: its late resolution, rejection or veto never clears or replaces a newer run's held bytes or state.
 * The host port owns canonical validation and its own coherent final disclosure fence (Finance's `ExportDisclosureFencePort` is a host capability; the Dashboard neither rebuilds nor
   fakes it). The Dashboard additionally checks its own host access, as above.
 
@@ -33,8 +38,14 @@ to the manifest references; the UTF-8 byte length of each text equals its declar
 `summary.json` provenance and every `metrics.csv` row. A failure is a typed refusal with a path and **no bytes**; a typed producer failure keeps only its closed `code` and its
 `safe_message` / body is never read, stored or shown.
 
+`checkPreparedExport` is **structural and synchronous**: it does not hash, so on its own it does not detect an equal-length change of bytes under their declared hash. Byte integrity is
+checked by `checkPreparedExportIntegrity` (structural check, then the real Web Crypto SHA-256 of each file's exact UTF-8 bytes against the manifest's declared `contentHash`), and
+`usePreparedExport` always runs it before anything is held or offered: a mismatch, or no Web Crypto, is `CONTENT_MISMATCH` with a path and no bytes. Because Web Crypto is async,
+all host access and source checks are repeated after that await, before the bytes are kept. A match proves only that the bytes are the ones the manifest declared; it is **content
+integrity, not host authentication and not financial authority** (the manifest is as untrusted as the bytes), and no new hash is produced or offered as proof.
+
 Not done in the browser, deliberately: no CSV or JSON generation, no aggregation, rounding, currency conversion or zero-filling (unknown totals stay JSON `null` / empty CSV
-cells), no hash computation (the content hash, artifact-set hash and receipt authentication are the host port's), no invented aliases, timestamps or ids. The honest status shown
+cells), no reconstruction of any snapshot, projection, query or artifact-set hash and no receipt authentication (those are the host port's; only the artifact bytes' own declared SHA-256 is checked), no invented aliases, timestamps or ids. The honest status shown
 is `prepared` / `manual_prepared` with delivery reference "None". Artifact text is held in memory only, never rendered, and reaches the browser only as a `Blob` download on an
 explicit click.
 

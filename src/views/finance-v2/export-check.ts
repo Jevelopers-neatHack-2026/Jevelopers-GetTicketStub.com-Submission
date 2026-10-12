@@ -4,7 +4,9 @@
  * It is NOT the producer validator and not a canonical schema: the host port owns canonical validation and its own coherent authority fence. This guard only refuses what the
  * Dashboard could not hand to a person faithfully: a wrong or invented shape, a status other than `prepared` / `manual_prepared`, anything not bound to the snapshot, hashes, format,
  * period, timezone, environment, billing mode and currencies the HOST stated independently of the answer, and bytes whose encoding or record structure is not what the manifest says.
- * Strings are compared for equality; nothing is hashed, signed, summed, converted or re-encoded here, and no CSV is generated. Whatever fails yields no bytes at all.
+ * Strings are compared for equality; nothing is signed, summed, converted or re-encoded here, and no CSV is generated. This synchronous check is STRUCTURAL: it does not hash. The delivered
+ * bytes' own declared SHA-256 is verified by `verifyPreparedFilesIntegrity` / `checkPreparedExportIntegrity` (content integrity only, not host authentication or financial authority), and
+ * `usePreparedExport` never keeps or offers bytes that failed it. Whatever fails yields no bytes at all.
  *
  * The pinned producer manifest (`ReportingExportManifest@2.0.0`) is mirrored here as data (closed key set and constants); `tests/components/finance-v2-export-conformance.test.tsx`
  * compares these constants with the committed, digest-pinned producer schema and with the committed candidate artifacts. Nothing from the producer repository is imported.
@@ -255,6 +257,35 @@ function inspect(raw: unknown, expected: FinanceV2PreparedExpectation): FinanceV
 export function checkPreparedExport(raw: unknown, expected: FinanceV2PreparedExpectation): FinanceV2PreparedCheck {
   try { return inspect(raw, expected); }
   catch (error) { return error instanceof Refusal ? { ok: false, kind: 'refused', code: error.code, path: error.path } : { ok: false, kind: 'refused', code: 'INVALID_SHAPE', path: '/' }; }
+}
+
+/**
+ * Content integrity of delivered artifact bytes: the SHA-256 of each file's exact UTF-8 bytes must equal the `contentHash` the manifest declared. This is the ONLY hashing here and it
+ * is a check on bytes in hand, never a reconstruction of any snapshot, projection or financial hash and never a new hash offered as proof. A match shows the bytes are the ones the
+ * manifest declared; it is NOT host authentication and NOT financial authority (the host port owns those). Without Web Crypto nothing can be verified, so nothing is accepted.
+ * Returns `null` when every file matches, otherwise the path of the first file that does not.
+ */
+export async function verifyPreparedFilesIntegrity(files: readonly FinanceV2PreparedFile[]): Promise<string | null> {
+  const subtle = (globalThis as { crypto?: { subtle?: { digest?: unknown } } }).crypto?.subtle;
+  if (typeof subtle?.digest !== 'function') return '/value/artifacts';
+  for (const [index, file] of files.entries()) {
+    let digest: ArrayBuffer;
+    try { digest = await (subtle as SubtleCrypto).digest('SHA-256', encoder.encode(file.content)); } catch { return `/value/artifacts/${index}/content`; }
+    const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    if (`sha256:${hex}` !== file.contentHash) return `/value/artifacts/${index}/content`;
+  }
+  return null;
+}
+
+/**
+ * Structural check (`checkPreparedExport`) followed by the byte integrity check. A download-capable result must come from here or from `usePreparedExport`; the synchronous
+ * `checkPreparedExport` alone does not detect an equal-length change of bytes under their declared hash.
+ */
+export async function checkPreparedExportIntegrity(raw: unknown, expected: FinanceV2PreparedExpectation): Promise<FinanceV2PreparedCheck> {
+  const structural = checkPreparedExport(raw, expected);
+  if (!structural.ok) return structural;
+  const failed = await verifyPreparedFilesIntegrity(structural.files);
+  return failed === null ? structural : { ok: false, kind: 'refused', code: 'CONTENT_MISMATCH', path: failed };
 }
 
 /** The file a person asked for: the producer prepares both files, the manual representation selects one. */
