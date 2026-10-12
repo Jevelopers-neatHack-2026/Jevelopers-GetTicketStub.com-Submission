@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { registerHooks } from "node:module";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { EventEmitter } from "node:events";
 import https from "node:https";
 import { Resolver } from "node:dns/promises";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
@@ -13,7 +12,6 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { Pool } from "pg";
 import ConnectionParameters from "pg/lib/connection-parameters.js";
-import sharp from "sharp";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -39,12 +37,10 @@ const temp = mkdtempSync(join(tmpdir(), "ticketstub-creative-host-"));
 const { creativeHostConfig, currentProjectAuthority, providerCredentialPort, financeConnectionOptions } = await import("../src/server/creative/config.mjs");
 const { canonicalHash } = await import("creative-engine/contracts");
 const { buildCreativeBrief } = await import("creative-engine/planning");
-const { changeBudgetPolicy, budgetDigest, readReservationSnapshot } = await import("@jevelopers/cost-intelligence/budgets");
-const { registerPricingRuleV2, registerRateCardV2 } = await import("@jevelopers/cost-intelligence/pricing");
+const { changeBudgetPolicy, budgetDigest, normalizedBudgetRequest, readReservationSnapshot, authorizeReservation, markReservationDispatched } = await import("@jevelopers/cost-intelligence/budgets");
 const { ingestUsage } = await import("@jevelopers/cost-intelligence/metering");
-const { invokeAgentCreativeDevelopment } = await import("../src/server/vendor/agent-harness/src/development/index.js");
 const { creativeHostForRequest } = await import("../src/server/creative/host.mjs");
-const { createCreativeFinance } = await import("../src/server/creative/finance.mjs");
+const { createCreativeFinance, creativeFinanceCustodySnapshot, initializeCreativeFinanceMapping, requireCreativeFinanceLifecycle } = await import("../src/server/creative/finance.mjs");
 const { POST } = await import("../src/app/api/creative/route.ts");
 const { POST: ART } = await import("../src/app/api/art/route.ts");
 
@@ -149,370 +145,244 @@ test("direct studio provider failures are explicit and never publish simulated s
   } finally { globalThis.fetch = originalFetch; for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); }
 });
 
-test("application session -> owned CE API/SQLite -> real Finance SQL -> intercepted OpenRouter -> immutable artifact", { skip: process.env.TICKETSTUB_OFFLINE_POSTGRES !== "1" }, async (t) => {
-  const saved = { ...process.env };
-  const originalFetch = globalThis.fetch;
-  const name = `ticketstub-creative-offline-${randomBytes(5).toString("hex")}`;
-  const adminPassword = randomBytes(32).toString("base64url");
-  const runtimePassword = randomBytes(32).toString("base64url");
-  const dockerEnvFile = join(temp, "postgres.env");
-  writeFileSync(dockerEnvFile, `POSTGRES_PASSWORD=${adminPassword}\nPOSTGRES_DB=creative_offline\n`, { mode: 0o600 });
+
+test("Finance-first barrier denies paid routes and direct admission without a runtime override; read state remains available", async (t) => {
+  const saved = { ...process.env }; const originalFetch = globalThis.fetch; let host; let attempts = 0;
+  Object.assign(process.env, { TICKETSTUB_DB: join(temp, "app.sqlite"), TICKETSTUB_FILES: join(temp, "app-files"), TICKETSTUB_RUNTIME_MODE: "live",
+    CONTEXT_SECRET: "offline-issuer-secret-with-at-least-thirty-two-characters", ADMIN_EMAILS: "commissioning@example.test", TICKETSTUB_OPS_ENVIRONMENT: "test",
+    GIT_SHA: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(), APP_URL: "https://ticketstub.test",
+    TICKETSTUB_CREATIVE_CONFIG: JSON.stringify(config), TICKETSTUB_FINANCE_DATABASE_URL: "postgresql://fixture:fixture@127.0.0.1:1/unavailable",
+    CREATIVE_ENGINE_OPENROUTER_API_KEY: "offline-ce-only", TYPESAFE_API_KEY: "offline-typesafe-only", TICKETSTUB_FINANCE_LIFECYCLE_ACCEPTED: "true" });
+  globalThis.fetch = async () => { attempts += 1; throw new Error("Unexpected provider transport"); };
+  t.mock.method(Pool.prototype, "connect", async () => { attempts += 1; throw new Error("Unexpected Finance connection"); });
+  t.mock.method(https, "request", () => { attempts += 1; throw new Error("Unexpected decision transport"); });
+  t.mock.method(Resolver.prototype, "resolve4", async () => { attempts += 1; throw new Error("Unexpected provider DNS"); });
+  try {
+    const { getStorage } = await import("../src/server/index.ts"); const { hashToken } = await import("../src/server/crypto.ts");
+    const { newStub, NEATHACK } = await import("../src/customer/studio/fixtures.ts");
+    const account = await getStorage().findOrCreateAccount("commissioning@example.test", Date.now()); const cookie = randomBytes(24).toString("base64url");
+    await getStorage().createSession(hashToken(cookie), account.id, Date.now(), Date.now() + 60 * 60_000);
+    await getStorage().syncWall(account.id, [newStub(NEATHACK, entry.application_project_id)], [], Date.now());
+    entry.application_owner_id = account.id; entry.allowed_actor_ids = [account.id]; writeRegistry();
+    const request = (operation, payload = {}) => new Request("https://ticketstub.test/api/creative", { method: "POST", headers: { origin: "https://ticketstub.test", cookie: `ts_session=${cookie}`, "content-type": "application/json" },
+      body: JSON.stringify({ projectId: entry.application_project_id, operation, actionId: randomUUID(), payload }) });
+    host = await creativeHostForRequest(request("list"), entry.application_project_id);
+    const brief = await POST(request("brief.create")); assert.equal(brief.status, 200);
+    for (const operation of ["generate", "edit"]) {
+      const response = await POST(request(operation, { brief_id: entry.brief_id })); const value = await response.json();
+      assert.equal(response.status, 503); assert.equal(value.error.code, "creative_finance_lifecycle_unavailable"); assert.equal(value.result, undefined);
+    }
+    const reading = await POST(request("list", { brief_id: entry.brief_id })); assert.equal(reading.status, 200); assert.equal((await reading.json()).result.items.length, 0);
+    assert.equal(host.store.db.prepare("SELECT count(*) AS count FROM ticketstub_creative_attempts").get().count, 0);
+    assert.throws(() => requireCreativeFinanceLifecycle({ accepted: true, consumerAck: "synthetic" }), { code: "creative_finance_lifecycle_unavailable" });
+    const finance = createCreativeFinance({ database: host.store.db, pool: null, authority: () => entry, currentContext: async () => {}, environment: "test", lifecycleAccepted: true });
+    await assert.rejects(finance.metering.reserveAttempt({}, {}), { code: "creative_finance_lifecycle_unavailable" });
+    assert.equal(attempts, 0, "paid denial precedes new Finance admission, DNS and provider writes");
+  } finally { if (host) await host.close(); globalThis.fetch = originalFetch; for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved); }
+});
+
+test("real Finance SQL qualifies only existing command replay, current custody and pending intake holds; paid adoption stays blocked", { skip: process.env.TICKETSTUB_OFFLINE_POSTGRES !== "1" }, async (t) => {
+  const savedProcessEnvironment = { ...process.env };
+  const name = `ticketstub-finance-recovery-${randomBytes(5).toString("hex")}`; const password = randomBytes(32).toString("base64url");
+  const runtimePassword = randomBytes(32).toString("base64url"); const envFile = join(temp, "recovery-postgres.env");
+  writeFileSync(envFile, `POSTGRES_PASSWORD=${password}\nPOSTGRES_DB=creative_offline\n`, { mode: 0o600 });
   const docker = (args) => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const image = "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d";
-  docker(["image", "inspect", image]);
-  docker(["run", "--rm", "--name", name, "-d", "-p", "127.0.0.1::5432", "--env-file", dockerEnvFile, image]);
-  let admin; let runtime; let host; let failed = false;
+  let admin; let runtime; let failed = false; let database;
   try {
+    docker(["image", "inspect", image]); docker(["run", "--rm", "--name", name, "-d", "-p", "127.0.0.1::5432", "--env-file", envFile, image]);
     const port = Number(docker(["port", name, "5432/tcp"]).split(":").at(-1));
     for (let count = 0; count < 50; count += 1) {
-      admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: adminPassword, database: "creative_offline", connectionTimeoutMillis: 1000 });
+      admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "creative_offline", connectionTimeoutMillis: 1000 });
       try { await admin.query("SELECT 1"); break; } catch { await admin.end(); admin = null; await new Promise((resolve) => setTimeout(resolve, 100)); }
     }
-    assert.ok(admin, "the disposable PostgreSQL engine must be available");
-    const migrations = join(root, "src/server/vendor/cost-intelligence/migrations");
+    assert.ok(admin); const migrations = join(root, "src/server/vendor/cost-intelligence/migrations");
     for (const file of readdirSync(migrations).filter((file) => file.endsWith(".sql")).sort()) await admin.query(readFileSync(join(migrations, file), "utf8"));
     await admin.query(`CREATE ROLE creative_runtime LOGIN PASSWORD '${runtimePassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS`);
     await admin.query("GRANT ci_finance_runtime TO creative_runtime");
     runtime = new Pool({ host: "127.0.0.1", port, user: "creative_runtime", password: runtimePassword, database: "creative_offline" });
-    Object.assign(process.env, { TICKETSTUB_DB: join(temp, "app.sqlite"), TICKETSTUB_FILES: join(temp, "app-files"), TICKETSTUB_RUNTIME_MODE: "live",
-      CONTEXT_SECRET: "offline-issuer-secret-with-at-least-thirty-two-characters", ADMIN_EMAILS: "commissioning@example.test", TICKETSTUB_OPS_ENVIRONMENT: "test",
-      GIT_SHA: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(), APP_URL: "https://ticketstub.test",
-      TICKETSTUB_CREATIVE_CONFIG: JSON.stringify(config), TICKETSTUB_FINANCE_DATABASE_URL: `postgresql://creative_runtime:${runtimePassword}@127.0.0.1:${port}/creative_offline`,
-      CREATIVE_ENGINE_OPENROUTER_API_KEY: "offline-ce-only", TICKETSTUB_ART_OPENROUTER_API_KEY: "offline-studio-only" });
-    const { getStorage } = await import("../src/server/index.ts");
-    const { hashToken } = await import("../src/server/crypto.ts");
-    const { newStub, NEATHACK } = await import("../src/customer/studio/fixtures.ts");
-    const account = await getStorage().findOrCreateAccount("commissioning@example.test", Date.now());
-    const cookie = randomBytes(24).toString("base64url");
+    const { DatabaseSync } = await import("node:sqlite"); database = new DatabaseSync(join(temp, "recovery.sqlite")); initializeCreativeFinanceMapping(database);
+    const current = structuredClone(entry); current.decision_access = { provider: "typesafe", model: "jev-1.13.0", environment: "test", accountRef: "fixture-account", projectRef: "fixture-key",
+      grantRef: "fixture-grant", evidenceRef: "fixture-eligibility", evidenceSha256: canonicalHash("synthetic eligibility, not acceptance"), expiresAt: later(), eligible: true };
+    current.maximums.jev_decision = { amount: "1.00", policy_ref: ref("CreativeMaximumPolicy"), evidence_ref: "fixture-maximum", evidence_sha256: canonicalHash("fixture maximum"), expires_at: later() };
+    const original = () => structuredClone(current);
+    const scope = { tenantId: current.tenant_id, projectId: current.project_id, environment: "test", billingMode: "live", actorId: current.finance_service.actor_id };
+    const ownerPorts = { database: runtime, clock: { now: () => new Date() }, trustedContext: { resolve: async (value) => value },
+      financeAuthority: { authorizeCurrent: async (input) => ({ status: "allowed", decisionId: "synthetic-external-finance-owner", operation: input.operation, permission: input.permission,
+        scope: input.requestedScope, principal: { kind: "service", actorId: scope.actorId, serviceStatus: "active", serviceGrantRevision: "fixture-owner-grant" }, verifiedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString() }) },
+      budgetEvidence: { verifyCurrent: async (query) => ({ status: "verified", queryDigest: await budgetDigest(query), verifiedAt: new Date().toISOString(), expiresAt: later(),
+        maximum: { policyRef: current.maximums.jev_decision.policy_ref, authorizedCap: "1.00", currency: "USD" } }) },
+      reservationAuthority: { verifyCurrent: async (query) => ({ status: "allowed", revoked: false, queryDigest: await budgetDigest(query), verifiedAt: new Date().toISOString(), expiresAt: later(), evidenceRef: current.decision_access.evidenceRef, evidenceSha256: current.decision_access.evidenceSha256 }) } };
+    const policy = await changeBudgetPolicy({ schemaVersion: "1.0.0", requestId: randomUUID(), idempotencyKey: randomUUID(), scope, currency: "USD", limitAmount: "50.00", expectedPolicyRevision: 0,
+      actorReference: "synthetic-external-owner", reasonReference: "offline-recovery-fixtures-only", sourceAuthorityRef: current.finance_service.source_authority_ref }, ownerPorts);
+    assert.equal(policy.ok, true); current.budget_policy_ref = policy.value.policyRef;
+    const sourceRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+    const write = (row) => database.prepare("INSERT INTO ticketstub_creative_attempts VALUES (?,?) ON CONFLICT(billable_attempt_id) DO UPDATE SET state=excluded.state").run(row.attempt.billable_attempt_id, JSON.stringify(row));
+    const read = (row) => JSON.parse(database.prepare("SELECT state FROM ticketstub_creative_attempts WHERE billable_attempt_id=?").get(row.attempt.billable_attempt_id).state);
+    const provision = async ({ commitDispatch = true } = {}) => {
+      const bid = randomUUID(); const logical = randomUUID(); const transport = randomUUID(); const access = current.decision_access;
+      const attempt = { schema_version: "creative.metering.proposal/v1", tenant_id: current.tenant_id, project_id: current.project_id, budget_scope_id: current.budget_scope_id,
+        logical_operation_id: logical, billable_attempt_id: bid, retry_mapping_ref: "offline-recovery-only", operation_kind: "jev_decision", environment: "test", billing_mode: "live",
+        budget: { scope_id: current.budget_scope_id, policy_version: "ci-budget-policy-1.0.0" }, provider: { name: "typesafe", model: "jev-1.13.0", endpoint: "https://api.typesafe.ai/v1/systemone", sdk: { name: "agent-harness-http", version: "0.1.0" } } };
+      const binding = { mappingVersion: "ci-reservation-authority-1.0.0", budgetScopeId: current.budget_scope_id, grantRef: access.grantRef, accountRef: access.accountRef, projectRef: access.projectRef,
+        provider: "typesafe", model: access.model, operation: "decision", targetBindingSha256: canonicalHash({ fixture: bid }), leaseRef: randomUUID(), leaseExpiresAt: later() };
+      const attemptBinding = { logicalOperationId: logical, transportAttemptId: transport, providerRequestId: null, providerAttemptId: bid, billableAttemptId: bid };
+      const stamp = new Date().toISOString(); const common = { schema_version: "1.0.0", policy_version: "1.0.0", event_id: randomUUID(), tenant_id: current.tenant_id, project_id: current.project_id,
+        correlation_id: randomUUID(), producer: { module: "getticketstub.com", source_revision: sourceRevision, build_revision: sourceRevision }, occurred_at: stamp, observed_at: stamp, ingested_at: stamp, environment: "test", billing_mode: "live", source_refs: [] };
+      const reserve = { schemaVersion: "1.0.0", requestId: randomUUID(), idempotencyKey: `${bid}:reserve`, scope,
+        canonicalRequest: { ...common, contract: "ReserveRequest", request_id: randomUUID(), idempotency_key: `${bid}:reserve`, budget_scope_id: current.budget_scope_id,
+          logical_operation_id: logical, billable_attempt_id: bid, currency: "USD", policy_ref: current.budget_policy_ref, requested: { amount: "1.00", currency: "USD", scale: 2 }, expires_at: binding.leaseExpiresAt },
+        estimate: { completeness: "unknown", knownSubtotal: "0", currency: "USD", rateCardRef: null, missingDimensions: ["usage"], boundedConservativeMaximum: "1.00", maximumPolicyRef: current.maximums.jev_decision.policy_ref },
+        allowPartialAuthorization: false, attemptBinding, authorityBinding: binding, sourceAuthorityRef: current.finance_service.source_authority_ref };
+      // External-owner fixture provisioning uses the actual CI05A engine, never
+      // the disabled Product reserve method, and grants no producer adoption.
+      const reserved = await authorizeReservation(reserve, ownerPorts); assert.equal(reserved.ok, true); assert.equal(reserved.value.status, "authorized");
+      const dispatchRef = ref("CreativeDispatchIntent", { fixture: bid });
+      const command = { schemaVersion: "1.0.0", requestId: randomUUID(), idempotencyKey: `${bid}:dispatch`, scope, reservationId: reserved.value.reservationId, expectedRevision: 1,
+        actorReference: scope.actorId, sourceAuthorityRef: current.finance_service.source_authority_ref, attemptBinding, action: "mark_dispatched", dispatchIntentRef: dispatchRef,
+        workerLeaseId: binding.leaseRef, workerLeaseExpiresAt: binding.leaseExpiresAt };
+      const row = { attempt, scope, access: { account_ref: access.accountRef, project_ref: access.projectRef, grant_ref: access.grantRef, evidence_ref: access.evidenceRef, evidence_sha256: access.evidenceSha256, expires_at: access.expiresAt },
+        maximum: current.maximums.jev_decision, source_ref: current.finance_service.source_authority_ref, custody: creativeFinanceCustodySnapshot(current, attempt), binding, attempt_binding: attemptBinding,
+        reserve_request: reserve, reservation_id: reserved.value.reservationId, held_amount: "1.00", transport_id: transport, dispatch_ref: dispatchRef, dispatch_command: command, state: "reserved", common };
+      write(row);
+      const digest = await budgetDigest(normalizedBudgetRequest(row.reserve_request));
+      database.prepare("INSERT INTO ticketstub_creative_finance_sources VALUES (?,?,?,?)").run(digest, bid, JSON.stringify(row.source_ref),
+        JSON.stringify({ policyRef: row.maximum.policy_ref, authorizedCap: "1.00", currency: "USD" }));
+      if (commitDispatch) { const committed = await markReservationDispatched(command, ownerPorts); assert.equal(committed.ok, true); assert.equal(committed.value.status, "applied"); }
+      return row;
+    };
+    const { getStorage } = await import("../src/server/index.ts"); const { hashToken } = await import("../src/server/crypto.ts");
+    const { getRequestContext, requireCreativeCommissioningContext, assertCreativeCommissioningCurrent } = await import("../src/server/context.ts");
+    Object.assign(process.env, { TICKETSTUB_RUNTIME_MODE: "live", CONTEXT_SECRET: "offline-issuer-secret-with-at-least-thirty-two-characters", ADMIN_EMAILS: "commissioning@example.test", TICKETSTUB_OPS_ENVIRONMENT: "test", TYPESAFE_API_KEY: "offline-typesafe-only" });
+    const account = await getStorage().findOrCreateAccount("commissioning@example.test", Date.now()); const cookie = randomBytes(24).toString("base64url");
     await getStorage().createSession(hashToken(cookie), account.id, Date.now(), Date.now() + 60 * 60_000);
-    const stub = newStub(NEATHACK, entry.application_project_id);
-    await getStorage().syncWall(account.id, [stub], [], Date.now());
-    entry.application_owner_id = account.id; entry.allowed_actor_ids = [account.id];
-    const financialScope = { tenantId: entry.tenant_id, projectId: entry.project_id, environment: "test", billingMode: "live", actorId: entry.finance_service.actor_id };
-    // The external Finance owner provisions the policy as seeded data. Every
-    // reservation and lifecycle call below uses the actual application ports.
-    const policy = await changeBudgetPolicy({ schemaVersion: "1.0.0", requestId: randomUUID(), idempotencyKey: randomUUID(), scope: financialScope, currency: "USD", limitAmount: "50.00",
-      expectedPolicyRevision: 0, actorReference: "offline-finance-owner", reasonReference: "offline-policy-provision", sourceAuthorityRef: entry.finance_service.source_authority_ref }, {
-      database: runtime, clock: { now: () => new Date() }, trustedContext: { resolve: async (scope) => scope },
-      financeAuthority: { authorizeCurrent: async (request) => ({ status: "allowed", decisionId: "offline-owner-provision", operation: request.operation, permission: request.permission,
-        scope: request.requestedScope, principal: { kind: "service", actorId: financialScope.actorId, serviceStatus: "active", serviceGrantRevision: "offline-owner-provision" }, verifiedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString() }) },
-      budgetEvidence: { verifyCurrent: async (query) => ({ status: "verified", queryDigest: await budgetDigest(query), verifiedAt: new Date().toISOString(), expiresAt: later() }) },
-    });
-    assert.equal(policy.ok, true, JSON.stringify(policy)); assert.equal(policy.value.status, "applied"); entry.budget_policy_ref = policy.value.policyRef;
-    // Seed an explicitly synthetic external tariff through the actual Finance
-    // catalog API. The host estimates against the SQL catalog; it does not do
-    // local token arithmetic or treat this fixture as a production tariff.
-    const published = new Date().toISOString();
-    const tariffEvidence = ref("SyntheticTariffApproval", { provenance: "synthetic_fixture" });
-    const pricingPorts = { database: runtime, clock: { now: () => new Date() }, trustedContext: { resolve: async (scope) => scope },
-      financeAuthority: { authorizeCurrent: async (input) => ({ status: "allowed", decisionId: "offline-tariff-owner", operation: input.operation, permission: input.permission,
-        scope: input.requestedScope, principal: { kind: "service", actorId: financialScope.actorId, serviceStatus: "active", serviceGrantRevision: "offline-tariff-owner" },
-        verifiedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString() }) },
-      actionAuthority: { authorize: async (input) => ({ allowed: true, decisionId: "offline-tariff-owner", action: input.action, scope: input.scope,
-        actorId: input.scope.actorId, issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString() }) } };
-    const tariffBase = { schemaVersion: "2.0.0", revision: 1, provider: "typesafe", product: "systemone", effectiveFrom: new Date(Date.now() - 60_000).toISOString(),
-      effectiveTo: null, retrievedAt: published, freshnessMaxAgeSeconds: 3600, sourceUrl: "https://example.test/synthetic-typesafe-tariff",
-      sourceContentHash: canonicalHash("synthetic offline tariff, never a deployed tariff"), approvalRef: tariffEvidence, provenance: "synthetic_fixture" };
-    const rule = await registerPricingRuleV2({ schemaVersion: "2.0.0", requestId: randomUUID(), idempotencyKey: randomUUID(), scope: financialScope,
-      rule: { ...tariffBase, id: randomUUID(), usageSource: "provider_response", usageSemantics: "Input and output are separate disjoint provider counters.", partitionGroups: [],
-        usageUnits: ["input_tokens", "output_tokens"].map((name) => ({ name, category: name, unit: "tokens", relation: "standalone", treatment: "charge_total", missingPolicy: "required" })) } }, pricingPorts);
-    assert.equal(rule.ok, true, JSON.stringify(rule));
-    const card = await registerRateCardV2({ schemaVersion: "2.0.0", requestId: randomUUID(), idempotencyKey: randomUUID(), scope: financialScope,
-      rateCard: { ...tariffBase, id: randomUUID(), modelOrSku: "jev-1.13.0", aliases: [], contextTier: null, serviceTier: null, reasoningMode: null, toolClass: null,
-        currency: "USD", pricingRuleRef: rule.value.reference,
-        unitRates: ["input_tokens", "output_tokens"].map((name) => ({ category: name, unit: "tokens", basisQuantity: "1", rate: "0.001", relation: "standalone" })) } }, pricingPorts);
-    assert.equal(card.ok, true, JSON.stringify(card));
-    entry.finance_service.operations.push("pricing.estimateV2");
-    entry.maximums.jev_decision = { amount: "1.00", policy_ref: ref("CreativeMaximumPolicy"), evidence_ref: "offline-jev-maximum", evidence_sha256: canonicalHash("offline JEV maximum"), expires_at: later() };
-    entry.decision_access = { provider: "typesafe", model: "jev-1.13.0", environment: "test", accountRef: "offline-typesafe-account", projectRef: "offline-typesafe-key",
-      grantRef: "offline-typesafe-grant", evidenceRef: "offline-typesafe-eligibility", evidenceSha256: canonicalHash("offline eligibility data"), expiresAt: later(), eligible: true };
-    entry.decision_pricing = { product: "systemone", rate_card_ref: card.value.reference, allow_estimate_receipt_ref: true,
-      source_authority_ref: tariffEvidence, expires_at: later() };
-    process.env.TYPESAFE_API_KEY = "offline-typesafe-only";
-    writeRegistry();
-    const request = (body, token = cookie) => new Request("https://ticketstub.test/api/creative", { method: "POST", headers: { host: "ticketstub.test", origin: "https://ticketstub.test", "content-type": "application/json", cookie: `ts_session=${token}` }, body: JSON.stringify(body) });
-    const dispatches = [];
-    const decisionWrites = [];
-    let beforeDecisionTls;
-    let returnedDecisionModel = "jev-1.13.0";
-    t.mock.method(Resolver.prototype, "resolve4", async (hostname) => { assert.equal(hostname, "api.typesafe.ai"); return ["93.184.216.34"]; });
-    t.mock.method(Resolver.prototype, "resolve6", async (hostname) => { assert.equal(hostname, "api.typesafe.ai"); return []; });
-    t.mock.method(https, "request", (options, callback) => {
-      assert.equal(options.hostname, "api.typesafe.ai");
-      assert.ok(options.headers.authorization === "Bearer offline-typesafe-only", "only the server decision credential may reach this transport");
-      const request = new EventEmitter(); request.destroy = () => {};
-      request.end = (bytes) => {
-        decisionWrites.push(JSON.parse(bytes.toString()));
-        const response = new EventEmitter(); const body = Buffer.from(JSON.stringify({ ...(returnedDecisionModel ? { model: returnedDecisionModel } : {}), answers: {
-          layout: { type: "choice", choice: "bright", probabilities: { bright: 0.9, quiet: 0.1 }, confidence: 0.9 },
-        }, usage: { input_tokens: 10, output_tokens: 4 } }));
-        response.statusCode = 200; response.headers = { "content-length": String(body.length), "x-typesafe-request-id": "offline-provider-request" };
-        response.rawHeaders = ["content-length", String(body.length), "x-typesafe-request-id", "offline-provider-request"];
-        setImmediate(() => { callback(response); response.emit("data", body); response.emit("end"); });
-      };
-      const socket = new EventEmitter(); socket.encrypted = true; socket.authorized = true; socket.secureConnecting = true; socket.destroy = () => {};
-      setImmediate(() => { void (async () => { request.emit("socket", socket); if (beforeDecisionTls) await beforeDecisionTls();
-        socket.secureConnecting = false; socket.emit("secureConnect"); })().catch((error) => request.emit("error", error)); });
-      return request;
-    });
-    const pixels = await sharp({ create: { width: 64, height: 64, channels: 3, background: "#FF8F00" } }).png().toBuffer();
-    let usage = { prompt_tokens: 12, completion_tokens: 34, total_tokens: 46, cost: 0.04 };
-    globalThis.fetch = async (url, init) => {
-      assert.equal(String(url), "https://openrouter.ai/api/v1/images");
-      assert.ok(init.headers.authorization === "Bearer offline-ce-only", "only the dedicated creative credential may reach this transport");
-      const body = JSON.parse(init.body); assert.equal(body.model, profile.model_id); assert.deepEqual(body.provider, { only: [profile.provider_tag], allow_fallbacks: false });
-      dispatches.push(body);
-      return Response.json({ data: [{ b64_json: pixels.toString("base64"), media_type: "image/png" }], ...(usage ? { usage } : {}) });
-    };
-    const denied = await POST(request({ projectId: entry.application_project_id, operation: "list", actionId: randomUUID(), payload: { brief_id: entry.brief_id } }, "unrecognized-session"));
-    assert.equal(denied.status, 404); assert.equal(dispatches.length, 0);
-    for (const extra of [{ admission_context: { target_binding_sha256: canonicalHash("untrusted") } }, { environment: "production" }, { actor_id: "untrusted" }]) {
-      const deniedBody = await POST(request({ projectId: entry.application_project_id, operation: "list", actionId: randomUUID(), payload: { brief_id: entry.brief_id }, ...extra }));
-      assert.equal(deniedBody.status, 400); assert.equal(dispatches.length, 0); assert.equal(decisionWrites.length, 0);
-    }
-    host = await creativeHostForRequest(request({}), entry.application_project_id);
-    const created = await POST(request({ projectId: entry.application_project_id, operation: "brief.create", actionId: randomUUID(), payload: {} }));
-    const briefResult = await created.json(); assert.equal(created.status, 200, JSON.stringify(briefResult));
-    const brief = briefResult.result.brief;
-    let baseDesign = { contract: "DesignRoot", schema_version: "1.0", brief_id: entry.brief_id };
-    const plan = (id, operation = "concept.generate") => ({ contract: "EditPlan", schema_version: "1.0", event_id: randomUUID(), tenant_id: entry.tenant_id, project_id: entry.project_id,
-      correlation_id: randomUUID(), producer: "offline-consumer", occurred_at: new Date().toISOString(), ingested_at: new Date().toISOString(), environment: "test", billing_mode: "live", source_refs: [], plan_id: id,
-      base: { brief_hash: canonicalHash(brief), design_hash: baseDesign.design_hash ?? canonicalHash(baseDesign),
-        ...(baseDesign.design_version_id ? { design_version_id: baseDesign.design_version_id } : {}) }, operation,
-      steps: [{ step_id: `${id}-step`, action: operation, source_refs: [], parameters: operation === "concept.generate" ? { brief_id: entry.brief_id, variant_count: 1 }
-        : { design_version_id: baseDesign.design_version_id, artifact_id: baseDesign.artifact.artifact_id, instruction: "Make the artwork blue." } }],
-      expected_result: { contract: "DesignVersion", schema_version: "1.0", parent_version_id: baseDesign.design_version_id ?? `root:${entry.brief_id}`, artifact_kind: "image" }, invalidates: [] });
-    const decisionRequest = { execution_mode: "independent_batch", state: { text: "Synthetic verified offline festival facts." }, questions: {
-      layout: { type: "choice", question_schema_version: "1.0", policy_version: "offline-layout-policy/1", instructions: "Select one synthetic layout.",
-        criteria: { bright: "Bright layout", quiet: "Quiet layout" }, eligible_candidate_ids: ["bright", "quiet"], policy: { minimum_confidence: 0.7, low_confidence_action: "review" } },
-    } };
-    const action = randomUUID(); const input = { projectId: entry.application_project_id, operation: "generate", actionId: action,
-      payload: { brief_id: entry.brief_id, plan: plan("offline-generation"), decision_request: decisionRequest } };
-    const commit = host.store.commitPreparedDesignVersion.bind(host.store);
-    let signalPublication; let releasePublication;
-    const publicationPaused = new Promise((resolve) => { signalPublication = resolve; });
-    const publicationGate = new Promise((resolve) => { releasePublication = resolve; });
-    t.mock.method(host.store, "commitPreparedDesignVersion", async (...args) => {
-      const answer = await commit(...args);
-      assert.equal(host.store.db.isTransaction, true, "the actual owner publication transaction remains open");
-      signalPublication(); await publicationGate;
-      return answer;
-    });
-    const publishing = POST(request(input));
-    await Promise.race([publicationPaused, publishing.then(async (response) => { throw new Error(`Publication did not reach its owner commit: ${JSON.stringify(await response.clone().json())}`); })]);
-    let concurrentReadCompleted = false;
-    const reading = POST(request({ projectId: entry.application_project_id, operation: "list", actionId: randomUUID(), payload: { brief_id: entry.brief_id } }))
-      .then((response) => { concurrentReadCompleted = true; return response; });
-    await new Promise((resolve) => setImmediate(resolve));
-    const concurrentReadWasBlocked = !concurrentReadCompleted;
-    releasePublication();
-    const response = await publishing; const result = await response.json();
-    const readResponse = await reading; const readResult = await readResponse.json();
-    assert.equal(concurrentReadWasBlocked, true, "another request cannot observe an uncommitted artifact through another controller");
-    assert.equal(readResponse.status, 200); assert.equal(readResult.result.items.length, 1);
-    const stageSummary = host.store.db.prepare("SELECT state FROM ticketstub_creative_attempts").all().map((row) => { const value = JSON.parse(row.state); return { state: value.state, authority_error: value.authority_error }; });
-    assert.equal(response.status, 200, `${JSON.stringify(result)} ${JSON.stringify(stageSummary)}`); assert.equal(result.ok, true); assert.equal(dispatches.length, 1); assert.equal(decisionWrites.length, 1);
-    const design = result.result.design ?? result.result.design_version ?? result.result;
-    const versions = await host.store.listDesignVersions({ scope: { tenant_id: entry.tenant_id, project_id: entry.project_id }, brief_id: entry.brief_id, limit: 100 });
-    assert.equal(versions.items.length, 1);
-    const bytes = await host.store.getArtifactBytes({ scope: { tenant_id: entry.tenant_id, project_id: entry.project_id }, brief_id: entry.brief_id, design_version_id: versions.items[0].design_version_id });
-    assert.equal(canonicalHash(Array.from(bytes)), canonicalHash(Array.from(pixels)));
-    assert.equal(versions.items[0].artifact.content_hash, `sha256:${createHash("sha256").update(pixels).digest("hex")}`);
-    assert.ok(design, "the canonical API returns its actual publication result");
-    const repeated = await POST(request(input)); assert.equal(repeated.status, 200); assert.equal(dispatches.length, 1, "idempotent replay cannot spend twice");
-    const financial = await admin.query("SELECT reservation_id,event_type,consumed_amount::text FROM cost_intelligence.budget_reservation_events WHERE tenant_id=$1 ORDER BY reservation_id,event_sequence", [entry.tenant_id]);
-    const histories = Map.groupBy(financial.rows, (row) => row.reservation_id);
-    assert.equal(histories.size, 2);
-    for (const rows of histories.values()) assert.deepEqual(rows.map((row) => row.event_type), ["authorized", "dispatched", "settled"]);
-    assert.deepEqual(financial.rows.filter((row) => row.event_type === "settled").map((row) => Number(row.consumed_amount)).sort(), [0.014, 0.04]);
-    const observations = await admin.query("SELECT event_facts FROM cost_intelligence.usage_intake_inbox WHERE tenant_id=$1", [entry.tenant_id]);
-    assert.equal(observations.rows.length, 2);
-    const committed = host.store.db.prepare("SELECT state FROM ticketstub_creative_attempts").all().map((row) => JSON.parse(row.state));
-    for (const row of committed) {
-      const facts = observations.rows.find((item) => item.event_facts.billable_attempt_id === row.attempt.billable_attempt_id).event_facts;
-      assert.equal(facts.transport_attempt_id, row.transport_id); assert.equal(facts.source_observation_id, row.finance_observation_id);
-      assert.equal(row.identity_projection.creative.model, row.attempt.provider.model);
-      assert.equal(row.identity_projection.creative.source_observation_id, row.observation.source_observation_id);
-      assert.equal(row.identity_projection.finance.model, facts.model); assert.equal(row.identity_projection.finance.source_observation_id, facts.source_observation_id);
-      assert.equal(canonicalHash(row.identity_projection), row.identity_projection_ref.content_hash);
-      assert.ok(facts.source_refs.some((ref) => ref.id === row.identity_projection_ref.id && ref.content_hash === row.identity_projection_ref.content_hash));
-      assert.equal(facts.valuation.basis, "estimated", "reported/quoted cost is never upgraded to reconciled provider expense");
-      assert.deepEqual(facts.usage_units.map((unit) => unit.name).sort(), ["input_tokens", "output_tokens"]);
-      assert.ok(facts.usage_units.every((unit) => unit.relation === "standalone"));
-    }
-    const imageAttempt = committed.find((row) => row.attempt.provider.name === "openrouter");
-    assert.equal(versions.items[0].billable_attempt_id, imageAttempt.attempt.billable_attempt_id);
-    assert.equal(imageAttempt.reported_cost_receipt.provenance, "provider_reported_unsettled");
-    assert.equal(imageAttempt.identity_projection.creative.model, profile.model_id);
-    assert.equal(imageAttempt.identity_projection.finance.model, mapping.finance_model_compatibility_id);
-    for (const units of [
-      [{ name: "total_tokens", quantity: "46", scale: 0, relation: "standalone" }],
-      [{ name: "input_tokens", quantity: "12", scale: 0, relation: "included_subset", included_in: "total_tokens" }],
+    const req = new Request("https://ticketstub.test/api/creative", { headers: { cookie: `ts_session=${cookie}` } });
+    const platform = await getRequestContext(req); const scoped = await getRequestContext(req, { id: entry.application_project_id, kind: "stub" });
+    requireCreativeCommissioningContext(platform, scoped);
+    const finance = createCreativeFinance({ database, pool: runtime, environment: "test", authority: () => current,
+      currentContext: async () => { const fresh = await getRequestContext(req, { id: entry.application_project_id, kind: "stub" }); requireCreativeCommissioningContext(await getRequestContext(req), fresh); },
+      assertCurrentContext: () => assertCreativeCommissioningCurrent(req, { platform, scoped }) });
+    const input = (row) => ({ billable_attempt_id: row.attempt.billable_attempt_id, logical_operation_id: row.attempt.logical_operation_id, reservation_id: row.reservation_id, lease_id: row.binding.leaseRef, transport_attempt_id: row.transport_id });
+    const committed = await provision(); const commandBytes = JSON.stringify(committed.dispatch_command);
+    // PostgreSQL committed, but the Product response/local acknowledgement was
+    // lost. Only the exact real owner 'replay' may repair that local ACK.
+    assert.equal((await finance.metering.recordTransportAttempt(input(committed))).status, "recorded");
+    assert.equal(read(committed).dispatch_ack.status, "replay"); assert.equal(read(committed).dispatch_ack.owner_revision, 2);
+    assert.equal(JSON.stringify(read(committed).dispatch_command), commandBytes);
+    assert.equal((await finance.metering.recordTransportAttempt(input(committed))).status, "recorded");
+    const events = async (row) => (await admin.query("SELECT event_type,consumed_amount::text,released_amount::text FROM cost_intelligence.budget_reservation_events WHERE reservation_id=$1 ORDER BY event_sequence", [row.reservation_id])).rows;
+    assert.deepEqual((await events(committed)).map((event) => event.event_type), ["authorized", "dispatched"]);
+    const absent = await provision({ commitDispatch: false }); assert.equal((await finance.metering.recordTransportAttempt(input(absent))).status, "held_for_reconciliation");
+    assert.deepEqual((await events(absent)).map((event) => event.event_type), ["authorized"], "recovery cannot append a missing original dispatch");
+    const missing = await provision(); delete missing.dispatch_command; write(missing); assert.equal((await finance.metering.recordTransportAttempt(input(missing))).status, "held_for_reconciliation");
+    const divergent = await provision(); divergent.dispatch_command.requestId = randomUUID(); divergent.dispatch_command.dispatchIntentRef = ref("CreativeDispatchIntent"); write(divergent);
+    assert.equal((await finance.metering.recordTransportAttempt(input(divergent))).status, "held_for_reconciliation");
+    assert.deepEqual((await events(divergent)).map((event) => event.event_type), ["authorized", "dispatched"]);
+    const partial = await provision(); delete partial.custody; write(partial); await assert.rejects(finance.readRecoveryState(input(partial)), { code: "creative_finance_unavailable" });
+    const savedAuthority = original();
+    for (const mutate of [
+      (value) => { value.finance_service.source_authority_ref = ref("CreativeFinanceSource"); },
+      (value) => { value.finance_service.grant_revision = "changed-grant-revision"; },
+      (value) => { value.decision_access.accountRef = "changed-account"; },
+      (value) => { value.decision_access.projectRef = "changed-project"; },
+      (value) => { value.decision_access.grantRef = "changed-grant"; },
+      (value) => { value.decision_access.model = "changed-model"; },
+      (value) => { value.budget_policy_ref = ref("BudgetPolicy"); },
+      (value) => { value.maximums.jev_decision.policy_ref = ref("CreativeMaximumPolicy"); },
     ]) {
-      const invalid = structuredClone(imageAttempt.usage_request); const attemptId = randomUUID();
-      Object.assign(invalid, { requestId: randomUUID(), idempotencyKey: randomUUID() });
-      Object.assign(invalid.usageEvent, { event_id: randomUUID(), usage_event_id: randomUUID(), source_observation_id: randomUUID(),
-        logical_operation_id: randomUUID(), provider_attempt_id: attemptId, billable_attempt_id: attemptId, transport_attempt_id: randomUUID(), usage_units: units });
-      const quarantined = await ingestUsage(invalid, { ...pricingPorts, providerSource: { isAvailable: async () => true } });
-      assert.equal(quarantined.ok, true); assert.equal(quarantined.value.status, "quarantined"); assert.equal(quarantined.value.quarantineCode, "unsafe_metadata");
-      assert.equal(quarantined.value.durableCommit, true, "unsupported Finance privacy units stay in durable quarantine");
+      Object.assign(current, structuredClone(savedAuthority)); mutate(current);
+      await assert.rejects(finance.readRecoveryState(input(committed)), { code: "creative_finance_unavailable" });
+      assert.deepEqual((await events(committed)).map((event) => event.event_type), ["authorized", "dispatched"]);
     }
-    assert.equal(Number((await admin.query("SELECT count(*) AS count FROM cost_intelligence.usage_intake_inbox WHERE tenant_id=$1", [entry.tenant_id])).rows[0].count), 2,
-      "quarantined source records cannot overwrite the two accepted observations");
-    const decisionAttempt = committed.find((row) => row.attempt.provider.name === "typesafe");
-    const quotes = await admin.query("SELECT usage_event_id,result_payload FROM cost_intelligence.pricing_estimate_snapshots WHERE tenant_id=$1", [entry.tenant_id]);
-    assert.equal(quotes.rows.length, 1); assert.equal(quotes.rows[0].usage_event_id, decisionAttempt.usage_request.usageEvent.usage_event_id);
-    assert.equal(canonicalHash(quotes.rows[0].result_payload), canonicalHash(decisionAttempt.pricing_result));
-    assert.equal(decisionAttempt.usage_request.usageEvent.valuation.rate_card_ref.contract, "PricingEstimateReceipt");
-    assert.equal(decisionAttempt.usage_request.usageEvent.valuation.rate_card_ref.id, quotes.rows[0].result_payload.requestId);
-    assert.equal(decisionAttempt.usage_request.usageEvent.valuation.rate_card_ref.content_hash, canonicalHash(quotes.rows[0].result_payload));
-    const finance = createCreativeFinance({ database: host.store.db, pool: runtime, environment: "test", sourceRevision: process.env.GIT_SHA,
-      authority: () => currentProjectAuthority(config, entry.application_project_id, account.id, account.id),
-      currentContext: async () => { const checked = await host.invoke({ projectId: entry.application_project_id, operation: "list", actionId: randomUUID(), payload: { brief_id: entry.brief_id } }); assert.equal(checked.ok, true); } });
-    const settlementInput = { billable_attempt_id: imageAttempt.attempt.billable_attempt_id, logical_operation_id: imageAttempt.attempt.logical_operation_id,
-      reservation_id: imageAttempt.reservation_id, lease_id: imageAttempt.binding.leaseRef, source_observation_id: imageAttempt.observation.source_observation_id };
-    const originalMapping = JSON.stringify(imageAttempt);
-    for (const corrupt of [
-      (row) => { delete row.reported_cost_receipt; },
-      (row) => { row.reported_cost_receipt.target_binding_sha256 = canonicalHash("wrong target"); row.reported_cost_receipt_sha256 = canonicalHash(row.reported_cost_receipt); },
-      (row) => { row.reported_cost_receipt.amount = "0.99"; row.reported_cost_receipt_sha256 = canonicalHash(row.reported_cost_receipt); },
-      (row) => { row.identity_projection.finance.model = "incorrect-compatibility-label"; row.identity_projection_ref.content_hash = canonicalHash(row.identity_projection); },
-    ]) {
-      const mutated = JSON.parse(originalMapping); corrupt(mutated);
-      host.store.db.prepare("UPDATE ticketstub_creative_attempts SET state=? WHERE billable_attempt_id=?").run(JSON.stringify(mutated), imageAttempt.attempt.billable_attempt_id);
-      assert.equal((await finance.metering.settleReservation(settlementInput)).status, "held_for_reconciliation", "private receipt/projection corruption cannot authorize another settlement");
-    }
-    host.store.db.prepare("UPDATE ticketstub_creative_attempts SET state=? WHERE billable_attempt_id=?").run(originalMapping, imageAttempt.attempt.billable_attempt_id);
-    assert.equal(Number((await admin.query("SELECT count(*) AS count FROM cost_intelligence.budget_reservation_events WHERE tenant_id=$1", [entry.tenant_id])).rows[0].count), 6);
-    const driver = await invokeAgentCreativeDevelopment({ host, request: { projectId: entry.application_project_id, environment: "test", operation: "list", actionId: randomUUID(), payload: { brief_id: entry.brief_id } }, source_manifest: host.source_manifest });
-    assert.equal(driver.response.ok, true); assert.equal(dispatches.length, 1); assert.equal(decisionWrites.length, 1);
-    const stale = await POST(request({ ...input, actionId: randomUUID() }));
-    assert.equal((await stale.json()).error.code, "stale_version"); assert.equal(dispatches.length, 1, "an obsolete generation root cannot spend");
-    baseDesign = versions.items[0];
-    const cancelAction = randomUUID();
-    beforeDecisionTls = async () => {
-      const job = host.store.db.prepare("SELECT job_id FROM creative_jobs WHERE tenant_id=? AND project_id=? AND action_id=?")
-        .get(entry.tenant_id, entry.project_id, cancelAction);
-      assert.ok(job);
-      const cancelled = await POST(request({ projectId: entry.application_project_id, operation: "cancel", actionId: randomUUID(), payload: { job_id: job.job_id } }));
-      assert.equal(cancelled.status, 200, JSON.stringify(await cancelled.json()));
-    };
-    const cancelled = await POST(request({ projectId: entry.application_project_id, operation: "edit", actionId: cancelAction,
-      payload: { brief_id: entry.brief_id, design_version_id: baseDesign.design_version_id, plan: plan("offline-cancel", "image.edit"), decision_request: decisionRequest } }));
-    assert.ok(cancelled.status >= 400); assert.equal(decisionWrites.length, 1, "owned cancellation at TLS prevents the next provider write"); assert.equal(dispatches.length, 1);
-    beforeDecisionTls = undefined;
-    returnedDecisionModel = undefined;
-    const uncertainInput = { projectId: entry.application_project_id, operation: "edit", actionId: randomUUID(),
-      payload: { brief_id: entry.brief_id, design_version_id: baseDesign.design_version_id, plan: plan("offline-unverified-model", "image.edit"), decision_request: decisionRequest } };
-    const uncertain = await POST(request(uncertainInput)); assert.ok(uncertain.status >= 400);
-    assert.equal(decisionWrites.length, 2); assert.equal(dispatches.length, 1, "unverified JEV model usage cannot permit image publication");
-    const repeatedUncertain = await POST(request(uncertainInput)); const replayedUncertain = await repeatedUncertain.json();
-    assert.ok(repeatedUncertain.status >= 400, JSON.stringify(replayedUncertain)); assert.equal(replayedUncertain.job.status, "failed");
-    assert.equal(replayedUncertain.result, undefined, "pending recovery cannot be presented as a published result");
-    assert.equal(decisionWrites.length, 2, "a durable unknown outcome cannot blindly resend");
-    returnedDecisionModel = "jev-1.13.0";
-    const savedAuthority = JSON.stringify(entry);
-    for (const change of [
-      (record) => { record.decision_access.grantRef = "revoked-original-grant"; },
-      (record) => { record.finance_service.grant_revision = "changed-delegation-revision"; },
-      (record) => { record.permissions = record.permissions.filter((permission) => permission !== "creative.edit"); },
-      (record) => { record.decision_access.expiresAt = new Date(Date.now() - 1000).toISOString(); },
-    ]) {
-      beforeDecisionTls = async () => { change(entry); writeRegistry(); };
-      const revoked = await POST(request({ projectId: entry.application_project_id, operation: "edit", actionId: randomUUID(),
-        payload: { brief_id: entry.brief_id, design_version_id: baseDesign.design_version_id, plan: plan("offline-revoked-registry", "image.edit"), decision_request: decisionRequest } }));
-      assert.ok(revoked.status >= 400); assert.equal(decisionWrites.length, 2); assert.equal(dispatches.length, 1, "current registry changes close paid dispatch");
-      entry = JSON.parse(savedAuthority); writeRegistry();
-    }
-    beforeDecisionTls = undefined;
-    // Fault injection preserves the actual SQLite read/result and all real
-    // Finance calls. Change an external owner record during the owned final
-    // synchronous job fence, after async permits have completed. The host's
-    // uncached registry check must close this last send boundary.
-    const originalPrepare = host.store.db.prepare.bind(host.store.db);
-    let finalAuthorityChange;
-    t.mock.method(host.store.db, "prepare", (sql) => {
-      const statement = originalPrepare(sql);
-      if (finalAuthorityChange && String(sql).includes("SELECT dispatch_intent_ref,context_fence_json,billable_attempt_id") && new Error().stack.includes("assertDispatchCurrent")) {
-        const originalGet = statement.get.bind(statement);
-        statement.get = (...args) => { const result = originalGet(...args); const change = finalAuthorityChange; finalAuthorityChange = undefined; change(entry); writeRegistry(); return result; };
-      }
-      return statement;
+    Object.assign(current, structuredClone(savedAuthority));
+    const originalDigest = globalThis.crypto.subtle.digest.bind(globalThis.crypto.subtle); let changeAfterDigest;
+    t.mock.method(globalThis.crypto.subtle, "digest", async (...args) => {
+      const result = await originalDigest(...args);
+      if (changeAfterDigest && new Error().stack.includes("verifyCurrent")) { const change = changeAfterDigest; changeAfterDigest = undefined; change(); }
+      return result;
     });
-    finalAuthorityChange = (record) => { record.finance_service.grant_revision = "changed-at-final-owner-fence"; };
-    const finalRevocation = await POST(request({ projectId: entry.application_project_id, operation: "edit", actionId: randomUUID(),
-      payload: { brief_id: entry.brief_id, design_version_id: baseDesign.design_version_id, plan: plan("offline-final-fence", "image.edit"), decision_request: decisionRequest } }));
-    assert.ok(finalRevocation.status >= 400); assert.equal(finalAuthorityChange, undefined, "the actual owned final fence was traversed");
-    assert.equal(decisionWrites.length, 2); assert.equal(dispatches.length, 1, "a changed final delegation cannot reach provider writes");
-    entry = JSON.parse(savedAuthority); writeRegistry();
-    // The same final owner read injects a real application authority change,
-    // after the last awaited permit/Finance operation. No session result or
-    // reservation response is mocked. The storage methods below execute their
-    // owned synchronous SQLite transactions before returning their promises.
-    const storage = getStorage(); const sessionHash = hashToken(cookie);
-    const restoreSession = async () => { await storage.deleteSession(sessionHash); await storage.createSession(sessionHash, account.id, Date.now(), Date.now() + 60 * 60_000); };
-    let wallRevision = Date.now();
-    const authorityChanges = [
-      { name: "session-revoked", change: () => { void storage.deleteSession(sessionHash); }, restore: restoreSession },
-      { name: "session-expired", change: () => { storage.db.prepare("UPDATE sessions SET expires_at=? WHERE token_hash=?").run(Date.now() - 1, sessionHash); }, restore: restoreSession },
-      { name: "staff-list-removed", change: () => { delete process.env.ADMIN_EMAILS; }, restore: async () => { process.env.ADMIN_EMAILS = account.email; } },
-      { name: "membership-revised", change: () => { void storage.syncStaff(account.id, false); void storage.syncStaff(account.id, true); }, restore: async () => {} },
-      { name: "ownership-tombstoned", change: () => { wallRevision = Math.max(wallRevision + 1, Date.now()); void storage.syncWall(account.id, [], [stub.id], wallRevision); },
-        restore: async () => { wallRevision += 1; await storage.syncWall(account.id, [{ ...stub, updatedAt: wallRevision }], [], wallRevision); } },
-    ];
-    for (const provider of ["typesafe", "openrouter"]) for (const scenario of authorityChanges) {
-      const actionId = randomUUID();
-      finalAuthorityChange = scenario.change;
-      const blocked = await POST(request({ projectId: entry.application_project_id, operation: "edit", actionId,
-        payload: { brief_id: entry.brief_id, design_version_id: baseDesign.design_version_id, plan: plan(`offline-final-${provider}-${scenario.name}`, "image.edit"),
-          ...(provider === "typesafe" ? { decision_request: decisionRequest } : {}) } }));
-      try {
-        assert.ok(blocked.status >= 400, `${provider}/${scenario.name} must fail closed`);
-        assert.equal(finalAuthorityChange, undefined, `${provider}/${scenario.name} must traverse the actual final fence`);
-        assert.equal(decisionWrites.length, 2); assert.equal(dispatches.length, 1, `${provider}/${scenario.name} cannot write to either provider`);
-        const dispatch = host.store.db.prepare(`SELECT d.billable_attempt_id,d.reservation_ref,d.provider_name FROM creative_dispatch_intents d
-          JOIN creative_jobs j ON j.tenant_id=d.tenant_id AND j.project_id=d.project_id AND j.job_id=d.job_id
-          WHERE j.tenant_id=? AND j.project_id=? AND j.action_id=?`).get(entry.tenant_id, entry.project_id, actionId);
-        assert.ok(dispatch, `${provider}/${scenario.name} must have its actual admitted dispatch`); assert.equal(dispatch.provider_name, provider);
-        const retained = JSON.parse(host.store.db.prepare("SELECT state FROM ticketstub_creative_attempts WHERE billable_attempt_id=?").get(dispatch.billable_attempt_id).state);
-        assert.equal(retained.reservation_id, dispatch.reservation_ref); assert.equal(retained.state, "held_for_reconciliation");
-        const history = await admin.query(`SELECT event_type,held_amount::text,consumed_amount::text,released_amount::text
-          FROM cost_intelligence.budget_reservation_events WHERE tenant_id=$1 AND reservation_id=$2 ORDER BY event_sequence`, [entry.tenant_id, dispatch.reservation_ref]);
-        assert.deepEqual(history.rows.map((row) => row.event_type), ["authorized", "dispatched"], "a real Finance hold cannot be settled or released after final revocation");
-        // Event amounts are deltas. A separately seeded external Finance-owner
-        // read grant inspects the actual SQL reducer after app authority closes.
-        const snapshot = await readReservationSnapshot({ schemaVersion: "1.0.0", requestId: randomUUID(), scope: retained.scope, reservationId: dispatch.reservation_ref }, pricingPorts);
-        assert.equal(snapshot.ok, true); assert.equal(snapshot.value.reservation.billable_attempt_id, dispatch.billable_attempt_id);
-        assert.equal(snapshot.value.state, "dispatched"); assert.equal(snapshot.value.reservation.lifecycle, "uncertain_in_flight");
-        assert.ok(Number(snapshot.value.heldAmount) > 0); assert.equal(Number(snapshot.value.effectiveConsumedAmount), 0); assert.equal(Number(snapshot.value.releasedAmount), 0);
-        assert.equal(snapshot.value.expectedRevision, 2); assert.equal(snapshot.value.reservation.usage_completeness, "unknown");
-        assert.equal((await host.store.listDesignVersions({ scope: { tenant_id: entry.tenant_id, project_id: entry.project_id }, brief_id: entry.brief_id, limit: 100 })).items.length, 1,
-          `${provider}/${scenario.name} cannot publish another artifact`);
-      } finally { await scenario.restore(); }
-    }
-    t.diagnostic("Both provider paths denied final-fence session revocation/expiry, staff-list removal, membership revision and ownership tombstone; all 10 real PostgreSQL holds retained, zero extra provider writes.");
-    usage = null;
-    const missing = await POST(request({ ...input, operation: "edit", actionId: randomUUID(), payload: { brief_id: entry.brief_id,
-      design_version_id: baseDesign.design_version_id, plan: plan("offline-missing-usage", "image.edit") } }));
-    const missingResult = await missing.json();
-    assert.ok(missing.status >= 400); assert.equal(dispatches.length, 2, JSON.stringify(missingResult));
-    const retained = host.store.db.prepare("SELECT state FROM ticketstub_creative_attempts").all().map((row) => JSON.parse(row.state));
-    assert.ok(retained.some((row) => row.state === "held_for_reconciliation"));
-    assert.equal((await host.store.listDesignVersions({ scope: { tenant_id: entry.tenant_id, project_id: entry.project_id }, brief_id: entry.brief_id, limit: 100 })).items.length, 1);
-    assert.ok(!JSON.stringify(result).includes("offline-ce-only"), "credentials do not appear in the public result");
-    assert.ok(!JSON.stringify(retained).includes("offline-ce-only"), "credentials do not appear in durable mapping state");
-    t.diagnostic(`Real PostgreSQL16 with all ${readdirSync(migrations).filter((file) => file.endsWith(".sql")).length} pinned CI migrations; intercepted image writes=${dispatches.length}, decision writes=${decisionWrites.length}; immutable versions=1.`);
+    changeAfterDigest = () => { current.decision_access.accountRef = "changed-after-owned-digest"; };
+    await assert.rejects(finance.verifyRecoveryAuthorization({ billable_attempt_id: committed.attempt.billable_attempt_id, reservation_ref: committed.reservation_id,
+      target_binding_sha256: committed.binding.targetBindingSha256 }));
+    assert.equal(changeAfterDigest, undefined, "the actual owner digest callback boundary was crossed");
+    Object.assign(current, structuredClone(savedAuthority));
+    // Preserve the real SQL response. Mutate custody after COMMIT has awaited;
+    // the final current source/session fences must deny local ACK.
+    const originalConnect = runtime.connect.bind(runtime); let changeAfterCommit; let commitsUntilChange = 1;
+    t.mock.method(runtime, "connect", async () => {
+      const client = await originalConnect(); const originalQuery = client.query.bind(client);
+      const wrapped = { release: () => client.release(), query: async (...args) => { const result = await originalQuery(...args); if (changeAfterCommit && args[0] === "COMMIT" && --commitsUntilChange === 0) { const change = changeAfterCommit; changeAfterCommit = undefined; change(); } return result; } };
+      return wrapped;
+    });
+    changeAfterCommit = () => { current.finance_service.source_authority_ref = ref("CreativeFinanceSource"); };
+    await assert.rejects(finance.readRecoveryState(input(committed)), { code: "creative_finance_unavailable" }); assert.equal(changeAfterCommit, undefined);
+    Object.assign(current, structuredClone(savedAuthority));
+    commitsUntilChange = 2;
+    changeAfterCommit = () => { void getStorage().deleteSession(hashToken(cookie)); };
+    await assert.rejects(finance.metering.recordTransportAttempt(input(committed))); assert.equal(changeAfterCommit, undefined);
+    await getStorage().createSession(hashToken(cookie), account.id, Date.now(), Date.now() + 60 * 60_000);
+    commitsUntilChange = 1;
+    const observationId = randomUUID(); const observation = { schema_version: "creative.metering.proposal/v1", tenant_id: committed.attempt.tenant_id, project_id: committed.attempt.project_id,
+      budget_scope_id: committed.attempt.budget_scope_id, logical_operation_id: committed.attempt.logical_operation_id, billable_attempt_id: committed.attempt.billable_attempt_id,
+      source_observation_id: observationId, source: "provider_response", provider_name: "typesafe", model: "jev-1.13.0", transport_attempt_id: committed.transport_id,
+      environment: "test", billing_mode: "live", completeness: "complete", missing_fields: [], usage_units: [{ name: "input_tokens", quantity: "10", relation: "standalone" }, { name: "output_tokens", quantity: "4", relation: "standalone" }] };
+    const row = read(committed); row.usage_request = { schemaVersion: "1.0.0", requestId: randomUUID(), idempotencyKey: `${observationId}:usage`, scope,
+      usageEvent: { ...row.common, contract: "UsageEvent", event_id: randomUUID(), usage_event_id: randomUUID(), source_observation_id: observationId, logical_operation_id: row.attempt.logical_operation_id,
+        provider_attempt_id: row.attempt.billable_attempt_id, billable_attempt_id: row.attempt.billable_attempt_id, transport_attempt_id: row.transport_id, provider_request_id: null,
+        provider: "typesafe", model: "jev-1.13.0", source: "provider_response", completeness: "complete", usage_units: observation.usage_units.map((unit) => ({ ...unit, scale: 0 })), missing_fields: [],
+        valuation: { basis: "estimated", money: { amount: "0.014", currency: "USD", scale: 3 }, rate_card_ref: ref("SyntheticValuationEvidence") }, outcome: "unknown", retry_mapping_ref: row.source_ref,
+        supersedes_observation_id: null, reconciliation_ref: null }, evidenceMode: "sandbox", verificationStatus: "verified", evidenceProvenanceRef: "synthetic-recovery-native-data" };
+    write(row); const usageBytes = JSON.stringify(row.usage_request);
+    // Real Finance intake under a synthetic external owner. Its trusted clock
+    // becomes unavailable only at the actual ledger append, so the real SQL
+    // outbox records retry; this is not a mocked Finance response or approval.
+    const retryPorts = { ...ownerPorts, clock: { now() {
+      const stack = new Error().stack;
+      return stack.includes("appendLedgerEventInternal") && !stack.includes("usageDecisionIsCurrent") ? new Date(Number.NaN) : new Date();
+    } } };
+    const intake = await ingestUsage(row.usage_request, retryPorts);
+    assert.equal(intake.ok, true); assert.equal(intake.value.durableCommit, true); assert.equal(intake.value.status, "accepted"); assert.equal(intake.value.outboxStatus, "retry");
+    row.intake_receipt = intake.value; write(row);
+    assert.equal((await finance.metering.recordUsageObservation({ ...input(row), observation })).status, "held_for_reconciliation");
+    assert.equal(read(row).intake_receipt.outboxStatus, "retry"); assert.equal(read(row).state, "held_for_reconciliation");
+    assert.equal(JSON.stringify(read(row).usage_request), usageBytes);
+    const repeated = await ingestUsage(row.usage_request, ownerPorts); assert.equal(repeated.ok, true); assert.equal(repeated.value.status, "duplicate");
+    assert.equal(repeated.value.outboxStatus, "retry");
+    const pendingRow = await provision(); const priorObservation = randomUUID(); const nextObservation = randomUUID();
+    const priorRequest = structuredClone(row.usage_request); Object.assign(priorRequest, { requestId: randomUUID(), idempotencyKey: `${priorObservation}:usage` });
+    Object.assign(priorRequest.usageEvent, { event_id: randomUUID(), usage_event_id: randomUUID(), source_observation_id: priorObservation,
+      logical_operation_id: pendingRow.attempt.logical_operation_id, provider_attempt_id: pendingRow.attempt.billable_attempt_id,
+      billable_attempt_id: pendingRow.attempt.billable_attempt_id, transport_attempt_id: pendingRow.transport_id });
+    const priorReceipt = await ingestUsage(priorRequest, retryPorts); assert.equal(priorReceipt.ok, true); assert.equal(priorReceipt.value.outboxStatus, "retry");
+    const pendingRequest = structuredClone(priorRequest); Object.assign(pendingRequest, { requestId: randomUUID(), idempotencyKey: `${nextObservation}:usage` });
+    Object.assign(pendingRequest.usageEvent, { event_id: randomUUID(), usage_event_id: randomUUID(), source_observation_id: nextObservation, supersedes_observation_id: priorObservation });
+    const pendingReceipt = await ingestUsage(pendingRequest, ownerPorts); assert.equal(pendingReceipt.ok, true); assert.equal(pendingReceipt.value.durableCommit, true); assert.equal(pendingReceipt.value.outboxStatus, "pending");
+    pendingRow.usage_request = pendingRequest; pendingRow.intake_receipt = pendingReceipt.value; write(pendingRow);
+    const pendingObservation = { ...observation, logical_operation_id: pendingRow.attempt.logical_operation_id, billable_attempt_id: pendingRow.attempt.billable_attempt_id,
+      transport_attempt_id: pendingRow.transport_id, source_observation_id: nextObservation };
+    assert.equal((await finance.metering.recordUsageObservation({ ...input(pendingRow), observation: pendingObservation })).status, "held_for_reconciliation");
+    assert.equal(read(pendingRow).intake_receipt.outboxStatus, "pending"); assert.equal(read(pendingRow).recovery_reason, "usage_outbox_pending");
+    // A receipt that committed before a custody/session change cannot supply a
+    // later local ACK. Real owner state stays durable; Product stays held.
+    current.finance_service.source_authority_ref = ref("CreativeFinanceSource");
+    await assert.rejects(finance.metering.recordUsageObservation({ ...input(pendingRow), observation: pendingObservation }));
+    Object.assign(current, structuredClone(savedAuthority));
+    await getStorage().deleteSession(hashToken(cookie));
+    await assert.rejects(finance.metering.recordUsageObservation({ ...input(pendingRow), observation: pendingObservation }));
+    await getStorage().createSession(hashToken(cookie), account.id, Date.now(), Date.now() + 60 * 60_000);
+    assert.equal((await finance.metering.settleReservation({ ...input(row), source_observation_id: observationId })).status, "held_for_reconciliation");
+    assert.equal((await finance.metering.releaseBeforeDispatch(input(absent))).status, "held_for_reconciliation");
+    assert.deepEqual((await events(row)).map((event) => event.event_type), ["authorized", "dispatched"]);
+    const actual = await readReservationSnapshot({ schemaVersion: "1.0.0", requestId: randomUUID(), scope, reservationId: row.reservation_id }, ownerPorts);
+    assert.equal(actual.ok, true); assert.ok(Number(actual.value.heldAmount) > 0); assert.equal(Number(actual.value.effectiveConsumedAmount), 0); assert.equal(Number(actual.value.releasedAmount), 0); assert.equal(actual.value.usageFinality, "unknown");
+    const queue = await admin.query("SELECT status FROM cost_intelligence.usage_intake_outbox WHERE billable_attempt_id=$1", [row.attempt.billable_attempt_id]); assert.equal(queue.rows[0].status, "retry");
+    const ledger = await admin.query("SELECT count(*) AS count FROM cost_intelligence.financial_ledger_events WHERE tenant_id=$1", [scope.tenantId]); assert.equal(Number(ledger.rows[0].count), 0);
+    t.diagnostic("Finance-first unavailable: zero Product admissions/provider writes; real SQL exact persisted dispatch replay ACK only, no duplicate money; missing/uncommitted/divergent commands and stale/partial custody hold. Native recovery intake accepted/retry stays durable with unknown finality, zero consumption/release; no accepted CI05B/publication claim.");
   } catch (error) { failed = true; throw error; } finally {
-    globalThis.fetch = originalFetch;
-    if (host) await host.close(); if (runtime) await runtime.end(); if (admin) await admin.end();
-    let cleanupFailed = false;
-    try { docker(["rm", "-f", name]); } catch { cleanupFailed = true; }
-    try { unlinkSync(dockerEnvFile); } finally {
-      for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]; Object.assign(process.env, saved);
-    }
-    if (cleanupFailed) {
-      t.diagnostic(`Disposable PostgreSQL container cleanup failed: ${name}; inspect the local Docker runtime. No other containers were changed.`);
-      if (!failed) assert.fail("The disposable PostgreSQL container could not be removed.");
-    }
+    if (database) database.close(); if (runtime) await runtime.end(); if (admin) await admin.end();
+    let cleanupFailed = false; try { docker(["rm", "-f", name]); } catch { cleanupFailed = true; }
+    unlinkSync(envFile);
+    for (const key of Object.keys(process.env)) if (!(key in savedProcessEnvironment)) delete process.env[key]; Object.assign(process.env, savedProcessEnvironment);
+    if (cleanupFailed) { t.diagnostic(`Owned PostgreSQL cleanup failed: ${name}; no shared daemon changed.`); if (!failed) assert.fail("Owned PostgreSQL cleanup failed"); }
   }
 });

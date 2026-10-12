@@ -1,39 +1,18 @@
 # Creative-engine application integration
 
-`POST /api/creative` now invokes the canonical owned `creative-engine/api/v1` API. It accepts
-`{projectId, operation, actionId, payload, sourceRefs?, environment?}`; an optional development-driver environment
-must equal the server's configured environment. Project references are checked against the current
-application session and existing stub ownership. The server supplies actor, scope, modes and the canonical
-envelope. Supported operations are `brief.create`, `generate`, `edit`, `list`, `compare`, `restore`, `cancel`
-and `job.status`. A populated key alone does not enable execution.
+Finance-owner review of source `48dd51940381882c2160a6139aa0c0bbf46d60d6` found F1–F4 incompatible with the accepted public lifecycle. Producer adoption/shipping is **blocked**. The historical offline CI and UI/component review do not establish Finance acceptance; their receipts remain preserved as superseded evidence.
 
-`src/server/creative/{host,config,finance}.mjs` composes the real engine API, version store/jobs, telemetry
-outbox and OpenRouter adapter with the real cost-intelligence PostgreSQL budgets/usage/pricing APIs. It uses
-the harness public DecisionPort and existing JEV transport. The application credential port supplies only
-`CREATIVE_ENGINE_OPENROUTER_API_KEY`; studio credentials remain separate. No second image adapter or Finance
-capacity ledger is created. SQLite stores mapping/recovery evidence; PostgreSQL owns economic capacity.
+`POST /api/creative` invokes the canonical owned `creative-engine/api/v1` API for scoped read/state operations. It accepts `{projectId, operation, actionId, payload, sourceRefs?, environment?}` with a development environment that must equal the server. Current staff session, existing stub ownership and private registry scope/permissions remain required. `brief.create`, `list`, `compare`, `restore`, `cancel` and `job.status` preserve existing state and recovery. `generate` and `edit` fail with `creative_finance_lifecycle_unavailable` before C03 admission, provider DNS or provider writes. A key, registry field, environment variable or test cannot override the source-owned barrier.
 
-Commissioning requires a current staff session, existing project ownership, explicit platform Finance
-reservation capability and separate owner-issued delegation/eligibility/Research records on a private volume.
-Requests cannot install these records. Guests and customer art capability alone receive no Finance authority.
-After asynchronous permits, both provider send paths synchronously reread the storage-owned live session,
-current staff list, membership revision and stub ownership using the same context issuer rules. Backends
-without that snapshot fail closed. Registry evidence is reread at the same final fence; separate application,
-registry and Finance authorities do not form an atomic cross-system snapshot.
-Cancellation, deadline, rights/current brief/selection, active lease, target and immutable publication fences
-remain inside the engine. Errors never become simulated creative success.
+Direct new Finance admission/dispatch authorization is also unavailable. The Product no longer imports or calls the exported lower settlement/release engines, creates financial finality from counters/estimates, or allocates compatibility UUID/model/quote projections. Settlement/release requests retain recovery state and existing holds. Finance must first release its accepted public intake/custody and atomic settlement/unused-release lifecycle, then the exact Product consumer needs independent review and a named owner ACK. Finance PR40, proposal schemas, development aliases, synthetic fixtures and syntactically valid registry records are not that release/ACK.
 
-Complete OpenRouter usage requires an exact-model reviewed profile and exact target/transport/reservation
-binding. Reported unsettled cost remains **estimated budget consumption**, never a confirmed provider invoice.
-Missing essential usage retains the hold and withholds publication, with raw usage/private attribution retained.
-JEV valuation uses actual SQL `estimateV2` tariffs. The explicit version1 `PricingEstimateReceipt` compatibility
-projection records the genuine schema2 quote identity/hash and true tariff refs; it never renames a RateCard.
+Bounded recovery may acknowledge an already committed dispatch command only. It preserves the original command bytes and IDs, verifies the actual current owner SQL state/revision/binding, prevents a new append using the old expected revision, and accepts only the owner's exact `replay` outcome. Missing, divergent, uncommitted or incomplete-custody records remain held. Source/service/policy/account/project/grant/model/operation identity is compared to the held record after every digest/snapshot/replay await; the context/storage-owned synchronous session/staff/revision/ownership fence also runs before local ACK. Comparison snapshots and request digests do not mint authority or adoption.
 
-Source pins/file hashes are in the existing `src/server/vendor/*/MANIFEST.json` files and assembly snapshot
-tooling. `TICKETSTUB_OFFLINE_POSTGRES=1 node --test tests/creative-host.test.mjs` exercises real application
-sessions, engine SQLite/jobs/artifacts, restricted PostgreSQL with the pinned migrations and intercepted
-provider transport. External owner records/response bytes are seeded offline data, not account/live acceptance.
-See [deployed settings](../operations/deployed-settings.md) for the single inventory, deployment order and rollback.
+Original CE observations, persisted requests, actual historical intake receipts, pending/retry outboxes, reservations, jobs and artifacts remain available for recovery. No new intake/quote delivery or expense posting is enabled while public custody is unavailable. An accepted durable intake receipt is neither posted expense nor atomic completed settlement/finality/full unused release. Pending/retry receipts retain a recovery hold. Provider-reported unsettled cost and estimate provenance remain distinct from invoice reconciliation.
+
+The existing vendored source manifests and assembly tooling pin the owned components. `npm run verify:creative-host` is mandatory real-PostgreSQL qualification of this **blocked/recovery boundary**, not a positive paid-journey acceptance test. It exercises actual app sessions/read state, zero new admissions/provider writes/artifacts, exact committed-command replay without duplicate money, current custody changes and durable pending/retry recovery. External records and IDs are explicitly synthetic fixture data; they confer no live/source authenticity. The source at48dd and its earlier positive artifact evidence are historical and superseded for lifecycle acceptance.
+
+The current studio `/api/art` remains a separate credential/provider consumer. See [deployed settings](../operations/deployed-settings.md) for the inventory and Finance-first deployment/rollback gate. No production setting, paid call or publication is authorized by these repairs.
 
 ## Historical studio mapper boundary
 

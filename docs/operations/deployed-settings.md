@@ -6,6 +6,8 @@ This is the single environment inventory for the settings migration under
 [actual canonical creative composition](../integration/creative-engine.md). Code integration, owner agreements,
 account eligibility and hosted verification remain distinct. No provider charge or publication is authorized here.
 
+**REQUEST_CHANGES / producer adoption blocked:** Finance-owner review F1–F4 supersedes the earlier48dd offline lifecycle qualification. Pinned Finance public CI05B settlement/release and exact native custody/intake adoption remain unavailable. New canonical `generate`/`edit` and direct new Finance admission/dispatch are unconditionally disabled; no configuration, registry ACK/boolean, credential or synthetic fixture enables them. Read/state/cancel and bounded already-committed-command recovery preserve durable evidence. Releasing this barrier requires the accepted public Finance release and exact independently reviewed consumer ACK.
+
 | Name | Owner / actual consumer | Purpose | Secret? | Required environments |
 | --- | --- | --- | --- | --- |
 | `APP_URL` | Application / orders, email and origin checks | This deployment's canonical origin; server appends the order return path | No | Live checkout; set Preview separately before hosted test checkout |
@@ -21,10 +23,10 @@ account eligibility and hosted verification remain distinct. No provider charge 
 | `GPT_IMAGE_ACCESS_MODE` | Development tooling / no deployed adapter | Subscription/API tooling preference; grants no deployed API entitlement | No | Development only; exclude from hosting requirements |
 | `OPENAI_API_KEY` | Application / direct provider | Server API credential; development subscription login is not this key | Yes | Direct OpenAI studio execution |
 | `TICKETSTUB_ART_OPENROUTER_API_KEY` | Application / studio provider | Independent studio credential | Yes | OpenRouter studio execution |
-| `TICKETSTUB_CREATIVE_CONFIG` | Application / canonical creative host | Grouped nonsecret environment, private volume paths and explicit image profile | No | Enabled canonical creative host |
-| `CREATIVE_ENGINE_OPENROUTER_API_KEY` | Host credential port / engine adapter | Dedicated creative identity; no studio/OpenAI fallback | Yes | Canonical creative image execution |
-| `TYPESAFE_API_KEY` | Host injection / harness DecisionPort / JEV transport | Dedicated TypeSafe server API credential | Yes | Canonical operations requesting JEV decisions |
-| `TICKETSTUB_FINANCE_DATABASE_URL` | Application pool / Finance SQL APIs | Restricted PostgreSQL runtime connection; verified TLS in Production | Yes | Enabled canonical creative host |
+| `TICKETSTUB_CREATIVE_CONFIG` | Application / canonical creative host | Grouped nonsecret environment, private volume paths and staged image profile | No | Enabled canonical creative host |
+| `CREATIVE_ENGINE_OPENROUTER_API_KEY` | Host credential port / engine adapter | Staged dedicated creative identity; no studio/OpenAI fallback or dispatch while gated | Yes | Canonical creative image execution |
+| `TYPESAFE_API_KEY` | Host injection / harness DecisionPort / JEV transport | Staged dedicated TypeSafe server API credential; no paid dispatch while gated | Yes | Canonical operations requesting JEV decisions |
+| `TICKETSTUB_FINANCE_DATABASE_URL` | Application pool / Finance SQL APIs | Restricted PostgreSQL recovery connection; verified TLS in Production; not an adoption grant | Yes | Enabled canonical creative host |
 | `CONTEXT_SECRET` | Application context issuer | Existing signed/current context authority | Yes | Live execution |
 | `ADMIN_EMAILS` | Application current membership | Staff commissioning; does not replace delegated Finance grants | No, private metadata | Commissioning environments |
 | `TICKETSTUB_DB`, `TICKETSTUB_FILES` | Application storage | Durable sessions/ownership/quotas and images | No, private paths | Persistent deployments |
@@ -89,21 +91,11 @@ parses it once and passes explicit pg options; Production always verifies TLS ce
 connect/statement timeouts. URI `sslmode`, `ssl`, timeout overrides and TLS file parameters are rejected before
 pg parsing. Remove those query parameters when provisioning this host; they cannot weaken its TLS policy.
 
-The reviewed image profile can map complete essential usage to **estimated budget consumption** while retaining
-`provider_reported_unsettled` attribution. Missing dimensions retain the actual hold and withhold publication.
-JEV counter valuation uses SQL `estimateV2`, not local token-price arithmetic. Its version1 receipt projection
-keeps the genuine schema2 quote identity/hash and actual tariff refs; it never relabels a RateCard. Provider invoice
-reconciliation remains separate. Unknown holds, private attribution and usage queues survive restarts.
+The earlier image usage, Finance-compatible UUID/model label and PricingEstimateReceipt projections are unaccepted historical compatibility proposals. They no longer submit new intake, settle/release the lower engine, allocate new projection identities or upgrade profile-mapping-pending counters to financial completeness. Preserve their original evidence, but do not treat a profile/registry field or matching hash as owner acceptance. Provider-reported unsettled cost and tariff estimates do not establish financial finality. The accepted native identity/custody, pricing dimension and atomic public lifecycle are owner dependencies, not a runtime option.
 
-The pinned shared `UsageEvent` schema cannot represent OpenRouter slash selectors or CE's opaque observation
-IDs directly. A reviewed image mapping therefore explicitly names `finance_model_compatibility_id` beside the
-actual `model_id`; neither is inferred from a default or used to select another model. The private immutable
-`CreativeFinanceUsageProjection` binds both identities, the allocated Finance UUID, original CE observation,
-attempt/transport/target, mapping bytes/hash and owner evidence. SQL usage source references link that projection
-and original observation. Only disjoint input/output counters enter Finance's privacy vocabulary; redundant
-totals stay in CE attribution. Missing/mismatched mapping or a corrupt receipt retains the hold. This is an
-explicit compatibility agreement awaiting production owner acceptance, not a change to the shared contract.
-Existing quarantined usage stays immutable; this host does not overwrite it or blindly resend an unknown attempt.
+Actual historical intake `accepted`/`duplicate` with durableCommit preserves intake/outbox work, not posted expense or completed atomic settlement. Pending/retry outboxes remain recoverable holds. This host performs no new expense posting, quote delivery, outbox drain or financial release while the custody/lifecycle gate is closed. Original observations, commands, receipts and unknown holds remain durable; do not overwrite quarantine or blindly resend a provider request.
+
+Current recovery compares the complete held/current service/source/policy and account/project/grant/model/operation record after asynchronous digests, owner SQL reads and exact dispatch replay. It also repeats the existing storage-owned synchronous session/staff/revision/ownership check. Missing/partial old custody is unavailable. A new dispatch cannot be appended: recovery requires an existing dispatched owner state at a revision newer than the persisted command, then the exact owner `replay` outcome with matching reservation/revision/hold. New, missing and divergent commands remain held. Settlement/release stay unavailable until the accepted public contract; no estimate/counter or locally registered request digest supplies finality.
 
 These delegated service records authorize only the listed creative Finance operations. They grant no Dashboard
 read/export capabilities and do not approve the separate `/2` Finance namespace proposals. The deployed customer
@@ -111,16 +103,15 @@ studio still uses its existing image path; customer creative commissioning requi
 journey. A repeated running creative job returns HTTP202 with its existing job reference and no published result.
 
 Configuration/profile/environment/DB connection changes and credential rotation require a process restart.
-The host refuses opening two different configurations on the same active creative database. Current creative
-main does not qualify multiprocess publication; separate CE PR50 remains its owner's work. Within one host
+The host refuses opening two different configurations on the same active creative database. The pinned creative
+source does not qualify multiprocess publication; separate CE PR50 remains its owner's work. Within one host
 process, every request uses the same store-owned adapter/controller and serialization queue. Request-specific
 actor, registry, planning, credential and cancellation closures are rebuilt for each request. Private Finance
 mapping writes refuse an active owner publication transaction; they never join a different request's transaction.
 
 ## Dependency order, hosting changes and rollback
 
-1. Review/land the creative-engine target-preparation/DecisionPort helper change, then the harness public
-   DecisionPort/development driver. The application pins **exact reviewed SHAs** in its existing vendor manifests.
+1. **Finance first:** coordinate the accepted released public intake/custody and atomic settlement/unused-release lifecycle, then obtain the exact Product consumer ACK after money/supervisor review. Do not deploy or toggle the paid host in the interim. Preserve the accepted creative-engine/harness dependency order. The application pins **exact reviewed SHAs** in its existing vendor manifests.
    Current draft pins: creative `e4fa66488f31577f516b27238e945a1fb3c2143f`, harness
    `fd4eaf2a54cb68740c960d5e061d4c4b11e79251`, Finance `a08760e9ea65bda1e116867ac00b3e03d737bb7e`.
    Final deployment requires the independently reviewed exact heads. Refresh scripts preserve harness observability.
@@ -131,10 +122,8 @@ mapping writes refuse an active owner publication transaction; they never join a
    It must report zero required skips. The default `npm test` skips this engine-owning test and cannot qualify
    the assembly alone. CI separately pulls that exact image and runs the mandatory command. The test creates
    and removes its own disposable container, applies all ten pinned migrations and uses a restricted runtime login.
-   Delegation/eligibility/Research/usage policy/tariff records and provider pixels/costs are synthetic external
-   fixtures; application session, CE/C03/harness, SQL authority/intake/pricing and artifact storage are real.
-3. Provision isolated private volumes, restricted Finance/TLS access, current owner delegation, accepted profiles/
-   tariffs and account eligibility/limits. Keep creative execution off until these exist.
+   The new suite qualifies unavailable/recovery behavior only: actual application session/read state and owner SQL, zero new Product admissions/provider writes/artifacts, exact already-committed dispatch replay, custody changes and durable pending/retry holds. Owner fixture records/IDs remain synthetic, never acceptance. Earlier48dd provider/artifact evidence remains preserved but superseded for Finance compatibility.
+3. Keep the unconditional paid lifecycle barrier until the released owner contract, native custody/intake/finality semantics and exact consumer ACK exist. Then provision isolated private volumes, restricted Finance/TLS access, actual current delegation/tariffs/account eligibility. Provisioning alone cannot enable the old pinned lifecycle.
 4. An authorized Preview publication installs supported code/config before removals and corrects Preview `APP_URL`.
    Qualify sharp0.35.5 on the actual GoDaddy Node22 host using saved offline PNG/JPEG/WebP through the owned
    inspector. Local installation is not hosted native-codec qualification.
@@ -142,7 +131,7 @@ mapping writes refuse an active owner publication transaction; they never join a
    restore only the four public Preview overrides in two saves, restart Preview, and verify fresh sessions against
    separate properties. Preserve unrelated settings. The fourth override is `TICKETSTUB_OPS_ENVIRONMENT`; verify
    the creative environment mapping after restoration.
-6. With separate explicit authorization/budgets, execute staff-owned brief/generate/edit/decision/cancel/recovery
+6. Only after the accepted released Finance contract and exact consumer ACK, with separate explicit authorization/budgets, execute staff-owned brief/generate/edit/decision/cancel/recovery
    journeys in Preview and verify real reservations, usage-or-unknown observations and immutable artifacts.
    Production needs its separate account/policy/host evidence. Do not close issues from local tests.
 
@@ -161,7 +150,7 @@ Finance PostgreSQL ledger/reservations, unknown holds, private attribution and u
 Never reset them to make rollback appear clean. Restore legacy aliases only for a consumer that needs them;
 do not restore the unused Dodo setting. Any authorized rollback publication also requires the Preview analytics gate.
 
-Remaining live evidence: owner service/customer delegation and mapping/projection agreements; real Finance
+Mandatory adoption blocker: accepted released public Finance intake/custody, atomic settlement/unused-release/finality contract and exact independent Product consumer ACK. Remaining live evidence: owner service/customer delegation; real Finance
 network/TLS/policies/tariffs; hosted native codec; model/account/quota eligibility and key limits; authorized paid
 journeys; hosted origin/analytics isolation; durable recovery and multiprocess qualification. Offline tests seed
 external records and intercept transport; they prove code behavior, not these live gates.

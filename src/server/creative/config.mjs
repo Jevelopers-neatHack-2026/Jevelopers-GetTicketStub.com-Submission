@@ -5,7 +5,9 @@ import { canonicalHash } from "creative-engine/contracts";
 
 export class CreativeHostError extends Error {
   constructor(code = "creative_configuration_unavailable", status = 503) {
-    super("Creative execution is unavailable until its trusted host configuration is complete.");
+    super(code === "creative_finance_lifecycle_unavailable"
+      ? "Creative execution is unavailable until the Finance lifecycle and consumer custody interface are accepted."
+      : "Creative execution is unavailable until its trusted host configuration is complete.");
     this.name = "CreativeHostError";
     this.code = code;
     this.status = status;

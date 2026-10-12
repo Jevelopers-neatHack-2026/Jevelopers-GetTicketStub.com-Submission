@@ -13,7 +13,7 @@ import { getRequestContext, requireCreativeCommissioningContext, assertCreativeC
 import { HttpError } from "../http";
 import { deployedCommit } from "../commit";
 import { creativeHostConfig, currentProjectAuthority, providerCredentialPort, financeConnectionOptions, CreativeHostError } from "./config.mjs";
-import { createCreativeFinance, initializeCreativeFinanceMapping } from "./finance.mjs";
+import { createCreativeFinance, initializeCreativeFinanceMapping, requireCreativeFinanceLifecycle } from "./finance.mjs";
 import ceManifest from "../vendor/creative-engine/MANIFEST.json" with { type: "json" };
 import ciManifest from "../vendor/cost-intelligence/MANIFEST.json" with { type: "json" };
 import harnessManifest from "../vendor/agent-harness/MANIFEST.json" with { type: "json" };
@@ -32,10 +32,10 @@ function hostSlot(config, env) {
     // Configuration and connection rotation require a process restart. Keep
     // the qualified single-connection CE publication boundary intact.
     if ([...slots.values()].some((existing) => existing.databasePath === config.database_path)) fail();
-    const pool = new Pool(financeConnectionOptions(env.TICKETSTUB_FINANCE_DATABASE_URL, config.environment));
+    const pool = env.TICKETSTUB_FINANCE_DATABASE_URL?.trim() ? new Pool(financeConnectionOptions(env.TICKETSTUB_FINANCE_DATABASE_URL, config.environment)) : null;
     // Pool errors are content-free. Never log the connection URL or a driver's
     // error object, which can include connection parameters.
-    pool.on("error", () => {});
+    pool?.on("error", () => {});
     const store = new CreativeVersionStore({ databasePath: config.database_path, objectRoot: config.object_root });
     initializeCreativeFinanceMapping(store.db);
     // One owner adapter/controller/serialization queue for this physical
@@ -80,7 +80,7 @@ export async function creativeHostForRequest(req, applicationProjectId, env = pr
     return fresh;
   };
   const slot = hostSlot(config, env);
-  const finance = createCreativeFinance({ database: slot.store.db, pool: slot.pool, authority, currentContext,
+  const finance = createCreativeFinance({ database: slot.store.db, pool: slot.pool, authority, currentContext, assertCurrentContext: assertAuthorityCurrent,
     environment: config.environment, sourceRevision: applicationCommit });
   const capability = (input) => {
     const record = authority(); const access = record.image_access;
@@ -185,6 +185,9 @@ export async function creativeHostForRequest(req, applicationProjectId, env = pr
         throw new HttpError(400, "invalid_request", "Send a creative operation and its existing project references.");
       }
       await currentContext(); const record = authority();
+      // Finance-first: no registry, environment, key or offline fixture can
+      // approve the unaccepted public lifecycle of the current pinned owner.
+      if (["generate", "edit"].includes(body.operation)) requireCreativeFinanceLifecycle();
       if (body.payload.brief_id !== undefined && body.payload.brief_id !== record.brief_id) throw new HttpError(403, "scope_denied", "That brief is outside this project.");
       const occurred_at = new Date().toISOString();
       const principal = { actor_id: `account:${actorId}`, tenant_id: record.tenant_id, project_id: record.project_id,
@@ -198,6 +201,6 @@ export async function creativeHostForRequest(req, applicationProjectId, env = pr
     // Private lifecycle for offline host tests and controlled process shutdown;
     // neither is part of a browser response.
     store: slot.store,
-    async close() { slots.delete(slot.identity); slot.store.close(); await slot.pool.end(); },
+    async close() { slots.delete(slot.identity); slot.store.close(); await slot.pool?.end(); },
   };
 }
