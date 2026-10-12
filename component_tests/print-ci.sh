@@ -60,7 +60,8 @@ container="$(docker create --platform linux/amd64 --init \
   --env "IE_PRINT_RUNTIME=$IE_PRINT_EVIDENCE/node-runtime.json" \
   --env IE_PRINT_BROWSER_ROOT=/ms-playwright --env "IE_PRINT_EVIDENCE=$IE_PRINT_EVIDENCE" \
   --workdir "$repository" "$image" "$repository/.venv/bin/python" \
-  -m pytest component_tests/test_print.py -o cache_dir=/tmp/print-cache \
+  -m pytest component_tests/test_print_containment.py component_tests/test_print.py \
+  -o cache_dir=/tmp/print-cache \
   --junitxml="$IE_PRINT_EVIDENCE/component-junit.xml")"
 trap 'docker rm --force "$container" >/dev/null' EXIT
 inspect() {
