@@ -1,5 +1,6 @@
 import { executeMeteredAttempt, MeteringContractError, validateMeteredAttempt, validateUsageObservation } from "../contracts/metering.mjs";
 import { canonicalSerialize } from "../contracts/validation.mjs";
+import { snapshotBoundedPlainJson } from "../contracts/plain-json.mjs";
 import { assertSafePublicIdentifier, isSensitivePublicField, projectPublicTelemetry, TelemetryPrivacyError } from "./privacy.mjs";
 
 export const CREATIVE_TELEMETRY_SCHEMA = "creative.telemetry.evidence/v1";
@@ -205,7 +206,7 @@ async function appendEvidence(port, event) {
 }
 
 function bindMeteringPort(port, capture, { observationOutbox, attempt, trustedScope,
-  onReservation, reservationTransportId }) {
+  onReservation, reservationTransportId, executionTarget }) {
   const methods = [
     "reserveAttempt", "releaseBeforeDispatch", "markAttemptInFlight", "recordTransportAttempt",
     "recordUsageObservation", "settleReservation", "markOutcomeUnknown",
@@ -219,6 +220,9 @@ function bindMeteringPort(port, capture, { observationOutbox, attempt, trustedSc
     Object.defineProperty(proxy, method, {
       enumerable: true,
       value: async (...args) => {
+        if (method === "reserveAttempt" && executionTarget) {
+          args.push(Object.freeze({ ...executionTarget, transport_attempt_id: reservationTransportId }));
+        }
         let enqueuedObservation;
         if (method === "recordUsageObservation") {
           const input = args[0];
@@ -294,6 +298,24 @@ function bindMeteringPort(port, capture, { observationOutbox, attempt, trustedSc
     });
   }
   return proxy;
+}
+
+function snapshotExecutionTarget(value, attempt) {
+  if (value === undefined) return undefined;
+  try {
+    const snapshot = snapshotBoundedPlainJson(value);
+    if (Object.keys(snapshot).some((key) => !["target_binding", "target_binding_sha256", "deadline_at"].includes(key)) ||
+        !/^sha256:[a-f0-9]{64}$/.test(snapshot.target_binding_sha256) || !validTimestamp(snapshot.deadline_at)) throw new Error();
+    const serialized = canonicalSerialize(snapshot);
+    if (Buffer.byteLength(serialized, "utf8") > 1024 * 1024) throw new Error();
+    const captured = JSON.parse(serialized);
+    const target = captured.target_binding?.contract === "DecisionExecutionTarget"
+      ? captured.target_binding.request : captured.target_binding;
+    if (!target || target.tenant_id !== attempt.tenant_id || target.project_id !== attempt.project_id ||
+        target.billable_attempt_id !== attempt.billable_attempt_id || target.deadline_at !== captured.deadline_at ||
+        (target.model ?? target.model_policy?.model_id) !== attempt.provider.model) throw new Error();
+    return deepFreeze(captured);
+  } catch { throw new TelemetryBoundaryError("invalid_execution_target"); }
 }
 
 function deepFreeze(value) {
@@ -388,8 +410,10 @@ export async function executeCreativeMeteredAttempt({
   clock = () => new Date(),
   signal,
   onReservation,
+  executionTarget: rawExecutionTarget,
 }) {
   const attempt = validateAttemptSafely(request, trustedScope);
+  const executionTarget = snapshotExecutionTarget(rawExecutionTarget, attempt);
   safeAttempt(attempt);
   const evidence = evidencePort(rawEvidencePort);
   const safeModes = validateModes(modes);
@@ -427,15 +451,19 @@ export async function executeCreativeMeteredAttempt({
   await appendEvidence(evidence, intent);
   persistedEvidenceRefs.push(intent.event_id);
 
-  const reservationTransportId = typeof onReservation === "function" ? nextId("transport") : undefined;
+  const reservationTransportId = executionTarget || typeof onReservation === "function" ? nextId("transport") : undefined;
+  if (reservationTransportId && [attempt.logical_operation_id, attempt.billable_attempt_id].includes(reservationTransportId)) {
+    throw new TelemetryBoundaryError("duplicate_generated_identity");
+  }
   const captured = { reservationRef: undefined, observation: undefined, observationRef: undefined, lastHoldStatus: undefined };
   const meter = bindMeteringPort(meteringPort, captured, { observationOutbox, attempt, trustedScope,
-    onReservation, reservationTransportId });
+    onReservation, reservationTransportId, executionTarget });
   const transportIds = new Set();
   const authorizedTransports = new Map();
   let nextTransportId;
   const recordTransport = async (context, transportAttemptId) => {
     const safeTransportId = safeOptionalId(transportAttemptId, "transport_attempt_id");
+    if (executionTarget && safeTransportId !== reservationTransportId) throw new TelemetryBoundaryError("transport_target_mismatch");
     if (safeTransportId && authorizedTransports.has(safeTransportId)) {
       const dispatchIntentRef = authorizedTransports.get(safeTransportId);
       assertTransportActive(context.signal ?? signal);

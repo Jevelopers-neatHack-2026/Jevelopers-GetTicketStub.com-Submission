@@ -107,7 +107,12 @@ export interface HeldSettlement {
 }
 
 export interface MeteringPort {
-  reserveAttempt(attempt: MeteredAttemptRequest): Promise<ReservedAttempt | DeniedAttempt>;
+  reserveAttempt(attempt: MeteredAttemptRequest, executionTarget?: Readonly<{
+    target_binding: Readonly<Record<string, unknown>>;
+    target_binding_sha256: `sha256:${string}`;
+    deadline_at: string;
+    transport_attempt_id: string;
+  }>): Promise<ReservedAttempt | DeniedAttempt>;
   releaseBeforeDispatch(command: Record<string, unknown>): Promise<unknown>;
   markAttemptInFlight(command: Record<string, unknown>): Promise<{ status: 'in_flight'; reservation_id: string }>;
   recordTransportAttempt(command: Record<string, unknown>): Promise<unknown>;

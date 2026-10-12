@@ -1,6 +1,8 @@
 import {
   PINNED_JEV_MODEL_ID,
   planQuestionBatches,
+  planDecisionExecutionQuestionBatches,
+  decisionExecutionTarget,
   validateDecisionRequest,
   validateDecisionResult,
 } from "../contracts/decision-port/v1.mjs";
@@ -86,7 +88,7 @@ function snapshotDecisionContext(value, field, { route = false } = {}) {
   return context;
 }
 
-function requestFromContext(context, deterministic, { state, questions, sourceRefs }) {
+function requestFromContext(context, deterministic, { state, questions, sourceRefs, preparation = false }) {
   const request = {
     contract: "DecisionPortRequest",
     schema_version: "1.0",
@@ -121,7 +123,7 @@ function requestFromContext(context, deterministic, { state, questions, sourceRe
     ...(context.transport_attempt_id ? { transport_attempt_id: context.transport_attempt_id } : {}),
     ...(context.provider_request_id ? { provider_request_id: context.provider_request_id } : {}),
   };
-  try { validateDecisionRequest(request, { trustedScope: { tenant_id: deterministic.tenant_id, project_id: deterministic.project_id,
+  try { (preparation ? decisionExecutionTarget : validateDecisionRequest)(request, { trustedScope: { tenant_id: deterministic.tenant_id, project_id: deterministic.project_id,
     brief_id: deterministic.brief_id, design_version_id: deterministic.design_version_id, artifact_id: deterministic.artifact_id,
     ...(context.job_id ? { job_id: context.job_id } : {}) } }); }
   catch { fail("invalid_request", "decision_request", "Generated DecisionPort request failed its trusted scope or schema contract."); }
@@ -224,7 +226,7 @@ export function createInspectionRoutingInput(input) {
  * Build the creative-owned question definitions. Deterministic failures,
  * unknown permissions, and refusals do not reach this function's question set.
  */
-export function createInspectionDecisionPlan(input) {
+function inspectionDecisionPlan(input, preparation = false) {
   const deterministic = input?.deterministic;
   if (!isInspectionHandle(deterministic) || deterministic.contract !== "CreativeDeterministicInspection") {
     fail("invalid_request", "deterministic", "A validated deterministic inspection is required.");
@@ -244,7 +246,11 @@ export function createInspectionDecisionPlan(input) {
       reason: input.provider_status === "refused" ? "observer_refused" : "observer_unavailable" });
   }
   const observation = validateVisualObservation(input.observation, deterministic);
-  const context = snapshotDecisionContext(input.decision_context, "decision_context");
+  let context = snapshotDecisionContext(input.decision_context, "decision_context");
+  if (preparation) {
+    const { reservation_ref: _reservation, ...budget } = context.budget_ref;
+    context = deepFreeze({ ...context, budget_ref: budget });
+  }
   const eligibleActions = deterministic.eligible_repair_actions;
   const questions = inspectionQuestions(eligibleActions);
   const requestShape = {
@@ -281,7 +287,7 @@ export function createInspectionDecisionPlan(input) {
     ...(context.transport_attempt_id ? { transport_attempt_id: context.transport_attempt_id } : {}),
     ...(context.provider_request_id ? { provider_request_id: context.provider_request_id } : {}),
   };
-  const batches = planQuestionBatches(requestShape, { trustedScope: {
+  const batches = (preparation ? planDecisionExecutionQuestionBatches : planQuestionBatches)(requestShape, { trustedScope: {
     tenant_id: deterministic.tenant_id,
     project_id: deterministic.project_id,
     design_version_id: deterministic.design_version_id,
@@ -310,12 +316,16 @@ export function createInspectionDecisionPlan(input) {
     eligible_candidates: Object.freeze([...questions.next_step.eligible_candidate_ids]),
     decision_observation: deterministicDecisionObservation(observation),
   });
-  PLAN_METADATA.set(plan, { deterministic, scope, context, contextRef, observationRef, planRef,
+  PLAN_METADATA.set(plan, { deterministic, scope, context, contextRef, observationRef, planRef, preparation,
     subjectHash: expectedSubjectHash, policyVersion: INSPECTION_POLICY_VERSION,
     questionSchemaVersion: INSPECTION_QUESTION_SCHEMA_VERSION, modelId: context.model_policy.model_id,
     requestsByHash: new Map() });
   return plan;
 }
+
+export function createInspectionDecisionPlan(input) { return inspectionDecisionPlan(input); }
+/** Explicit preparation path; no reservation or transport identity is fabricated. */
+export function prepareInspectionDecisionPlan(input) { return inspectionDecisionPlan(input, true); }
 
 function firstStageQuestions(plan) {
   if (!PLAN_METADATA.has(plan) || plan.status !== "ready" || !Array.isArray(plan.first_stage_question_ids) || plan.first_stage_question_ids.length !== 2) {
@@ -329,7 +339,7 @@ function firstStageQuestions(plan) {
 }
 
 /** Prepare the independent first request fragment; prior answers are intentionally absent. */
-export function createInspectionEvidenceBatch(plan, observation) {
+function inspectionEvidenceBatch(plan, observation, preparation = false) {
   const metadata = PLAN_METADATA.get(plan);
   if (!metadata) fail("invalid_request", "question_plan", "A plan created by this module is required.");
   if (!observation || observation.contract !== "CreativeVisualObservation" ||
@@ -341,9 +351,27 @@ export function createInspectionEvidenceBatch(plan, observation) {
     state: Object.freeze({ observations: Object.freeze([decisionObservation]) }),
     questions: Object.freeze(firstStageQuestions(plan)),
     sourceRefs: Object.freeze([decisionObservation.source_ref, metadata.planRef, metadata.subjectHash]),
+    preparation,
   });
   registerRequest(plan, request, { plan, stage: "evidence", planRef: metadata.planRef,
     contextRef: metadata.contextRef, scope: metadata.scope });
+  return request;
+}
+
+export function createInspectionEvidenceBatch(plan, observation) { return inspectionEvidenceBatch(plan, observation); }
+export function prepareInspectionEvidenceBatch(plan, observation) { return inspectionEvidenceBatch(plan, observation, true); }
+
+/** Bind only the actual admitted C03 reservation to the exact owned prepared request. */
+export function bindInspectionDecisionReservation(plan, preparedRequest, reservationRef) {
+  const metadata = REQUEST_METADATA.get(preparedRequest);
+  if (!metadata || metadata.plan !== plan || Object.hasOwn(preparedRequest.budget_ref, "reservation_ref") ||
+      metadata.bound) fail("invalid_request", "prepared_decision", "A current module-prepared decision request is required.");
+  const request = deepFreeze({ ...preparedRequest, budget_ref: { ...preparedRequest.budget_ref, reservation_ref: reservationRef } });
+  try { validateDecisionRequest(request, { trustedScope: { ...metadata.scope,
+    ...(request.job_id ? { job_id: request.job_id } : {}) } }); }
+  catch { fail("invalid_request", "reservation_ref", "The final DecisionPort envelope requires its actual scoped reservation."); }
+  metadata.bound = true;
+  registerRequest(plan, request, metadata);
   return request;
 }
 
@@ -351,7 +379,7 @@ export function createInspectionEvidenceBatch(plan, observation) {
  * Validate stage one through C02 before exposing only normalized allowlisted
  * answers to the dependent route-choice request.
  */
-export function createInspectionRouteBatch(plan, firstRequest, firstResult, trustedScope, routeDecisionContext) {
+function inspectionRouteBatch(plan, firstRequest, firstResult, trustedScope, routeDecisionContext, preparation = false) {
   const metadata = PLAN_METADATA.get(plan);
   if (!metadata || plan.status !== "ready") fail("invalid_request", "question_plan", "Ready module-created question plan required.");
   if (!matchesInspectionScope(trustedScope, metadata.scope)) {
@@ -378,7 +406,11 @@ export function createInspectionRouteBatch(plan, firstRequest, firstResult, trus
   if (validated.status !== "complete") {
     return Object.freeze({ status: "review_required", reason: validated.status });
   }
-  const routeContext = snapshotDecisionContext(routeDecisionContext, "route_decision_context", { route: true });
+  let routeContext = snapshotDecisionContext(routeDecisionContext, "route_decision_context", { route: true });
+  if (preparation) {
+    const { reservation_ref: _reservation, ...budget } = routeContext.budget_ref;
+    routeContext = deepFreeze({ ...routeContext, budget_ref: budget });
+  }
   if (routeContext.linked_request_id !== firstRequest.request_id ||
     routeContext.linked_billable_attempt_id !== firstRequest.billable_attempt_id ||
     routeContext.plan_ref !== metadata.planRef || routeContext.inspection_subject_hash !== metadata.subjectHash ||
@@ -400,6 +432,7 @@ export function createInspectionRouteBatch(plan, firstRequest, firstResult, trus
     state: Object.freeze({ text: stateText }),
     questions: Object.freeze({ next_step: Object.freeze(routeQuestion) }),
     sourceRefs: Object.freeze([plan.decision_observation.source_ref, metadata.planRef, resultRef]),
+    preparation,
   });
   const routeContextRef = canonicalHash(routeContext);
   registerRequest(plan, request, { plan, stage: "route", planRef: metadata.planRef,
@@ -407,6 +440,9 @@ export function createInspectionRouteBatch(plan, firstRequest, firstResult, trus
     linkedFirstRequestRef: firstMetadata.requestRef, firstResultRef: resultRef });
   return request;
 }
+
+export function createInspectionRouteBatch(...args) { return inspectionRouteBatch(...args); }
+export function prepareInspectionRouteBatch(...args) { return inspectionRouteBatch(...args, true); }
 
 export function evaluateInspectionDecision(plan, firstRequest, firstResult, routeRequest, routeResult, trustedScope) {
   const metadata = PLAN_METADATA.get(plan);

@@ -1,5 +1,5 @@
 import type { CreativeBrief, DesignVersion, TrustedScope } from "../contracts/creative/v1.mjs";
-import type { DecisionPortRequest, DecisionPortResult, DecisionQuestion } from "../contracts/decision-port/v1.mjs";
+import type { DecisionPortRequest, DecisionPortResult, DecisionQuestion, UnreservedDecisionPortRequest } from "../contracts/decision-port/v1.mjs";
 
 export interface InspectionErrorShape {
   code: string;
@@ -162,6 +162,16 @@ export declare function createInspectionDecisionPlan(input: {
   provider_status?: "complete" | "refused" | "unavailable" | "timeout" | "cancelled";
   inspection_subject_hash?: string;
 }): InspectionQuestionPlanResult;
+export type UnreservedInspectionDecisionContext = Omit<InspectionDecisionContext, "budget_ref"> & {
+  budget_ref: UnreservedDecisionPortRequest["budget_ref"];
+};
+export declare function prepareInspectionDecisionPlan(input: Omit<Parameters<typeof createInspectionDecisionPlan>[0], "decision_context"> & {
+  decision_context: UnreservedInspectionDecisionContext;
+}): InspectionQuestionPlanResult;
+export declare function prepareInspectionEvidenceBatch(plan: InspectionQuestionPlan,
+  observation: CreativeVisualObservation): UnreservedDecisionPortRequest;
+export declare function bindInspectionDecisionReservation(plan: InspectionQuestionPlan,
+  preparedRequest: UnreservedDecisionPortRequest, reservationRef: string): DecisionPortRequest;
 export declare function createInspectionRoutingInput(input: {
   deterministic: DeterministicInspection;
   observation: CreativeVisualObservation;
@@ -183,6 +193,11 @@ export declare function createInspectionRouteBatch(
   routeDecisionContext: InspectionRouteDecisionContext,
 ): DecisionPortRequest |
   Readonly<{ status: "review_required"; reason: string }>;
+export declare function prepareInspectionRouteBatch(plan: InspectionQuestionPlan, firstRequest: DecisionPortRequest,
+  firstResult: DecisionPortResult, trustedScope: InspectionTrustedScope,
+  routeDecisionContext: UnreservedInspectionDecisionContext & Pick<InspectionRouteDecisionContext,
+    "linked_request_id" | "linked_billable_attempt_id" | "plan_ref" | "inspection_subject_hash">):
+  UnreservedDecisionPortRequest | Readonly<{ status: "review_required"; reason: string }>;
 export interface InspectionDecision {
   readonly status: "complete" | "review_required";
   readonly outcome: "acceptable_for_review" | "bounded_repair_recommended" | "needs_human_review";

@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { canonicalHash, canonicalSerialize, computeDesignVersionHash, ContractError } from "../../src/contracts/index.mjs";
+import { canonicalHash, canonicalSerialize, computeDesignVersionHash, ContractError, decisionExecutionTargetHash } from "../../src/contracts/index.mjs";
 import { ApprovalHandoffContractError, createConsumptionReceipt, hashCompositionLayerManifest } from "../../src/contracts/approval-handoff.mjs";
 import { FakeMeteringAuthority } from "../../fixtures/contracts/metering/fake-authority.mjs";
 import { MeteringContractError } from "../../src/contracts/metering.mjs";
@@ -1975,6 +1975,63 @@ test("decision execution binds the exact reserved attempt and uses the pinned JE
   assert.equal(harness.state.calls.reserve, 2);
   assert.equal(harness.state.calls.usage.length, 2);
   assert.equal(harness.state.authority.reservations.has(harness.state.calls.decisionReservationRefs[0]), true);
+});
+
+test("normal DecisionPort target is admitted before reservation and forwarded outside its canonical result", async () => {
+  await loadPlans();
+  const h = await setup({ withDesign: false });
+  let admitted;
+  const reserve = h.ports.metering.reserveAttempt;
+  h.ports.metering.reserveAttempt = async (attempt, target) => {
+    if (attempt.operation_kind === "jev_decision") {
+      admitted = target;
+      assert.equal(Object.hasOwn(target.target_binding.request.budget_ref, "reservation_ref"), false);
+      assert.equal(target.target_binding.request.billable_attempt_id, attempt.billable_attempt_id);
+    }
+    return reserve(attempt);
+  };
+  const execute = h.ports.decisionPort.execute;
+  h.ports.decisionPort.execute = async input => {
+    assert.equal(input.target_binding_sha256, admitted.target_binding_sha256);
+    assert.equal(decisionExecutionTargetHash(input.request), admitted.target_binding_sha256);
+    assert.equal(input.transport_attempt_id, admitted.transport_attempt_id);
+    assert.equal(input.assertDispatchCurrent(), input.dispatch_intent_ref);
+    const value = await execute(input);
+    assert.equal(Object.hasOwn(value, "target_binding_sha256"), false);
+    return value;
+  };
+  const body = generationRequest("normal-decision-target"); body.payload.decision_request = validDecisionInput();
+  const response = await h.api.invoke(actor(), body);
+  assert.equal(response.ok, true, JSON.stringify(response));
+  assert.equal(h.state.calls.decision, 1);
+});
+
+test("both actual inspection DecisionPort consumers forward their admitted stable target and final owner fence", async () => {
+  await loadPlans();
+  const h = await setup();
+  const targets = new Map();
+  const reserve = h.ports.metering.reserveAttempt;
+  h.ports.metering.reserveAttempt = async (attempt, target) => {
+    if (attempt.operation_kind === "jev_decision") targets.set(attempt.billable_attempt_id, target);
+    return reserve(attempt);
+  };
+  const execute = h.ports.decisionPort.execute;
+  let decisions = 0;
+  h.ports.decisionPort.execute = async input => {
+    decisions++;
+    const target = targets.get(input.attempt.billable_attempt_id);
+    assert.equal(input.target_binding_sha256, target.target_binding_sha256);
+    assert.equal(decisionExecutionTargetHash(input.request), target.target_binding_sha256);
+    assert.equal(input.transport_attempt_id, target.transport_attempt_id);
+    assert.equal(input.assertDispatchCurrent(), input.dispatch_intent_ref);
+    return execute(input);
+  };
+  const response = await h.api.invoke(actor(), request("inspect", {
+    brief_id: "brief-api-1", design_version_id: "design-api-1",
+  }, "inspect-prepared-targets"));
+  assert.equal(response.ok, true, JSON.stringify(response));
+  assert.equal(decisions, 2);
+  assert.equal(targets.size, 2);
 });
 
 test("inspection receives a declared initial transport ID and usage can omit it", async () => {

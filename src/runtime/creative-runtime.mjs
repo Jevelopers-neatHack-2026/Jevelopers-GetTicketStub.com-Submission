@@ -14,6 +14,8 @@ import { OpenAIImagesProviderError, inspectOpenAIImageBytes, readPrivateOpenAIIm
 import {
   validateDecisionRequest,
   validateDecisionResult,
+  decisionExecutionTarget,
+  decisionExecutionTargetHash,
   PINNED_JEV_MODEL_ID,
 } from "../contracts/decision-port/v1.mjs";
 import {
@@ -57,6 +59,10 @@ import {
   createInspectionEvidenceBatch,
   createInspectionReport,
   createInspectionRouteBatch,
+  prepareInspectionDecisionPlan,
+  prepareInspectionEvidenceBatch,
+  prepareInspectionRouteBatch,
+  bindInspectionDecisionReservation,
   createInspectionRoutingInput,
   deterministicDecisionObservation,
   evaluateInspectionDecision,
@@ -2733,7 +2739,7 @@ export function createCreativeApi(options = {}) {
 
   async function runMetered(principal, request, started, operationKind, route, portPath, invokePort, preDispatchGuard,
     contextFence, { allowTerminalFailure = false, allowUnknownOutcome = false,
-      logicalOperationId = request.action_id, maximumDeadlineAt, onReservation } = {}) {
+      logicalOperationId = request.action_id, maximumDeadlineAt, onReservation, prepareAttempt } = {}) {
     if (preDispatchGuard) await preDispatchGuard();
     requiredPort(ports, "metering.reserveAttempt", request.operation);
     const telemetry = ports.telemetry;
@@ -2933,7 +2939,41 @@ export function createCreativeApi(options = {}) {
     let evidenceRefs = [];
     let observationRef;
     let telemetryEvidence;
+    let preparedExecution;
     try {
+      if (typeof prepareAttempt === "function") {
+        let abortListener;
+        try {
+          preparedExecution = await Promise.race([
+            Promise.resolve().then(() => prepareAttempt(Object.freeze({ attempt, route: checkedRoute,
+              signal: deadline.signal, deadline_at: deadline.deadline_at }))),
+            new Promise((_, reject) => {
+              abortListener = () => reject(new CreativeApiError("cancelled", request.operation, "preparation"));
+              if (deadline.signal.aborted) abortListener();
+              else deadline.signal.addEventListener("abort", abortListener, { once: true });
+            }),
+          ]);
+        } finally {
+          if (abortListener) deadline.signal.removeEventListener("abort", abortListener);
+        }
+        await checkDispatchFence();
+        assertFinalDispatchEligibility(deadline.signal);
+        const currentJob = await requiredPort(ports, "jobs.get", request.operation)(Object.freeze({
+          scope: started.scope, job_id: started.job_id }));
+        assertScopedRecord(currentJob, started.scope, request.operation);
+        if (currentJob.job_id !== started.job_id || currentJob.actor_id !== principal.actor_id ||
+            currentJob.action_id !== request.action_id || currentJob.request_hash !== started.request_hash ||
+            currentJob.status !== "running") {
+          throw new CreativeApiError(currentJob.status === "cancelled" ? "cancelled" : "stale_version",
+            request.operation, "prepared_execution_job");
+        }
+        assertFinalDispatchEligibility(deadline.signal);
+        if (!isRecord(preparedExecution) || !isRecord(preparedExecution.target_binding) ||
+            !/^sha256:[a-f0-9]{64}$/.test(preparedExecution.target_binding_sha256) ||
+            preparedExecution.deadline_at !== deadline.deadline_at) {
+          throw new CreativeApiError("unavailable", request.operation, "prepared_execution_target");
+        }
+      }
       const telemetryResult = await executeCreativeMeteredAttempt({
       meteringPort: metering,
       evidencePort: telemetry.outbox,
@@ -2944,6 +2984,9 @@ export function createCreativeApi(options = {}) {
       idFactory,
       clock: () => new Date(now()),
       signal: deadline.signal,
+      ...(preparedExecution ? { executionTarget: { target_binding: preparedExecution.target_binding,
+        target_binding_sha256: preparedExecution.target_binding_sha256,
+        deadline_at: preparedExecution.deadline_at } } : {}),
       authorizeTransport: async ({ transport_attempt_id, reservation_ref }) =>
         authorizeTransport(transport_attempt_id, reservation_ref),
       revalidateTransport,
@@ -2964,6 +3007,7 @@ export function createCreativeApi(options = {}) {
           deadline_at: deadline.deadline_at,
           transportAttemptId,
           dispatch_intent_ref,
+          prepared_execution: preparedExecution,
           async recordTransportAttempt(transportId) {
             boundedString(transportId, "transport_attempt_id", 256);
             if (dispatchContext.signal?.aborted) throw new CreativeApiError("cancelled", request.operation, "deadline");
@@ -3041,7 +3085,8 @@ export function createCreativeApi(options = {}) {
         const mappedUsage = await usageObservation({ attempt: dispatchContext.attempt,
           trustedScope: meteredTrustedScope(principal), rawUsage, profile: usageProfile, transportAttemptId,
           idFactory, usageProfileAuthority: telemetry.usage_profile_authority,
-          targetBindingSha256: dispatched?.value?.target_binding_sha256, reservationRef: dispatchContext.reservation_ref,
+          targetBindingSha256: preparedExecution?.target_binding_sha256 ?? dispatched?.value?.target_binding_sha256,
+          reservationRef: dispatchContext.reservation_ref,
           dispatchIntentRef: dispatch_intent_ref, providerOutcome: dispatched?.provider_outcome ?? "succeeded" });
         return { provider_outcome: dispatched?.provider_outcome ?? "succeeded",
           usage_observation: await finishUsageMapping(dispatchContext, mappedUsage) };
@@ -3133,9 +3178,8 @@ export function createCreativeApi(options = {}) {
       assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
       return Object.freeze([]);
     };
-    const result = await runMetered(principal, request, started, "jev_decision", route, "decisionPort.execute",
-      async ({ method, attempt, reservation_ref, signal, deadline_at, transportAttemptId, dispatch_intent_ref,
-        recordTransportAttempt, revalidateDispatch, setDecisionRequest }) => {
+    const decisionScope = { ...started.scope, job_id: started.job_id };
+    const prepareDecision = ({ attempt, deadline_at }) => {
         const timestamp = new Date(now()).toISOString();
         const boundRequest = {
           contract: "DecisionPortRequest",
@@ -3157,7 +3201,6 @@ export function createCreativeApi(options = {}) {
           attempt_limit: 1,
           budget_ref: {
             budget_scope_ref: principal.budget_scope_id,
-            reservation_ref,
             policy_version: principal.budget_policy_version,
           },
           deadline_at,
@@ -3168,20 +3211,34 @@ export function createCreativeApi(options = {}) {
           questions: input.questions,
           job_id: started.job_id,
         };
+      const target_binding = decisionExecutionTarget(boundRequest, { trustedScope: decisionScope });
+      return Object.freeze({ target_binding, target_binding_sha256: decisionExecutionTargetHash(boundRequest,
+        { trustedScope: decisionScope }), deadline_at });
+    };
+    const result = await runMetered(principal, request, started, "jev_decision", route, "decisionPort.execute",
+      async ({ method, attempt, reservation_ref, signal, deadline_at, transportAttemptId, dispatch_intent_ref,
+        recordTransportAttempt, revalidateDispatch, assertDispatchCurrent, setDecisionRequest, prepared_execution }) => {
+        const target_binding_sha256 = prepared_execution.target_binding_sha256;
+        const unreserved = prepared_execution.target_binding.request;
+        const boundRequest = { ...unreserved, budget_ref: { ...unreserved.budget_ref, reservation_ref } };
         let validated;
-        // DecisionPort envelopes carry job_id. Bind that optional reference to
-        // the job identity allocated by the trusted idempotency port.
-        const decisionScope = { ...started.scope, job_id: started.job_id };
-        try { validated = validateDecisionRequest(boundRequest, { trustedScope: decisionScope }); }
-        catch (error) { throw safeError(error, request.operation); }
+        try {
+          validated = validateDecisionRequest(boundRequest, { trustedScope: decisionScope });
+          if (decisionExecutionTargetHash(validated, { trustedScope: decisionScope }) !== target_binding_sha256) {
+            throw new CreativeApiError("unavailable", request.operation, "decision_execution_target");
+          }
+        } catch (error) { throw safeError(error, request.operation); }
         setDecisionRequest(validated);
         const raw = await method(Object.freeze({ scope: started.scope, actor_id: principal.actor_id,
           request: validated, attempt, reservation_ref, transport_attempt_id: transportAttemptId,
-          dispatch_intent_ref, recordTransportAttempt, revalidateDispatch, signal, deadline_at }));
-        return { value: raw, usage: raw?.usage, provider_outcome: raw?.status === "complete" || raw?.status === "review" ? "succeeded" : "failed" };
+          dispatch_intent_ref, target_binding_sha256, recordTransportAttempt, revalidateDispatch,
+          assertDispatchCurrent, signal, deadline_at }));
+        return { value: raw, usage: raw?.usage,
+          provider_outcome: raw?.status === "complete" || raw?.status === "review" ? "succeeded" : "failed" };
       }, assertDecisionContext,
       creativeContextFence(brief, baseDesign, expectedCurrentDesignVersionId, expectedCurrentDesignHash,
-        repairAuthorization ? { inspection_repair: repairAuthorization.proof } : undefined));
+        repairAuthorization ? { inspection_repair: repairAuthorization.proof } : undefined),
+      { prepareAttempt: prepareDecision });
     if (!result.decision_request) throw new CreativeApiError("unavailable", request.operation, "decision_request");
     let validated;
     try { validated = validateDecisionResult(result.decision_request, result.value, {
@@ -3292,15 +3349,19 @@ export function createCreativeApi(options = {}) {
         ? requiredPort(ports, "jobs.recordPrivateProviderUsageAttribution", operation) : undefined;
       const privateAttributionPendingPort = imageProviderRoute(route.provider.name) !== undefined
         ? requiredPort(ports, "jobs.stagePrivateProviderAttribution", operation) : undefined;
+      const prepareImage = typeof ports.provider?.prepareAttempt === "function"
+        ? requiredPort(ports, "provider.prepareAttempt", operation) : undefined;
       const metered = await runMetered(principal, request, started, operation === "generate" ? "image_generation" : "image_edit", route, method,
       async ({ method: dispatch, scope, actor_id, started: job, route: resolved, attempt, signal, deadline_at,
-        reservation_ref, transportAttemptId, dispatch_intent_ref, recordTransportAttempt, revalidateDispatch }) => {
+        reservation_ref, transportAttemptId, dispatch_intent_ref, recordTransportAttempt, revalidateDispatch, assertDispatchCurrent, prepared_execution }) => {
         const value = await dispatch(Object.freeze({ scope: started.scope, actor_id: principal.actor_id,
           job_id: started.job_id, attempt, route: resolved, brief, base_design: baseDesign, plan,
           ...(currentReferenceManifest ? { image_reference_manifest: currentReferenceManifest } : {}),
           decision_result: decisionResult, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
+          ...(prepared_execution ? { prepared_attempt: prepared_execution } : {}),
           recordTransportAttempt,
           revalidateDispatch,
+          assertDispatchCurrent,
           ...(typeof privateAttributionPort === "function" ? {
             async recordPrivateProviderRequestId(attribution) {
               if (!isRecord(attribution) || typeof attribution.provider_request_id !== "string" ||
@@ -3429,7 +3490,12 @@ export function createCreativeApi(options = {}) {
         return { value, usage: value?.usage, provider_outcome: "succeeded" };
       }, assertImageContext,
       creativeContextFence(brief, baseDesign, expectedCurrentDesignVersionId, expectedCurrentDesignHash,
-        repairAuthorization ? { inspection_repair: repairAuthorization.proof } : undefined));
+        repairAuthorization ? { inspection_repair: repairAuthorization.proof } : undefined),
+      prepareImage ? { prepareAttempt: ({ attempt, signal, deadline_at }) => prepareImage(Object.freeze({
+        operation, scope: started.scope, actor_id: principal.actor_id, job_id: started.job_id, attempt,
+        brief, base_design: baseDesign, plan, decision_result: decisionResult,
+        ...(currentReferenceManifest ? { image_reference_manifest: currentReferenceManifest } : {}), signal, deadline_at,
+      })) } : {});
     const finalRightsProofs = await assertImageContext();
     const generated = metered.value;
     const usage = normalizeUsage(generated?.usage);
@@ -3616,9 +3682,16 @@ export function createCreativeApi(options = {}) {
       "request_id", "logical_operation_id", "billable_attempt_id", "attempt_number", "attempt_limit", "budget_ref", "deadline_at",
       "cancellation_ref", "model_policy", "workflow_id", "run_id", "order_id", "job_id", "transport_attempt_id", "provider_request_id"];
     const firstContext = Object.fromEntries(Object.entries(firstRequest).filter(([key]) => contextKeys.includes(key)));
-    const plan = createInspectionDecisionPlan({ deterministic, observation, decision_context: firstContext });
+    const preparedFirstStage = firstStage.intent.target_binding_sha256 !== undefined;
+    const plan = (preparedFirstStage ? prepareInspectionDecisionPlan : createInspectionDecisionPlan)({ deterministic,
+      observation, decision_context: firstContext });
+    const expectedFirst = plan.status === "ready" ? preparedFirstStage
+      ? bindInspectionDecisionReservation(plan, prepareInspectionEvidenceBatch(plan, observation),
+        firstRequest.budget_ref.reservation_ref)
+      : createInspectionEvidenceBatch(plan, observation) : null;
     if (plan.status !== "ready" || plan.plan_ref !== firstStage.intent.plan_ref ||
-      canonicalHash(createInspectionEvidenceBatch(plan, observation)) !== canonicalHash(firstRequest)) {
+      canonicalHash(expectedFirst) !== canonicalHash(firstRequest) || preparedFirstStage &&
+      decisionExecutionTargetHash(firstRequest) !== firstStage.intent.target_binding_sha256) {
       throw new CreativeApiError("unavailable", "edit", "inspection_repair.decision_plan");
     }
     const trustedInspectionScope = Object.freeze({ ...started.scope, brief_id: brief.brief_id,
@@ -3637,8 +3710,13 @@ export function createCreativeApi(options = {}) {
     const routeContext = { ...Object.fromEntries(Object.entries(routeRequest).filter(([key]) => contextKeys.includes(key))),
       linked_request_id: firstRequest.request_id, linked_billable_attempt_id: firstRequest.billable_attempt_id,
       plan_ref: plan.plan_ref, inspection_subject_hash: subjectHash };
-    const expectedRoute = createInspectionRouteBatch(plan, firstRequest, checkedFirst, trustedInspectionScope, routeContext);
-    if (!isRecord(expectedRoute) || canonicalHash(expectedRoute) !== canonicalHash(routeRequest)) {
+    const preparedRouteStage = routeStage.intent.target_binding_sha256 !== undefined;
+    const unboundRoute = (preparedRouteStage ? prepareInspectionRouteBatch : createInspectionRouteBatch)(plan,
+      firstRequest, checkedFirst, trustedInspectionScope, routeContext);
+    const expectedRoute = preparedRouteStage ? bindInspectionDecisionReservation(plan, unboundRoute,
+      routeRequest.budget_ref.reservation_ref) : unboundRoute;
+    if (!isRecord(expectedRoute) || canonicalHash(expectedRoute) !== canonicalHash(routeRequest) ||
+      preparedRouteStage && decisionExecutionTargetHash(routeRequest) !== routeStage.intent.target_binding_sha256) {
       throw new CreativeApiError("unavailable", "edit", "inspection_repair.decision_provenance");
     }
     const checkedRoute = validateDecisionResult(routeRequest, routeResult, { trustedScope: trustedInspectionScope });
@@ -4106,27 +4184,8 @@ export function createCreativeApi(options = {}) {
       };
     };
 
-    const dispatchSlot = async (conceptId) => {
-      let slot = batch.slots.find((item) => item.concept_id === conceptId);
-      if (!slot || !["pending", "failed"].includes(slot.status) || dispatchCount() >= 2 || batchHasNativeHardStop() ||
-          slot.status === "failed" && slot.attempts.at(-1)?.latest_provider_outcome === "failed" &&
-            !hasEligibleSettledFailure(slot)) return false;
-      assertPolicyCurrent(batch.policy_snapshot);
-      await assertConceptCurrent();
-      let reservationCapture;
-      let metered;
-      try {
-        metered = await runMetered(principal, request, started, "image_edit", route, "provider.edit",
-          async ({ method, attempt, reservation_ref, signal, deadline_at, transportAttemptId, dispatch_intent_ref,
-            recordTransportAttempt, revalidateDispatch, assertDispatchCurrent }) => {
-            const reservation = reservationCapture?.reservation;
-            if (!reservation || reservation.reservation_id !== reservation_ref ||
-                reservationCapture.attempt.billable_attempt_id !== attempt.billable_attempt_id) {
-              throw new CreativeApiError("unavailable", operation, "concept.reservation");
-            }
-            const privateCallbacks = recordPrivateCallbacks(reservation, attempt, transportAttemptId, dispatch_intent_ref);
-            const value = await method(Object.freeze({ scope, actor_id: principal.actor_id, job_id: started.job_id,
-              attempt, route, brief, base_design: null, plan: nativePlan,
+    const conceptExecutionInput = (slot) => ({ scope, actor_id: principal.actor_id, job_id: started.job_id,
+      brief, base_design: null, plan: nativePlan,
               concept_reference_manifest: Object.freeze({ contract: "CreativeConceptReferenceManifest", schema_version: "1.0",
                 tenant_id: principal.tenant_id, project_id: principal.project_id, brief_id: brief.brief_id,
                 brief_hash: briefHash, research_package_id: permissionContext.research_package.package_id,
@@ -4140,6 +4199,28 @@ export function createCreativeApi(options = {}) {
                   asset_id: reference.asset_id, content_hash: reference.content_hash, media_type: reference.media_type,
                   width: reference.width, height: reference.height, role_ref: reference.role_ref }))) }),
               concept_batch_id: batch.batch_id, concept_id: slot.concept_id,
+    });
+    const dispatchSlot = async (conceptId) => {
+      let slot = batch.slots.find((item) => item.concept_id === conceptId);
+      if (!slot || !["pending", "failed"].includes(slot.status) || dispatchCount() >= 2 || batchHasNativeHardStop() ||
+          slot.status === "failed" && slot.attempts.at(-1)?.latest_provider_outcome === "failed" &&
+            !hasEligibleSettledFailure(slot)) return false;
+      assertPolicyCurrent(batch.policy_snapshot);
+      await assertConceptCurrent();
+      let reservationCapture;
+      let metered;
+      try {
+        metered = await runMetered(principal, request, started, "image_edit", route, "provider.edit",
+          async ({ method, attempt, reservation_ref, signal, deadline_at, transportAttemptId, dispatch_intent_ref,
+            recordTransportAttempt, revalidateDispatch, assertDispatchCurrent, prepared_execution }) => {
+            const reservation = reservationCapture?.reservation;
+            if (!reservation || reservation.reservation_id !== reservation_ref ||
+                reservationCapture.attempt.billable_attempt_id !== attempt.billable_attempt_id) {
+              throw new CreativeApiError("unavailable", operation, "concept.reservation");
+            }
+            const privateCallbacks = recordPrivateCallbacks(reservation, attempt, transportAttemptId, dispatch_intent_ref);
+            const value = await method(Object.freeze({ ...conceptExecutionInput(slot), attempt, route,
+              ...(prepared_execution ? { prepared_attempt: prepared_execution } : {}),
               reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
               recordTransportAttempt, revalidateDispatch, assertDispatchCurrent,
               ...privateCallbacks,
@@ -4185,6 +4266,11 @@ export function createCreativeApi(options = {}) {
             allowTerminalFailure: true, allowUnknownOutcome: true,
             logicalOperationId: slot.logical_operation_id,
             maximumDeadlineAt: batch.policy_snapshot.deadline_at,
+            ...(typeof ports.provider?.prepareAttempt === "function" ? {
+              prepareAttempt: ({ attempt, signal, deadline_at }) => ports.provider.prepareAttempt(Object.freeze({
+                ...conceptExecutionInput(slot), operation: "edit", attempt, signal, deadline_at,
+              })),
+            } : {}),
             async onReservation({ reservation, transport_attempt_id, attempt }) {
               const exactReservation = Object.freeze({ status: reservation.status,
                 reservation_id: reservation.reservation_id, billable_attempt_id: reservation.billable_attempt_id,
@@ -4628,10 +4714,10 @@ export function createCreativeApi(options = {}) {
               request_id: boundedString(idFactory(), "decision_request.request_id", 200),
               logical_operation_id: attempt.logical_operation_id, billable_attempt_id: attempt.billable_attempt_id,
               attempt_number: 1, attempt_limit: 1,
-              budget_ref: { budget_scope_ref: principal.budget_scope_id, reservation_ref,
+              budget_ref: { budget_scope_ref: principal.budget_scope_id, ...(reservation_ref === undefined ? {} : { reservation_ref }),
                 policy_version: principal.budget_policy_version }, deadline_at, cancellation_ref: started.job_id,
               model_policy: { model_id: PINNED_JEV_MODEL_ID, policy_version: INSPECTION_POLICY_VERSION },
-              job_id: started.job_id, transport_attempt_id: transportAttemptId });
+              job_id: started.job_id, ...(transportAttemptId === undefined ? {} : { transport_attempt_id: transportAttemptId }) });
           };
           const trustedInspectionScope = Object.freeze({ ...scope, brief_id: brief.brief_id,
             design_version_id: design.design_version_id, artifact_id: design.artifact.artifact_id });
@@ -4666,11 +4752,14 @@ export function createCreativeApi(options = {}) {
               "deadline_at", "cancellation_ref", "model_policy", "workflow_id", "run_id", "order_id", "job_id",
               "transport_attempt_id", "provider_request_id",
             ].includes(key)));
-            const planned = createInspectionDecisionPlan({ deterministic, observation, decision_context: context });
+            const preparedStage = firstStage.intent.target_binding_sha256 !== undefined;
+            const planned = (preparedStage ? prepareInspectionDecisionPlan : createInspectionDecisionPlan)({ deterministic, observation, decision_context: context });
             if (planned.status !== "ready") throw new CreativeApiError("unavailable", operation, "inspection.question_plan");
             plan = planned;
-            const expected = createInspectionEvidenceBatch(plan, observation);
-            if (canonicalHash(expected) !== canonicalHash(firstRequest) || plan.plan_ref !== firstStage.intent.plan_ref) {
+            const expected = preparedStage ? bindInspectionDecisionReservation(plan, prepareInspectionEvidenceBatch(plan, observation),
+              firstRequest.budget_ref.reservation_ref) : createInspectionEvidenceBatch(plan, observation);
+            if (canonicalHash(expected) !== canonicalHash(firstRequest) || plan.plan_ref !== firstStage.intent.plan_ref ||
+              preparedStage && decisionExecutionTargetHash(firstRequest) !== firstStage.intent.target_binding_sha256) {
               throw new CreativeApiError("unavailable", operation, "inspection.decision_provenance");
             }
             firstResult = validateDecisionResult(firstRequest, firstResult, { trustedScope: { ...trustedInspectionScope,
@@ -4683,33 +4772,47 @@ export function createCreativeApi(options = {}) {
             let capturedPlan;
             const firstMetered = await runMetered(principal, request, started, "jev_decision", decisionRoute,
               "decisionPort.execute", async ({ method, attempt, reservation_ref, signal, deadline_at,
-                transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest, revalidateDispatch }) => {
-                const context = makeDecisionContext({ attempt, reservation_ref, deadline_at, transportAttemptId });
-                const planned = createInspectionDecisionPlan({ deterministic, observation, decision_context: context });
-                if (planned.status !== "ready") throw new CreativeApiError("unavailable", operation, "inspection.question_plan");
-                const decisionRequest = createInspectionEvidenceBatch(planned, observation);
+                transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest, revalidateDispatch,
+                assertDispatchCurrent, prepared_execution }) => {
+                const planned = prepared_execution.inspection_plan;
+                const decisionRequest = bindInspectionDecisionReservation(planned, prepared_execution.decision_request, reservation_ref);
+                const target_binding_sha256 = prepared_execution.target_binding_sha256;
+                if (decisionExecutionTargetHash(decisionRequest) !== target_binding_sha256) {
+                  throw new CreativeApiError("unavailable", operation, "inspection.execution_target");
+                }
                 setDecisionRequest(decisionRequest);
                 await stagePort.begin("decision_evidence", attempt.billable_attempt_id,
                   Object.freeze({ request: decisionRequest, request_hash: canonicalHash(decisionRequest), plan_ref: planned.plan_ref,
-                    subject_hash: subjectHash, stage: "independent_batch" }));
+                    subject_hash: subjectHash, target_binding_sha256, stage: "independent_batch" }));
                 await revalidateDispatch({ transport_attempt_id: transportAttemptId,
                   billable_attempt_id: attempt.billable_attempt_id, reservation_ref, dispatch_intent_ref,
-                  target_binding_sha256: canonicalHash(decisionRequest), signal });
+                  target_binding_sha256, signal });
                 const raw = await method(Object.freeze({ scope, actor_id: principal.actor_id, request: decisionRequest,
                   attempt, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
-                  recordTransportAttempt, revalidateDispatch, signal, deadline_at }));
+                  target_binding_sha256, recordTransportAttempt, revalidateDispatch, assertDispatchCurrent, signal, deadline_at }));
                 let checked;
                 try { checked = validateDecisionResult(decisionRequest, raw, { trustedScope: { ...trustedInspectionScope,
                   job_id: started.job_id } }); }
                 catch (error) { throw safeError(error, operation); }
                 capturedPlan = planned;
                 return { value: { request: decisionRequest, decision_result: checked,
-                  target_binding_sha256: canonicalHash(decisionRequest) }, usage: raw?.usage,
+                  target_binding_sha256 }, usage: raw?.usage,
               provider_outcome: checked.status === "complete" || checked.status === "review" ? "succeeded" : "failed" };
               }, async () => {
                 await assertCurrentCreativeContext(scope, brief, design, operation);
                 return verifyInspectionAssetRights(scope, brief, assetUse, operation);
-              }, creativeContextFence(brief, design), { allowTerminalFailure: true });
+              }, creativeContextFence(brief, design), { allowTerminalFailure: true,
+                prepareAttempt({ attempt, deadline_at }) {
+                  const context = makeDecisionContext({ attempt, deadline_at });
+                  const planned = prepareInspectionDecisionPlan({ deterministic, observation, decision_context: context });
+                  if (planned.status !== "ready") throw new CreativeApiError("unavailable", operation, "inspection.question_plan");
+                  const decisionRequest = prepareInspectionEvidenceBatch(planned, observation);
+                  return Object.freeze({ inspection_plan: planned, decision_request: decisionRequest,
+                    target_binding: decisionExecutionTarget(decisionRequest, { trustedScope: { ...trustedInspectionScope, job_id: started.job_id } }),
+                    target_binding_sha256: decisionExecutionTargetHash(decisionRequest, { trustedScope: { ...trustedInspectionScope, job_id: started.job_id } }),
+                    deadline_at });
+                },
+              });
             plan = capturedPlan;
             if (!plan && isRecord(firstMetered.value?.request)) {
               const context = Object.fromEntries(Object.entries(firstMetered.value.request).filter(([key]) => [
@@ -4718,7 +4821,7 @@ export function createCreativeApi(options = {}) {
                 "deadline_at", "cancellation_ref", "model_policy", "workflow_id", "run_id", "order_id", "job_id",
                 "transport_attempt_id", "provider_request_id",
               ].includes(key)));
-              plan = createInspectionDecisionPlan({ deterministic, observation, decision_context: context });
+              plan = prepareInspectionDecisionPlan({ deterministic, observation, decision_context: context });
             }
             if (!plan || plan.status !== "ready") throw new CreativeApiError("unavailable", operation, "inspection.question_plan");
             firstRequest = firstMetered.value.request;
@@ -4750,7 +4853,9 @@ export function createCreativeApi(options = {}) {
                 routeRequest.billable_attempt_id !== routeStage.attempt_id) {
                 throw new CreativeApiError("unavailable", operation, "inspection.decision_route");
               }
-              routeRequest = createInspectionRouteBatch(plan, firstRequest, firstResult, trustedInspectionScope,
+              const preparedRouteStage = routeStage.intent.target_binding_sha256 !== undefined;
+              const reservationRef = routeRequest.budget_ref.reservation_ref;
+              routeRequest = (preparedRouteStage ? prepareInspectionRouteBatch : createInspectionRouteBatch)(plan, firstRequest, firstResult, trustedInspectionScope,
                 { ...Object.fromEntries(Object.entries(routeRequest).filter(([key]) => [
                   "event_id", "correlation_id", "producer", "occurred_at", "ingested_at", "environment", "billing_mode",
                   "request_id", "logical_operation_id", "billable_attempt_id", "attempt_number", "attempt_limit", "budget_ref",
@@ -4759,7 +4864,9 @@ export function createCreativeApi(options = {}) {
                 ].includes(key))), linked_request_id: firstRequest.request_id,
                   linked_billable_attempt_id: firstRequest.billable_attempt_id, plan_ref: plan.plan_ref,
                   inspection_subject_hash: subjectHash });
-              if (canonicalHash(routeRequest) !== routeStage.intent.request_hash) {
+              if (preparedRouteStage) routeRequest = bindInspectionDecisionReservation(plan, routeRequest, reservationRef);
+              if (canonicalHash(routeRequest) !== routeStage.intent.request_hash || preparedRouteStage &&
+                decisionExecutionTargetHash(routeRequest) !== routeStage.intent.target_binding_sha256) {
                 throw new CreativeApiError("unavailable", operation, "inspection.decision_provenance");
               }
               routeResult = validateDecisionResult(routeRequest, routeResult, { trustedScope: { ...trustedInspectionScope,
@@ -4784,37 +4891,48 @@ export function createCreativeApi(options = {}) {
               let builtRouteRequest;
               const routeMetered = await runMetered(principal, request, started, "jev_decision", routeConfig,
                 "decisionPort.execute", async ({ method, attempt, reservation_ref, signal, deadline_at,
-                  transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest, revalidateDispatch }) => {
-                  const context = makeDecisionContext({ attempt, reservation_ref, deadline_at, transportAttemptId });
-                  const requestContext = { ...context, linked_request_id: firstRequest.request_id,
-                    linked_billable_attempt_id: firstRequest.billable_attempt_id, plan_ref: plan.plan_ref,
-                    inspection_subject_hash: subjectHash };
-                  builtRouteRequest = createInspectionRouteBatch(plan, firstRequest, firstResult, trustedInspectionScope, requestContext);
-                  if (!isRecord(builtRouteRequest) || builtRouteRequest.contract !== "DecisionPortRequest") {
-                    throw new CreativeApiError("review_required", operation, "inspection.decision_route");
+                  transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest, revalidateDispatch,
+                  assertDispatchCurrent, prepared_execution }) => {
+                  builtRouteRequest = bindInspectionDecisionReservation(plan, prepared_execution.decision_request, reservation_ref);
+                  const target_binding_sha256 = prepared_execution.target_binding_sha256;
+                  if (decisionExecutionTargetHash(builtRouteRequest) !== target_binding_sha256) {
+                    throw new CreativeApiError("unavailable", operation, "inspection.execution_target");
                   }
                   setDecisionRequest(builtRouteRequest);
                   await stagePort.begin("decision_route", attempt.billable_attempt_id,
                     Object.freeze({ request: builtRouteRequest, request_hash: canonicalHash(builtRouteRequest),
                       plan_ref: plan.plan_ref, subject_hash: subjectHash, first_request_ref: canonicalHash(firstRequest),
-                      first_result_ref: canonicalHash(firstResult), stage: "dependent_route" }));
+                      first_result_ref: canonicalHash(firstResult), target_binding_sha256, stage: "dependent_route" }));
                   await revalidateDispatch({ transport_attempt_id: transportAttemptId,
                     billable_attempt_id: attempt.billable_attempt_id, reservation_ref, dispatch_intent_ref,
-                    target_binding_sha256: canonicalHash(builtRouteRequest), signal });
+                    target_binding_sha256, signal });
                   const raw = await method(Object.freeze({ scope, actor_id: principal.actor_id, request: builtRouteRequest,
                     attempt, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
-                    recordTransportAttempt, revalidateDispatch, signal, deadline_at }));
+                    target_binding_sha256, recordTransportAttempt, revalidateDispatch, assertDispatchCurrent, signal, deadline_at }));
                   let checked;
                   try { checked = validateDecisionResult(builtRouteRequest, raw, { trustedScope: { ...trustedInspectionScope,
                     job_id: started.job_id } }); }
                   catch (error) { throw safeError(error, operation); }
                   return { value: { request: builtRouteRequest, decision_result: checked,
-                    target_binding_sha256: canonicalHash(builtRouteRequest) }, usage: raw?.usage,
+                    target_binding_sha256 }, usage: raw?.usage,
                   provider_outcome: checked.status === "complete" || checked.status === "review" ? "succeeded" : "failed" };
                 }, async () => {
                   await assertCurrentCreativeContext(scope, brief, design, operation);
                   return verifyInspectionAssetRights(scope, brief, assetUse, operation);
-                }, creativeContextFence(brief, design), { allowTerminalFailure: true });
+                }, creativeContextFence(brief, design), { allowTerminalFailure: true,
+                  prepareAttempt({ attempt, deadline_at }) {
+                    const context = makeDecisionContext({ attempt, deadline_at });
+                    const requestContext = { ...context, linked_request_id: firstRequest.request_id,
+                      linked_billable_attempt_id: firstRequest.billable_attempt_id, plan_ref: plan.plan_ref,
+                      inspection_subject_hash: subjectHash };
+                    const preparedRequest = prepareInspectionRouteBatch(plan, firstRequest, firstResult, trustedInspectionScope, requestContext);
+                    if (preparedRequest.contract !== "DecisionPortRequest") throw new CreativeApiError("review_required", operation, "inspection.decision_route");
+                    return Object.freeze({ decision_request: preparedRequest,
+                      target_binding: decisionExecutionTarget(preparedRequest, { trustedScope: { ...trustedInspectionScope, job_id: started.job_id } }),
+                      target_binding_sha256: decisionExecutionTargetHash(preparedRequest, { trustedScope: { ...trustedInspectionScope, job_id: started.job_id } }),
+                      deadline_at });
+                  },
+                });
               routeRequest = routeMetered.value.request;
               routeResult = routeMetered.value.decision_result;
               if (routeResult?.status === "cancelled") throw new CreativeApiError("cancelled", operation, "inspection.decision_result");
@@ -5527,9 +5645,16 @@ export function createCreativeApi(options = {}) {
             "budget_ref", "deadline_at", "cancellation_ref", "model_policy", "workflow_id", "run_id", "order_id",
             "job_id", "transport_attempt_id", "provider_request_id"];
           const decisionContext = Object.fromEntries(Object.entries(firstRequest).filter(([key]) => decisionContextKeys.includes(key)));
-          const plan = createInspectionDecisionPlan({ deterministic, observation, decision_context: decisionContext });
+          const preparedFirstStage = firstStage.intent.target_binding_sha256 !== undefined;
+          const plan = (preparedFirstStage ? prepareInspectionDecisionPlan : createInspectionDecisionPlan)({ deterministic,
+            observation, decision_context: decisionContext });
+          const expectedFirst = plan.status === "ready" ? preparedFirstStage
+            ? bindInspectionDecisionReservation(plan, prepareInspectionEvidenceBatch(plan, observation),
+              firstRequest.budget_ref.reservation_ref)
+            : createInspectionEvidenceBatch(plan, observation) : null;
           if (plan.status !== "ready" || plan.plan_ref !== firstStage.intent.plan_ref ||
-            canonicalHash(createInspectionEvidenceBatch(plan, observation)) !== canonicalHash(firstRequest)) {
+            canonicalHash(expectedFirst) !== canonicalHash(firstRequest) || preparedFirstStage &&
+            decisionExecutionTargetHash(firstRequest) !== firstStage.intent.target_binding_sha256) {
             throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_plan");
           }
           const trustedInspectionScope = Object.freeze({ ...started.scope, brief_id: brief.brief_id,
@@ -5560,9 +5685,13 @@ export function createCreativeApi(options = {}) {
               .filter(([key]) => decisionContextKeys.includes(key))), linked_request_id: firstRequest.request_id,
               linked_billable_attempt_id: firstRequest.billable_attempt_id, plan_ref: plan.plan_ref,
               inspection_subject_hash: subjectHash };
-            const expectedRouteRequest = createInspectionRouteBatch(plan, firstRequest, checkedFirstResult,
-              trustedInspectionScope, routeContext);
-            if (!isRecord(expectedRouteRequest) || canonicalHash(expectedRouteRequest) !== canonicalHash(routeRequest)) {
+            const preparedRouteStage = routeStage.intent.target_binding_sha256 !== undefined;
+            const unboundRoute = (preparedRouteStage ? prepareInspectionRouteBatch : createInspectionRouteBatch)(plan,
+              firstRequest, checkedFirstResult, trustedInspectionScope, routeContext);
+            const expectedRouteRequest = preparedRouteStage ? bindInspectionDecisionReservation(plan, unboundRoute,
+              routeRequest.budget_ref.reservation_ref) : unboundRoute;
+            if (!isRecord(expectedRouteRequest) || canonicalHash(expectedRouteRequest) !== canonicalHash(routeRequest) ||
+              preparedRouteStage && decisionExecutionTargetHash(routeRequest) !== routeStage.intent.target_binding_sha256) {
               throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_provenance");
             }
             const checkedRouteResult = validateDecisionResult(routeRequest, routeResult, { trustedScope: trustedInspectionScope });

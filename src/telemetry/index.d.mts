@@ -199,6 +199,10 @@ export declare function executeCreativeMeteredAttempt(args: {
   idFactory?: (kind: string) => string;
   clock?: () => Date | string;
   signal?: AbortSignal;
+  executionTarget?: Readonly<{ target_binding: Readonly<Record<string, unknown>>;
+    target_binding_sha256: `sha256:${string}`; deadline_at: string }>;
+  onReservation?(input: Readonly<{ reservation: import("../contracts/metering.mjs").ReservedAttempt;
+    transport_attempt_id: string; attempt: DeepReadonly<MeteredAttemptRequest> }>): Promise<void> | void;
 }): Promise<Readonly<{
   outcome: MeteredAttemptOutcome;
   evidence_delivery: "recorded" | "duplicate" | "pending";

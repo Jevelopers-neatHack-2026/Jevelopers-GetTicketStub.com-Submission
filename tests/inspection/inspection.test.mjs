@@ -23,6 +23,10 @@ import {
   createInspectionEvidenceBatch,
   createInspectionReport,
   createInspectionRouteBatch,
+  prepareInspectionDecisionPlan,
+  prepareInspectionEvidenceBatch,
+  prepareInspectionRouteBatch,
+  bindInspectionDecisionReservation,
   createSqliteInspectionRepairController,
   deterministicDecisionObservation,
   evaluateHeldOutFixtures,
@@ -32,10 +36,45 @@ import {
   validateVisualObservation,
 } from "../../src/inspection/index.mjs";
 import { createBrief, DEFAULT_SCOPE, createVersion } from "../versions/helpers.mjs";
+import { decisionExecutionTargetHash } from "../../src/contracts/decision-port/v1.mjs";
 
 const FIXTURES = new URL("../../fixtures/inspection/manifest.json", import.meta.url);
 const trustedScope = Object.freeze({ ...DEFAULT_SCOPE });
 const digest = (value) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
+
+test("inspection owned preparation preserves target and plan provenance when actual reservations are bound", () => {
+  const inspected = deterministic(createSubject());
+  const scope = inspectionTrustedScopeFor(inspected);
+  const observation = observationFor(inspected);
+  const context = decisionContext("prepared-evidence"); delete context.budget_ref.reservation_ref;
+  const plan = prepareInspectionDecisionPlan({ deterministic: inspected, observation, decision_context: context });
+  const partial = prepareInspectionEvidenceBatch(plan, observation);
+  const target = decisionExecutionTargetHash(partial, { trustedScope: scope });
+  assert.throws(() => validateInspectionDecisionRequest(partial, scope));
+  const first = bindInspectionDecisionReservation(plan, partial, "actual-evidence-reservation");
+  assert.equal(decisionExecutionTargetHash(first), target);
+  assert.throws(() => bindInspectionDecisionReservation(plan, partial, "second-reservation"));
+  const firstResult = firstStageResult(first);
+  const routeContext = routeDecisionContext(plan, first, "prepared-route"); delete routeContext.budget_ref.reservation_ref;
+  const partialRoute = prepareInspectionRouteBatch(plan, first, firstResult, scope, routeContext);
+  const routeTarget = decisionExecutionTargetHash(partialRoute, { trustedScope: scope });
+  const route = bindInspectionDecisionReservation(plan, partialRoute, "actual-route-reservation");
+  assert.equal(decisionExecutionTargetHash(route), routeTarget);
+  const originalDecision = evaluateInspectionDecision(plan, first, firstResult, route, routeResult(route), scope);
+  assert.equal(originalDecision.status, "complete");
+  const restored = prepareInspectionDecisionPlan({ deterministic: inspected, observation,
+    decision_context: { ...context, budget_ref: first.budget_ref } });
+  assert.equal(restored.plan_ref, plan.plan_ref);
+  const restoredFirst = bindInspectionDecisionReservation(restored, prepareInspectionEvidenceBatch(restored, observation), first.budget_ref.reservation_ref);
+  assert.deepEqual(restoredFirst, first);
+  const restoredPartialRoute = prepareInspectionRouteBatch(restored, restoredFirst, firstResult, scope,
+    { ...routeContext, budget_ref: route.budget_ref, plan_ref: restored.plan_ref });
+  const restoredRoute = bindInspectionDecisionReservation(restored, restoredPartialRoute, route.budget_ref.reservation_ref);
+  assert.deepEqual(restoredRoute, route);
+  assert.deepEqual(evaluateInspectionDecision(restored, restoredFirst, firstResult, restoredRoute,
+    routeResult(restoredRoute), scope), originalDecision,
+  "completed replay preserves both request hashes and the reservation-free decision context provenance");
+});
 
 function crc32(bytes) {
   let value = 0xffffffff;
