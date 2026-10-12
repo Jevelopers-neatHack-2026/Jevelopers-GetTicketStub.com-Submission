@@ -78,6 +78,8 @@ async function fetchPage(url: string): Promise<string> {
     }
     if (!res.ok) {
       done("http_error", res.status);
+      // Release the unused body so the discarded connection is not left open.
+      await res.body?.cancel().catch(() => {});
       if (attempt === 0 && res.status >= 500) continue;
       throw new Error(`HTTP ${res.status}`);
     }
