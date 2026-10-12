@@ -34,6 +34,8 @@ export const syntheticOpaqueScope: OpaqueProductScope = Object.freeze({
 });
 const placeholderHash = (label: string): string => `sha256:${[...label].map((ch) => ch.charCodeAt(0).toString(16).padStart(2, '0')).join('').padEnd(64, '0').slice(0, 64)}`;
 export const syntheticSnapshotId = placeholderHash('synthetic-snapshot');
+export const syntheticQueryContentHash = placeholderHash('synthetic-query');
+export const syntheticSummaryContentHash = placeholderHash('synthetic-summary');
 
 const D = '000000000000000000';
 const zero = `0.${D}`;
@@ -88,7 +90,7 @@ const eurDetail = (): ReportingDetail => ({
   dimensions: { ...noDimensions, orderId: 'order-2' }, amount: amount('8'), metrics: detailMetrics({ expense: amount('8') }), status: 'recognized',
 });
 const page = (over: Partial<FinanceV2Page> = {}): FinanceV2Page => ({
-  schemaVersion: '2.0.0', requestId: 'synthetic-request-1', snapshotId: syntheticSnapshotId, queryContentHash: placeholderHash('synthetic-query'), summaryContentHash: placeholderHash('synthetic-summary'),
+  schemaVersion: '2.0.0', requestId: 'synthetic-request-1', snapshotId: syntheticSnapshotId, queryContentHash: syntheticQueryContentHash, summaryContentHash: syntheticSummaryContentHash,
   asOf: '2026-10-08T00:05:00Z', timezone: 'UTC', period: { start: '2026-10-01T00:00:00Z', end: '2026-10-08T00:00:00Z' }, scope: syntheticOpaqueScope,
   summary: projection(), details: details(), detailCount: 4, hasMore: false, nextCursor: null, canonicalMappingStatus: 'unsupported_opaque_scope', ...over,
 });

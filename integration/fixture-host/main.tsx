@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Dashboard, FinancialSummaryView, FinanceV2View, evaluateFinancePacket, type FinanceV2ViewName, type TableSort } from '@jevelopers/team-dashboard';
+import { Dashboard, FinancialSummaryView, FinanceV2ConnectedView, evaluateFinancePacket, type FinanceV2ViewName, type TableSort } from '@jevelopers/team-dashboard';
 import { routeHref } from '@jevelopers/team-dashboard/integration';
 import '@jevelopers/team-dashboard/style.css';
 import { ComponentExamples } from './component-examples';
+import { fixtureFinanceV2Port, portBehaviors, syntheticQueryContentHash, syntheticSummaryContentHash, type FixturePortLog, type PortBehavior } from './finance-v2-port';
 import { authorizedFixture, financeV2Fixture, financeV2FixtureNames, fixtureProvider, fixtureStates, summaryFixture, summaryFixtureNames, syntheticProjectLabel, type FinanceV2FixtureName, type FixtureState, type SummaryFixtureName } from './host';
 const params = new URLSearchParams(window.location.search);
 const requestedSummary = params.get('summary');
@@ -11,6 +12,14 @@ const summaryName = summaryFixtureNames.find((name) => name === requestedSummary
 /** Explicit SYNTHETIC_PROPOSAL fixture mode for the Finance v2 views: `?v2=<fixture>` on the budgets, ai-costs, transactions and transaction detail routes only. */
 const requestedV2 = params.get('v2');
 const v2Name = financeV2FixtureNames.find((name) => name === requestedV2) as FinanceV2FixtureName | undefined;
+/** Fixture-host-only scripting of the injected read port: `v2port=<behavior>` (or `none` for no port), `v2mode=integrated`, `v2timeout=<ms>`. */
+const requestedBehavior = params.get('v2port');
+const noV2Port = requestedBehavior === 'none';
+const v2Behavior: PortBehavior = portBehaviors.find((name) => name === requestedBehavior) ?? 'ok';
+const v2Integrated = params.get('v2mode') === 'integrated';
+const v2Timeout = Number(params.get('v2timeout')) > 0 ? Number(params.get('v2timeout')) : undefined;
+const v2Log: FixturePortLog = { calls: [] };
+(window as unknown as { __financeV2PortLog: FixturePortLog }).__financeV2PortLog = v2Log;
 const v2Views: Readonly<Record<string, FinanceV2ViewName>> = { budgets: 'budget', 'ai-costs': 'breakdown', transactions: 'transactions', 'transaction-detail': 'transaction-detail' };
 const configuredBase = params.get('base') ?? '/admin/finance';
 const examples = params.get('examples') === 'components';
@@ -37,6 +46,13 @@ function FixtureHost() {
 
   const [state, setState] = useState<FixtureState>(fixtureStates.includes(initialState as FixtureState) ? initialState as FixtureState : 'unavailable');
   const [authenticated, setAuthenticated] = useState(params.get('auth') !== 'missing');
+  const [v2Revision, setV2Revision] = useState(1);
+  const [v2Actor, setV2Actor] = useState<'a' | 'b'>('a');
+  const [v2Token, setV2Token] = useState(true);
+  const [v2Available, setV2Available] = useState(true);
+  // The token seam is stable until the token or its revision changes, and the host bumps the revision whenever the token changes.
+  const v2Authorization = useMemo(() => ({ revision: String(v2Revision), token: async () => (v2Token ? `fixture-token-${v2Revision}` : null) }), [v2Revision, v2Token]);
+  const v2Port = useMemo(() => v2Name && !noV2Port ? fixtureFinanceV2Port(v2Name, v2Behavior, v2Log) : undefined, []);
   const [connected, setConnected] = useState(params.get('provider') !== 'missing');
   const provider = useMemo(() => fixtureProvider(state), [state]);
   useEffect(() => { const update = () => { setPathname(window.location.pathname); setQuery(window.location.search); setRestoreFocus(false); }; window.addEventListener('popstate', update); return () => window.removeEventListener('popstate', update); }, []);
@@ -46,6 +62,12 @@ function FixtureHost() {
       <label>Boundary state <select value={state} onChange={(event) => setState(event.target.value as FixtureState)}>{fixtureStates.map((value) => <option key={value}>{value}</option>)}</select></label>
       <label><input type="checkbox" checked={authenticated} onChange={(event) => setAuthenticated(event.target.checked)} /> Fixture auth grant</label>
       <label><input type="checkbox" checked={connected} onChange={(event) => setConnected(event.target.checked)} /> Fixture read port</label>
+      {v2Name && !examples && <>
+        <button type="button" onClick={() => setV2Revision((value) => value + 1)}>Bump Finance v2 authorization revision ({v2Revision})</button>
+        <label>Finance v2 actor <select value={v2Actor} onChange={(event) => setV2Actor(event.target.value as 'a' | 'b')}><option value="a">actor a</option><option value="b">actor b</option></select></label>
+        <label><input type="checkbox" checked={v2Token} onChange={(event) => { setV2Token(event.target.checked); setV2Revision((value) => value + 1); }} /> Finance v2 host token</label>
+        <label><input type="checkbox" checked={v2Available} onChange={(event) => setV2Available(event.target.checked)} /> Finance v2 host available</label>
+      </>}
     </aside>
     <main><Dashboard basePath={configuredBase} pathname={pathname} navigate={navigate}
       access={authenticated ? authorizedFixture : { status: 'restricted' }} provider={connected ? provider : undefined}
@@ -59,9 +81,13 @@ function FixtureHost() {
           for (const [key, value] of Object.entries(next)) { if (value === 'all') params.delete(key); else params.set(key, value); }
           navigate(window.location.pathname + (params.toString() ? `?${params.toString()}` : ''));
         };
-        return <FinanceV2View mode="SYNTHETIC_PROPOSAL" view={v2Views[route.id]!} input={fixture.input} expectedScope={fixture.expectedScope} expectedSnapshotId={fixture.expectedSnapshotId}
-          {...(route.params.id ? { detailId: route.params.id } : {})} detailHref={(id) => routeHref(configuredBase, 'transaction-detail', { id }) + context} listHref={routeHref(configuredBase, 'transactions') + context}
-          onNavigate={navigate} filters={filters} onFiltersChange={changeFilters} />;
+        const scope = v2Actor === 'a' ? fixture.expectedScope : { ...fixture.expectedScope, actorId: 'account:synthetic-actor-b' };
+        const shared = { view: v2Views[route.id]!, availability: v2Available ? { status: 'available' } as const : { status: 'refused', reason: 'restricted' } as const, scope, authorization: v2Authorization,
+          expectedSnapshotId: fixture.expectedSnapshotId, expectedQueryContentHash: syntheticQueryContentHash, expectedSummaryContentHash: syntheticSummaryContentHash,
+          ...(v2Timeout ? { timeoutMs: v2Timeout } : {}),
+          ...(route.params.id ? { detailId: route.params.id } : {}), detailHref: (id: string) => routeHref(configuredBase, 'transaction-detail', { id }) + context, listHref: routeHref(configuredBase, 'transactions') + context,
+          onNavigate: navigate, filters, onFiltersChange: changeFilters };
+        return v2Integrated ? <FinanceV2ConnectedView mode="INTEGRATED" {...shared} /> : <FinanceV2ConnectedView mode="SYNTHETIC_PROPOSAL" {...shared} {...(v2Port ? { port: v2Port } : {})} />;
       })() : summaryName && route.id === 'overview' && !examples ? <>
         <p role="note"><strong>SYNTHETIC FIXTURE</strong>: offline development data shaped like adapter output. Not real Finance data; the actual Finance summary route is unavailable until the accepted handoff.</p>
         <FinancialSummaryView {...summaryFixture(summaryName, evaluateFinancePacket)} projectLabel={syntheticProjectLabel} />

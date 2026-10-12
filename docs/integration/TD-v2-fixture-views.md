@@ -49,6 +49,7 @@ The same hashes and status are recorded in `FROZEN_PROPOSAL_PROVENANCE` (`src/vi
 
 ## Not claimed, and still open
 
+- The async read port, lifecycle and fault mapping are in `docs/integration/TD-v2-async-port.md`.
 - No Finance wrapper handoff, no real provider, no trusted host port: live authority is unsupported. No grant alias and no grant derived from the opaque scope.
 - Finance definitions, the canonical mapping and the query/export API are unmerged and pending owner acknowledgement. No export API acceptance.
 - **Request to the Finance port (names only, no implementation here):** a reviewed read port that returns `FinancialSummaryPageV2` for the host's opaque product scope, with `snapshotId` / `queryContentHash` / `summaryContentHash` bound to the requested query, and an approved export port keyed by that snapshot.
