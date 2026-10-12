@@ -16,6 +16,7 @@ import {
 	fixtureDirectory,
 	writeOwned,
 	limitations,
+	applyRendererEnvironment,
 } from "./protocol.js";
 import type { OwnerRequest } from "./protocol.js";
 
@@ -28,28 +29,7 @@ async function execute(request: OwnerRequest) {
 		config.node_sha256 === digest(await readFile(process.execPath)),
 		"NODE_BYTES_MISMATCH",
 	);
-	const pins = z
-		.object({ image: z.object({ reference: z.string() }) })
-		.parse(
-			JSON.parse(
-				(
-					await readBounded(
-						join(fixtureDirectory, "../../../../docs/runtime/pins.json"),
-					)
-				).toString(),
-			),
-		);
-	requireOwner(
-		config.renderer_image ===
-			(process.platform === "linux" ? pins.image.reference : null),
-		"IMAGE_PIN_MISMATCH",
-	);
-	process.env["TZ"] = "UTC";
-	process.env["LANG"] = "C.UTF-8";
-	process.env["LC_ALL"] = "C.UTF-8";
-	process.env["PLAYWRIGHT_BROWSERS_PATH"] = config.browser_root;
-	if (config.renderer_image !== null)
-		process.env["PP_RENDERER_IMAGE"] = config.renderer_image;
+	await applyRendererEnvironment(config);
 	const payload = await readBounded(
 		join(fixtureDirectory, "asset-negative.txt"),
 	);

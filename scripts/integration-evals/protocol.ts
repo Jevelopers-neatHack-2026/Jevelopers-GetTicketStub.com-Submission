@@ -80,6 +80,38 @@ export const configurationSchema = z.strictObject({
 	browser_root: z.string().max(4096),
 	renderer_image: z.string().nullable(),
 });
+export type OwnerConfiguration = z.infer<typeof configurationSchema>;
+/**
+ * Verifies the configured renderer image against the pinned image and
+ * installs the deterministic renderer environment for this process. The
+ * owner command runs with a scrubbed environment, so on Linux the pinned
+ * PP_RENDERER_IMAGE must be restored from the verified configuration before
+ * the runtime environment gate (src/runtime/environment.ts) is reached.
+ */
+export async function applyRendererEnvironment(
+	config: OwnerConfiguration,
+): Promise<void> {
+	const pins = z
+		.object({ image: z.object({ reference: z.string() }) })
+		.parse(
+			JSON.parse(
+				(
+					await readBounded(join(checkout, "docs/runtime/pins.json"))
+				).toString(),
+			),
+		);
+	requireOwner(
+		config.renderer_image ===
+			(process.platform === "linux" ? pins.image.reference : null),
+		"IMAGE_PIN_MISMATCH",
+	);
+	process.env["TZ"] = "UTC";
+	process.env["LANG"] = "C.UTF-8";
+	process.env["LC_ALL"] = "C.UTF-8";
+	process.env["PLAYWRIGHT_BROWSERS_PATH"] = config.browser_root;
+	if (config.renderer_image !== null)
+		process.env["PP_RENDERER_IMAGE"] = config.renderer_image;
+}
 export async function safePath(path: string): Promise<void> {
 	requireOwner(
 		isAbsolute(path) && resolve(path) === path && !path.includes("\0"),
