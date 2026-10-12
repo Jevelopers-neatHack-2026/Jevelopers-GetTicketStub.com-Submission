@@ -898,6 +898,7 @@ export function mountLanding(ctx) {
       if (disposed) throw new Error('unmounted');
       const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
       const { RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js');
+      if (disposed) throw new Error('unmounted');
       const canvas = byId('gl');
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
       renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 760 ? 1.6 : 2));
