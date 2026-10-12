@@ -51,6 +51,7 @@ The core identity lives here, and getticketstub.com already ships byte-identical
 | [`SPEC.md`](SPEC.md) | Positioning, attributes, colour with contrast, type and licence, logo rationale, don'ts |
 | [`logo/`](logo/) | Outlined SVGs: stamp (full colour, mono, `currentColor`), favicon, app icon, wordmarks, lockups |
 | [`tokens/`](tokens/) | `tokens.json` (DTCG, source of truth), `tokens.css` (CSS variables plus the night theme), `tailwind.preset.js` |
+| [`inventory/`](inventory/brand-inventory.json) | Machine-readable inventory of every file: type, source/output relation, authority, owner role, approval and provenance (unknown where unrecorded). See the [source-of-truth index](docs/source-of-truth.md) |
 | [`docs/`](docs/) | Logo usage, voice, imagery, motion/sound/haptics, foil material, architecture views |
 | [`fonts/`](fonts/) | Fraunces and Inter Tight variable TTFs with their [Fraunces](fonts/Fraunces-OFL.txt) and [Inter Tight](fonts/InterTight-OFL.txt) SIL OFL 1.1 licences |
 | [`references/`](references/) | Curated reference images (WebP) |
@@ -82,6 +83,7 @@ The script takes no arguments. It shapes `fonts/Fraunces[SOFT,WONK,opsz,wght].tt
 
 ## Docs
 
+- [Source-of-truth index](docs/source-of-truth.md) · [Inventory checks](docs/inventory-checks.md) (`make check-inventory`, `make check-links`)
 - [Logo usage](docs/logo.md) · [Voice](docs/voice.md) · [Imagery and AI art](docs/imagery.md) · [Motion, sound and haptics](docs/motion-sound-haptics.md) · [Foil and holo material](docs/material-foil.md)
 - [Repository responsibilities](docs/architecture/OWNERSHIP.md) · [Acceptance view](docs/architecture/ACCEPTANCE.md)
 - [Architecture and diagrams](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)

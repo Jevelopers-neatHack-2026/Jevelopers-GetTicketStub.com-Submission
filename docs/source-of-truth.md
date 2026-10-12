@@ -1,0 +1,66 @@
+# Source-of-truth index
+
+Where each part of the TicketStub brand is authoritative **today**. The full per-file record (type, source/output relation, canonical authority, owner role, approval and provenance status) is [`inventory/brand-inventory.json`](../inventory/brand-inventory.json); `make check-inventory` fails if it drifts from the tracked files. Baseline: `main` at `74bc86f`, 2026-10-12, integrated with governance PR #17 (`main` at `00e4129`).
+
+**Approval and provenance are unknown unless stated.** No file here is recorded as approved for release. README says the identity is not ratified; nothing in this index changes that. Rights, tool and prompt provenance for the images, and redistribution policy, are left `unknown` for [BK-06](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/7).
+
+## Source-of-truth map
+
+| Topic | Authoritative path | Derived or generated | Notes |
+|---|---|---|---|
+| Logos and marks | [`tools/build_logos.py`](../tools/build_logos.py) | [`logo/`](../logo/) (14 SVGs) | Edit the script and regenerate; never hand-edit `logo/*.svg`. The script reads `fonts/Fraunces[SOFT,WONK,opsz,wght].ttf`. |
+| Iconography | none | none | No approved reusable icon system exists; board illustrations are demo only. See [Iconography](#iconography). |
+| Colour tokens | [`tokens/tokens.json`](../tokens/tokens.json) | manually maintained derived outputs: [`tokens/tokens.css`](../tokens/tokens.css), [`tokens/tailwind.preset.js`](../tokens/tailwind.preset.js) | JSON is the authority. The derivation is stated in the file headers, but no generator is tracked, so the outputs are kept in step by hand and drift is not machine-checked. See [Classifications](#classifications) for the migration path. |
+| Type tokens and fonts | [`tokens/tokens.json`](../tokens/tokens.json), `fonts/Fraunces[SOFT,WONK,opsz,wght].ttf`, `fonts/InterTight[wght].ttf` | same outputs as above | Licences: [Fraunces](../fonts/Fraunces-OFL.txt), [Inter Tight](../fonts/InterTight-OFL.txt). Upstream version and checksum are not recorded. |
+| Spacing and layout | [`tokens/tokens.json`](../tokens/tokens.json) | same outputs as above | No separate layout spec exists. |
+| Usage guidance | [`SPEC.md`](../SPEC.md), [`docs/logo.md`](logo.md), [`docs/voice.md`](voice.md), [`docs/imagery.md`](imagery.md), [`docs/motion-sound-haptics.md`](motion-sound-haptics.md), [`docs/material-foil.md`](material-foil.md) | board: [`index.html`](../index.html) | `SPEC.md` holds the prose values, `tokens.json` the machine values; they are not cross-checked. |
+| Provenance | [`fonts/Fraunces-OFL.txt`](../fonts/Fraunces-OFL.txt), [`fonts/InterTight-OFL.txt`](../fonts/InterTight-OFL.txt), [`inventory/brand-inventory.json`](../inventory/brand-inventory.json) | none | The font OFL texts are required licence/provenance documents that ship with the fonts. Everything else is `unknown`. |
+| Governance process | [`docs/brand-governance.md`](brand-governance.md), [`docs/governance/decision-template.md`](governance/decision-template.md), [`docs/governance/simulated-walkthrough.md`](governance/simulated-walkthrough.md), [`tools/check_governance.py`](../tools/check_governance.py) | none | Scaffolding from PR #17. Records no approval; the walkthrough is a fictional simulation; the script checks document shape only. |
+| Releases | none | none | No versions, packages or release notes. Pending [BK-03B](https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/14). |
+
+## Classifications
+
+| Class | Meaning | Examples |
+|---|---|---|
+| `canonical-source` | Edit here | `tools/build_logos.py`, `tokens/tokens.json`, font files |
+| `generated` | Produced by a tracked generator from a source; do not hand-edit | `logo/*.svg` (by `tools/build_logos.py`) |
+| `derived-manual` | Derived from a JSON authority but maintained by hand because no generator is tracked. Edit only to mirror the authority; drift is not machine-checked | `tokens/tokens.css`, `tokens/tailwind.preset.js` |
+| `guideline` | Human guidance and the brand board | `SPEC.md`, `docs/*.md`, `index.html` |
+| `licence-provenance` | Required third-party licence or provenance document. An export candidate that must ship with the asset it covers; never discard it as reference material | `fonts/Fraunces-OFL.txt`, `fonts/InterTight-OFL.txt` |
+| `reference-only` | Inspiration artwork; excluded from export | `references/*.webp` (rights unknown) |
+| `release_class` | `candidate-unapproved`, `reference-only` or `internal`. None is approved. The font OFL texts are `candidate-unapproved` and are required with any font release. | |
+
+**Migration for `derived-manual`.** `tokens/tokens.json` stays the authority. If a generator is added (candidate: BK-03A), track it, reclassify the outputs as `generated`, and record `generated_by` and `generated_from` in the inventory; the checker then requires those fields.
+
+## Actual versus proposed paths
+
+[`OWNERSHIP.md`](architecture/OWNERSHIP.md) proposes a future layout and states that it does not relocate existing assets. **Decision: current paths stay canonical; no file moves in BK-01.**
+
+| Proposed | Actual today | Decision and rationale | If moved later |
+|---|---|---|---|
+| `identity/` | `logo/`, `tools/build_logos.py` | Keep. The script's output path, `index.html`, docs links and consumer copies in getticketstub.com `public/brand` all use `logo/`. | Keep `logo/` as an alias for one release; update `OUT` in the script and board paths. |
+| `tokens/` | `tokens/` | Matches. | n/a |
+| `guidelines/` | `SPEC.md`, `docs/*.md` | Keep. README, SPEC and the board link these. | Leave redirect stubs. |
+| `components/` | none | Nothing to move. Board patterns need a named application owner first. | n/a |
+| `licenses-and-provenance/` | font OFL texts in `fonts/`, the inventory | Keep OFL texts beside the fonts. BK-06 may add a ledger. | n/a |
+| `releases/` | none | Nothing exists yet. | n/a |
+
+Imports affected by any future move: the README `@import "brand-kit/tokens/tokens.css"`, the Tailwind `require("@ticketstub/brand-kit/tokens/tailwind.preset.js")`, `index.html` relative `src`/`url()` paths, and consumer copies. These are listed in `path_map` in the inventory.
+
+## Iconography
+
+**Current state: there is no approved reusable icon system.** The repository has no icon library or iconography guidance. `logo/favicon.svg` and `logo/app-icon.svg` are logo variants. The inline SVG illustrations in [`index.html`](../index.html) (for example the mute glyph) are reference/demo illustrations on the board only: not an icon set, not approved, not export candidates. Whatever UI icon implementation ships today is owned by the consumers (getticketstub.com and others), outside this repository's inventory. [`OWNERSHIP.md`](architecture/OWNERSHIP.md) lists "icon treatment" as a responsibility without a source.
+
+**Future decision (unresolved, BK-02 with consumer owners).** Whether to create an owned icon family or style guidance here (owned guidance doc, an owned asset family, or staying consumer-owned) is not decided. No approval is inferred from this index.
+
+## Repository status and open handoffs
+
+- **Visibility (corrected by PR #17).** `OWNERSHIP.md` now states the repository is *Public*, citing `gh repo view` on 2026-10-12 (`visibility: PUBLIC`). History kept: it said *private* as verified 2026-10-10, and the earlier BK-01 note that this text was stale is superseded. No repository setting was changed.
+- **PR #3 (open, not merged).** It repoints the `ticket-studio` links in `README.md`, `SPEC.md`, `tokens/tokens.json` and `docs/material-foil.md`, and proposes "always on paper". As of 2026-10-12, getticketstub.com `main` (`388005240aa62374d49f709afc300adb5e98cd98`) contains `docs/studio/stub-system.md` and `docs/studio/research/holo-foil-technique.md`, the targets PR #3 links, plus `docs/studio/` (README, alignment, coverage, flow, product-spec), `src/app/parts/` and `src/customer/studio/feedback.ts`. getticketstub.com #20 merged 2026-10-11T14:56:06Z and #4 merged 2026-10-12T03:51:44Z. The earlier 2026-10-10 finding that the targets existed only on branches is superseded. That is link-target evidence only: it does not show the studio identity is approved, ratified or deployed. `brand-kit` `main` still points at the nonexistent `ticket-studio`; the direction change needs a BK-02 decision record. BK-01 does not merge or reimplement PR #3.
+- **PR #2 (merged).** Its edition-ownership handoff (owner confirmation for the `ticket-studio` link) is preserved unchanged.
+- **Governance (PR #17, merged).** `docs/brand-governance.md`, `docs/governance/decision-template.md`, `docs/governance/simulated-walkthrough.md` and `tools/check_governance.py` are catalogued. They define process only; no identity, token, font, asset or release is recorded as approved, and the reviewer roles other than the nominated approver remain unfilled.
+- **Consumer copies.** README's claim that getticketstub.com carries byte-identical logo copies was not verified.
+
+## Checks
+
+See [inventory checks](inventory-checks.md): `make check-inventory`, `make check-links`, `make test`, and `make check-governance` (document shape only). `make check` runs all four.
