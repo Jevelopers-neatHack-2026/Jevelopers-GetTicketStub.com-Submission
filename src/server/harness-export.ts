@@ -16,8 +16,11 @@ import {
 import type { TicketstubEvent } from "./events";
 
 const SETTING = "TICKETSTUB_HARNESS_EXPORT";
+// The harness loader prefers NEATLOGS_INGEST_KEY / NEATLOGS_READ_TOKEN and still reads the pre-rename names.
 const PASSED_NAMES = [
   "AGENT_HARNESS_TELEMETRY_KEY",
+  "NEATLOGS_INGEST_KEY",
+  "NEATLOGS_READ_TOKEN",
   "NEATLOGS_API_KEY",
   "NEATLOGS_TOKEN",
   "NEATLOGS_PROJECT_ID",
@@ -46,7 +49,7 @@ export function harnessOutboxPath(env: NodeJS.ProcessEnv = process.env): string 
 export function harnessExportProblem(env: NodeJS.ProcessEnv = process.env): string | undefined {
   if (!harnessExportEnabled(env)) return `${SETTING} is not "neatlogs"`;
   if (!unquote(env.AGENT_HARNESS_TELEMETRY_KEY)) return "AGENT_HARNESS_TELEMETRY_KEY is not set";
-  if (!unquote(env.NEATLOGS_API_KEY)) return "NEATLOGS_API_KEY is not set";
+  if (!unquote(env.NEATLOGS_INGEST_KEY) && !unquote(env.NEATLOGS_API_KEY)) return "NEATLOGS_INGEST_KEY is not set";
   if (!harnessOutboxPath(env)) return "no durable path: set TICKETSTUB_DB or TICKETSTUB_HARNESS_DB";
   return undefined;
 }
@@ -100,7 +103,7 @@ function exporter(env: NodeJS.ProcessEnv = process.env): TicketstubHarnessExport
       ...(g.__ticketstubHarnessFetch ? { fetch: g.__ticketstubHarnessFetch } : {}),
     });
     g.__ticketstubHarness = { id, exporter: created };
-    const readback = created.summary.neatlogs.readbackReady ? "on" : "off (no NEATLOGS_TOKEN/NEATLOGS_PROJECT_ID)";
+    const readback = created.summary.neatlogs.readbackReady ? "on" : "off (no NEATLOGS_READ_TOKEN/NEATLOGS_PROJECT_ID)";
     note("on", `export on: workflow ${created.summary.workflowName}, readback ${readback}`, "info");
     // Resume anything a previous process left queued or awaiting readback.
     created.scheduleDrain();

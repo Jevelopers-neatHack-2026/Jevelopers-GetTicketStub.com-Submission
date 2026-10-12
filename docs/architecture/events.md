@@ -48,7 +48,7 @@ pinned agent-harness commit (`src/server/vendor/agent-harness`, `MANIFEST.json`;
   result in its durable outbox (`agent-harness-outbox.sqlite` next to `TICKETSTUB_DB`, or `TICKETSTUB_HARNESS_DB`).
 - **Delivery.** A background drain sends each event as one trace (workflow `agent-harness.ticketstub-events`, session =
   project token, tags `ticketstub`, `ticketstub@<TICKETSTUB_COMMIT_SHA>`, `environment:<TICKETSTUB_OPS_ENVIRONMENT>`).
-  A receiver acceptance is recorded as "sent", never as delivered. With `NEATLOGS_TOKEN` and `NEATLOGS_PROJECT_ID`, the
+  A receiver acceptance is recorded as "sent", never as delivered. With `NEATLOGS_READ_TOKEN` and `NEATLOGS_PROJECT_ID`, the
   drain reads each trace back through the Neatlogs Public API, settles it as verified, and re-sends one that never
   appears under a new trace id (up to three times). Details: agent-harness `docs/runbooks/neatlogs.md`.
 - **Cost to a request.** One local SQLite write after the event is built; the network work never runs inline, and any

@@ -39,7 +39,7 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const scratch = mkdtempSync(join(tmpdir(), "ticketstub-harness-"));
 process.env.TICKETSTUB_DB = join(scratch, "app.sqlite");
 process.env.TICKETSTUB_FILES = join(scratch, "files");
-for (const name of ["TICKETSTUB_HARNESS_EXPORT", "TICKETSTUB_HARNESS_DB", "AGENT_HARNESS_TELEMETRY_KEY", "NEATLOGS_API_KEY", "NEATLOGS_TOKEN", "NEATLOGS_PROJECT_ID", "NEATLOGS_ENDPOINT", "NEATLOGS_HOST"]) {
+for (const name of ["TICKETSTUB_HARNESS_EXPORT", "TICKETSTUB_HARNESS_DB", "AGENT_HARNESS_TELEMETRY_KEY", "NEATLOGS_INGEST_KEY", "NEATLOGS_READ_TOKEN", "NEATLOGS_PROJECT_ID", "NEATLOGS_ENDPOINT", "NEATLOGS_HOST", "NEATLOGS_API_KEY", "NEATLOGS_TOKEN"]) {
   delete process.env[name];
 }
 
@@ -71,7 +71,7 @@ function enable(extra = {}) {
   Object.assign(process.env, {
     TICKETSTUB_HARNESS_EXPORT: "neatlogs",
     AGENT_HARNESS_TELEMETRY_KEY: `"${KEY_HEX}"`, // host settings are often pasted quoted
-    NEATLOGS_API_KEY: INGEST,
+    NEATLOGS_INGEST_KEY: INGEST,
     TICKETSTUB_COMMIT_SHA: "abcdef1",
     TICKETSTUB_OPS_ENVIRONMENT: "test",
     ...extra,
@@ -101,8 +101,8 @@ test("off by default: nothing is loaded, stored or sent", async () => {
 test("switched on without its settings, it says which one is missing and does nothing else", async () => {
   enable({ AGENT_HARNESS_TELEMETRY_KEY: "" });
   assert.equal(harness.harnessExportProblem(), "AGENT_HARNESS_TELEMETRY_KEY is not set");
-  enable({ NEATLOGS_API_KEY: "" });
-  assert.equal(harness.harnessExportProblem(), "NEATLOGS_API_KEY is not set");
+  enable({ NEATLOGS_INGEST_KEY: "" });
+  assert.equal(harness.harnessExportProblem(), "NEATLOGS_INGEST_KEY is not set");
   enable({ AGENT_HARNESS_TELEMETRY_KEY: "too-short" });
   const warnings = [];
   const warn = console.warn;
@@ -115,6 +115,11 @@ test("switched on without its settings, it says which one is missing and does no
   assert.deepEqual(warnings, ["[harness] export could not start (INVALID_TELEMETRY_KEY)"]);
   assert.equal(warnings.join("").includes("too-short"), false);
   assert.equal(existsSync(harness.harnessOutboxPath()), false);
+});
+
+test("the hand-off also starts with the pre-rename NEATLOGS_API_KEY", () => {
+  enable({ NEATLOGS_INGEST_KEY: "", NEATLOGS_API_KEY: INGEST });
+  assert.equal(harness.harnessExportProblem(), undefined);
 });
 
 test("the outbox lives next to TICKETSTUB_DB unless TICKETSTUB_HARNESS_DB names it", () => {
