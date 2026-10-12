@@ -33,8 +33,12 @@ and policy, and authorized real evidence satisfy the required boundaries.
   recovery, delivery cause and billing remain unverified. The later art screenshot shows
   model steps, tokens and timings; it does not close the complete IE-07 workflow or
   establish EVAL-02 comparable improvement. See the [qualified record](evidence/neatlogs/2026-10-11/README.md).
-- Entire evidence covers one Claude checkpoint and repository graph snapshots; no
-  entire.io mirror or Codex checkpoint is recorded, and the graph plugin version is unpinned.
+- Entire evidence covers one Claude checkpoint and repository graph snapshots. After the
+  initial no-mirror record, the owner reported on 2026-10-11 that hosted mirrors for all
+  10 code repos and `entire-checkpoints` were Synced, but the hosted Sessions view showed
+  no transcript. Git-based retrieval remains the verified path. No Codex checkpoint is
+  recorded, and the graph plugin version remains unpinned. See the chronological
+  [checkpoint record](evidence/entire/2026-10-11/checkpoint.md).
 - CFO.ai revision 2 is accepted with hypothetical forecasts; the authoritative Finance
   summary export, actual cash, demo coverage and submission remain open.
 - The controlled private shared-contracts 0.9.7 consumer checks 86 versions across 76 names
