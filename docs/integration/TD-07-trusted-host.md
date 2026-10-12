@@ -23,6 +23,7 @@ Dashboard ── route read ──▶  attaches its own server-held credential �
 The authorizer snapshots the verifier's answer before it validates anything:
 
 - Each field (`ok`, `reason`, `context`, and each context field) is read **exactly once** into a local, from an **own data property** (`Object.getOwnPropertyDescriptor`). Accessors (getters) are rejected without being invoked. Inherited values, including a polluted `Object.prototype`, are never read. A throwing Proxy trap fails closed.
+- **Caveat:** awaiting the verifier's promise reads `then` on its answer before the dashboard sees it (standard promise resolution). So a polluted `Object.prototype.then` in the host process can substitute the answer, and no code here can prevent that. Prototype integrity of the host process is the host's responsibility.
 - `capabilities` must be a real array (`Array.isArray`) with an own integer `length` of at most 256. It is copied by index into a fresh array (`Array.from({ length }, …)`) **before** any element is validated, so an overridden `every`, `Symbol.iterator` or `length` getter cannot skip validation. Holes fail. Duplicates are removed.
 - Only the snapshot is validated and used. The decision, its `scope`, `trustedScope` and `capabilities` are fresh frozen objects. Unknown fields are dropped.
 
@@ -30,7 +31,7 @@ The authorizer snapshots the verifier's answer before it validates anything:
 
 - `expiresAt` must be a strict ISO-8601 instant: `YYYY-MM-DDTHH:MM:SS[.mmm]` followed by `Z` or an explicit `±HH:MM` offset. An offset-less local time, a date-only value, RFC 2822 text and out-of-range fields are a malformed answer (`unavailable`). Parsing never consults the server's timezone (`parseInstant`). Tests run the same rows under `TZ=UTC` and `TZ=America/Los_Angeles`.
 - `maxContextTtlMs` caps how far in the future `expiresAt` may be: a context claiming `expiresAt > now + maxContextTtlMs` is denied (`lifetime_exceeded`). Default **15 minutes** (PR #42 issues 5-minute tokens). Configurable as an integer in [1 000, 86 400 000] ms (1 s to 24 h); anything else throws at construction.
-- `timeoutMs` (verifier) and `readTimeoutMs` (host read) must be integers in [1, 60 000] ms. Defaults: 5 000 and 10 000 (the read deadline sits below the dashboard's 15 s client timeout). `NaN`, `0`, negatives, fractions and `Infinity` throw.
+- `timeoutMs` (verifier) and `readTimeoutMs` (host read) must be integers in [1, 60 000] ms. Defaults: 5 000 and 9 000, so one verifier round-trip plus the read (≤ 14 s) stays below the dashboard's 15 s client timeout. `NaN`, `0`, negatives, fractions and `Infinity` throw.
 
 ## Finance scope (`environment`, `billingMode`)
 
@@ -44,7 +45,7 @@ An allowed decision exposes `trustedScope`, exactly the five `TrustedScope` fiel
 
 - `revision` is an opaque string that changes whenever session, membership or grants change. PR #42's `/2` context has `membershipRevision: number` and no `revision` string. The verifier owns the mapping. The fixture and the recommended mapping are `` `${actorId}@${membershipRevision}` ``, which changes on every bump of the account's monotonic `membershipRevision`.
 - `TrustedReadRequest` carries the verified `revision` and `expiresAt`.
-- **Residual window.** Between the verifier's answer and the end of the host read, a revocation can land. The window is bounded by one verifier round-trip (≤ `timeoutMs`) plus the read (≤ `readTimeoutMs`), so ≤ 15 s by default. The guarded reader aborts the read's signal at the deadline and returns `unavailable`.
+- **Residual window.** Between the verifier's answer and the end of the host read, a revocation can land. The window is bounded by one verifier round-trip (≤ `timeoutMs`) plus the read (≤ `readTimeoutMs`), so ≤ 14 s by default. The guarded reader aborts the read's signal at the deadline and returns `unavailable`.
 - **Host obligation.** Where the store allows, the host read must re-check the revision in the same transaction or query as the read (for #42: the account's `membershipRevision` still equals the verified value, and the session is still live). It must return `restricted` when the check fails. A host that cannot do this accepts the window above and must say so in its integration evidence.
 
 ## Object-level authorization on detail routes
@@ -58,11 +59,11 @@ An allowed decision exposes `trustedScope`, exactly the five `TrustedScope` fiel
 
 ## Denial cause and audit
 
-Denied and unavailable decisions carry a server-only `cause` (`revoked`, `stale`, `expired`, `forged`, `wrong_audience`, `malformed`, `unsupported_version`, `missing`, `invalid_credential`, `lifetime_exceeded`, `project_mismatch`, `missing_capability`, `unknown_route`; or `timeout`, `aborted`, `verifier_error`, `verifier_unavailable`, `malformed_answer`). `toHostAccessProjection` drops it. The guarded reader never returns it. Instead it reports a `GuardedReadOutcome` (cause, route, actor, revision, read result) to an optional server-only `onOutcome` hook. Exceptions thrown by the hook are ignored. **Never forward a cause to the browser.** Use it for logs, audit (TD-07.E), and choosing between re-authentication and refresh.
+Denied and unavailable decisions carry a server-only `cause` (`revoked`, `stale`, `expired`, `forged`, `wrong_audience`, `malformed`, `unsupported_version`, `missing`, `invalid_credential`, `lifetime_exceeded`, `project_mismatch`, `missing_capability`, `unknown_route`; or `timeout`, `aborted`, `verifier_error`, `verifier_unavailable`, `malformed_answer`). `toHostAccessProjection` drops it. The guarded reader never returns it. Instead it reports a `GuardedReadOutcome` (cause, route, actor, revision, read result) to an optional server-only `onOutcome` hook. Synchronous throws and rejected promises from the hook are both swallowed, so an audit backend outage cannot crash the server or change the result. `revision` values containing control characters are rejected as malformed, so they cannot forge log lines. **Never forward a cause to the browser.** Use it for logs, audit (TD-07.E), and choosing between re-authentication and refresh.
 
 ## Guarded read result
 
-`createGuardedRouteReader` returns `{ state, access }`. `state` is the `RouteState` for the browser. `access` is the `HostAccess` projection of the decision that served this read, so it carries the verified scope and revision. Send both. The client can then discard data whose `access` does not match the projection it rendered with, and it never labels data with a stale or forged scope.
+`createGuardedRouteReader` returns `{ state, access }`. `state` is the `RouteState` for the browser. `access` is the `HostAccess` projection of the decision that served this read, so it carries the verified scope and revision. Send both. The client can then discard data whose `access` does not match the projection it rendered with, and it never labels data with a stale or forged scope. **Nothing in this package performs that comparison.** `RouteProvider` consumes only the state, so the host's bridge must compare `access` with the rendered projection. `access` describes the authorization decision, not the read outcome: when the host read itself returns `restricted` (for example, a failed revision re-check), `access` still says `authorized`, and `state` is what the browser must honour.
 
 ## Fail-closed rules
 

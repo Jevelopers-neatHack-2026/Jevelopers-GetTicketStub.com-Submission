@@ -72,7 +72,15 @@ export type AuthorizerOptions = Readonly<{
 export const TIMEOUT_LIMITS = Object.freeze({ min: 1, max: 60_000 });
 export const CONTEXT_TTL_LIMITS = Object.freeze({ min: 1_000, max: 86_400_000 });
 const DEFAULT_TIMEOUT_MS = 5_000;
-const DEFAULT_READ_TIMEOUT_MS = 10_000;
+const DEFAULT_READ_TIMEOUT_MS = 9_000;
+// Rejects C0/C1 controls so a verifier-supplied revision cannot forge audit log lines.
+const hasControlCharacter = (value: string): boolean => {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
+};
 const DEFAULT_MAX_CONTEXT_TTL_MS = 900_000;
 const MAX_CREDENTIAL_LENGTH = 8192;
 const MAX_CAPABILITIES = 256;
@@ -161,7 +169,7 @@ function parseVerifyResult(value: unknown, audience: string, now: number, maxTtl
   const role = ownValue(context, 'role');
   if (!validIdentifier(actorId) || !validIdentifier(tenantId) || !validIdentifier(projectId)) return undefined;
   if (typeof environment !== 'string' || !ENVIRONMENTS.has(environment) || typeof billingMode !== 'string' || !BILLING_MODES.has(billingMode)) return undefined;
-  if (typeof revision !== 'string' || revision.trim().length === 0 || revision.length > 256) return undefined;
+  if (typeof revision !== 'string' || revision.trim().length === 0 || revision.length > 256 || hasControlCharacter(revision)) return undefined;
   if (!capabilities || !capabilities.every((item) => typeof item === 'string' && CAPABILITY.test(item))) return undefined;
   if (role !== ABSENT && role !== undefined && typeof role !== 'string') return undefined;
   if (contextAudience !== audience) return { failure: 'wrong_audience' };
@@ -271,10 +279,10 @@ export type GuardedReaderOptions<T> = Readonly<{
    * state for a record outside the scope as for one that does not exist (TD-07 object-level rule).
    */
   read: (request: TrustedReadRequest) => Promise<RouteState<T>>;
-  /** Server-side deadline for `read` in ms. Integer in [1, 60000]; default 10000 (below the 15 s client timeout). */
+  /** Server-side deadline for `read` in ms. Integer in [1, 60000]; default 9000, so verifier (5 s) plus read stays below the 15 s client timeout. */
   readTimeoutMs?: number;
-  /** Server-only audit hook; exceptions it throws are ignored. */
-  onOutcome?: (outcome: GuardedReadOutcome) => void;
+  /** Server-only audit hook. Synchronous throws and rejected promises are both swallowed. */
+  onOutcome?: (outcome: GuardedReadOutcome) => unknown;
 }>;
 
 /**
@@ -283,7 +291,13 @@ export type GuardedReaderOptions<T> = Readonly<{
  */
 export function createGuardedRouteReader<T>({ authorizer, basePath, read, readTimeoutMs = DEFAULT_READ_TIMEOUT_MS, onOutcome }: GuardedReaderOptions<T>): GuardedRouteReader<T> {
   boundedInteger('readTimeoutMs', readTimeoutMs, TIMEOUT_LIMITS);
-  const report = (outcome: GuardedReadOutcome) => { try { onOutcome?.(Object.freeze(outcome)); } catch { /* Audit hooks never change the result. */ } };
+  const report = (outcome: GuardedReadOutcome) => {
+    try {
+      const pending: unknown = onOutcome?.(Object.freeze(outcome));
+      // An async hook that rejects must not become an unhandled rejection, which terminates Node by default.
+      if (pending instanceof Promise) pending.catch(() => undefined);
+    } catch { /* Audit hooks never change the result. */ }
+  };
   const result = (state: RouteState<T>, access: HostAccess): GuardedReadResult<T> => Object.freeze({ state, access });
   return async ({ credential, pathname, projectId, signal }) => {
     const resolved = resolveRoute(basePath, pathname);

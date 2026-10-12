@@ -95,7 +95,7 @@ describe('TD-07 trusted host authorization', () => {
       undefined, null, 'ok', { ok: 'true', context: {} }, { ok: false, reason: 'unknown-reason' },
       { ok: true }, { ok: true, context: { ...okContext(), capabilities: 'finance.read' } }, { ok: true, context: { ...okContext(), capabilities: [1] } },
       { ok: true, context: { ...okContext(), tenantId: '' } }, { ok: true, context: { ...okContext(), projectId: 'x'.repeat(129) } },
-      { ok: true, context: { ...okContext(), revision: ' ' } }, { ok: true, context: { ...okContext(), expiresAt: 'tomorrow' } },
+      { ok: true, context: { ...okContext(), revision: ' ' } }, { ok: true, context: { ...okContext(), revision: 'account:x@2\nFORGED audit line' } }, { ok: true, context: { ...okContext(), revision: 'rev\u0085' } }, { ok: true, context: { ...okContext(), expiresAt: 'tomorrow' } },
       { ok: true, context: { ...okContext(), role: 7 } }, [{ ok: true, context: okContext() }], { ok: true, context: [okContext()] },
       { ok: true, context: { ...okContext(), environment: 'preview' } }, { ok: true, context: { ...okContext(), billingMode: 'paid_test' } },
       { ok: true, context: omit(okContext(), 'environment') }, { ok: true, context: omit(okContext(), 'billingMode') },
@@ -365,6 +365,21 @@ describe('TD-07 guarded server reads', () => {
     expect(await hung({ credential: captain, pathname: base, signal: signal() })).toEqual({ state: { status: 'unavailable' }, access: CAPTAIN_ACCESS });
     expect(readSignal?.aborted).toBe(true);
     expect(outcomes).toEqual([{ status: 'allowed', route: 'overview', actorId: 'account:acc_FIXTURE_captain1', revision: 'account:acc_FIXTURE_captain1@2', read: 'timeout' }]);
+  });
+
+  it('swallows a rejected async audit hook instead of raising an unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const authorizer = createDashboardAuthorizer({ verifier: fixtureVerifier(hostState()), audience: FIXTURE_AUDIENCE, now });
+      const guarded = createGuardedRouteReader<string>({ authorizer, basePath: base, onOutcome: async () => { throw new Error('audit backend down'); }, read: async () => ({ status: 'empty' }) });
+      expect(await guarded({ credential: captain, pathname: base, signal: signal() })).toMatchObject({ state: { status: 'empty' } });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 
   it('reports the denial cause to a server-only hook and never in the result', async () => {
