@@ -1,9 +1,9 @@
 import {
-  closeSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync,
-  statSync, unlinkSync, writeSync
+  closeSync, constants, fstatSync, fsyncSync, mkdirSync, openSync, readdirSync,
+  readFileSync, readSync, renameSync, statSync, unlinkSync, writeSync
 } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { DurableWorkflowStore } from '../../internal/durable-store.js';
 import { createHmacTokenizer, createTelemetryExporter } from '../../internal/telemetry.js';
 import { loadNeatlogsConfig, scrubNeatlogsEnvironment } from './neatlogs-config.js';
@@ -35,6 +35,9 @@ export const NEATLOGS_OUTBOX_SCHEMA = 'agent-harness.neatlogs.outbox-batch.v1';
 const BATCH_FILE = /^batch-(\d{12,16})-(\d{12,16})\.json$/;
 const MAX_BATCH_FILE_BYTES = 128 * 1024;
 const MAX_BATCHES_PER_DRAIN = 32;
+const DRAIN_CURSOR_FILE = 'drain-cursor.json';
+const DRAIN_CURSOR_SCHEMA = 'agent-harness.neatlogs.outbox-drain-cursor.v1';
+const MAX_DRAIN_CURSOR_BYTES = 256;
 const RETRYABLE_SEND = new Set(['outcome_unknown', 'not_accepted', 'aborted', 'not_configured']);
 const TERMINAL_READBACK = new Set(['verified', 'mismatch']);
 const BATCH_STATES = new Set([
@@ -57,7 +60,7 @@ function pad(sequence) {
 }
 
 function batchRange(path) {
-  const match = BATCH_FILE.exec(path.slice(resolve(path, '..').length + 1));
+  const match = BATCH_FILE.exec(basename(path));
   if (!match) throw new NeatlogsOutboxError('BATCH_INVALID');
   const first = BigInt(match[1]);
   const last = BigInt(match[2]);
@@ -190,15 +193,71 @@ export function listNeatlogsOutbox(directory) {
   const root = resolve(directory);
   return readdirSync(root)
     .filter(name => BATCH_FILE.test(name))
-    .sort((left, right) => {
-      const leftMatch = BATCH_FILE.exec(left);
-      const rightMatch = BATCH_FILE.exec(right);
-      const first = BigInt(leftMatch[1]) - BigInt(rightMatch[1]);
-      if (first !== 0n) return first < 0n ? -1 : 1;
-      const last = BigInt(leftMatch[2]) - BigInt(rightMatch[2]);
-      return last < 0n ? -1 : last > 0n ? 1 : 0;
-    })
+    .sort(compareBatchNames)
     .map(name => join(root, name));
+}
+
+function compareBatchNames(left, right) {
+  const leftMatch = BATCH_FILE.exec(left);
+  const rightMatch = BATCH_FILE.exec(right);
+  const first = BigInt(leftMatch[1]) - BigInt(rightMatch[1]);
+  if (first !== 0n) return first < 0n ? -1 : 1;
+  const last = BigInt(leftMatch[2]) - BigInt(rightMatch[2]);
+  if (last !== 0n) return last < 0n ? -1 : 1;
+  // Legacy and current-width names can encode the same range. Preserve a
+  // deterministic order even for those names so a saved cursor has one place.
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function readDrainCursor(root) {
+  let fd;
+  try {
+    fd = openSync(join(root, DRAIN_CURSOR_FILE), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw new NeatlogsOutboxError('DRAIN_CURSOR_INVALID');
+  }
+  try {
+    const stats = fstatSync(fd);
+    if (!stats.isFile() || stats.size < 1 || stats.size > MAX_DRAIN_CURSOR_BYTES) {
+      throw new NeatlogsOutboxError('DRAIN_CURSOR_INVALID');
+    }
+    const bytes = Buffer.alloc(MAX_DRAIN_CURSOR_BYTES + 1);
+    let length = 0;
+    while (length < bytes.length) {
+      const count = readSync(fd, bytes, length, bytes.length - length, length);
+      if (count === 0) break;
+      length += count;
+    }
+    if (length > MAX_DRAIN_CURSOR_BYTES) throw new NeatlogsOutboxError('DRAIN_CURSOR_INVALID');
+    const cursor = parseNeatlogsJson(bytes.subarray(0, length).toString('utf8'));
+    if (cursor === null || typeof cursor !== 'object' || Array.isArray(cursor)
+        || Object.keys(cursor).length !== 2 || cursor.schema !== DRAIN_CURSOR_SCHEMA
+        || typeof cursor.lastBatch !== 'string' || !BATCH_FILE.test(cursor.lastBatch)) {
+      throw new NeatlogsOutboxError('DRAIN_CURSOR_INVALID');
+    }
+    batchRange(cursor.lastBatch);
+    return cursor.lastBatch;
+  } catch {
+    throw new NeatlogsOutboxError('DRAIN_CURSOR_INVALID');
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * Read-only inspection of retained batches for evidence, yielding one parsed
+ * batch at a time. This is separate from the bounded drain page and performs
+ * no sends, readbacks or transitions. Consumers should reduce each batch
+ * before advancing; retaining every yielded batch defeats the memory bound.
+ * A concurrent writer can change files during inspection; this is not an
+ * atomic snapshot or a substitute for externally serialized drain ownership.
+ */
+export function* iterateNeatlogsOutboxSnapshot(directory) {
+  for (const path of listNeatlogsOutbox(directory)) {
+    const batch = readBatch(path);
+    yield Object.freeze({ path, state: batch.state, batch });
+  }
 }
 
 function serializablePlan(plan) {
@@ -281,6 +340,9 @@ async function captureEnvelope(records, captureTimeoutMs) {
  * Sends pending outbox batches through the PR #38 OTLP sender and, when asked,
  * verifies accepted batches through the Public API readback. Every state
  * change is written back to the batch file before the next network call.
+ * A durable scheduling cursor rotates at most 32 batches per call, including
+ * terminal and unresolved batches. It is not a delivery acknowledgement or
+ * an ownership fence; callers must serialize drainers externally.
  */
 export async function drainNeatlogsOutbox({
   directory,
@@ -302,8 +364,25 @@ export async function drainNeatlogsOutbox({
   try { secrets.push(config.readbackToken()); } catch { /* not configured */ }
   const scan = [...forbidden, ...secrets];
   const results = [];
-  const paths = listNeatlogsOutbox(directory).slice(0, MAX_BATCHES_PER_DRAIN);
-  for (const path of paths) {
+  const root = resolve(directory);
+  const cursor = readDrainCursor(root);
+  const paths = listNeatlogsOutbox(root);
+  const after = cursor === null ? 0 : paths.findIndex(path => compareBatchNames(basename(path), cursor) > 0);
+  const start = after < 0 ? 0 : after;
+  for (let offset = 0; offset < Math.min(paths.length, MAX_BATCHES_PER_DRAIN); offset += 1) {
+    const path = paths[(start + offset) % paths.length];
+    // A corrupt filename must not turn a valid scheduling cursor into invalid
+    // cursor data. Validate its numeric range before persisting the visit.
+    batchRange(path);
+    if (send || readback) {
+      // Advance before reading/capturing/sending: an invalid batch, thrown
+      // callback or process exit must not pin every later drain to that row.
+      // The retained batch is revisited after rotation; no work is acknowledged
+      // by this cursor and a failed cursor write stops before dependent work.
+      writeDurably(join(root, DRAIN_CURSOR_FILE), `${JSON.stringify({
+        schema: DRAIN_CURSOR_SCHEMA, lastBatch: basename(path)
+      })}\n`);
+    }
     const batch = readBatch(path);
     const persist = () => writeDurably(path, `${JSON.stringify(batch, null, 2)}\n`);
     if (send && batch.state === 'pending_send') {

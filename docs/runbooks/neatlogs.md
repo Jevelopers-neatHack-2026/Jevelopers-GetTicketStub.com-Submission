@@ -99,7 +99,7 @@ This is how a trace of a real harness workflow reaches Neatlogs. It is off by de
    - File enumeration, reads and durability calls are synchronous; an exporter timeout cannot preempt a blocked filesystem call. Slow or unavailable storage can block the event loop or refuse the sink write.
    - If a retry after a timeout carries a page that grew in the meantime, only the new suffix is written.
    - A stored record that differs from the retried one is refused.
-4. **Drain.** `drainNeatlogsOutbox({ directory, config, tags, forbidden, readback })` processes each `pending_send` batch in five steps:
+4. **Drain.** `drainNeatlogsOutbox({ directory, config, tags, forbidden, send, readback, recover })` visits at most 32 retained batches per call. A separate `drain-cursor.json` schedules batches in numeric sequence order, starting after the previous visit and wrapping at the end. Retained terminal batches and unresolved retries cannot permanently occupy the first page. Each selected `pending_send` batch is processed in five steps when `send` is enabled:
    1. It captures the batch through the pinned SDK.
    2. It plans the batch with `planNeatlogsExport`.
    3. It scans the encoded body for the run's raw identifiers and the configured credentials. A hit marks the batch `blocked`, and no request is made.
@@ -113,7 +113,13 @@ This is how a trace of a real harness workflow reaches Neatlogs. It is off by de
    - With `recover` (`--recover` on the tool), a `missing` batch re-sends only its bounded-404 traces under the next delivery generation. This follows the verifier's recovery semantics: earlier IDs are kept as `priorTraceIds`, the duplicate risk is recorded, and there are at most 3 generations.
 5. **Mapper allowlist.** The SDK mapper now accepts every event type on the durable telemetry allowlist, including the `operations_work_*` types. A test asserts that the two lists are equal.
 
-The cursor now advances when the batch is durably in the outbox. "Sent, awaiting readback" is the batch file's state.
+The telemetry exporter's cursor advances when the batch is durably in the outbox. "Sent, awaiting readback" is the batch file's state.
+
+The drain scheduling cursor is durably written **before** reading or processing each selected batch. If a batch's content is invalid, capture throws, or the process exits during delivery, the next invocation can visit later batches; it returns to the retained failed batch after rotation. This cursor records a visit, not delivery or readback, and never settles or deletes a batch. A selected filename with an invalid numeric range fails with `BATCH_INVALID` before it can replace the cursor and requires repair. A deleted last-visited batch does not reset progress: selection starts at the next numeric range, or wraps if none remains. Malformed, unsupported, oversized, nonregular or symlink cursor files fail closed with `DRAIN_CURSOR_INVALID` before any delivery work; they are not silently reset. An absent cursor starts with the first range.
+
+`send: false` still prohibits sends and recovery. `readback: false` still prohibits readback. Setting both to `false` inspects one page without creating or advancing the scheduling cursor. A readback-only invocation may advance past unsent batches, but cannot send or acknowledge them. An empty outbox creates no cursor.
+
+The cursor is not a cross-process lease or an ownership fence. The caller must serialize file-outbox drainers and writers externally. The 32-batch limit bounds drain work; directory enumeration remains proportional to the retained file count. Evidence inspection yields one parsed batch at a time and the CLI immediately reduces it to a sanitized summary, but its directory list and retained summary array still grow with the outbox. File-outbox retention, concurrent ownership, immutable retry bytes and durable send/recovery intent require separate work. A cursor does not repair or certify those behaviors.
 
 ## Delivery queue for long-running hosts
 
@@ -208,6 +214,8 @@ The tool runs the workflow through the normal in-process entry point: `createOpe
 - The plan uses only `number.add` and `text.concat`. The registry marks provider, network and shell operations unavailable, so no model or provider call is possible.
 - Evidence is labeled `live-runtime-application` or `offline-runtime-application`, with `harnessMode: mock`.
 - Evidence contains no credential, project UUID or raw run identifier. Every raw job, workflow, scope, owner and event ID of the run is scanned for before anything is written or sent.
+
+For network modes, `drainPage` records only the at-most-32 batch visits from this invocation. `batches` is a read-only inspection of every retained batch after that page, labeled `batchEvidenceSource: persisted_outbox_snapshot`. It includes previously stored results and does not claim a fresh provider observation for them. `deliveryConfirmed` keeps the complete-count rule: there must be at least one retained batch, the summary count must match the current file count, and every retained readback result must be `verified`. An incomplete page, an unresolved row, or a cursor by itself cannot establish complete delivery. The inspection is not an atomic snapshot during concurrent writes; use the same external serialization required for draining.
 
 ## Dashboard check
 

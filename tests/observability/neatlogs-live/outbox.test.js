@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import net from 'node:net';
 import tls from 'node:tls';
-import { mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { after, before, describe, test } from 'node:test';
 import { TELEMETRY_EVENT_TYPES } from '../../../src/internal/telemetry.js';
 import { loadNeatlogsConfig } from '../../../src/observability/private/neatlogs-config.js';
@@ -13,7 +15,8 @@ import {
   listNeatlogsOutbox,
   loadNeatlogsTelemetryOptIn,
   readbackPlanFromRecords,
-  runtimeNeatlogsTags
+  runtimeNeatlogsTags,
+  iterateNeatlogsOutboxSnapshot
 } from '../../../src/observability/private/neatlogs-outbox.js';
 import { NEATLOGS_SDK_EVENT_TYPES } from '../../../src/observability/private/neatlogs-sdk-mapper.js';
 import { isCompleteDeliveryEvidence, runRuntimeWorkflow } from '../../../tools/neatlogs-runtime-trace.mjs';
@@ -56,6 +59,12 @@ function recordsIn(directory) {
   return listNeatlogsOutbox(directory).flatMap(path => JSON.parse(readFileSync(path, 'utf8')).records);
 }
 
+// These fixtures contain at most 33 bounded batches. Production evidence
+// reduces one yielded batch at a time instead of retaining all raw records.
+function snapshotNeatlogsOutbox(directory) {
+  return Array.from(iterateNeatlogsOutboxSnapshot(directory));
+}
+
 function sourceRecord(sequence) {
   return {
     schema: 'agent-harness.telemetry.v1', sequence,
@@ -77,13 +86,16 @@ function fakeNeatlogs({ ingestStatus = 200, tags = TAGS, droppedIds = [], genera
       'content-type': 'application/json'
     });
     if (path === '/project') return ok({ id: PROJECT_ID, name: 'Test project' });
-    const plan = readbackPlanFromRecords(fakeNeatlogs.records, tags, generations());
+    // The fake service can retain more than one bounded sender batch. Derive
+    // each record independently instead of sending its entire history through
+    // the mapper's per-batch size limit.
+    const plans = fakeNeatlogs.records.map(record => readbackPlanFromRecords([record], tags, generations()));
     const match = /^\/traces\/([0-9a-f]{32})(\/spans(?:\/([0-9a-f]{16})\/payload)?)?$/.exec(path);
-    const trace = droppedIds.includes(match?.[1]) ? null : plan.traces.find(item => item.traceId === match?.[1]);
+    const trace = droppedIds.includes(match?.[1]) ? null : plans.flatMap(plan => plan.traces).find(item => item.traceId === match?.[1]);
     if (!trace) return response(404, '{}', { 'content-type': 'application/problem+json' });
     if (!match[2]) {
       return ok({
-        traceId: trace.traceId, sessionId: trace.sessionId, workflowName: plan.workflowName,
+        traceId: trace.traceId, sessionId: trace.sessionId, workflowName: plans[0].workflowName,
         traceName: 'agent_harness.workflow_event', tags: [...tags], spansCount: 1, finalizationStatus: 'finalized'
       });
     }
@@ -265,6 +277,285 @@ describe('outbox sink', () => {
 });
 
 describe('drain', () => {
+  test('advances beyond 32 retained verified batches on a later drain', async () => {
+    const directory = join(scratch, 'drain-terminal-prefix');
+    const sink = createNeatlogsOutboxSink({ directory });
+    for (let sequence = 1; sequence <= 33; sequence += 1) sink([sourceRecord(sequence)]);
+    for (const path of listNeatlogsOutbox(directory).slice(0, 32)) {
+      const batch = JSON.parse(readFileSync(path, 'utf8'));
+      batch.state = 'verified';
+      batch.readback = { status: 'verified' };
+      writeFileSync(path, `${JSON.stringify(batch)}\n`, { mode: 0o600 });
+    }
+    fakeNeatlogs.records = recordsIn(directory);
+    const fake = fakeNeatlogs();
+    const first = await drainNeatlogsOutbox({
+      directory, config: configured(), tags: TAGS, readback: true, fetch: fake.fetchImpl,
+      readbackOptions: { pollIntervalMs: 0, maxPolls: 1 }
+    });
+    const second = await drainNeatlogsOutbox({
+      directory, config: configured(), tags: TAGS, readback: true, fetch: fake.fetchImpl,
+      readbackOptions: { pollIntervalMs: 0, maxPolls: 1 }
+    });
+    assert.equal(first.length, 32);
+    assert.equal(second.length, 32);
+    assert.equal(second[0].batch.firstSequence, 33);
+    assert.equal(second[0].state, 'verified');
+    assert.equal(fake.calls.filter(call => call.url.endsWith('/v1/traces')).length, 1);
+    assert.equal(listNeatlogsOutbox(directory).length, 33, 'retained records must not be deleted for progress');
+    const snapshot = snapshotNeatlogsOutbox(directory);
+    assert.equal(isCompleteDeliveryEvidence({
+      network: true, batches: second.map(result => result.batch), batchCount: 33
+    }), false, 'the rotating page remains incomplete evidence');
+    assert.equal(isCompleteDeliveryEvidence({
+      network: true, batches: snapshot.map(result => result.batch), batchCount: 33
+    }), true, 'the complete persisted snapshot includes earlier verified batches');
+  });
+
+  test('rotates past 32 unresolved sends without treating unknown outcomes as delivered', async () => {
+    const directory = join(scratch, 'drain-unresolved-prefix');
+    const sink = createNeatlogsOutboxSink({ directory });
+    for (let sequence = 1; sequence <= 33; sequence += 1) sink([sourceRecord(sequence)]);
+    const fake = fakeNeatlogs({ ingestStatus: 503 });
+    const options = {
+      directory, config: configured(), tags: TAGS, fetch: fake.fetchImpl,
+      sendOptions: { maxAttempts: 1 }
+    };
+    const first = await drainNeatlogsOutbox(options);
+    const second = await drainNeatlogsOutbox(options);
+    assert.equal(first.length, 32);
+    assert.equal(second.length, 32);
+    assert.equal(second[0].batch.firstSequence, 33);
+    assert.equal(fake.calls.length, 64, 'each drain retains the 32-batch work limit');
+    assert.ok([...first, ...second].every(result => result.state === 'pending_send'
+      && result.batch.send.status === 'outcome_unknown' && result.batch.readback === null));
+    assert.equal(new Set([...first, ...second].map(result => result.batch.firstSequence)).size, 33);
+    assert.equal(isCompleteDeliveryEvidence({
+      network: true, batches: snapshotNeatlogsOutbox(directory).map(result => result.batch), batchCount: 33
+    }), false);
+  });
+
+  test('a fresh process resumes the saved page and read-only inspection does not advance it', async () => {
+    const directory = join(scratch, 'drain-process-restart');
+    const sink = createNeatlogsOutboxSink({ directory });
+    for (let sequence = 1; sequence <= 33; sequence += 1) sink([sourceRecord(sequence)]);
+    const fake = fakeNeatlogs();
+    await drainNeatlogsOutbox({
+      directory, config: configured(), tags: TAGS, send: false, readback: true, recover: true, fetch: fake.fetchImpl
+    });
+    assert.equal(fake.calls.length, 0, 'readback-only mode must not send pending batches, even with recover');
+    const cursorPath = join(directory, 'drain-cursor.json');
+    const cursorBefore = readFileSync(cursorPath, 'utf8');
+    const moduleUrl = new URL('../../../src/observability/private/neatlogs-outbox.js', import.meta.url).href;
+    const child = spawnSync(process.execPath, ['--input-type=module', '--eval', `
+      const { drainNeatlogsOutbox } = await import(${JSON.stringify(moduleUrl)});
+      const rows = await drainNeatlogsOutbox({
+        directory: ${JSON.stringify(directory)}, config: {}, tags: ${JSON.stringify(TAGS)},
+        send: false, readback: false, fetch() { throw new Error('unexpected network'); }
+      });
+      process.stdout.write(JSON.stringify(rows.map(row => row.batch.firstSequence)));
+    `], { encoding: 'utf8', timeout: 10_000, maxBuffer: 64 * 1024,
+      env: { PATH: process.env.PATH, TMPDIR: tmpdir(), NODE_NO_WARNINGS: '1' } });
+    assert.equal(child.error, undefined);
+    assert.equal(child.signal, null);
+    assert.equal(child.status, 0, child.stderr);
+    assert.deepEqual(JSON.parse(child.stdout), [33, ...Array.from({ length: 31 }, (_, index) => index + 1)]);
+    assert.equal(readFileSync(cursorPath, 'utf8'), cursorBefore);
+    assert.ok(snapshotNeatlogsOutbox(directory).every(result => result.state === 'pending_send'
+      && result.batch.send === null && result.batch.readback === null));
+  });
+
+  test('retains rotation when the previously visited batch is removed', async () => {
+    const directory = join(scratch, 'drain-removed-cursor-row');
+    const sink = createNeatlogsOutboxSink({ directory });
+    for (let sequence = 1; sequence <= 33; sequence += 1) sink([sourceRecord(sequence)]);
+    const options = { directory, config: configured(), tags: TAGS, send: false, readback: true,
+      fetch: fakeNeatlogs().fetchImpl };
+    const first = await drainNeatlogsOutbox(options);
+    unlinkSync(first.at(-1).path);
+    const second = await drainNeatlogsOutbox(options);
+    assert.equal(second.length, 32);
+    assert.equal(second[0].batch.firstSequence, 33);
+    assert.equal(second.at(-1).batch.firstSequence, 31);
+  });
+
+  test('cursor ordering follows numeric legacy ranges and wraps after the final range', async () => {
+    const directory = join(scratch, 'drain-legacy-cursor');
+    const sink = createNeatlogsOutboxSink({ directory });
+    const sequences = [1, 1_000_000_000_000, Number.MAX_SAFE_INTEGER];
+    for (const sequence of sequences) sink([sourceRecord(sequence)]);
+    const original = listNeatlogsOutbox(directory)[1];
+    const legacyName = 'batch-1000000000000-1000000000000.json';
+    renameSync(original, join(directory, legacyName));
+    const cursorPath = join(directory, 'drain-cursor.json');
+    writeFileSync(cursorPath, JSON.stringify({
+      schema: 'agent-harness.neatlogs.outbox-drain-cursor.v1', lastBatch: legacyName
+    }), { mode: 0o600 });
+    const options = { directory, config: configured(), tags: TAGS, send: false, readback: true,
+      fetch: fakeNeatlogs().fetchImpl };
+    const first = await drainNeatlogsOutbox(options);
+    assert.deepEqual(first.map(result => result.batch.firstSequence), [Number.MAX_SAFE_INTEGER, 1, sequences[1]]);
+    const again = await drainNeatlogsOutbox(options);
+    assert.deepEqual(again.map(result => result.batch.firstSequence), first.map(result => result.batch.firstSequence));
+  });
+
+  test('an invalid batch does not pin future drains and still blocks complete evidence', async () => {
+    const directory = join(scratch, 'drain-batch-exception');
+    const sink = createNeatlogsOutboxSink({ directory });
+    for (let sequence = 1; sequence <= 33; sequence += 1) sink([sourceRecord(sequence)]);
+    const firstPath = listNeatlogsOutbox(directory)[0];
+    const original = readFileSync(firstPath, 'utf8');
+    const invalid = JSON.parse(original);
+    invalid.state = 'unrecognized';
+    writeFileSync(firstPath, JSON.stringify(invalid), { mode: 0o600 });
+    const fake = fakeNeatlogs();
+    const options = { directory, config: configured(), tags: TAGS, send: false, readback: true,
+      fetch: fake.fetchImpl };
+    await assert.rejects(drainNeatlogsOutbox(options), { code: 'BATCH_INVALID' });
+    const continued = await drainNeatlogsOutbox(options);
+    assert.deepEqual(continued.map(result => result.batch.firstSequence),
+      Array.from({ length: 32 }, (_, index) => index + 2));
+    assert.equal(fake.calls.length, 0);
+    assert.throws(() => snapshotNeatlogsOutbox(directory), { code: 'BATCH_INVALID' });
+    writeFileSync(firstPath, original, { mode: 0o600 });
+    const repaired = await drainNeatlogsOutbox(options);
+    assert.equal(repaired[0].batch.firstSequence, 1, 'the retained failed row is revisited after rotation');
+  });
+
+  test('an invalid batch filename cannot replace a valid cursor or prevent progress after repair', async () => {
+    const invalidNames = [
+      'batch-0000000000000000-0000000000000002.json',
+      'batch-0000000000000002-0000000000000001.json',
+      'batch-9007199254740992-9007199254740992.json'
+    ];
+    for (const [index, invalidName] of invalidNames.entries()) {
+      const directory = join(scratch, `drain-invalid-batch-name-${index}`);
+      const sink = createNeatlogsOutboxSink({ directory });
+      sink([sourceRecord(1)]);
+      sink([sourceRecord(2)]);
+      const originalPath = listNeatlogsOutbox(directory)[1];
+      const invalidPath = join(directory, invalidName);
+      renameSync(originalPath, invalidPath);
+      const cursorPath = join(directory, 'drain-cursor.json');
+      const cursorBefore = JSON.stringify({ schema: 'agent-harness.neatlogs.outbox-drain-cursor.v1',
+        lastBatch: 'batch-0000000000000001-0000000000000001.json' });
+      writeFileSync(cursorPath, cursorBefore, { mode: 0o600 });
+      const fake = fakeNeatlogs();
+      const options = { directory, config: configured(), tags: TAGS, send: false, readback: true,
+        fetch: fake.fetchImpl };
+      await assert.rejects(drainNeatlogsOutbox(options), { code: 'BATCH_INVALID' });
+      assert.equal(readFileSync(cursorPath, 'utf8'), cursorBefore);
+      assert.equal(fake.calls.length, 0);
+      renameSync(invalidPath, originalPath);
+      const repaired = await drainNeatlogsOutbox(options);
+      assert.deepEqual(repaired.map(result => result.batch.firstSequence), [2, 1]);
+    }
+  });
+
+  test('refuses malformed, unsupported, oversized and unsafe cursor data without delivery or reset', async () => {
+    const directory = join(scratch, 'drain-invalid-cursor');
+    createNeatlogsOutboxSink({ directory })([sourceRecord(1)]);
+    const cursorPath = join(directory, 'drain-cursor.json');
+    const schema = 'agent-harness.neatlogs.outbox-drain-cursor.v1';
+    const lastBatch = 'batch-0000000000000001-0000000000000001.json';
+    const invalid = [
+      '', '{', 'null', '[]', JSON.stringify({ schema }),
+      JSON.stringify({ schema: 'future', lastBatch }),
+      JSON.stringify({ schema, lastBatch, extra: true }),
+      JSON.stringify({ schema, lastBatch: `../${lastBatch}` }),
+      JSON.stringify({ schema, lastBatch: 'batch-0000000000000000-0000000000000001.json' }),
+      JSON.stringify({ schema, lastBatch: 'batch-0000000000000002-0000000000000001.json' }),
+      JSON.stringify({ schema, lastBatch: 'batch-9007199254740992-9007199254740992.json' }),
+      `{"schema":${JSON.stringify(schema)},"lastBatch":${JSON.stringify(lastBatch)},"lastBatch":${JSON.stringify(lastBatch)}}`,
+      `${JSON.stringify({ schema, lastBatch })}${' '.repeat(257)}`
+    ];
+    const fake = fakeNeatlogs();
+    for (const value of invalid) {
+      writeFileSync(cursorPath, value, { mode: 0o600 });
+      await assert.rejects(drainNeatlogsOutbox({
+        directory, config: configured(), tags: TAGS, fetch: fake.fetchImpl
+      }), { code: 'DRAIN_CURSOR_INVALID' });
+      assert.equal(readFileSync(cursorPath, 'utf8'), value);
+    }
+    assert.equal(fake.calls.length, 0);
+    assert.equal(snapshotNeatlogsOutbox(directory)[0].batch.send, null);
+  });
+
+  test('refuses cursor directories and symlinks instead of replacing them', async () => {
+    const directory = join(scratch, 'drain-nonfile-cursor');
+    createNeatlogsOutboxSink({ directory })([sourceRecord(1)]);
+    const cursorPath = join(directory, 'drain-cursor.json');
+    const fake = fakeNeatlogs();
+    const options = { directory, config: configured(), tags: TAGS, fetch: fake.fetchImpl };
+    mkdirSync(cursorPath);
+    await assert.rejects(drainNeatlogsOutbox(options), { code: 'DRAIN_CURSOR_INVALID' });
+    rmSync(cursorPath, { recursive: true });
+    const target = join(scratch, 'cursor-symlink-target.json');
+    const contents = JSON.stringify({ schema: 'agent-harness.neatlogs.outbox-drain-cursor.v1',
+      lastBatch: 'batch-0000000000000001-0000000000000001.json' });
+    writeFileSync(target, contents, { mode: 0o600 });
+    symlinkSync(target, cursorPath);
+    await assert.rejects(drainNeatlogsOutbox(options), { code: 'DRAIN_CURSOR_INVALID' });
+    assert.equal(readFileSync(target, 'utf8'), contents);
+    assert.equal(fake.calls.length, 0);
+  });
+
+  test('an empty outbox and a read-only first visit create no cursor or network work', async () => {
+    const directory = join(scratch, 'drain-empty');
+    const sink = createNeatlogsOutboxSink({ directory });
+    const fake = fakeNeatlogs();
+    const options = { directory, config: configured(), tags: TAGS, fetch: fake.fetchImpl };
+    assert.deepEqual(await drainNeatlogsOutbox(options), []);
+    assert.equal(existsSync(join(directory, 'drain-cursor.json')), false);
+    sink([sourceRecord(1)]);
+    const readOnly = await drainNeatlogsOutbox({ ...options, send: false, readback: false });
+    assert.equal(readOnly.length, 1);
+    assert.equal(readOnly[0].state, 'pending_send');
+    assert.equal(existsSync(join(directory, 'drain-cursor.json')), false);
+    assert.equal(fake.calls.length, 0);
+  });
+
+  test('the CLI separates a bounded drain page from complete persisted delivery evidence', async () => {
+    const directory = join(scratch, 'drain-cli-snapshot');
+    const sink = createNeatlogsOutboxSink({ directory });
+    for (let sequence = 1; sequence <= 33; sequence += 1) sink([sourceRecord(sequence)]);
+    // These are explicitly synthetic retained verification records. The child
+    // must inspect them without making a real network request or asserting a
+    // new provider observation.
+    for (const path of listNeatlogsOutbox(directory)) {
+      const batch = JSON.parse(readFileSync(path, 'utf8'));
+      batch.state = 'verified';
+      batch.readback = { status: 'verified' };
+      writeFileSync(path, JSON.stringify(batch), { mode: 0o600 });
+    }
+    const evidencePath = join(scratch, 'cli-synthetic-snapshot.json');
+    const toolUrl = new URL('../../../tools/neatlogs-runtime-trace.mjs', import.meta.url);
+    const networkGuard = `
+      import net from 'node:net';
+      import tls from 'node:tls';
+      globalThis.fetch = () => { throw new Error('unexpected network'); };
+      net.Socket.prototype.connect = () => { throw new Error('unexpected socket'); };
+      tls.connect = () => { throw new Error('unexpected TLS'); };
+    `;
+    const child = spawnSync(process.execPath, [
+      '--import', `data:text/javascript,${encodeURIComponent(networkGuard)}`, fileURLToPath(toolUrl),
+      '--mode', 'drain', '--outbox', directory, '--evidence', evidencePath, '--component-revision', REVISION
+    ], { encoding: 'utf8', timeout: 10_000, maxBuffer: 64 * 1024,
+      env: { PATH: process.env.PATH, TMPDIR: tmpdir(), NODE_NO_WARNINGS: '1',
+        NEATLOGS_INGEST_KEY: INGEST_KEY, NEATLOGS_READ_TOKEN: READ_TOKEN, NEATLOGS_PROJECT_ID: PROJECT_ID } });
+    assert.equal(child.error, undefined);
+    assert.equal(child.signal, null);
+    assert.equal(child.status, 0, child.stderr);
+    const evidenceText = readFileSync(evidencePath, 'utf8');
+    const evidence = JSON.parse(evidenceText);
+    assert.equal(evidence.drainPage.length, 32);
+    assert.equal(evidence.batches.length, 33);
+    assert.equal(evidence.batchEvidenceSource, 'persisted_outbox_snapshot');
+    assert.equal(evidence.deliveryConfirmed, true);
+    assert.ok(evidence.batches.every(batch => batch.send === null));
+    for (const secret of [INGEST_KEY, READ_TOKEN, PROJECT_ID]) assert.ok(!evidenceText.includes(secret));
+  });
+
   test('sends through the OTLP sender, reads back, and records state without the project UUID', async () => {
     const directory = copyOutbox('drain-ok');
     fakeNeatlogs.records = recordsIn(directory);
