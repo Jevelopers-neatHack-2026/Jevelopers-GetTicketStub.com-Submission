@@ -1,5 +1,5 @@
 import {
-  closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, opendirSync, openSync, readdirSync,
+  closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, opendirSync, openSync,
   readFileSync, readSync, renameSync, statSync, unlinkSync, writeSync
 } from 'node:fs';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -267,10 +267,31 @@ export function createNeatlogsOutboxSink({ directory, maxRetainedBatches = DEFAU
 
 export function listNeatlogsOutbox(directory) {
   const root = resolve(directory);
-  return readdirSync(root)
-    .filter(name => BATCH_FILE.test(name))
-    .sort(compareBatchNames)
-    .map(name => join(root, name));
+  const names = [];
+  const stream = opendirSync(root, { bufferSize: 32 });
+  try {
+    let entry;
+    let examined = 0;
+    let noncursorEntries = 0;
+    while ((entry = stream.readSync()) !== null) {
+      // Readers support the largest allowed admission, including old files.
+      // Count ignored artifacts too, reserving one slot only for the cursor
+      // so an active drain cannot make its next inventory exceed this bound.
+      if (++examined > MAX_RETAINED_BATCHES + 1) {
+        throw new NeatlogsOutboxError('OUTBOX_INVENTORY_LIMIT_REACHED');
+      }
+      if (entry.name === DRAIN_CURSOR_FILE) continue;
+      if (++noncursorEntries > MAX_RETAINED_BATCHES) {
+        throw new NeatlogsOutboxError('OUTBOX_INVENTORY_LIMIT_REACHED');
+      }
+      // Keep the existing under-bound filtering and deferred range/body
+      // validation: a corrupt body must still permit cursor-driven progress.
+      if (BATCH_FILE.test(entry.name)) names.push(entry.name);
+    }
+    return names.sort(compareBatchNames).map(name => join(root, name));
+  } finally {
+    stream.closeSync();
+  }
 }
 
 function compareBatchNames(left, right) {
@@ -325,7 +346,8 @@ function readDrainCursor(root) {
  * Read-only inspection of retained batches for evidence, yielding one parsed
  * batch at a time. This is separate from the bounded drain page and performs
  * no sends, readbacks or transitions. Consumers should reduce each batch
- * before advancing; retaining every yielded batch defeats the memory bound.
+ * before advancing; retaining every yielded batch defeats streaming. The
+ * finite name inventory and per-file limit are not a caller heap-size limit.
  * A concurrent writer can change files during inspection; this is not an
  * atomic snapshot or a substitute for externally serialized drain ownership.
  */
