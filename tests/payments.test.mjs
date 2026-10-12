@@ -220,3 +220,16 @@ test("caps the webhook body while it streams, before anything is parsed", async 
   const res = await POST(req);
   assert.equal(res.status, 413);
 });
+
+test("accepts APP_URL only as an absolute https URL, or http on localhost", async () => {
+  const { configuredOrigin } = await import("../src/server/http.ts");
+  const was = process.env.APP_URL;
+  try {
+    for (const [v, want] of [["https://getticketstub.com/x", "https://getticketstub.com"], ["http://localhost:3000", "http://localhost:3000"], ["http://getticketstub.com", null], ["getticketstub.com", null], ["javascript:alert(1)", null], ["", null]]) {
+      process.env.APP_URL = v;
+      assert.equal(configuredOrigin(), want, v);
+    }
+  } finally {
+    process.env.APP_URL = was;
+  }
+});

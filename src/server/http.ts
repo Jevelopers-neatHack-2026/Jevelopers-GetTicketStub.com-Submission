@@ -68,16 +68,21 @@ export function route<A extends unknown[]>(fn: (...args: A) => Promise<Response>
 
 export const notFound = () => new HttpError(404, "not_found", "We couldn't find that.");
 
+/** APP_URL's origin, when it is an absolute https URL (or http on localhost). Anything else counts as unset. */
+export function configuredOrigin(): string | null {
+  try {
+    const u = new URL(process.env.APP_URL?.trim() ?? "");
+    const local = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    return u.protocol === "https:" || (u.protocol === "http:" && local) ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The public origin, for links in emails. APP_URL wins; otherwise the request's own origin. */
 export function appOrigin(req: Request): string {
-  const configured = process.env.APP_URL?.trim();
-  if (configured) {
-    try {
-      return new URL(configured).origin;
-    } catch {
-      /* fall through to the request origin */
-    }
-  }
+  const configured = configuredOrigin();
+  if (configured) return configured;
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? new URL(req.url).host;
   const proto = req.headers.get("x-forwarded-proto")?.split(",")[0].trim() ?? new URL(req.url).protocol.replace(":", "");
   return `${proto}://${host}`;
@@ -96,14 +101,8 @@ export function checkOrigin(req: Request): void {
   }
   const own = (req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "").toLowerCase();
   let allowed = parsed.host.toLowerCase() === own;
-  const configured = process.env.APP_URL?.trim();
-  if (!allowed && configured) {
-    try {
-      allowed = parsed.origin === new URL(configured).origin;
-    } catch {
-      /* ignore a malformed APP_URL */
-    }
-  }
+  const configured = configuredOrigin();
+  if (!allowed && configured) allowed = parsed.origin === configured;
   if (!allowed) throw deny();
 }
 

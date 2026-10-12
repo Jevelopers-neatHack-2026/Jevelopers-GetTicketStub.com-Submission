@@ -4,7 +4,7 @@
 // `code` when the server didn't take it, in which case `retry` sends the same order again (no second local copy).
 import { useRef, useState } from "react";
 import { useProgress } from "@/customer/feedback-messages/progress";
-import { goToCheckout, placeOrder, resendOrder, type Placed } from "./orders";
+import { goToCheckout, isPayable, placeOrder, resendOrder, type Placed } from "./orders";
 
 export function useOrderFlow() {
   const { state, run } = useProgress();
@@ -12,14 +12,16 @@ export function useOrderFlow() {
   const [held, setHeld] = useState<Placed | null>(null);
 
   // What the caller does once the order is placed (empty the cart, tear the stub). Never run for a checkout that is
-  // still to be paid, or one that couldn't start: the buyer may come back from the provider with nothing bought.
+  // still to be paid: the buyer may come back from the provider with nothing bought. For an order that could be paid
+  // for it runs only on success, so any error keeps the cart; a sandbox-only order keeps its local record either way.
   const afterPlaced = useRef<(() => void) | undefined>(undefined);
+  const payable = useRef(false);
 
   function settle(p: Placed | undefined) {
     if (!p) return;
     // The server started a provider checkout: payment happens on the provider's page, which returns to /payment/return.
     if (goToCheckout(p)) return;
-    if (p.code !== "payment_unavailable") {
+    if (!p.code || !payable.current) {
       afterPlaced.current?.();
       afterPlaced.current = undefined;
     }
@@ -28,6 +30,7 @@ export function useOrderFlow() {
   }
   function place(draft: Parameters<typeof placeOrder>[0], onPlaced?: () => void) {
     afterPlaced.current = onPlaced;
+    payable.current = isPayable(draft);
     setPlaced(null);
     void run(() => placeOrder(draft)).then(settle);
   }
