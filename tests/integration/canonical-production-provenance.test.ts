@@ -23,7 +23,7 @@ test("records the actual consumer pin in base and both row bundles and batch evi
 	);
 	const pin = z
 		.object({
-			version: z.literal("0.9.4"),
+			version: z.literal("0.9.7"),
 			accepted: z.literal(false),
 			source_revision: z.string(),
 			archive_sha256: z.string(),

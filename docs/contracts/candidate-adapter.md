@@ -7,15 +7,39 @@ exports `createCandidateProductionOperations(authenticatedHost)`. Its six
 context, request and Promise result unions. No canonical schema is copied here.
 
 The immutable owner archive is vendored unchanged at
-`vendor/shared-contracts/jevelopers-shared-contracts-0.9.4.tgz`. Consumer metadata
-records stopped PR31 source `d96e6cf3d8f390126407cdbc9f37b750d3256069`, package 0.9.4,
-archive SHA-256 `8f388a5b0e03be4be02083c5f2bcf62b614658a3a64498dd16287da6a4fb7616`,
+`vendor/shared-contracts/jevelopers-shared-contracts-0.9.7.tgz`. Consumer metadata
+records reviewed PR31 source `d432ad5c895a67155affeaa05cd8423c758d95c3`, package 0.9.7,
+archive SHA-256 `771a9f565ea9df87a4c08e6e6d5ede422d2a5926182a95be082dc8ed7b8c4c43`,
 SRI, package-content and fixture digests, and `accepted:false`. Installation used
 Node 24.21.0/npm 11.19.0 with `--ignore-scripts --offline --no-audit --no-fund`.
-Archive entries were reviewed before installation: 358 regular `package/` files,
-35,282,030 unpacked bytes, no unsafe paths or links. Content and fixture manifests
-were verified against every listed member; schema and fixture bytes retain their
-0.9.3 identities. This pin is not acceptance.
+Archive entries were reviewed before installation: 362 regular `package/` files,
+35,333,144 unpacked bytes, no unsafe paths, duplicate names or links. The content
+manifest covers exactly the 361 other archive members. Every listed content,
+fixture and schema hash was verified; all 362 installed files match the archive.
+Package-content digest is
+`sha256:3b4267aceaf250d4d2506ad9fad8c2e83964810078f1c01ef5d6f55100b63fe1`;
+fixture digest is
+`sha256:8db06e6348ff798c066f429bb0b21d5b7fd56ce07705b0133584bfe4f8d829ab`.
+The schema manifest lists all 86 version/schema hashes and reports
+`source_revision:null`; source provenance comes from the separate owner receipt.
+
+Compared with the retained historical 0.9.4 archive, all 86 schemas and all 90
+existing fixture files are byte-identical. The new 91st fixture is the explicitly
+synthetic `ProductionRowCsvContextCalibration.json`. The sole declaration change
+adds `ProductionZipDescriptor = Pick<ArtifactFile, 'filename' | 'byte_size' |
+'byte_hash'>` and accepts those descriptors in `verifyProductionZip`; all six
+operation signatures and package export targets are unchanged. Runtime helpers
+add facts-reference, row/batch, conditional CSV, missing error/geometry context,
+file-inventory and idempotency guards. Three new compatibility finding receipts
+retain the owner review inputs. Generated manifests, package version, changelog
+and production documentation also change. No owner source is forked here.
+
+The [owner review receipt](https://github.com/Jevelopers-neatHack-2026/shared-contracts/pull/31#issuecomment-6115337714)
+and [private development permission](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/30#issuecomment-6115346934)
+permit this immutable private interface before all nine consumers are complete,
+under supervisor section 8 criterion 5. They confer no complete program/domain
+acceptance or genuine authority. `accepted:false`, `live_integration:false` and
+blocked supplier eligibility remain recorded in actual output provenance.
 
 The host authenticates scope, actor/audience, current access, resolver and approval
 ports independently. Requests use the factory's frozen `context`; replacement
@@ -109,7 +133,7 @@ status from the actual consumer pin, verified against installed version/archive.
 
 ## Concrete contract gaps and remaining acceptance
 
-Candidate 0.9.4 `checkRowResult` rejects visible successful rows unless their
+Candidate 0.9.7 `checkRowResult` rejects visible successful rows unless their
 eligibility is `eligible`; `checkBatchResult` requires every successful row to be
 published for a successful batch. Real development row bundles are integrity
 passed but blocked, so exporting their references as canonical visible successes
@@ -123,8 +147,9 @@ field exists; PP#13.4 canonical visible row/batch publication remains unfulfille
 
 The historical 0.9.3 owner review requested changes for SC-CHK-018 (invalid-clock
 TypeError) and SC-CHK-021 (noncanonical independently expected references/bindings
-escaping pure helpers). Owner 0.9.4 repairs these paths to typed context failures;
-fresh independent review of this exact candidate remains pending. Host clock
+escaping pure helpers). Owner 0.9.4 repaired these paths to typed context failures.
+The reviewed 0.9.7 archive adds subsequent context repairs described above;
+independent review of this consumer refresh remains pending. Host clock
 parsing and typed expected values remain in place; owner source is vendored
 unchanged. V2 supplier eligibility intentionally remains `LEGACY_UNREPRESENTABLE`:
 an `ArtifactFile/2` preview cannot be equated with `Preview/1` approval.
@@ -183,8 +208,14 @@ Exact commands, outcomes, commits and output digests are recorded in the ignored
 `out/canonical-adapter-report.json`. The separate dependency refresh receipt is
 `out/canonical-refresh-report.json`; preceding 44 focused and 602 broad passes are
 historical receipts, not a full-suite claim for the refreshed HEAD. Independent
-parent and fresh owner review are still required.
+parent review of this consumer candidate is still required. The owner 0.9.7
+review and development permission are recorded above.
 The review-fix receipt is `out/canonical-fix-report.json`; it preserves baseline
 failures, permanent regression results, separate-process interruption evidence and
 the exact fixed commit/tree. It supplies implementation evidence for a fresh
 independent review and does not self-approve the candidate or accept owner 0.9.4.
+The current dependency refresh evidence is `out/contracts-097-report.json`, with
+the exact consumer HEAD/tree, complete archive delta, all-member installation
+audit, final-head checks, six-operation/base-row byte proofs and negative-owner
+command/control evidence. Earlier 0.9.4 reports and producer fixture base revisions
+remain historical evidence.

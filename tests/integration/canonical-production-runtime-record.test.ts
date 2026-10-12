@@ -249,7 +249,7 @@ test("attributes actual files to the resolved matching runtime and current consu
 	assert.notEqual(parsed.content_hash, parsed.parser_commitment);
 	assert.ok(typeof record === "object" && record !== null);
 	assert.ok(
-		"contract_candidate" in record && record.contract_candidate === "0.9.4",
+		"contract_candidate" in record && record.contract_candidate === "0.9.7",
 	);
 	assert.ok("accepted" in record && record.accepted === false);
 	assert.ok("consumer_pin" in record);
