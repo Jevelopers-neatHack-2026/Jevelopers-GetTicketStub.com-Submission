@@ -87,52 +87,74 @@ The initial implementation's local execution was blocked (owner exit 1 and clean
 failure under existing macOS containment); Docker had no running daemon. Linux
 CI, independent review and producer acknowledgement remain required.
 
-## Guarded container lifetime investigation
+## Guarded container lifetime prototype
 
-The authorized development investigation has not enabled a replacement backend.
-Its first proposed primitive is an evaluator-owned control lease: only the host
-evaluator holds the write end, a trusted container guard observes EOF, and guard
-exit causes namespace init to exit so the kernel terminates all namespace members.
-That requires a guard the hostile owner cannot stop, trace, or impersonate, and a
-control channel the owner cannot keep alive. Docker client exit, `--rm`, an EXIT
-trap, and ordinary `finally` cleanup do not establish that relationship.
+The default-off prototype in `component_tests/container_*.py` exercises only a
+synthetic lifetime canary. It is not an evaluator backend or a print acceptance
+launcher. The earlier identity-equality blocker in commit `75e75fe` was an
+incorrect inference: the source inspection checks its submitted `Config.User`,
+while the source runtime checks its own UID independently. Producer clarification
+permits recording distinct roles in this authorized development prototype. It
+does not approve that profile for official owner execution. Source revision
+`0ef7398` and both validators stay unchanged.
 
-The initial distinct-UID design is blocked by the required identity binding.
-At producer revision `0ef7398`, `scripts/security/run-offline.mjs:18` requires
-`Config.User` to equal the submitted nonroot UID:GID, `Init=true`, all capabilities
-dropped, no new privileges, and the exact source security profile. Starting the
-guard as that container command gives an ordinary child guard the owner's UID.
-The source seccomp policy permits `kill`; a same-UID owner can therefore attempt
-to stop the guard with `SIGSTOP`. Nondumpable state alone does not remove signal
-permission. This is a design counterexample, not a recorded Linux exploit test.
+Each invocation creates one fresh private PID namespace. Required Docker init and
+its main guard child run as UID/GID 61001; the one synthetic owner invocation runs
+as UID/GID 61002. No container is reused. The host creator listens on a Unix socket
+inside a guard-owned mode-0700 directory, with a mode-0600 socket and a readonly
+control mount. The guard connects and blocks on that socket. Only the creator
+holds the peer endpoint; neither endpoint is inherited by Docker clients. Creator
+SIGKILL closes the endpoint in the kernel. EOF exits the guard, which must cause
+init to exit and terminate every namespace member, including detached processes.
+If the creator dies before connection, the guard must fail connecting and exit.
+Docker attach, shell traps and client exit are not the lifetime mechanism.
 
-Starting the initial guard under another UID and the owner through `docker exec
---user` would break the required binding between `Config.User` and the actual
-submitted owner identity. The inspection CLI accepts a caller-supplied `user`,
-while the runtime validator independently checks its own positive UID; passing
-both with different identities would not establish that binding. Conversely, an
-extra guard launched under a different UID cannot simply signal the original
-UID's init/child without signal permission. Adding a same-UID intermediary leaves
-that intermediary exposed to the same stopping problem.
+Before starting the owner, the controller runs the actual source inspection
+validator, checks the exact bind mount allowlist, verifies socket peer credentials
+against the guard's real host PID, and records init/guard namespace, cgroup,
+UID/GID, supplementary groups, zero capability sets, NNP, seccomp and AppArmor.
+It also checks actual directory/socket ownership and mode. The owner calls the
+unchanged source `observeLinuxContainerSecurity`, then attempts guard/init
+SIGSTOP/SIGKILL/SIGTERM, ptrace, guard-FD opening and control-socket access. Its
+double-forked, setsid descendant closes stdio and remains alive for the test.
+Host `/proc` observations joined to Docker's actual process list bind the owner
+receipt to the captured full container ID and private namespace. Separate source
+checks alone are never treated as approval of the cross-role policy.
 
-Before implementation, the producer/runtime owner must resolve how the guard and
-owner identities, launch authority, control-channel permissions, and init exit
-are bound together under the existing restrictions. An alternative same-UID
-mechanism needs an independently justified defense against every owner signal,
-ptrace and descriptor path; none has been implemented or validated here. This is
-not a proof that every possible mechanism is impossible. No source-validator
-change, extra privilege, replacement image, or broader mount permission follows
-from the investigation.
+The container preserves the existing exact image, seccomp, docker-default,
+nonroot roles, zero capabilities, NNP, private PID/IPC/network, 1-GiB shm,
+readonly root and 2-GiB `/tmp` tmpfs. Only canary code, the managed Python runtime,
+pinned producer, owner staging, guard control directory and host namespace receipt
+are mounted; only owner staging is a writable host bind. The host controller uses
+existing authorized Linux host privileges for ownership and `/proc` observations.
+No root process, daemon socket, credentials or added capabilities enter the container.
 
-Local Docker has no daemon. Parent death during create/start/attach, cancellation,
-timeout, hostile guard tampering, detached descendants with closed stdio,
-cross-run survival, and daemon/teardown failure remain unexecuted in the exact
-source image/profile. Any later primitive must preserve the 30-second case,
-`min(case.timeout_seconds, 30)` cleanup, five-second reap and 15-minute job budgets;
-create/start overhead counts. Unknown/live termination must yield ERROR and
-preserve staging/quarantine before retention or cleanup. The existing failing
-print baseline remains separate from prototype proof and ART-04 acceptance.
+Run the explicit workflow-dispatch input `guarded_print_lifetime=true` to select
+the additive `print-container-lifetime-prototype` job. It has the original
+15-minute budget. After source staging and build its command is:
 
-Linux semantics supporting the design analysis: [signal permissions](https://man7.org/linux/man-pages/man2/kill.2.html),
-[namespace init termination](https://man7.org/linux/man-pages/man7/pid_namespaces.7.html),
-and [no-new-privileges](https://www.kernel.org/doc/html/latest/userspace-api/no_new_privs.html).
+```sh
+IE_PRINT_CONTAINER_PROTOTYPE=guarded-development \
+IE_PRINT_SOURCE=/approved/pinned-print-source \
+IE_PRINT_LIFETIME_EVIDENCE=/owned/lifetime-evidence \
+bash component_tests/container-prototype-ci.sh
+```
+
+Nine Linux tests cover SIGKILL after create-client launch, after recorded creation,
+after start/attach-client launch, after lease arming and after detached owner
+startup; each runs a separate live sentinel. They also cover normal lease release,
+handled cancellation, the original 30-second deadline, and an unreachable
+teardown-only Docker endpoint. The checkpoints identify client lifecycle
+boundaries, not every instruction inside the daemon. The outage test does not
+stop the shared daemon. Every operation counts against the original 30-second
+invocation and five-second final reap budgets. No producer cleanup is invoked.
+
+Raw inspections and requested IDs are retained before validation. Teardown checks
+the returned immutable ID and ownership before removing only that ID. Unknown or
+live termination produces ERROR/quarantine and preserves staging; even successful
+canary staging is kept as diagnostics. Root-owned evidence is archived without
+disposing unknown containers. The original print job, tests and acceptance
+failure remain intact. Local Docker has no daemon: these Linux tests are
+**unexecuted until a real job receipt exists**. Independent review, hostile-test
+results and an explicit reviewed role profile are required before any subsequent
+official backend integration or feasibility claim.

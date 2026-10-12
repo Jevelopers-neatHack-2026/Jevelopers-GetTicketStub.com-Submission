@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      guarded_print_lifetime:
+        description: Run the development-only distinct-role print lifetime falsification suite
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -82,6 +87,53 @@ jobs:
         with:
           name: verification-tooling-${{ github.sha }}
           path: reports/
+          retention-days: 30
+
+  print-container-lifetime-prototype:
+    if: github.event_name == 'workflow_dispatch' && inputs.guarded_print_lifetime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+      IE_PRINT_CONTAINER_PROTOTYPE: guarded-development
+    steps:
+      - name: Initialize isolated prototype paths
+        run: |
+          {
+            printf 'UV_PYTHON_INSTALL_DIR=%s/lifetime-python\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_SOURCE=%s/lifetime-producer\n' "$RUNNER_TEMP"
+            printf 'IE_PRINT_LIFETIME_EVIDENCE=%s/lifetime-evidence\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.10.4
+          enable-cache: false
+      - run: uv sync --frozen
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/print-production
+          ref: 0ef7398bb94caacf6b48068747142883470fbdaf
+          path: .lifetime-producer
+          persist-credentials: false
+      - run: mv .lifetime-producer "$IE_PRINT_SOURCE"
+      - name: Falsify the isolated EOF guard lifetime hypothesis
+        run: bash component_tests/container-prototype-ci.sh
+      - name: Archive private staging without disposing unknown containers
+        if: always()
+        run: |
+          mkdir -p "$IE_PRINT_LIFETIME_EVIDENCE"
+          sudo -n tar --exclude='*/control/lease' -cf "$RUNNER_TEMP/lifetime-evidence.tar" -C "$IE_PRINT_LIFETIME_EVIDENCE" .
+          sudo -n chmod 0644 "$RUNNER_TEMP/lifetime-evidence.tar"
+      - name: Preserve prototype diagnostics even when falsified
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: print-lifetime-prototype-${{ github.sha }}
+          path: ${{ runner.temp }}/lifetime-evidence.tar
+          if-no-files-found: error
           retention-days: 30
 
   print-component:
