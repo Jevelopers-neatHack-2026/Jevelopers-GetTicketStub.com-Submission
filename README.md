@@ -69,11 +69,13 @@ Still unproven: one complete live agent journey and measured improvement across 
 
 ## Try the sample
 
-In a fresh clone, use the studio’s [Node and npm versions](repositories/getticketstub.com/package.json):
+In a fresh folder, check out the version we replayed. Use its [Node and npm versions](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/package.json):
 
 ```sh
-cd repositories/getticketstub.com
-npm ci
+git clone https://github.com/Jevelopers-neatHack-2026/getticketstub.com.git ticketstub-demo
+cd ticketstub-demo
+git checkout 6daafba1a3384b20ad181b957fd5d5715da29153
+npm ci --ignore-scripts
 TICKETSTUB_RUNTIME_MODE=demo npm run dev
 ```
 

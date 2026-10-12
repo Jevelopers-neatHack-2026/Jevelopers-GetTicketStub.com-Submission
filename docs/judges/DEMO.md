@@ -36,11 +36,13 @@ The times below match the supplied storyboard. They are **not timestamps of veri
 
 ## Replay the sample
 
-In a fresh clone, use the versions in the [studio package file](../../repositories/getticketstub.com/package.json), then:
+In a fresh folder outside this collection, use the versions in the [tested studio package file](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/package.json). This pins the exact code we replayed, even after the collection changes:
 
 ```sh
-cd repositories/getticketstub.com
-npm ci
+git clone https://github.com/Jevelopers-neatHack-2026/getticketstub.com.git ticketstub-demo
+cd ticketstub-demo
+git checkout 6daafba1a3384b20ad181b957fd5d5715da29153
+npm ci --ignore-scripts
 TICKETSTUB_RUNTIME_MODE=demo npm run dev
 ```
 

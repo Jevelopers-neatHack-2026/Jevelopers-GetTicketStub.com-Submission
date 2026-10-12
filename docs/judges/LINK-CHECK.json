@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-12T17:24:11.921481+00:00",
+  "checked_at": "2026-10-12T17:30:28.970969+00:00",
   "method": "Unauthenticated HTTP GET; does not prove form completion or page claims.",
   "links": [
     {
@@ -23,29 +23,34 @@
       "final_url": "https://github.com/CompleteDotTech"
     },
     {
+      "url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/9580b9b3eebd90470c8c322d95ee169f153995d3",
+      "status": 200,
+      "final_url": "https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/9580b9b3eebd90470c8c322d95ee169f153995d3"
+    },
+    {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087",
       "status": 200,
       "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/actions/runs/38166575087"
     },
     {
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/package.json",
+      "error": "HTTP Error 503: Service Unavailable"
+    },
+    {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/app/api/research/route.ts",
-      "status": 200,
-      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/app/api/research/route.ts"
+      "error": "HTTP Error 503: Service Unavailable"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/agent/planner.ts",
-      "status": 200,
-      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/agent/planner.ts"
+      "error": "HTTP Error 503: Service Unavailable"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/fixtures.ts",
-      "status": 200,
-      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/customer/studio/fixtures.ts"
+      "error": "HTTP Error 503: Service Unavailable"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/server/ai/providers.ts",
-      "status": 200,
-      "final_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/6daafba1a3384b20ad181b957fd5d5715da29153/src/server/ai/providers.ts"
+      "error": "HTTP Error 503: Service Unavailable"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/commit/6daafba1a3384b20ad181b957fd5d5715da29153",
@@ -59,28 +64,23 @@
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md",
-      "status": 200,
-      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/README.md"
+      "error": "HTTP Error 503: Service Unavailable"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md",
-      "status": 200,
-      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-canvas-narrative.md"
+      "error": "HTTP Error 503: Service Unavailable"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx",
-      "status": 200,
-      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/cfo-ai/2026-10-11-r2/cfo-native-export.xlsx"
+      "error": "HTTP Error 503: Service Unavailable"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md",
-      "status": 200,
-      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/entire/2026-10-11/graph-getticketstub-c384776/README.md"
+      "error": "HTTP Error 503: Service Unavailable"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md",
-      "status": 200,
-      "final_url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/89141b4e9237d7cc1548254b99dbd0f01589eaa4/evidence/neatlogs/2026-10-11/README.md"
+      "error": "HTTP Error 503: Service Unavailable"
     },
     {
       "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/commit/89141b4e9237d7cc1548254b99dbd0f01589eaa4",

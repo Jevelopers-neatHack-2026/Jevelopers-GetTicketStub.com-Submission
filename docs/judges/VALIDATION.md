@@ -27,4 +27,13 @@ To refresh the public link report (this edits `LINK-CHECK.json`):
 python3 scripts/check_judge_docs.py --public-links
 ```
 
-The first authenticated refresh stopped before applying files when the shared GitHub API quota ran out. A public-only metadata option was added and tested; the refresh result is recorded below when complete. The sync copies exact source trees and never updates an evidence claim merely because its source code changed.
+## First source refresh
+
+Published October 12 at 17:29 UTC: [snapshot commit 9580b9b](https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/9580b9b3eebd90470c8c322d95ee169f153995d3).
+
+- 14 public repositories, 3,931 tracked files. All copied Git trees matched their recorded source trees. Private checkpoint storage was excluded.
+- 27 presentation files had identical SHA-256 hashes before and after the refresh. The root guide and assets survived unchanged.
+- The secret scan passed with 553 exact, reviewed fixture/identifier matches. Eleven matches in ten changed or new files were reviewed before updating their exact exceptions: synthetic test keys, fake token strings, an unchanged test-only UUID, and public input-file hashes. No path or rule was excluded wholesale.
+- All 11 sync tests and the maintained-document link/hash checks passed after refresh. Evidence claims still refer to their tested revisions; new source code was not declared live-verified.
+
+The first authenticated attempt stopped safely when the shared GitHub API quota ran out. The successful retry used `python3 scripts/sync_submission.py --publish --public-api`. Public metadata used no credential; the normal Git push used existing authentication.
