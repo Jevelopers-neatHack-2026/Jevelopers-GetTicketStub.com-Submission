@@ -1,0 +1,15 @@
+HTTP/2 200 
+date: Mon, 12 Oct 2026 14:20:06 GMT
+content-type: text/html; charset=utf-8
+cache-control: private, no-cache, no-store, max-age=0, must-revalidate
+set-cookie: [REDACTED]
+link: </_next/static/media/54fc36028e2bb174-s.p.20jfceqj9zyw9.woff2>; rel=preload; as="font"; crossorigin=""; type="font/woff2", </_next/static/media/ab57efd000576a30-s.p.3fofz6dws3mg0.woff2>; rel=preload; as="font"; crossorigin=""; type="font/woff2", </brand/mockup-art-glasgow.webp>; rel=preload; as="image", </brand/ts-stamp-mono-ink.svg>; rel=preload; as="image"
+ss-product-id: paas-nodejs-v1
+vary: Origin
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding
+x-powered-by: Next.js
+x-request-id: aea662bd284da3d5
+cf-cache-status: DYNAMIC
+server: cloudflare
+cf-ray: a496be4918a123b7-CLE
+
