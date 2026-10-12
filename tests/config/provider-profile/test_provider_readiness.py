@@ -149,7 +149,7 @@ def make_live_observation(profile, capability_id, *, api_family, endpoint, model
         billing_mode="api_metered",
         api_family=api_family,
         endpoint=endpoint,
-        credential_env={"typesafe": "TYPESAFE_API_KEY", "openai": "OPENAI_API_KEY", "neatlogs": "NEATLOGS_API_KEY"}.get(cell["provider"]),
+        credential_env={"typesafe": "TYPESAFE_API_KEY", "openai": "OPENAI_API_KEY", "neatlogs": "NEATLOGS_INGEST_KEY"}.get(cell["provider"]),
         account_ref=account_ref,
         project_ref=project_ref,
         quota_status="recorded",
