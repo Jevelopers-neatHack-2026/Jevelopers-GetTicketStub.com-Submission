@@ -1,7 +1,9 @@
 import copy
+import hashlib
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -9,6 +11,8 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+from tools import validate_collateral as validator  # noqa: E402
 
 from tools.validate_collateral import (  # noqa: E402
     DEFAULT_SUBMISSION_SELECTION,
@@ -804,6 +808,122 @@ class CollateralPolicyValidationTests(unittest.TestCase):
         blockers = release_blockers(self.claims, mutated)
         self.assertTrue(any("independent visual/content/accessibility review is pending" in item for item in blockers), blockers)
         self.assertTrue(any("selected destination rights/publishability are not approved" in item for item in blockers), blockers)
+
+
+class CollateralPathBoundaryTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.fixture_root = Path(temporary.name).resolve()
+        self.repo_root = self.fixture_root / "repo"
+        self.repo_root.mkdir()
+        self.outside_dir = self.fixture_root / "outside"
+        self.outside_dir.mkdir()
+        self.outside_file = self.outside_dir / "outside.md"
+        self.canary = "SYNTHETIC_OUTSIDE_ROOT_DISCLOSURE_CANARY"
+        self.outside_file.write_text(self.canary + "\n", encoding="utf-8")
+        self.root_patch = mock.patch.object(validator, "ROOT", self.repo_root)
+        self.root_patch.start()
+        self.addCleanup(self.root_patch.stop)
+
+    def visual_copy_errors(self, path_text, exact_text="Synthetic safe copy."):
+        source_bytes = (exact_text + "\n").encode("utf-8")
+        source_digest = hashlib.sha256(source_bytes).hexdigest()
+        handoff_bytes = b"{}"
+        ledger = {
+            "claims": [{"id": "SYNTHETIC-CLAIM", "allowedWording": exact_text}],
+            "visualCopy": {
+                "handoffPath": "review/visual/asset-handoff.json",
+                "handoffCommit": "0" * 40,
+                "handoffSha256": hashlib.sha256(handoff_bytes).hexdigest(),
+                "mappings": [{
+                    "mappingId": "SYNTHETIC-PATH-MAPPING",
+                    "assetId": "SYNTHETIC-ASSET",
+                    "path": path_text,
+                    "surface": "markdown-paragraph",
+                    "exactText": exact_text,
+                    "mappingKind": "block",
+                    "sourceSha256": source_digest,
+                    "sourceCommit": "0" * 40,
+                    "provenanceRecordId": "SYNTHETIC-ASSET",
+                    "claimId": "SYNTHETIC-CLAIM",
+                }],
+            },
+        }
+        register = {"records": [{
+            "assetId": "SYNTHETIC-ASSET",
+            "source": {"path": path_text},
+            "checksum": {"value": source_digest},
+        }]}
+
+        def pinned_bytes(revision, path):
+            return handoff_bytes if path == "review/visual/asset-handoff.json" else source_bytes
+
+        with mock.patch.object(validator, "EXPECTED_VISUAL_COPY_SOURCES", {path_text: "SYNTHETIC-ASSET"}), mock.patch.object(
+            validator, "_pinned_file", side_effect=pinned_bytes
+        ), mock.patch.object(validator, "_sha256_path", wraps=validator._sha256_path) as hash_path, mock.patch.object(
+            validator, "_extract_copy_units", wraps=validator._extract_copy_units
+        ) as extract:
+            errors = validator.validate_visual_copy(ledger, {}, register)
+        return errors, hash_path, extract
+
+    def assert_unsafe_visual_path_rejected(self, path_text):
+        errors, hash_path, extract = self.visual_copy_errors(path_text)
+        joined = "\n".join(errors)
+        self.assertIn("path must be normalized and contained in the repository without symlinks", joined)
+        self.assertNotIn(self.canary, joined)
+        hash_path.assert_not_called()
+        extract.assert_not_called()
+
+    def test_parent_traversal_cannot_read_or_disclose_outside_file(self):
+        self.assert_unsafe_visual_path_rejected("../outside/outside.md")
+
+    def test_absolute_path_cannot_read_or_disclose_outside_file(self):
+        self.assert_unsafe_visual_path_rejected(self.outside_file.as_posix())
+
+    def test_leaf_symlink_cannot_read_or_disclose_outside_file(self):
+        (self.repo_root / "linked.md").symlink_to(self.outside_file)
+        self.assert_unsafe_visual_path_rejected("linked.md")
+
+    def test_directory_symlink_cannot_read_or_disclose_outside_file(self):
+        (self.repo_root / "linked").symlink_to(self.outside_dir, target_is_directory=True)
+        self.assert_unsafe_visual_path_rejected("linked/outside.md")
+
+    def test_normalized_repository_file_keeps_exact_copy_compatibility(self):
+        (self.repo_root / "copy").mkdir()
+        (self.repo_root / "copy/safe.md").write_text("Synthetic safe copy.\n", encoding="utf-8")
+        errors, hash_path, extract = self.visual_copy_errors("copy/safe.md")
+        self.assertEqual(errors, [])
+        hash_path.assert_called_once_with(self.repo_root / "copy/safe.md")
+        self.assertEqual(extract.call_count, 2)
+
+    def test_non_normalized_paths_are_rejected(self):
+        for path_text in (None, 1, "", ".", "./copy.md", "copy//safe.md", "copy/./safe.md", "copy/", "copy\\safe.md", "copy\x00.md"):
+            with self.subTest(path=path_text):
+                self.assertIsNone(validator._safe_repo_path(path_text))
+        self.assertEqual(validator._safe_repo_path("copy/missing.md"), self.repo_root / "copy/missing.md")
+
+    def test_symlink_components_are_rejected_even_for_in_repository_targets(self):
+        (self.repo_root / "copy").mkdir()
+        (self.repo_root / "copy/safe.md").write_text("Synthetic safe copy.\n", encoding="utf-8")
+        (self.repo_root / "linked").symlink_to(self.repo_root / "copy", target_is_directory=True)
+        self.assertIsNone(validator._safe_repo_path("linked/safe.md"))
+
+    def test_default_policy_symlink_is_rejected_and_explicit_cli_input_is_supported(self):
+        policy_file = self.outside_dir / "policy.json"
+        policy_file.write_text('{"synthetic": true}\n', encoding="utf-8")
+        (self.repo_root / "messaging").mkdir()
+        default_policy = self.repo_root / "messaging/claims.json"
+        default_policy.symlink_to(policy_file)
+        with self.assertRaisesRegex(ValueError, "normalized repository file without symlinks"):
+            validator._read_cli_json(default_policy, "messaging/claims.json")
+        self.assertEqual(validator._read_cli_json(policy_file, "messaging/claims.json"), {"synthetic": True})
+
+    def test_option_like_tracked_filename_is_passed_after_git_argument_separator(self):
+        (self.repo_root / "--synthetic.md").write_text("Synthetic safe copy.\n", encoding="utf-8")
+        with mock.patch.object(validator.subprocess, "run", return_value=mock.Mock(returncode=0)) as run:
+            self.assertTrue(validator._is_tracked_repo_file("--synthetic.md"))
+        self.assertEqual(run.call_args.args[0], ["git", "ls-files", "--error-unmatch", "--", "--synthetic.md"])
 
 
 if __name__ == "__main__":
