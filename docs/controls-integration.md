@@ -1,4 +1,4 @@
-Current staged composition details and remaining full original-scope dependencies are in [composition controls integration](controls/composition-integration.md). Final qualification waits corrected coherent backend integration and exact-head checks/review.
+The bounded local composition consumer, source-reported post-merge checks, and remaining full original-scope dependencies are in [composition controls integration](controls/composition-integration.md). Full qualification still depends on the original typed composition/compound bridge and its owner-controlled integration and acceptance evidence.
 
 Current actual Apply→CE09 consumer details and boundaries are in [actual saved-artwork inspection](controls/actual-inspection.md). Earlier checkpoint statements below retain their historical scope; they do not describe current inspection as unimplemented.
 
@@ -11,7 +11,7 @@ immutable version store and usage outbox. The
 browser's default fixture uses **MOCK trusted host authority and intercepted
 provider/Finance transport**. It authenticates no real membership and makes no
 network provider calls. Local API execution and persisted bytes, hashes, jobs,
-selection, replay and cancellation are real. A separately versioned staged composition controls consumer and durable artwork-action recovery now exist; see [composition controls integration](controls/composition-integration.md) and [reviewed artwork action recovery](controls/artwork-recovery.md). These offline mock/local consumers do not supply the original CE-05 `creative.composition.consume/1` ControlOperation bridge, compound routing or factual-correction workflow, nor do they establish app-runtime integration or external acceptance. The original composition/compound bridge remains typed-unavailable below; research correction remains pending.
+selection, replay and cancellation are real. A separately versioned local composition controls consumer and durable artwork-action recovery now exist; see [composition controls integration](controls/composition-integration.md) and [reviewed artwork action recovery](controls/artwork-recovery.md). These offline mock/local consumers do not supply the original CE-05 `creative.composition.consume/1` ControlOperation bridge, compound routing or factual-correction workflow, nor do they establish app-runtime integration or external acceptance. The original composition/compound bridge remains typed-unavailable below; research correction remains pending.
 
 This contributes to CON-01/02/03 (Agent and research), ART-01 (Creative and
 fulfillment), ART-02/EVAL-03 (Product and frontend), and EVAL-04 (Finance and
@@ -224,7 +224,7 @@ accepted package consumers remain pending.
 
 ## Required backend bridges
 
-This table tracks the original CE-05 typed `ControlOperation` bridge and related follow-up consumers. It is distinct from the separately versioned staged `CompositionControlsAdapter` documented above; the typed-unavailable bridge outcome does not mean that the separate local mock composition consumer is absent. These remain required local integrations, not scope waivers or external blockers:
+This table tracks the original CE-05 typed `ControlOperation` bridge and related follow-up consumers. It is distinct from the separately versioned local `CompositionControlsAdapter` documented above; the typed-unavailable bridge outcome does not mean that the separate local mock composition consumer is absent. These remain required local integrations, not scope waivers or external blockers:
 
 | Bridge | Required contract and result | Current outcome |
 | --- | --- | --- |
