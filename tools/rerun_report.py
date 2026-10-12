@@ -40,12 +40,12 @@ OFFLINE_PROVIDER_VALUES = ("mock", "recorded")
 OUTCOMES = ("passed", "failed", "skipped", "error")
 ERROR_KINDS = ("none", "test_failure", "environment", "ambiguous_dispatch")
 
-SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-HEX40 = re.compile(r"^[0-9a-f]{40}$")
-HEX64 = re.compile(r"^[0-9a-f]{64}$")
-ISSUE_URL = re.compile(r"^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/issues/[1-9][0-9]{0,9}$")
+SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+HEX40 = re.compile(r"[0-9a-f]{40}")
+HEX64 = re.compile(r"[0-9a-f]{64}")
+ISSUE_URL = re.compile(r"https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/issues/[1-9][0-9]{0,9}")
 UTC_TS = re.compile(
-    r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(?:Z|\+00:00)$")
+    r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,6}))?(?:Z|\+00:00)")
 
 TOP_KEYS = ("format_version", "case_id", "requirement_ids", "mandatory", "category",
             "provider_modes", "pins", "fixture_digest", "config_digest", "seed", "runs")
@@ -164,7 +164,7 @@ def parse_ts(value):
     """Return a datetime for a UTC ISO timestamp, or None."""
     if type(value) is not str:
         return None
-    m = UTC_TS.match(value)
+    m = UTC_TS.fullmatch(value)
     if not m:
         return None
     parts = [int(g) for g in m.groups()[:6]]
@@ -193,7 +193,7 @@ def _valid_pins(errs, value, field):
         return False
     ok = True
     for key, item in value.items():
-        if not SAFE_ID.match(key) or type(item) is not str or not HEX40.match(item):
+        if not SAFE_ID.fullmatch(key) or type(item) is not str or not HEX40.fullmatch(item):
             ok = False
     if not ok:
         errs.add("bad-value", field)
@@ -204,7 +204,7 @@ def _valid_modes(errs, value, field):
     if type(value) is not dict or not value or len(value) > MAX_ITEMS:
         errs.add("bad-value", field)
         return False
-    ok = all(SAFE_ID.match(k) and type(v) is str and v in PROVIDER_VALUES
+    ok = all(SAFE_ID.fullmatch(k) and type(v) is str and v in PROVIDER_VALUES
              for k, v in value.items())
     if not ok:
         errs.add("bad-value", field)
@@ -212,7 +212,7 @@ def _valid_modes(errs, value, field):
 
 
 def _valid_hex(errs, value, field, pattern):
-    ok = type(value) is str and bool(pattern.match(value))
+    ok = type(value) is str and bool(pattern.fullmatch(value))
     if not ok:
         errs.add("bad-value", field)
     return ok
@@ -226,7 +226,7 @@ def _validate_quarantine(errs, q):
         if key in q and not _is_str(q[key]):
             errs.add("bad-value", field + "." + key)
     if "remediation_issue" in q and not (
-            type(q["remediation_issue"]) is str and ISSUE_URL.match(q["remediation_issue"])):
+            type(q["remediation_issue"]) is str and ISSUE_URL.fullmatch(q["remediation_issue"])):
         errs.add("bad-value", field + ".remediation_issue")
     if "expiry" in q and parse_ts(q["expiry"]) is None:
         errs.add("bad-value", field + ".expiry")
@@ -252,7 +252,7 @@ def _validate_runs(errs, data, runs, top_ok):
             continue
         rid = run.get("run_id")
         if "run_id" in run:
-            if type(rid) is not str or not SAFE_ID.match(rid):
+            if type(rid) is not str or not SAFE_ID.fullmatch(rid):
                 errs.add("bad-value", f + ".run_id")
             elif rid in seen:
                 errs.add("duplicate-id", f + ".run_id")
@@ -307,12 +307,12 @@ def validate(data):
     if "format_version" in data and not (_is_int(data["format_version"])
                                          and data["format_version"] == FORMAT_VERSION):
         errs.add("bad-value", "format_version")
-    if "case_id" in data and not (type(data["case_id"]) is str and SAFE_ID.match(data["case_id"])):
+    if "case_id" in data and not (type(data["case_id"]) is str and SAFE_ID.fullmatch(data["case_id"])):
         errs.add("bad-value", "case_id")
     if "requirement_ids" in data:
         ids = data["requirement_ids"]
         if type(ids) is not list or not ids or len(ids) > MAX_ITEMS or not all(
-                type(x) is str and SAFE_ID.match(x) for x in ids):
+                type(x) is str and SAFE_ID.fullmatch(x) for x in ids):
             errs.add("bad-value", "requirement_ids")
         elif len(set(ids)) != len(ids):
             errs.add("duplicate-id", "requirement_ids")

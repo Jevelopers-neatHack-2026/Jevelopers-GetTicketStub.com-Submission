@@ -348,6 +348,81 @@ class Validation(Base):
         self.assertEqual(d, before)
 
 
+class WholeFieldGrammar(Base):
+    """Trailing/embedded newline, CR and non-ASCII digits must never pass a grammar check."""
+    SUFFIXES = ("\n", "\r", "\r\n", " ", "\x00")
+
+    def assert_rejected(self, mutate, label):
+        d = record((("failed", "test_failure"),) * 2, quarantine=quarantine())
+        mutate(d)
+        self.assertTrue(rr.validate(d), label)
+        code, out, _ = self.cli(self.write(d))
+        self.assertEqual(code, 1, label)
+        self.assertFalse(json.loads(out)["ok"], label)
+        for frag in ("\\n", "\\r", "\\u0000", "case-1", "run-0", "REQ-1", PIN, "b" * 64):
+            self.assertNotIn(frag, out, (label, frag))
+
+    def variants(self, value):
+        out = [value + s for s in self.SUFFIXES]
+        out.append(value[:1] + "\n" + value[1:])
+        out.append("\n" + value)
+        return out
+
+    def test_ids(self):
+        setters = (
+            ("case_id", "case-1", lambda d, v: d.__setitem__("case_id", v)),
+            ("requirement", "REQ-1", lambda d, v: d["requirement_ids"].__setitem__(0, v)),
+            ("run_id", "run-0", lambda d, v: d["runs"][0].__setitem__("run_id", v)),
+            ("run_id2", "run-1", lambda d, v: d["runs"][1].__setitem__("run_id", v)),
+            ("parent", "run-0", lambda d, v: d["runs"][1].__setitem__("parent_run_id", v)),
+        )
+        for name, base, setter in setters:
+            for v in self.variants(base):
+                self.assert_rejected(lambda d: setter(d, v), (name, v))
+
+    def test_pin_and_provider_keys(self):
+        setters = (
+            lambda d, v: d.__setitem__("pins", {v: PIN}),
+            lambda d, v: d["runs"][0].__setitem__("pins", {v: PIN}),
+            lambda d, v: d.__setitem__("provider_modes", {v: "mock"}),
+            lambda d, v: d["runs"][1].__setitem__("provider_modes", {v: "mock"}),
+        )
+        for v in self.variants("repo"):
+            for n, fn in enumerate(setters):
+                self.assert_rejected(lambda d: fn(d, v), (n, v))
+
+    def test_pin_and_digest_values(self):
+        for v in self.variants(PIN):
+            self.assert_rejected(lambda d: d.__setitem__("pins", {"repo": v}), ("top pin", v))
+            self.assert_rejected(lambda d: d["runs"][0].__setitem__("pins", {"repo": v}), ("run pin", v))
+            self.assert_rejected(lambda d: d["quarantine"].__setitem__("last_bad_revision", v), "bad rev")
+            self.assert_rejected(lambda d: d["quarantine"].__setitem__("last_good_revision", v), "good rev")
+        for key in ("fixture_digest", "config_digest"):
+            for v in self.variants("b" * 64):
+                self.assert_rejected(lambda d: d.__setitem__(key, v), (key, v))
+                self.assert_rejected(lambda d: d["runs"][1].__setitem__(key, v), (key, "run", v))
+
+    def test_timestamps(self):
+        extra = ["2026-01-01T00:00:00+00:00\n", "\u0662026-01-01T00:00:00Z",
+                 "2026-01-01T00:00:00.\u0661Z", "2026-\uff10\uff11-01T00:00:00Z"]
+        for v in self.variants("2026-01-01T00:00:00Z") + extra:
+            self.assert_rejected(lambda d: d["runs"][1].__setitem__("occurred_at", v), ("ts", v))
+            self.assert_rejected(lambda d: d["quarantine"].__setitem__("expiry", v), ("expiry", v))
+
+    def test_issue_url(self):
+        for v in self.variants("https://github.com/org/repo/issues/12") + [
+                "https://github.com/org/repo/issues/1\u0662"]:
+            self.assert_rejected(lambda d: d["quarantine"].__setitem__("remediation_issue", v), ("issue", v))
+
+    def test_parse_ts_direct(self):
+        self.assertIsNone(rr.parse_ts("2026-01-01T00:00:00Z\n"))
+        self.assertIsNotNone(rr.parse_ts("2026-01-01T00:00:00Z"))
+
+    def test_clean_values_still_accepted(self):
+        d = record((("failed", "test_failure"),) * 2, quarantine=quarantine())
+        self.assertEqual(rr.validate(d), [])
+
+
 class InputHandling(Base):
     def test_duplicate_keys(self):
         raw = json.dumps(record()).replace('"case_id": "case-1"', '"case_id": "a", "case_id": "b"')
