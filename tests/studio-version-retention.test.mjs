@@ -178,4 +178,21 @@ describe("legacy walls and sync", () => {
     assert.equal(merged[0].versions[0].art.src, remote.versions[0].art.src);
     assert.ok(!retention.artUnavailable(merged[0].versions[0].art));
   });
+
+  test("a photo version that lost its picture is labelled unavailable, never as 'Your photo'", () => {
+    const released = { kind: "procedural", seed: 3, vibe: "photo", provenance: "sandbox", unavailable: true };
+    const legacy = { kind: "procedural", seed: 3, vibe: "photo", provenance: "sandbox" };
+    for (const a of [released, legacy]) {
+      assert.equal(retention.artUnavailable(a), true);
+      assert.deepEqual(versions.artLabel(a), { text: "Your photo, image not kept on this device (sample shown)", sample: true });
+    }
+    assert.deepEqual(versions.artLabel({ kind: "image", src: "/api/files/x.png", seed: 3, vibe: "photo", provenance: "sandbox" }), { text: "Your photo", sample: false });
+  });
+
+  test("retainArt never takes art from a different stub", () => {
+    const a = stub("a", 3);
+    const lost = retention.releaseOldest([a], 1)[0];
+    const other = { ...stub("b", 3) };
+    assert.equal(retention.retainArt(lost, other), lost);
+  });
 });

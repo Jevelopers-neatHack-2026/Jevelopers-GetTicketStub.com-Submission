@@ -249,7 +249,9 @@ export class SqliteStorage implements Storage {
             keep = stub; // an unreadable stored copy has nothing to give back
           }
         }
-        upsert.run(accountId, stub.id, at, JSON.stringify(keep));
+        const json = JSON.stringify(keep);
+        upsert.run(accountId, stub.id, at, json);
+        stored.set(stub.id, json); // a later entry for the same stub in this request sees what was just written
         existing.set(stub.id, { updatedAt: at, deleted: false });
       }
       const tomb = this.db.prepare(

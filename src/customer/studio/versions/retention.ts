@@ -7,10 +7,11 @@ const isInline = (src: string | undefined): src is string => !!src && src.starts
 
 /**
  * True when this version's picture is not on this copy. Covers the explicit marker and the old silent drop, which left
- * generated ("live") art as procedural with no image.
+ * generated ("live") art as procedural with no image, and photo versions left with no image.
  */
 export function artUnavailable(a: ArtLayer): boolean {
-  return a.unavailable === true || (a.kind === "procedural" && a.provenance === "live" && !a.src);
+  // a photo remix always had a picture, so a photo version with none lost it, whatever its provenance says
+  return a.unavailable === true || (!a.src && (a.vibe === "photo" || (a.kind === "procedural" && a.provenance === "live")));
 }
 
 /** The version with its inline picture released and said so. Everything else about it (id, parent, seed, vibe) stays. */
@@ -41,7 +42,7 @@ export function releaseOldest(stubs: Stub[], count: number): Stub[] {
  * still has it. Matches by version id only; nothing else about the version changes. Returns `next` itself when nothing is restored.
  */
 export function retainArt(next: Stub, kept: Stub | undefined): Stub {
-  if (!kept) return next;
+  if (!kept || kept.id !== next.id) return next;
   const have = new Map(kept.versions.map((v) => [v.id, v]));
   let changed = false;
   const versions = next.versions.map((v) => {

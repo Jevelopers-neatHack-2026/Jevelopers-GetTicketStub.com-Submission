@@ -31,8 +31,12 @@ export function sameArt(a: ArtLayer, b: ArtLayer): boolean {
 
 /** What the art is, in plain words. Sample and procedural art never reads as the real thing. */
 export function artLabel(a: ArtLayer): { text: string; sample: boolean } {
+  if (artUnavailable(a)) {
+    return a.vibe === "photo"
+      ? { text: "Your photo, image not kept on this device (sample shown)", sample: true }
+      : { text: "Generated art, image not kept on this device (sample shown)", sample: true };
+  }
   if (a.vibe === "photo") return { text: "Your photo", sample: false };
-  if (artUnavailable(a)) return { text: "Generated art, image not kept on this device (sample shown)", sample: true };
   if (a.kind === "procedural") return { text: "Procedural art (sample)", sample: true };
   if (a.provenance === "live") return { text: "Generated art", sample: false };
   return { text: "Sample art (not generated)", sample: true };
