@@ -146,7 +146,12 @@ try {
   }
   async function snapshot(page, name) { const file = join(evidenceDir, `${name}.png`); await page.screenshot(file); result.screenshots.push(file); }
   async function center(page, selector) {
-    return page.eval(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return null; el.scrollIntoView({ block:'center', behavior:'instant' }); const r = el.getBoundingClientRect(); return { x:r.x+r.width/2, y:r.y+r.height/2 }; })()`);
+    if(!await page.eval(`(() => {const el=document.querySelector(${JSON.stringify(selector)});if(!el)return false;el.scrollIntoView({block:'center',behavior:'instant'});return true;})()`)) return null;
+    // Fixed scene controls reconcile on a frame after scrolling; click only once the real target is uncovered.
+    const actionable=await page.waitFor(`(() => {const el=document.querySelector(${JSON.stringify(selector)});if(!el)return false;const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width>0 && r.height>0 && !!hit && el.contains(hit);})()`,2000);
+    check(`${page.entry.name}: pointer target ${selector} is visible and uncovered`,actionable);
+    if(!actionable) throw new Error(`Pointer target is covered or invisible: ${selector}`);
+    return page.eval(`(() => {const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
   }
   async function pointer(page, selector = '.motion-toggle') {
     await page.waitFor(`!document.querySelector('#loader') || document.querySelector('#loader').hidden`, 5000);
@@ -181,6 +186,18 @@ try {
     const { node } = await page.send('DOM.describeNode', { nodeId });
     const { nodes } = await page.send('Accessibility.getPartialAXTree', { backendNodeId: node.backendNodeId });
     return nodes.find(n => n.backendDOMNodeId === node.backendNodeId);
+  }
+
+  async function tabToGeneratedCard(page, selector, label, seed = '.lp .logo') {
+    await page.eval(`document.querySelector(${JSON.stringify(seed)}).focus({preventScroll:true})`);
+    let reached=false;
+    for(let i=0;i<120 && !reached;i++) {await page.key('Tab');reached=await page.eval(`document.activeElement===document.querySelector(${JSON.stringify(selector)})`);}
+    check(`${label}: trusted Tab reaches generated card`,reached);
+  }
+  const generatedCardState = (page,selector) => page.eval(`(() => {const e=document.querySelector(${JSON.stringify(selector)});return {focused:document.activeElement===e,name:e?.getAttribute('aria-label'),flipped:e?.classList.contains('flipped')};})()`);
+  async function flipGeneratedCard(page, selector, label) {
+    const before=await generatedCardState(page,selector);await page.key(' ');const after=await generatedCardState(page,selector);
+    check(`${label}: trusted Space still flips the focused card`,after.focused && before.flipped!==after.flipped,{before,after});
   }
 
   const os = await open('system-reduced', { reducedMotion:true });
@@ -277,6 +294,22 @@ try {
     await three.type(' continued');
     const continuedFocus=await three.eval(`(() => {const e=document.querySelector('#ev');return {value:e.value,start:e.selectionStart,end:e.selectionEnd,focused:document.activeElement===e};})()`);
     check('positive 3D: trusted typing continues after actual renderer restart',continuedFocus.focused && continuedFocus.value==='Actual Three focus fixture night continued' && continuedFocus.start===continuedFocus.value.length && continuedFocus.end===continuedFocus.value.length,continuedFocus);
+    const ribbonSelector='#ribbon .ts-stub:not([aria-hidden="true"])';
+    await tabToGeneratedCard(three,ribbonSelector,'positive 3D: generated ribbon');
+    const ribbonName=(await generatedCardState(three,ribbonSelector)).name;
+    await flipGeneratedCard(three,ribbonSelector,'positive 3D: original ribbon');
+    await three.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+    await expected(three,'off','positive 3D: ribbon OS reduction');
+    const ribbonReduced=await generatedCardState(three,ribbonSelector);
+    check('positive 3D: automatic reduction restores generated ribbon focus',ribbonReduced.focused && ribbonReduced.name===ribbonName,ribbonReduced);
+    await flipGeneratedCard(three,ribbonSelector,'positive 3D: reduced ribbon');
+    const beforeRibbonRestart=await three.eval('({contexts:window.__landingEvidence.actualContexts,draws:window.__landingEvidence.draws})');
+    await three.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+    await expected(three,'3d','positive 3D: ribbon OS permission returns');
+    check('positive 3D: regenerated ribbon waits for real renderer handoff',await three.waitFor(`window.__landingEvidence.actualContexts>${beforeRibbonRestart.contexts} && window.__landingEvidence.draws>${beforeRibbonRestart.draws} && document.querySelector('.lp').classList.contains('ready') && document.querySelector('#loader')?.hidden && !document.querySelector('.lp').classList.contains('no3d')`,20000),await state(three));
+    const ribbonResumed=await generatedCardState(three,ribbonSelector);
+    check('positive 3D: async art generation restores logical ribbon focus',ribbonResumed.focused && ribbonResumed.name===ribbonName,ribbonResumed);
+    await flipGeneratedCard(three,ribbonSelector,'positive 3D: regenerated ribbon');
     await activate(three,'Enter'); await expected(three,'off','positive 3D: disable via real toggle');
     check('positive 3D: renderer context released after remount', await three.waitFor(`window.__landingActualGL?.isContextLost()`,5000), await state(three));
     const drawCount = await three.eval('window.__landingEvidence.draws'); await sleep(400);
@@ -397,6 +430,23 @@ try {
     }
   }
   await close(automaticFocus);
+
+  const generatedFocus = await open('automatic-generated-card-focus', {hints:{softwareGL:true}});
+  for(const [label,selector,seed] of [['studio cork','#tsCork .ts-stub','.lp .logo'],['board preview','#finCard .ts-stub','#ev'],['gallery ribbon','#ribbon .ts-stub:not([aria-hidden="true"])','.lp .logo']]) {
+    check(`generated ${label}: script creates focusable ticket card`,await generatedFocus.eval(`document.querySelector(${JSON.stringify(selector)})?.matches('figure[role="button"][tabindex="0"]')`));
+    const originalName=(await generatedCardState(generatedFocus,selector)).name;
+    for(const [os,mode] of [['reduce','off'],['no-preference','2d']]) {
+      if(seed==='#ev') {await pointer(generatedFocus,'.cta-foot[href="#make"]');check(`generated board preview before OS ${os}: maker CTA exposes board`,await generatedFocus.waitFor(`document.activeElement?.id==='ev' && !document.querySelector('#finale').inert`,5000));}
+      await tabToGeneratedCard(generatedFocus,selector,`generated ${label} before OS ${os}`,seed);
+      await flipGeneratedCard(generatedFocus,selector,`generated ${label} before OS ${os}`);
+      await generatedFocus.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:os}]});
+      await expected(generatedFocus,mode,`generated ${label}: OS ${os}`);
+      const restored=await generatedCardState(generatedFocus,selector);
+      check(`generated ${label}: OS ${os} retains logical card focus`,restored.focused && restored.name===originalName,restored);
+      await flipGeneratedCard(generatedFocus,selector,`generated ${label} after OS ${os}`);
+    }
+  }
+  await close(generatedFocus);
 
   const leavingDemo = await open('printing-settle-navigation', {pref:'on',hints:{softwareGL:true}});
   await leavingDemo.goto(`${base}/search`,{settle:100});

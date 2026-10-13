@@ -52,17 +52,19 @@ export function Landing({ children }: { children: ReactNode }) {
     else delete el.dataset.lite;
     const pendingFocus = refocus.current;
     refocus.current = null;
-    const focusTarget = pendingFocus === "toggle" ? el.querySelector<HTMLButtonElement>(".motion-toggle")
-      : pendingFocus ? matchingControls(hosts[pendingFocus.host], pendingFocus)[pendingFocus.occurrence] : null;
-    const needsBoard = !!focusTarget?.closest("#boardUI");
     let mounted = false, boardReady = false, live = true, focusRestored = false;
     const restoreFocus = () => {
       if (!live || !pendingFocus || focusRestored) return;
-      // Font loading may delay the board. Respect any control the visitor focused meanwhile.
-      if (needsBoard && document.activeElement !== document.body) return;
+      // Cards are created by the script, some after fonts load. Resolve their replacement when it exists.
+      const target = pendingFocus === "toggle" ? el.querySelector<HTMLButtonElement>(".motion-toggle")
+        : matchingControls(hosts[pendingFocus.host], pendingFocus)[pendingFocus.occurrence];
+      if (!target || (target.closest("#boardUI") && !boardReady)) return;
+      if (target.closest("[inert],[hidden]")) return;
+      // Respect any control the visitor focused while generated content was pending.
+      if (pendingFocus !== "toggle" && document.activeElement !== document.body) { focusRestored = true; return; }
+      target.focus({ preventScroll: true });
+      if (document.activeElement !== target) return;
       focusRestored = true;
-      const target = focusTarget;
-      target?.focus({ preventScroll: true });
       if (pendingFocus !== "toggle" && pendingFocus.selection && target) {
         const { start, end, direction } = pendingFocus.selection;
         if (start !== null && end !== null) (target as HTMLInputElement).setSelectionRange(start, end, direction ?? "none");
@@ -70,10 +72,10 @@ export function Landing({ children }: { children: ReactNode }) {
     };
     const stop = mountLanding({ root: el, hosts, mode, submit: (text: string) => router.push(newStubHref(text)), onBoardReady: () => {
       boardReady = true;
-      if (mounted && needsBoard) restoreFocus();
+      if (mounted) restoreFocus();
     } });
     mounted = true;
-    if (!needsBoard || boardReady) restoreFocus();
+    restoreFocus();
     const toggle = el.querySelector<HTMLButtonElement>(".motion-toggle");
     toggle?.setAttribute("aria-pressed", String(mode.still));
     const flip = () => {
@@ -86,7 +88,8 @@ export function Landing({ children }: { children: ReactNode }) {
     const followSystem = () => {
       if (readMotionPref() !== "auto") return;
       const active = document.activeElement;
-      refocus.current = null;
+      // A second automatic change may arrive while fonts/content are pending and focus is still on body.
+      refocus.current = active === document.body && !focusRestored ? pendingFocus : null;
       if (active === toggle) refocus.current = "toggle";
       else if (active) {
         const host = hosts.findIndex((h) => h.contains(active));

@@ -86,19 +86,21 @@ for (const hints of [{ connection: { saveData: true } }, { connection: { effecti
 }
 
 // Render the real component with deterministic hooks; its effect, click handler and cleanup run unchanged.
-function landingEnv({ delayBoard = false } = {}) {
+function landingEnv({ delayBoard = false, generatedCards = false } = {}) {
   let effect, cleanup, refIndex = 0, stateIndex = 0, stopped = 0;
   const states = [0, false];
   const refs = [], listeners = new Map(), changes = new Set(), modes = [], focus = [], drafts = [];
   const boardCallbacks=[];
-  const emptyInput = () => ({ tagName:"INPUT", closest:()=>({id:'boardUI'}), getAttribute(name) { return name === "id" ? "ev" : null; }, value: "", selectionStart: 0, selectionEnd: 0, selectionDirection: "none", focus(o) { documentNode.activeElement=this; focus.push(o); this.selectionStart=this.selectionEnd=this.value.length; this.selectionDirection="none"; }, setSelectionRange(start,end,direction) { this.selectionStart=start; this.selectionEnd=end; this.selectionDirection=direction; } });
+  let cards=[];
+  const card = (kind) => ({kind,tagName:'FIGURE',blocked:false,closest(selector){return selector==='[inert],[hidden]'&&this.blocked?{}:selector==='#boardUI'&&kind==='preview'?{id:'boardUI'}:null;},getAttribute:name=>name==='aria-label'?`${kind} stub. Press to flip it over.`:null,focus(options){documentNode.activeElement=this;focus.push(options);}});
+  const emptyInput = () => ({ tagName:"INPUT", closest:selector=>selector==='#boardUI'?{id:'boardUI'}:null, getAttribute(name) { return name === "id" ? "ev" : null; }, value: "", selectionStart: 0, selectionEnd: 0, selectionDirection: "none", focus(o) { documentNode.activeElement=this; focus.push(o); this.selectionStart=this.selectionEnd=this.value.length; this.selectionDirection="none"; }, setSelectionRange(start,end,direction) { this.selectionStart=start; this.selectionEnd=end; this.selectionDirection=direction; } });
   let rawInput = emptyInput();
   const link = (href) => ({ tagName:"A", closest:()=>null, getAttribute(name) { return name === "href" ? href : null; }, focus(options) { documentNode.activeElement=this;focus.push(options); } });
   let navLink=link('#studio'), ctaLink=link('#make');
   const hosts = Array.from({length:4}, (_,i) => ({
-    querySelectorAll() { return i === 0 ? [toggle,rawInput,navLink,ctaLink] : []; },
+    querySelectorAll() { return i === 0 ? [toggle,rawInput,navLink,ctaLink,...cards] : []; },
     contains(el) { return this.querySelectorAll().includes(el); },
-    set innerHTML(_) { if (i===0) { if ([rawInput,navLink,ctaLink].includes(documentNode.activeElement)) documentNode.activeElement=documentNode.body; rawInput=emptyInput();navLink=link('#studio');ctaLink=link('#make'); } },
+    set innerHTML(_) { if (i===0) { if ([rawInput,navLink,ctaLink,...cards].includes(documentNode.activeElement)) documentNode.activeElement=documentNode.body; cards=[];rawInput=emptyInput();navLink=link('#studio');ctaLink=link('#make'); } },
   }));
   let pref = 'auto', reduced = false;
   const toggle = { tagName:"BUTTON", closest:()=>null, getAttribute(name) { return name === "aria-label" ? "Reduce motion" : null; }, setAttribute(k, v) { this[k] = v; }, focus(o) { documentNode.activeElement=this; focus.push(o); }, addEventListener(k, v) { listeners.set(k, v); }, removeEventListener(k) { listeners.delete(k); } };
@@ -114,14 +116,55 @@ function landingEnv({ delayBoard = false } = {}) {
     if (id === 'next/navigation') return { useRouter: () => ({ push() {} }) };
     if (id === './MotionContext') return { MotionOffContext: { Provider: 'motion-provider' } };
     if (id === './motion') return { readMotionPref: () => pref, writeMotionPref: v => { pref = v; }, landingMode: () => ({ still: pref === 'off' || (pref === 'auto' && reduced), no3d: pref !== 'on', reason: pref === 'on' ? '' : 'motion off' }) };
-    if (id === './landing.script') return { mountLanding: ctx => { modes.push(ctx.mode); drafts.push(rawInput.value); if(delayBoard)boardCallbacks.push(ctx.onBoardReady);else ctx.onBoardReady?.(); return () => { stopped++; }; } };
+    if (id === './landing.script') return { mountLanding: ctx => {
+      modes.push(ctx.mode); drafts.push(rawInput.value);
+      if(generatedCards)cards=[card('studio'),card('preview')];
+      const ready=()=>{if(generatedCards)cards.push(card('ribbon'));ctx.onBoardReady?.();};
+      if(delayBoard)boardCallbacks.push(ready);else ready();
+      return () => { stopped++; };
+    } };
     if (id === './markup') return { CHROME_HTML: '', HERO_HTML: '', REST_HTML: '', FOOT_HTML: '' };
     return {};
   } });
   const render = () => { cleanup?.(); refIndex = 0; stateIndex = 0; exports.Landing({ children: null }); cleanup = effect(); };
   render();
-  return { render, el, toggle, modes, focus, changes, drafts, boardCallbacks, document:documentNode, input:()=>rawInput, nav:()=>navLink, cta:()=>ctaLink, click: () => listeners.get('click')(), system(v) { reduced = v; for (const cb of changes) cb(); }, run: () => states[0], motionOff: () => states[1], stopped: () => stopped, cleanup: () => cleanup() };
+  return { render, el, toggle, modes, focus, changes, drafts, boardCallbacks, document:documentNode, card:kind=>cards.find(c=>c.kind===kind), input:()=>rawInput, nav:()=>navLink, cta:()=>ctaLink, click: () => listeners.get('click')(), system(v) { reduced = v; for (const cb of changes) cb(); }, run: () => states[0], motionOff: () => states[1], stopped: () => stopped, cleanup: () => cleanup() };
 }
+
+for(const kind of ['studio','preview','ribbon'])test(`automatic OS remount resolves the regenerated ${kind} ticket after creation`,()=>{
+  const env=landingEnv({delayBoard:true,generatedCards:true});env.boardCallbacks.at(-1)();const original=env.card(kind);original.focus({preventScroll:true});
+  env.system(true);env.render();assert.notEqual(env.card(kind),original);
+  if(kind==='studio')assert.equal(env.document.activeElement,env.card(kind),'synchronously created studio card restores immediately');
+  else assert.equal(env.document.activeElement,env.document.body,'pending board/gallery content does not consume the restoration');
+  env.boardCallbacks.at(-1)();assert.equal(env.document.activeElement,env.card(kind));
+  assert.ok(env.focus.every(options=>options.preventScroll));env.cleanup();
+});
+test('generated ribbon focus restoration respects a newly focused React input and disposed mounts',()=>{
+  const env=landingEnv({delayBoard:true,generatedCards:true});env.boardCallbacks.at(-1)();env.card('ribbon').focus({preventScroll:true});env.system(true);env.render();
+  const pending=env.boardCallbacks.at(-1),embedded={value:'New React draft'};env.document.activeElement=embedded;const before=env.focus.length;
+  pending();assert.equal(env.document.activeElement,embedded);assert.equal(env.focus.length,before);
+  env.cleanup();env.document.activeElement=env.document.body;pending();assert.equal(env.document.activeElement,env.document.body);assert.equal(env.focus.length,before);
+});
+test('generated ticket restoration does not attempt or consume focus on an inert or hidden target',()=>{
+  const env=landingEnv({delayBoard:true,generatedCards:true});env.card('preview').focus({preventScroll:true});env.system(true);env.render();env.card('preview').blocked=true;
+  const before=env.focus.length;env.boardCallbacks.at(-1)();assert.equal(env.document.activeElement,env.document.body);assert.equal(env.focus.length,before);
+  env.card('preview').blocked=false;env.boardCallbacks.at(-1)();assert.equal(env.document.activeElement,env.card('preview'));env.cleanup();
+});
+for(const kind of ['input','ribbon'])test(`successive automatic changes retain pending ${kind} focus and retire older callbacks`,()=>{
+  const env=landingEnv({delayBoard:true,generatedCards:true});env.boardCallbacks.at(-1)();
+  const original=kind==='input'?env.input():env.card(kind);original.focus({preventScroll:true});
+  if(kind==='input'){original.value='Pending maker draft';original.setSelectionRange(2,7,'backward');}
+  env.system(true);env.render();env.boardCallbacks.at(-1)();
+  env.system(false);env.render();const old=env.boardCallbacks.at(-1);assert.equal(env.document.activeElement,env.document.body);
+  env.system(true);env.render();const before=env.focus.length;old();assert.equal(env.focus.length,before,'the retired mount cannot restore a stale target');
+  env.boardCallbacks.at(-1)();assert.equal(env.document.activeElement,kind==='input'?env.input():env.card(kind));
+  if(kind==='input')assert.deepEqual([env.input().value,env.input().selectionStart,env.input().selectionEnd,env.input().selectionDirection],['Pending maker draft',2,7,'backward']);
+  env.cleanup();
+});
+test('new React focus supersedes an unfulfilled generated target across automatic changes',()=>{
+  const env=landingEnv({delayBoard:true,generatedCards:true});env.boardCallbacks.at(-1)();env.card('ribbon').focus({preventScroll:true});env.system(true);env.render();
+  const embedded={value:'Preserved React edit'};env.document.activeElement=embedded;env.system(false);env.render();env.boardCallbacks.at(-1)();assert.equal(env.document.activeElement,embedded);env.cleanup();
+});
 
 test('automatic maker focus waits for settled board layout and restores its exact selection',()=>{
   const env=landingEnv({delayBoard:true});env.input().value='Delayed gallery fixture';env.input().focus({preventScroll:true});env.input().setSelectionRange(4,9,'backward');
