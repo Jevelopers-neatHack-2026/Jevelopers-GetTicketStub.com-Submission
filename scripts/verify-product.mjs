@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { summarizeCheckResult } from "./lib/check-result.mjs";
+import { summarizeCheckResult, summarizeNetworkProbe } from "./lib/check-result.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const guard = join(root, "scripts/lib/fixture-network-guard.mjs");
@@ -136,10 +136,10 @@ function childEnv(extra = {}) {
 function runNode(nodeArgs, env) {
   return new Promise((done) => {
     const child = spawn(process.execPath, nodeArgs, { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
-    let out = "";
-    child.stdout.on("data", (d) => (out += d));
-    child.stderr.on("data", (d) => (out += d));
-    child.on("close", (code) => done({ code: code ?? 1, out }));
+    let out = "", stdout = "", stderr = "";
+    child.stdout.on("data", (d) => { stdout += d; out += d; });
+    child.stderr.on("data", (d) => { stderr += d; out += d; });
+    child.on("close", (code) => done({ code: code ?? 1, out, stdout, stderr }));
   });
 }
 
@@ -693,7 +693,10 @@ try {
   } else {
     // the guard has to work before anything is trusted to it
     const probe = await runNode(["--import", guardUrl, "--input-type=module", "-e", "try { await fetch('https://example.com/'); console.log('REACHED'); } catch (e) { console.log(e.code); }"], { ...process.env, VERIFY_NET_LOG: join(tmp, "selftest.log") });
-    record("fixture mode refuses outbound network", probe.out.trim() === "ETICKETSTUB_FIXTURE_NETWORK", probe.out.trim());
+    const probeResult = summarizeNetworkProbe(probe.code, probe.stdout, probe.stderr);
+    process.stderr.write(probe.stderr);
+    record("fixture mode refuses outbound network", probeResult.ok, `exit ${probe.code}: ${probe.stdout.trim()}`);
+    Object.assign(steps.at(-1), probeResult);
     const ctx = {};
     if (suite.server) {
       let extra = { ...(suite.serverEnv ?? {}) };
