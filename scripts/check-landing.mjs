@@ -271,7 +271,7 @@ try {
     const beforeRestart=await three.eval('window.__landingEvidence.draws');
     await three.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
     await expected(three,'3d','positive 3D: automatic OS permission returns');
-    check('positive 3D: real renderer restarts after asynchronous initialization',await three.waitFor(`window.__landingEvidence.actualContexts>=2 && window.__landingEvidence.draws>${beforeRestart} && !document.querySelector('.lp').classList.contains('no3d')`,20000),await state(three));
+    check('positive 3D: real renderer restarts after asynchronous initialization',await three.waitFor(`window.__landingEvidence.actualContexts>=2 && window.__landingEvidence.draws>${beforeRestart} && document.querySelector('.lp').classList.contains('ready') && document.querySelector('#loader')?.hidden && !document.querySelector('.lp').classList.contains('no3d')`,20000),await state(three));
     const initializedFocus=await three.eval(`(() => {const e=document.querySelector('#ev');return {value:e.value,focused:document.activeElement===e};})()`);
     check('positive 3D: completed async initialization retains raw input focus',initializedFocus.focused && initializedFocus.value==='Actual Three focus fixture night',initializedFocus);
     await three.type(' continued');
