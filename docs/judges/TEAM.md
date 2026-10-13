@@ -8,22 +8,36 @@ Our interests include AI agents, autonomous systems, agent orchestration, reliab
 
 **Team Jevelopers: building agents that can be trusted, measured, and improved.**
 
-| Teammate | Role or credit | GitHub | X |
-| --- | --- | --- | --- |
-| Timothy Wayne Gregg | Team captain | [CompleteDotTech](https://github.com/CompleteDotTech) | [CompleteTechLLC](https://x.com/CompleteTechLLC) |
-| Lars van der Zande | Brand and studio design | [lmvdz](https://github.com/lmvdz) | [Lmvdzande](https://x.com/Lmvdzande) |
-| Zachary D. Wright | Team member | [zwright8](https://github.com/zwright8) | [ZacharyDWright](https://x.com/ZacharyDWright) |
-| Crystal Aguilar | Team member | [lajefahemp-collab](https://github.com/lajefahemp-collab) | [lajefahemp](https://x.com/lajefahemp) |
+## Timothy Gregg — Team Captain
 
-Contact supplied by the captain: **completedottech@gmail.com**.
+- Email: completedottech@gmail.com
+- GitHub: [CompleteDotTech](https://github.com/CompleteDotTech)
+- LinkedIn: `https://www.linkedin.com/in/timothy-gregg/`
+- X: [CompleteTechLLC](https://x.com/CompleteTechLLC)
 
-Names and roles are team-supplied. Social profiles were inspected on October 12. GitHub commit credit follows the original recorded author details; see the separate contributor audit for account-mapping limits.
+## Lars van der Zande
 
-## LinkedIn details supplied by the team
+Brand and studio design.
 
-These addresses were supplied by the team. Automated access did not verify the profile pages, so they are recorded as text pending a public-access check:
+- Email: lmvdzande@inkwell.finance
+- GitHub: [lmvdz](https://github.com/lmvdz)
+- LinkedIn: `https://linkedin.com/in/lmvanderzande`
+- X: [Lmvdzande](https://x.com/Lmvdzande)
 
-- Timothy: `https://www.linkedin.com/in/timothy-gregg/`
-- Lars: `https://linkedin.com/in/lmvanderzande`
-- Zachary: `https://linkedin.com/in/zachary-d-wright`
-- Crystal: `https://www.linkedin.com/in/crystal-aguilar-la-jefa-hemp-llc-721514b8/`
+## Zachary D. Wright
+
+- Email: Zacwright27@gmail.com
+- GitHub: [zwright8](https://github.com/zwright8)
+- LinkedIn: `https://linkedin.com/in/zachary-d-wright`
+- X: [ZacharyDWright](https://x.com/ZacharyDWright)
+
+## Crystal Aguilar
+
+- Email: LaJefaHemp@gmail.com
+- GitHub: [lajefahemp-collab](https://github.com/lajefahemp-collab)
+- LinkedIn: `https://www.linkedin.com/in/crystal-aguilar-la-jefa-hemp-llc-721514b8/`
+- X: [lajefahemp](https://x.com/lajefahemp)
+
+Names, roles, and contact details were supplied by the team. Email delivery has not been tested. GitHub and X profiles were inspected on October 12. Automated access did not verify the LinkedIn pages, so their supplied addresses remain plain text pending a public-access check.
+
+GitHub commit credit follows the original recorded author details; see the [contributor audit](CONTRIBUTORS.md) for account-mapping limits.
