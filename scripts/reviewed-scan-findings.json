@@ -3232,6 +3232,836 @@
       "findings": [
         "generic-api-key:3:131:3:167"
       ]
+    },
+    {
+      "path": "repositories/event-intelligence/tests/discovery/source-identity/corroboration.test.mjs",
+      "sha256": "00a70387e7e86ffb7fb82447d608f6649bce64b3d8b368397a61d2812d9d32f2",
+      "reason": "Reviewed pinned Git predecessor commit used by git show in a regression test; not a Sourcegraph credential.",
+      "reviewed_source_commit": "fbc1457974313ba8851d0b74add0e03041f6e5dc",
+      "findings": [
+        "sourcegraph-access-token:340:17:340:57"
+      ]
+    },
+    {
+      "path": "repositories/event-intelligence/tests/research/private-retrieval.test.mjs",
+      "sha256": "60af91030361c70c19962b422c2ad39f3325d5f8727077f76d250905b1de369e",
+      "reason": "Reviewed synthetic UUID lease token in an isolated database-tampering regression test; no operational credential.",
+      "reviewed_source_commit": "fbc1457974313ba8851d0b74add0e03041f6e5dc",
+      "findings": [
+        "generic-api-key:1978:57:1978:108"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/clock-string.json",
+      "sha256": "e03698e0273ae73fec0223c363729716e57d4dcda70b7b212fac340de0e4f04a",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-empty.json",
+      "sha256": "ee23d8aecaf1bf7f71991f8efd39e66a046f4dfb6531d280e42dfbfc96704f06",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-art-only-download.json",
+      "sha256": "4edcb4624974f2c5edefd27f53c4b7a09423dec9739574689b4ac4983743848b",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1404"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-malformed-hash.json",
+      "sha256": "87ec41f57412e76e34a4f7a9a749e8aadb3a07c58d6ec66dba90a945ebf0aaa3",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-mismatch.json",
+      "sha256": "ca84a3703e454047e8c515c99164547ac2bab54e6c61fdf6c56d9b17ad5f18d7",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-missing-design.json",
+      "sha256": "38b9fad492e4edc8232e93e21b8e527f290f7d5e04bb3c6f8d56751db2c1276f",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-missing-facts.json",
+      "sha256": "229f2f32cf84ac95d32ed579b5b31e319c8f6e15cd57bfd40047f09efa30fb2d",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-missing-art.json",
+      "sha256": "cff0efad5192e7d4d396cc5298ca02b738a8da9fd776567bd8b741110642e3bc",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-missing-composition.json",
+      "sha256": "e45a089304d5ef046d7734e8872a4bb31d30a9e3d5963d18a870b137efef8d1d",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/forged-edited-binding.json",
+      "sha256": "b524c0691b83d70b82e86058c17748be1ef8bb2617b7c1f19bab5d48eef3bf03",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/expired.json",
+      "sha256": "ca3b9ab1ba469831cee2837dc7c145a667e108e755a6de27a4e9fa78158cad74",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/forged-context-key.json",
+      "sha256": "492a824c5ba1e8214af5c11c7b856ecc30d9de3294a8ad610593ef984e14d666",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-uppercase-hash.json",
+      "sha256": "dd50bddbee68be9d59c17eb8060bce14a53105f581a2614c67868400200c3860",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/revoked-bytes-retained.json",
+      "sha256": "aec09eacc724d132d2f5ff0e41c29592cd3a68180a13045d8ee088f75b0eaf24",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/revoked.json",
+      "sha256": "507e8d2bb5730e21980f96654921fc6af55a6aef3e7af80ec2bc0b6ad6b006d8",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/stale-composition.json",
+      "sha256": "6fb18aba1d45592afb49b14aea3535806932e9daec9e452c0b5d59f40f259499",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/forged.json",
+      "sha256": "01ddd460e4da75efaf1cd8397b000f97688e3407fd3fa2fe6962e5fdb8bc8051",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/content-missing-art-download.json",
+      "sha256": "1fdcf99f5f152cf206a375118f741324e6bf04fee922016f92aa51200f51495b",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1404"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/stale-membership.json",
+      "sha256": "2bbc57d44d0d07ac97df49f0e06b17444909512aaf70e11626fd8145df5d0d48",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/stale-facts.json",
+      "sha256": "1344321a3bbbe088609a397bf82ffec0fe9ded0b7a11b070cc616297a682a132",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/forged-unknown-kid.json",
+      "sha256": "77c9300d70811b985fcbd22bbb03a0aedeb8b9fd8832cea2d16b200aca4fe721",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1411"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/unsupported-version.json",
+      "sha256": "ae3f267b1a0c9b9500bbecb2dc6d63a07a5ee8fe1266f4328c34badeadead25d",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/wrong-purpose.json",
+      "sha256": "83731a5007203abbafb17319ff49cefa18bc17e0b0393120c70bb65900cd15ac",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/wrong-scope-project.json",
+      "sha256": "c9b6439d2b28da627b83f5549ce97fe12fc34c9511f07d61da0e81a6e7d37cc1",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/valid-artifact-download.json",
+      "sha256": "37ad641f5eebe4c33658a36a3a9b1f0f5ba22059ebf40a156a894959dcee5cc0",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1404"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/wrong-scope-tenant.json",
+      "sha256": "9c8262bbaf60d3e6eeb57abeef060ecc67f1e8167a56ea399abc9061fb61f0c4",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/valid-print-compose.json",
+      "sha256": "70c170e6d68616baf8a24214dabe190ebc84149f1f26c0b0eee66b5679001ecc",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/unknown-no-record.json",
+      "sha256": "dc2e6d6313727c149f4c442fa979422b5e20e2894a955b1814eb8b03bf7008ba",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/unknown-no-kid.json",
+      "sha256": "99b0cb8489c3558e1c2969775f1c550746bcda98486a84a966b3728c59b3f0be",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1377"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/not-a-purchase-authorization.json",
+      "sha256": "bd470b788f723a900a98d289052efede3a40300c556b443211bf2f23d79056a7",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/already-claimed-verify.json",
+      "sha256": "2d07df10a941e14d8fee7c5f16a2b1397a76320fabd9f06a7318be11a1bd0031",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-approval.json",
+      "sha256": "591317753c9659af5a86e9958a6ab4d30af667eb8965a0bb4b8a5304ce84bc41",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-currency.json",
+      "sha256": "3b1624bfc39b1a4eec559af3842a7cbee3053e78d5450af34351a92fd261422d",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-amount.json",
+      "sha256": "5e2013fa3930666a6ec32029bfee15baa931efd1a4cde1e23b4bb9e67ccf1947",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-capability-version.json",
+      "sha256": "1d1abe72e0675b9d03a13e7b2567043daafe1c497b4d61b022c8a5ca90a9cfd1",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-art.json",
+      "sha256": "5bddee94a3b9e3cea59dc7cbb90c0ff265ebb67d4262877cbc2cb021ee985b63",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/already-claimed-other-key.json",
+      "sha256": "8fee2dff032c3b8f4740949bdc9837fb399aa08db9016bb0a672f546e5b6a01d",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/clock-negative.json",
+      "sha256": "ab9bf2e3edb2f2f6cea7ca77a7557195f2275eaecb54313bf83032da82f3650d",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/forged.json",
+      "sha256": "d15d81becb2af496b487fd96d694afd25b15a5847939eebd40277411d193ce51",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-quantity.json",
+      "sha256": "298678f163ff076127b0456af46875e7094f2e8b5ea11b117816db02cd19e9a5",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/not-orderable.json",
+      "sha256": "ada780f78fdb19a102672b537044420d3db59f1417fe9d79871604d54cfa9f01",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/clock-infinity.json",
+      "sha256": "de79be3797533632fbb8b0e6363a7b4d3658f2090b8ac2b6a1156792e073632f",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/revalidate-approval-revoked-after-claim.json",
+      "sha256": "51bb3ce59ee33361a5717f3ef46b08758fb89c3de51d1d299deff97782bd5829",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/expired.json",
+      "sha256": "17b72e7ca5ee500b54e2af3825eb0b7c2899b4f9a4656cc786c23235dba285a1",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-quote-id.json",
+      "sha256": "41ca567ff6edc7fd9131fd79004f03f0ff826b059f116a09d20f504cf823a518",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/revalidate-changed-terms-after-claim.json",
+      "sha256": "157826e2a5043a1863bc1b8345a365cd338a9e30018fd21c833e526eb6e787fa",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/clock-string.json",
+      "sha256": "77bd56e9acea8957136e7c034c5ff0dd7e06c960f80bb3c6536c5f60083f3709",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/revalidate-not-claimed.json",
+      "sha256": "76ddecc6666b068d09edf9fd6fda4cf93bb3d042a15b06ea8e13139966fb006b",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/revalidate-revoked-after-claim.json",
+      "sha256": "21ba3cfe3dc7eaaa35fbd0870a3be64356a2c327caa13ed0d2852f7c8c2c8684",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/revalidate-membership-moved-after-claim.json",
+      "sha256": "419a6b99c497892169d86bdc32db87e6fadfc6679b999f2e0c6281270ca983dd",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/forged-unknown-kid.json",
+      "sha256": "0398b67a89e793f4ece0f37d9df32c97859fe3a04f9dbf4f1165391f240878df",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2328"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-sku.json",
+      "sha256": "e3184966454383a28caaeb75dca6f2d2ab7fa41a30c5da836270211d2f737e18",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-design-version.json",
+      "sha256": "d1062ca486e2c35d203b0d58e565ff8c9add136208c4117f6b0c84da01b1b6cb",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/revalidate-wrong-claim-reference.json",
+      "sha256": "ebe26732e7a1d2907e72c45bc505521b43de119cc4f289fc70ebc65920aceeb5",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/clock-negative.json",
+      "sha256": "b815ff8d4bb33c81cfd59b3a65ed3317682c3601d085c56c85ecbec7f14d0c26",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/clock-infinity.json",
+      "sha256": "01eb988a071945ff2e0e226c71fe9c04b84a228d2217b93f94c55688ae2fc646",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/generate.mjs",
+      "sha256": "2bcb7756b885dc71dd8c9fe2a6194d2227814823ed67092bcade61b84e8d2364",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "generic-api-key:287:82:287:119"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/stale-approval-expired.json",
+      "sha256": "9d1719da7313d02775c715059c98de691c1e9c69c0d402f42e1dc4b81bb4a0f3",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-destination-digest.json",
+      "sha256": "46fc1c3c73485c302ef9798a5ee8be046a7500bc147e512368f2a3cbb23dfd7a",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/stale-approval-changed.json",
+      "sha256": "1d11e401267745e33216e58c3fd7420bbb64a715519a4929e5d8da4575bf4d61",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/stale-approval-missing.json",
+      "sha256": "234819fe1eec1b2fd3ebfb5d228c6cd6b69e21322c9242c3f0f85bdc2f4eb7f9",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/stale-approval-revoked.json",
+      "sha256": "322145450bf68691aa8881d91b754b1900fa51fc954b0ebadc1af4cbd774b86d",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/approval/clock-nan.json",
+      "sha256": "1aabbc5badba5ce22adf794be7be2f020a4fd64975abdbd5e3fbb67e51e56949",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:5:14:5:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/stale-capability-version.json",
+      "sha256": "4bb0d8eeb4f82ca2a3fe16186ab68679a9be3012f00a2747155afd1408f349e2",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/stale-membership.json",
+      "sha256": "1be92e210b54219fd1ab94f1c364dd7742ba0f5ef40b5744579839c2d1a9593b",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/revoked.json",
+      "sha256": "398ec6c991a48c626b07abdb47e543a0aab22a64508ca3d998efb8335d2c6dab",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/unknown-approval-token.json",
+      "sha256": "8845d74a4bd0d824414aef75d5dccf17fcd350f5aef7e58d4e7452b992b447ea",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:1398"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/revalidate-expired-after-claim.json",
+      "sha256": "2ce84440cfabcf2bdf4ceae6b8e988746d15d2fc761b73c419a40b0771e5244f",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/unknown-no-record.json",
+      "sha256": "38a5902b3d33adf3aec21ae33146204ebdfdeb17a57509cabb66d44f3c7ba59b",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/forged-context-key.json",
+      "sha256": "9af581f43e5f77ebfb959597833a94d33499b40cc8d113d4e400dd5fb5b0a0c5",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/unsupported-version.json",
+      "sha256": "9f1c51e11bef76c51d37c4c5194edd03ec67a8f4e3a30d14f2e9221ced498d2b",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/forged-approval-key.json",
+      "sha256": "897f7b7f3b55b8664f6475e0f81db609f76948f8b4c452561f20c0fb6ac0bc9c",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/unknown-no-kid.json",
+      "sha256": "197825ff5eae3df398896ede06b4a912ce57c6b19f5d24536b0c85ab9f9bf32e",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2293"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/valid-claim.json",
+      "sha256": "1f0cf047ed11688f41bbacf3a6f5bf2e74e02f52e8feb44f60ad27e986711e40",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/unknown-wrong-audience.json",
+      "sha256": "42409e8e57f3e484c9a973c52d7806859e47deb827fee33d38e9f4aecc37d82b",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2301"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/valid-revalidate.json",
+      "sha256": "7d106799bdb1d93f666f472df85460fbf5f3d88b2bff2ce7d2f7d9625518e057",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/forged-edited-terms.json",
+      "sha256": "2288afea4f381c3c624a7ef043b76251d51c07e7dd6c54509237367c201968d1",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-finish.json",
+      "sha256": "6b6d4f725a74eefaef4c0ab6dcaeb44ba7b6abeeeef79c8ea61061642456149a",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-destination.json",
+      "sha256": "25ab7172ab252b0bafa1b81cc5eb640cf399ee7db50c159f87e5cf601d4660eb",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/stale-superseded.json",
+      "sha256": "552a462a7f59db4fb943115ca41f5fda9471fd61b7730c68c003613924b90689",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/wrong-scope-action.json",
+      "sha256": "3678509e2bd2d0da8eade101e0c2787680d16e9b9487c2e6fb2ba98fc1a133ad",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/wrong-scope-project.json",
+      "sha256": "9732cd28a16fecec2c435d10ae6d0ccb437b8f57d9d4feed179933eac8dd0855",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/clock-nan.json",
+      "sha256": "18bebf82dd5c95f2ebf1f8b7703eac683ea70c32d091483f1f6a6091931cd104",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/changed-terms-order.json",
+      "sha256": "6075997a406f5edc5eb531e30de3110c4e14926359ec3d5c74efc4973171dfbf",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/wrong-scope-provider.json",
+      "sha256": "c28c93344ca53cb5d307683d31f2a048b9709ef646aadc6982d6cbc337ed6471",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/valid-claim-replay-same-key.json",
+      "sha256": "4322bdbe565fc8bffa3e6193bfb1aeef81d36bd40b15b9e5bf99067bc8021b83",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/wrong-scope-tenant.json",
+      "sha256": "4be140805f796e910784ae6908515ac9b01b6b127740680ad2d4d45e26e36cd9",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/fixtures/order-authorization/valid-submit.json",
+      "sha256": "e3b9552b812bb5990f062b4db3ef7bbf879d6989f08742ec779dc160593dc0e5",
+      "reason": "Reviewed deterministic approval/order authorization fixture tokens with fixture mode and public fixture-only signing keys, malformed/forged test variants, or synthetic idempotency key; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "jwt:6:14:6:2315"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/src/server/vendor/creative-engine/MANIFEST.json",
+      "sha256": "d9699b50cca9644dca182760f71019260948e23ba3d6491a2e511dee846fe109",
+      "reason": "Reviewed SHA-256 checksums of vendored source files; no operational credentials.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "generic-api-key:61:21:61:99",
+        "generic-api-key:76:20:76:103",
+        "generic-api-key:77:20:77:101"
+      ]
+    },
+    {
+      "path": "repositories/getticketstub.com/src/server/vendor/creative-engine/src/api/v1.d.mts",
+      "sha256": "469493d1110f72ef82becad81476f65f43a4259cd35bdc019f515bc8895d52e4",
+      "reason": "Reviewed exported TypeScript union declaration CreativeApiResult; no operational credential.",
+      "reviewed_source_commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "findings": [
+        "generic-api-key:1578:14:1578:55"
+      ]
     }
   ]
 }
