@@ -195,6 +195,13 @@ async function alternativeJourney(j) {
   };
   const stored = () => page.eval(`JSON.stringify(JSON.parse(localStorage.getItem("ticketstub.wall.v1") || "[]").find((s) => s.id === ${JSON.stringify(j.id)}))`);
   const messages = () => page.eval(`[...document.querySelectorAll('[role="dialog"] [class*="msg"][class*="agent"]')].map((e) => e.innerText)`);
+  const replyVisible = () => page.waitFor(`(() => {
+    const list = document.querySelector('[role="dialog"] [data-announce="added"]');
+    const reply = [...document.querySelectorAll('[role="dialog"] [class*="msg"][class*="agent"]')].at(-1);
+    if (!list || !reply) return false;
+    const viewport = list.getBoundingClientRect(), box = reply.getBoundingClientRect();
+    return box.height > 0 && box.top >= viewport.top && box.bottom <= viewport.bottom;
+  })()`, 6000);
   try {
     await page.goto(`${base}/studio/${j.id}`, { settle: 300 });
     check(T("the current local fixture is available"), await page.waitFor('document.querySelector("figure[data-edition]")', 15000));
@@ -226,6 +233,7 @@ async function alternativeJourney(j) {
       const replied = await page.waitFor(`document.querySelectorAll('[role="dialog"] [class*="msg"][class*="agent"]').length > ${messageCount}`, 6000);
       const reply = (await messages()).at(-1) ?? "";
       check(T(`${value} gets a truthful refusal and a valid-date recovery instruction`), replied && /not changed/i.test(reply) && /real calendar date/i.test(reply) && !/Fixed\./.test(reply), reply);
+      check(T(`${value} reply becomes visible in the actual conversation viewport`), await replyVisible());
       const after = await stored();
       check(T(`${value} changes no local event, history, version or save metadata`), after === before);
       log.steps.push({ input: value, outcome: /not changed/i.test(reply) ? "refusal" : "unexpected reply", reply, unchanged: after === before });
@@ -237,6 +245,7 @@ async function alternativeJourney(j) {
     const replied = await page.waitFor(`document.querySelectorAll('[role="dialog"] [class*="msg"][class*="agent"]').length > ${messageCount}`, 6000);
     const reply = (await messages()).at(-1) ?? "";
     check(T("a successful correction reports the accepted date"), replied && /Fixed\. 29 Feb is on your stub\./.test(reply), reply);
+    check(T("the recovery reply becomes visible in the actual conversation viewport"), await replyVisible());
     const afterValid = JSON.parse(await stored());
     check(T("only the accepted answer is appended to correction history"), afterValid.event.dateISO === "2024-02-29" && afterValid.corrections.length === beforeValid.corrections.length + 1 && afterValid.corrections.at(-1).original.value === "2024-02-28" && afterValid.corrections.at(-1).corrected.value === "2024-02-29");
     check(T("answer recovery preserves every existing artwork version"), JSON.stringify(afterValid.versions) === JSON.stringify(beforeValid.versions) && afterValid.currentVersionId === beforeValid.currentVersionId);
