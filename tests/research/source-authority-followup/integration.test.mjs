@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { runPrivateRetrieval } from '../../../src/research/private-retrieval.mjs';
 import { eventHtml, harness, respond, sourceUrl, wrapStore } from './support.mjs';
 
 const EMPTY_SOURCE = '<!doctype html><html><body><p>A synthetic page without event or entity claims.</p></body></html>';
+const execFileAsync = promisify(execFile);
 
 function hasNoQuestion(result) {
   assert.equal(Object.hasOwn(result, 'sourceAuthorityReview'), false);
@@ -195,6 +199,30 @@ test('a settled no-source result requires fresh host release authorization', asy
   assert.equal(checked, 1); hasNoQuestion(result);
   assert.ok(result.limitations.includes('authorization_revoked'));
 });
+
+for (const [stage, mode] of [
+  ['release', 'rejected'], ['release', 'late-rejected'], ['release', 'fulfilled-true'],
+  ['release', 'poisoned-fulfillment'], ['release', 'thenable-getter'],
+  ['start', 'rejected'], ['candidate', 'rejected'],
+]) {
+  test(`invalid synchronous authority stays refused and observed under native strict handling: ${stage}/${mode}`,
+    async (t) => {
+      const { stdout, stderr } = await execFileAsync(process.execPath, [
+        '--unhandled-rejections=strict',
+        fileURLToPath(new URL('./native-authority-child.mjs', import.meta.url)), stage, mode,
+      ], { timeout: 15_000, maxBuffer: 1024 * 1024 });
+      if (stderr) t.diagnostic(stderr);
+      const lines = stdout.split('\n').filter((line) => line.startsWith('NATIVE_FOLLOWUP_AUTH_JSON='));
+      assert.equal(lines.length, 1);
+      const result = JSON.parse(lines[0].slice('NATIVE_FOLLOWUP_AUTH_JSON='.length));
+      assert.equal(result.stage, stage);
+      assert.equal(result.mode, mode);
+      assert.equal(result.getterReads, 0);
+      assert.equal(result.recovered, true);
+      assert.equal(result.nativeIntrinsicsAndHandlersUnmodified, true);
+      t.diagnostic(lines[0]);
+    });
+}
 
 test('cancellation inside no-source release authorization prevents its fixed prompt', async (t) => {
   const h = await harness(t, { respond: (_req, response) => respond(response, 200, { 'content-type': 'text/html' }, EMPTY_SOURCE) });

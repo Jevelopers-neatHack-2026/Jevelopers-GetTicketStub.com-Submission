@@ -486,7 +486,12 @@ async function awaitAbortableCleanup(operation, timeoutMs = 250, waitMs = timeou
 
 function authorized(input, stage) {
   try {
-    return input.authorizeCurrent(input.request, Object.freeze({ runId: input.runId, stage })) === true;
+    const value = input.authorizeCurrent(input.request, Object.freeze({ runId: input.runId, stage }));
+    if (value === true) return true;
+    // Authorization is synchronous. Invalid native Promise outcomes must stay
+    // observed without forwarding a fulfilled value into another Promise.
+    subscribeToSupportedNativePromise(value, () => {}, () => {});
+    return false;
   } catch {
     return false;
   }
