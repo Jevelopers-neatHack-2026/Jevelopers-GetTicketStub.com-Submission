@@ -46,17 +46,35 @@ def read_regular(path, code):
     return data
 
 
-def git(root, *args):
+def git(root, *args, no_match_ok=False):
     try:
         result = subprocess.run([
             "git", "--no-replace-objects", "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false",
             "-C", str(root), *args,
-        ], check=True, capture_output=True, timeout=10)
+        ], capture_output=True, timeout=10)
     except (OSError, subprocess.SubprocessError) as error:
         raise Rejected("release_git_unavailable") from error
-    require(len(result.stdout) <= MAX_BYTES, "release_git_output_oversized")
+    require(max(len(result.stdout), len(result.stderr)) <= MAX_BYTES, "release_git_output_oversized")
+    # git config --get-regexp reports no matching keys as exit1 with no output.
+    # Other errors, including configuration parse errors, must remain failures.
+    if no_match_ok and result.returncode == 1 and not result.stdout and not result.stderr:
+        return ""
+    require(result.returncode == 0, "release_git_unavailable")
     value = result.stdout.decode("utf-8")
     return value if "-z" in args else value.strip()
+
+
+def safe_status_configuration(root):
+    # Status can execute a clean filter while comparing unchanged working bytes.
+    # Query effective keys (including conditional includes/worktree config), never values.
+    # Do not alter another owner's configuration or silently ignore dirty inputs.
+    require(not git(root, "config", "--includes", "--name-only", "--get-regexp", r"^filter\.", no_match_ok=True),
+            "release_git_filter_configuration_rejected")
+    # Status can recurse into a submodule's separately configured repository.
+    # Reject both staged gitlinks and HEAD gitlinks removed from the index.
+    for args in (("ls-files", "--stage", "-z"), ("ls-tree", "-r", "-z", "HEAD")):
+        require(not any(record.startswith("160000 ") for record in git(root, *args).split("\0")),
+                "release_git_submodules_unsupported")
 
 
 def clean_checkout(root, label):
@@ -64,6 +82,7 @@ def clean_checkout(root, label):
     require(Path(git(root, "rev-parse", "--show-toplevel")).resolve() == root.resolve(), f"release_{label}_checkout_invalid")
     revision, tree = git(root, "rev-parse", "HEAD"), git(root, "rev-parse", "HEAD^{tree}")
     require(re.fullmatch(r"[a-f0-9]{40}", revision) and re.fullmatch(r"[a-f0-9]{40}", tree), "release_git_identity_invalid")
+    safe_status_configuration(root)
     require(not git(root, "status", "--porcelain", "--untracked-files=all"), f"release_{label}_checkout_dirty")
     # Ordinary status alone cannot detect assume-unchanged / skip-worktree inputs.
     require(all(item.startswith("H ") for item in git(root, "ls-files", "-v", "-z").split("\0") if item), f"release_{label}_index_flags")
@@ -143,7 +162,7 @@ def verify(app, manifest, evidence, workspace):
     locked_dependencies(evaluator)
     sys.path.insert(0, str(evaluator / "src"))
     # No runner, owner, provider or history-write API is called.
-    from integration_evals.artifacts import load_record, reject_leaks
+    from integration_evals.artifacts import confined_path, load_record, reject_leaks
     from integration_evals.history import summarize_history
     from integration_evals.history_archive import load_history
     from integration_evals.models import Assembly, Catalog, Selection, Suite
@@ -168,8 +187,14 @@ def verify(app, manifest, evidence, workspace):
     validate_catalog(catalog, evaluator / "fixtures", requirements)
     validate_suite(suite, catalog, requirements, selection)
     require(assembly.selected_cases is None or set(assembly.selected_cases) == {case.id for case in suite.cases}, "release_full_selection_required")
+    # Canonical validate_component performs its own status call. Preflight every
+    # component before entering that foreign validator, not only afterwards.
+    states = {}
+    for component in assembly.components:
+        # Preserve canonical confinement before moving Git reads ahead of it.
+        confined_path(workspace, component.repository)
+        states[component.repository] = clean_checkout(workspace / component.repository, "component")
     validate_assembly(assembly, workspace, digest(read_regular(catalog_file, "release_catalog_missing")))
-    states = {component.repository: clean_checkout(workspace / component.repository, "component") for component in assembly.components}
     require(states["getticketstub.com"] == app_state, "release_app_changed_during_validation")
     history = load_history(evidence, suite)
     composed_outcomes(assembly, history, suite, digest(raw), source_fingerprint(evaluator))

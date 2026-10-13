@@ -8,6 +8,7 @@ missing prerequisites fail instead of skipping the canonical controls.
 from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import shlex
@@ -20,6 +21,10 @@ if len(sys.argv) != 2 or sys.version_info < (3, 13):
     raise SystemExit("usage: Python3.13+ -I -B tests/release-verifier-canonical.py <pinned-evaluator-checkout>")
 EVALUATOR = Path(sys.argv.pop()).resolve()
 APP = Path(__file__).resolve().parents[1]
+# Match the public wrapper's existing Git scopes for this direct prerequisite.
+# Repository-local, include/includeIf and worktree configuration remain effective.
+os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
+os.environ["GIT_CONFIG_GLOBAL"] = "/dev/null"
 spec = importlib.util.spec_from_file_location("actual_release_bridge", APP / "scripts/lib/verify_release.py")
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
@@ -88,6 +93,10 @@ class CanonicalControls(unittest.TestCase):
         for name, revision in self.original.items():
             repo = self.workspace / name
             subprocess.run(["git", "-C", str(repo), "config", "--unset", "core.fsmonitor"], capture_output=True)
+            for key in ("filter.probe.clean", "include.path", f"includeIf.gitdir:{repo}/.git.path", "extensions.worktreeConfig"):
+                subprocess.run(["git", "-C", str(repo), "config", "--unset-all", key], capture_output=True)
+            (repo / ".git/config.worktree").unlink(missing_ok=True)
+            (repo / ".git/info/attributes").unlink(missing_ok=True)
             if name == "integration-evals":
                 git(repo, "update-index", "--no-assume-unchanged", "src/integration_evals/models.py")
                 shutil.rmtree(repo / "src/integration_evals/__pycache__", ignore_errors=True)
@@ -153,11 +162,11 @@ class CanonicalControls(unittest.TestCase):
         result = subprocess.run(["node", str(self.app / "scripts/verify-release.mjs"), "--manifest", str(self.manifest),
                                  "--evidence-dir", str(self.directory), "--workspace", str(self.workspace), "--python", sys.executable], capture_output=True, text=True, timeout=70)
         receipt = json.loads(result.stdout)
+        self.assertFalse(self.sentinel.exists(), "an owner, cleanup or repository-configured filter command was executed")
         self.assertEqual(receipt["code"], code, receipt)
         self.assertEqual(result.returncode, 0 if code == "release_evidence_consistent" else 2)
         self.assertEqual(receipt["passed"], code == "release_evidence_consistent")
         self.assertEqual(receipt["acceptance"], "not_recorded")
-        self.assertFalse(self.sentinel.exists(), "an owner/cleanup command was executed")
         self.assertNotIn(str(self.root), result.stdout, "private filesystem input echoed")
         return receipt
 
@@ -258,6 +267,65 @@ class CanonicalControls(unittest.TestCase):
         hook.chmod(0o700)
         git(self.workspace / "shared-contracts", "config", "core.fsmonitor", str(hook))
         self.invoke("release_evidence_consistent")
+
+    def configure_clean_filter(self, repository, *, configuration="local"):
+        repo = self.workspace / repository
+        relative = "configuration.json" if repository == "getticketstub.com" else "contract.json"
+        hook = self.root / "unexpected-clean-filter"
+        hook.write_text("#!/bin/sh\nprintf unexpected > " + shlex.quote(str(self.sentinel)) + "\ncat\n")
+        hook.chmod(0o700)
+        if configuration in {"include", "conditional"}:
+            config = self.root / "included-filter-config"
+            git(repo, "config", "--file", str(config), "filter.probe.clean", str(hook))
+            key = "include.path" if configuration == "include" else f"includeIf.gitdir:{repo}/.git.path"
+            git(repo, "config", key, str(config))
+        elif configuration == "worktree":
+            git(repo, "config", "extensions.worktreeConfig", "true")
+            git(repo, "config", "--worktree", "filter.probe.clean", str(hook))
+        else:
+            git(repo, "config", "filter.probe.clean", str(hook))
+        (repo / ".git/info/attributes").write_text(f"{relative} filter=probe\n")
+        # Same committed bytes, different inode: status must compare content, not
+        # trust the old stat cache. The original candidate runs the clean hook.
+        target = repo / relative
+        replacement = self.root / "same-bytes-new-inode"
+        replacement.write_bytes(target.read_bytes())
+        replacement.replace(target)
+
+    def test_app_clean_filter_is_refused_before_status(self):
+        self.configure_clean_filter("getticketstub.com")
+        self.invoke("release_git_filter_configuration_rejected")
+
+    def test_component_clean_filter_is_refused_before_canonical_status(self):
+        self.configure_clean_filter("shared-contracts")
+        self.invoke("release_git_filter_configuration_rejected")
+
+    def test_included_clean_filter_is_refused_without_echo(self):
+        self.configure_clean_filter("shared-contracts", configuration="include")
+        self.invoke("release_git_filter_configuration_rejected")
+
+    def test_conditional_clean_filter_is_refused_without_echo(self):
+        self.configure_clean_filter("shared-contracts", configuration="conditional")
+        self.invoke("release_git_filter_configuration_rejected")
+
+    def test_worktree_clean_filter_is_refused_without_echo(self):
+        self.configure_clean_filter("shared-contracts", configuration="worktree")
+        self.invoke("release_git_filter_configuration_rejected")
+
+    def test_gitlink_is_refused_before_recursive_submodule_status(self):
+        git(self.app, "update-index", "--add", "--cacheinfo", f"160000,{self.original['getticketstub.com']},nested-owner")
+        self.invoke("release_git_submodules_unsupported")
+
+    def test_head_gitlink_removed_from_index_is_still_refused(self):
+        git(self.app, "update-index", "--add", "--cacheinfo", f"160000,{self.original['getticketstub.com']},nested-owner")
+        git(self.app, "commit", "-m", "Constructed HEAD gitlink control")
+        git(self.app, "update-index", "--force-remove", "nested-owner")
+        self.invoke("release_git_submodules_unsupported")
+
+    def test_component_path_escape_is_refused_before_preflight(self):
+        outside = self.assembly.components[0].model_copy(update={"repository": ".."})
+        self.set_manifest(components=(*self.assembly.components, outside))
+        self.invoke("unsafe_path")
 
     def test_archived_suite_cannot_replace_canonical_selection(self):
         fake = self.suite.model_copy(update={"cases": self.suite.cases[:1]})

@@ -66,6 +66,17 @@ schemas and validators. Dirty trees, skip-worktree/assume-unchanged entries and 
 bytecode are rejected. Required installed parser dependencies must match the frozen lock. A canonical update needs
 a reviewed pin change and new compatibility evidence; do not silently use the latest evaluator.
 
+Use isolated checkouts whose source and Git configuration remain fixed for this inspection. Before any working-tree
+status read, the wrapper rejects every effective `filter.*` configuration key, including keys inherited through
+`include`, `includeIf` and worktree configuration. Git can execute clean filters while comparing otherwise unchanged
+files; the gate reads key names only and never prints values. Submodules are unsupported: a gitlink in either HEAD
+or the index fails before status can recurse into a separately configured repository. All components receive this
+preflight before the canonical validator performs its own status checks, and the wrapper repeats it during final
+source validation. Dirty-state checks remain active. These checks do not protect against a concurrent hostile process
+replacing configuration or source during validation; use owned, fixed checkouts rather than treating the gate as an
+operating-system sandbox. See Git's [configuration](https://git-scm.com/docs/git-config) and
+[recursive status](https://git-scm.com/docs/git-status) documentation.
+
 ## Results and limits
 
 Exit0 emits the app/evaluator revisions and trees, manifest/history digests, case/run/evidence counts and observed
@@ -97,7 +108,9 @@ actual application CLI using disposable Git repositories and explicitly **constr
 They cover missing/wrong manifests, stale/dirty/hidden evaluator source, missing composed receipts, wrong components,
 catalog/source joins, tampered artifact bytes, omitted history, a saved failed ancestor followed by a passing run,
 required skips, incomplete cleanup, nonzero exits, unknown fields and sensitive/ambiguous input. Command and cleanup
-sentinels prove that inspection does not execute those manifest arrays. The positive protocol control always asserts
+sentinels prove that inspection does not execute those manifest arrays. Actual same-byte clean-filter controls cover
+the app, component and inherited configuration boundaries; HEAD/index gitlink controls require refusal before nested
+status. The positive protocol control always asserts
 `acceptance: "not_recorded"`. Missing canonical prerequisites fail these controls rather than skip them. The separate
 `Canonical release evidence gate` workflow performs these controls with the same source/runtime pins and retains logs.
 
