@@ -336,6 +336,52 @@ try {
   }
   await close(rawDraft);
 
+  const automaticFocus = await open('automatic-motion-input-focus', {hints:{softwareGL:true}});
+  await pointer(automaticFocus,'.cta-foot[href="#make"]');
+  check('automatic motion: maker CTA establishes editable focus',await automaticFocus.waitFor(`document.activeElement?.id==='ev' && !document.querySelector('#finale').inert`,5000));
+  await automaticFocus.type('Automatic maker fixture night, fixture venue');
+  for(let i=0;i<3;i++) await automaticFocus.key('ArrowLeft',{shift:true});
+  const inputState = (page,selector) => page.eval(`(() => {const e=document.querySelector(${JSON.stringify(selector)});return {value:e.value,start:e.selectionStart,end:e.selectionEnd,direction:e.selectionDirection,focused:document.activeElement===e};})()`);
+  const rawAutoBefore=await inputState(automaticFocus,'#ev');
+  check('automatic motion: trusted draft has active backward selection',rawAutoBefore.focused && rawAutoBefore.end-rawAutoBefore.start===3 && rawAutoBefore.direction==='backward',rawAutoBefore);
+  await automaticFocus.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+  await expected(automaticFocus,'off','automatic motion: OS reduction');
+  const rawAutoReduced=await inputState(automaticFocus,'#ev');
+  check('automatic motion: OS reduction retains raw draft, selection and focus',JSON.stringify(rawAutoBefore)===JSON.stringify(rawAutoReduced),{before:rawAutoBefore,after:rawAutoReduced});
+  check('automatic motion: OS reduction retains raw preview',await automaticFocus.eval(`document.querySelector('#finale').classList.contains('typing') && document.querySelector('#finCard .tc-a')?.textContent.includes('Automatic maker fixture night')`));
+  await automaticFocus.key('ArrowRight'); await automaticFocus.type(' / continued');
+  const continued=await inputState(automaticFocus,'#ev'),continuedValue=rawAutoBefore.value+' / continued';
+  check('automatic motion: trusted typing continues after OS reduction',continued.focused && continued.value===continuedValue && continued.start===continuedValue.length && continued.end===continuedValue.length,continued);
+  await automaticFocus.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+  await expected(automaticFocus,'2d','automatic motion: OS permission returns');
+  const rawAutoResumed=await inputState(automaticFocus,'#ev');
+  check('automatic motion: OS reset retains continued raw draft, selection and focus',rawAutoResumed.focused && rawAutoResumed.value===continuedValue && rawAutoResumed.start===continuedValue.length && rawAutoResumed.end===continuedValue.length,rawAutoResumed);
+  const continuedPreview=await automaticFocus.eval(`({typing:document.querySelector('#finale').classList.contains('typing'),title:document.querySelector('#finCard .tc-a')?.textContent,meta:document.querySelector('#finCard .tc-meta')?.textContent})`);
+  check('automatic motion: OS reset retains continued raw preview',continuedPreview.typing && continuedPreview.title?.includes('Automatic maker fixture night') && continuedPreview.meta?.includes('fixture venue / continued'),continuedPreview);
+  await automaticFocus.eval(`document.querySelector('#start input').scrollIntoView({block:'center',behavior:'instant'});document.querySelector('#start input').focus()`);
+  await automaticFocus.type('Embedded automatic fixture draft');
+  for(let i=0;i<2;i++) await automaticFocus.key('ArrowLeft',{shift:true});
+  const embeddedAutoBefore=await inputState(automaticFocus,'#start input');
+  check('automatic motion: trusted embedded draft establishes focus and selection',embeddedAutoBefore.focused && embeddedAutoBefore.end-embeddedAutoBefore.start===2,embeddedAutoBefore);
+  for(const [os,mode] of [['reduce','off'],['no-preference','2d']]) {
+    await automaticFocus.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:os}]});
+    await expected(automaticFocus,mode,`automatic motion: embedded input OS ${os}`);
+    const after=await inputState(automaticFocus,'#start input');
+    check(`automatic motion: OS ${os} keeps embedded focus and draft`,JSON.stringify(embeddedAutoBefore)===JSON.stringify(after),{before:embeddedAutoBefore,after});
+  }
+  for(const [label,selector] of [['navigation anchor','.lp .nav a[href="#studio"]'],['hero CTA','.hero a[href="#start"]']]) {
+    await automaticFocus.eval(`document.querySelector('.lp .logo').focus({preventScroll:true})`);
+    let reached=false;
+    for(let i=0;i<25 && !reached;i++) {await automaticFocus.key('Tab');reached=await automaticFocus.eval(`document.activeElement?.matches(${JSON.stringify(selector)})`);}
+    check(`automatic motion: Tab reaches ${label}`,reached);
+    for(const [os,mode] of [['reduce','off'],['no-preference','2d']]) {
+      await automaticFocus.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:os}]});
+      await expected(automaticFocus,mode,`automatic motion: ${label} OS ${os}`);
+      check(`automatic motion: OS ${os} retains ${label} focus`,await automaticFocus.eval(`document.activeElement?.matches(${JSON.stringify(selector)})`));
+    }
+  }
+  await close(automaticFocus);
+
   const leavingDemo = await open('printing-settle-navigation', {pref:'on',hints:{softwareGL:true}});
   await leavingDemo.goto(`${base}/search`,{settle:100});
   await pointer(leavingDemo,'a[aria-label="TicketStub home"]');

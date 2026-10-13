@@ -19,6 +19,17 @@ export function newStubHref(text: string): string {
 }
 
 const PARTS = [CHROME_HTML, HERO_HTML, REST_HTML, FOOT_HTML];
+const FOCUS_CONTROLS = "a,button,input,select,textarea,[tabindex]";
+const FOCUS_ATTRIBUTES = ["id", "href", "name", "data-demo", "aria-label"];
+type FocusTarget = {
+  host: number;
+  tag: string;
+  attributes: (string | null)[];
+  occurrence: number;
+  selection: { start: number | null; end: number | null; direction: "forward" | "backward" | "none" | null } | null;
+};
+const matchingControls = (host: HTMLElement, target: FocusTarget) => Array.from(host.querySelectorAll<HTMLElement>(FOCUS_CONTROLS))
+  .filter((control) => control.tagName === target.tag && FOCUS_ATTRIBUTES.every((name, i) => control.getAttribute(name) === target.attributes[i]));
 
 export function Landing({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -26,7 +37,7 @@ export function Landing({ children }: { children: ReactNode }) {
   // bumped by the Motion switch: the landing unmounts and mounts again in the new mode, without a reload
   const [run, setRun] = useState(0);
   const [motionOff, setMotionOff] = useState(false);
-  const refocus = useRef(false); // the switch is rebuilt with the page: keyboard focus goes back to the new one
+  const refocus = useRef<"toggle" | FocusTarget | null>(null); // only raw hosts rebuild; React children retain their own focus
 
   useEffect(() => {
     const el = root.current;
@@ -42,20 +53,38 @@ export function Landing({ children }: { children: ReactNode }) {
     const stop = mountLanding({ root: el, hosts, mode, submit: (text: string) => router.push(newStubHref(text)) });
     const toggle = el.querySelector<HTMLButtonElement>(".motion-toggle");
     toggle?.setAttribute("aria-pressed", String(mode.still));
-    if (refocus.current) {
-      refocus.current = false;
-      toggle?.focus({ preventScroll: true });
+    const pendingFocus = refocus.current;
+    refocus.current = null;
+    if (pendingFocus) {
+      const target = pendingFocus === "toggle" ? toggle : matchingControls(hosts[pendingFocus.host], pendingFocus)[pendingFocus.occurrence];
+      target?.focus({ preventScroll: true });
+      if (pendingFocus !== "toggle" && pendingFocus.selection && target) {
+        const { start, end, direction } = pendingFocus.selection;
+        if (start !== null && end !== null) (target as HTMLInputElement).setSelectionRange(start, end, direction ?? "none");
+      }
     }
     const flip = () => {
       writeMotionPref(mode.still ? "on" : "off");
-      refocus.current = true;
+      refocus.current = "toggle";
       setRun((n) => n + 1);
     };
     toggle?.addEventListener("click", flip);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const followSystem = () => {
       if (readMotionPref() !== "auto") return;
-      refocus.current = document.activeElement === toggle;
+      const active = document.activeElement;
+      refocus.current = null;
+      if (active === toggle) refocus.current = "toggle";
+      else if (active) {
+        const host = hosts.findIndex((h) => h.contains(active));
+        if (host >= 0) {
+          const input = active as HTMLInputElement;
+          const target: FocusTarget = { host, tag: active.tagName, attributes: FOCUS_ATTRIBUTES.map((name) => active.getAttribute(name)), occurrence: 0,
+            selection: /^(INPUT|TEXTAREA)$/.test(active.tagName) ? { start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection } : null };
+          target.occurrence = matchingControls(hosts[host], target).indexOf(active as HTMLElement);
+          if (target.occurrence >= 0) refocus.current = target;
+        }
+      }
       setRun((n) => n + 1);
     };
     reducedMotion.addEventListener("change", followSystem);

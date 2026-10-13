@@ -90,14 +90,21 @@ function landingEnv() {
   let effect, cleanup, refIndex = 0, stateIndex = 0, stopped = 0;
   const states = [0, false];
   const refs = [], listeners = new Map(), changes = new Set(), modes = [], focus = [], drafts = [];
-  const emptyInput = () => ({ value: "", selectionStart: 0, selectionEnd: 0, selectionDirection: "none", setSelectionRange(start,end,direction) { this.selectionStart=start; this.selectionEnd=end; this.selectionDirection=direction; } });
+  const emptyInput = () => ({ tagName:"INPUT", getAttribute(name) { return name === "id" ? "ev" : null; }, value: "", selectionStart: 0, selectionEnd: 0, selectionDirection: "none", focus(o) { documentNode.activeElement=this; focus.push(o); this.selectionStart=this.selectionEnd=this.value.length; this.selectionDirection="none"; }, setSelectionRange(start,end,direction) { this.selectionStart=start; this.selectionEnd=end; this.selectionDirection=direction; } });
   let rawInput = emptyInput();
-  const hosts = Array.from({length:4}, (_,i) => ({ set innerHTML(_) { if (i===0) rawInput=emptyInput(); } }));
+  const link = (href) => ({ tagName:"A", getAttribute(name) { return name === "href" ? href : null; }, focus(options) { documentNode.activeElement=this;focus.push(options); } });
+  let navLink=link('#studio'), ctaLink=link('#make');
+  const hosts = Array.from({length:4}, (_,i) => ({
+    querySelectorAll() { return i === 0 ? [toggle,rawInput,navLink,ctaLink] : []; },
+    contains(el) { return this.querySelectorAll().includes(el); },
+    set innerHTML(_) { if (i===0) { if ([rawInput,navLink,ctaLink].includes(documentNode.activeElement)) documentNode.activeElement=documentNode.body; rawInput=emptyInput();navLink=link('#studio');ctaLink=link('#make'); } },
+  }));
   let pref = 'auto', reduced = false;
-  const toggle = { setAttribute(k, v) { this[k] = v; }, focus(o) { focus.push(o); }, addEventListener(k, v) { listeners.set(k, v); }, removeEventListener(k) { listeners.delete(k); } };
+  const toggle = { tagName:"BUTTON", getAttribute(name) { return name === "aria-label" ? "Reduce motion" : null; }, setAttribute(k, v) { this[k] = v; }, focus(o) { documentNode.activeElement=this; focus.push(o); }, addEventListener(k, v) { listeners.set(k, v); }, removeEventListener(k) { listeners.delete(k); } };
+  const documentNode = { activeElement: toggle, body: { nodeName:"BODY" } };
   const el = { dataset: {}, classList: { remove() {} }, querySelector: sel => sel === '#maker #ev' ? rawInput : toggle, querySelectorAll: () => hosts };
   const exports = {};
-  vm.runInNewContext(compile('Landing.tsx'), { exports, window: { matchMedia: () => ({ addEventListener(_, cb) { changes.add(cb); }, removeEventListener(_, cb) { changes.delete(cb); } }) }, document: { activeElement: toggle }, require(id) {
+  vm.runInNewContext(compile('Landing.tsx'), { exports, window: { matchMedia: () => ({ addEventListener(_, cb) { changes.add(cb); }, removeEventListener(_, cb) { changes.delete(cb); } }) }, document: documentNode, require(id) {
     if (id === 'react') return {
       useRef(initial) { const i = refIndex++; return refs[i] ??= { current: i === 0 ? el : initial }; },
       useState: () => { const i = stateIndex++; return [states[i], next => { states[i] = typeof next === "function" ? next(states[i]) : next; }]; }, useEffect: cb => { effect = cb; },
@@ -112,7 +119,7 @@ function landingEnv() {
   } });
   const render = () => { cleanup?.(); refIndex = 0; stateIndex = 0; exports.Landing({ children: null }); cleanup = effect(); };
   render();
-  return { render, el, toggle, modes, focus, changes, drafts, input:()=>rawInput, click: () => listeners.get('click')(), system(v) { reduced = v; for (const cb of changes) cb(); }, run: () => states[0], motionOff: () => states[1], stopped: () => stopped, cleanup: () => cleanup() };
+  return { render, el, toggle, modes, focus, changes, drafts, document:documentNode, input:()=>rawInput, nav:()=>navLink, cta:()=>ctaLink, click: () => listeners.get('click')(), system(v) { reduced = v; for (const cb of changes) cb(); }, run: () => states[0], motionOff: () => states[1], stopped: () => stopped, cleanup: () => cleanup() };
 }
 test('Landing effect follows system changes only in auto, reflects aria-pressed and restores switch focus', () => {
   const env = landingEnv();
@@ -155,4 +162,42 @@ test('Landing host rebuild keeps the maker draft and selection while focus retur
   assert.equal(env.focus.length,2);
   assert.ok(env.focus.every(options=>options.preventScroll));
   env.cleanup();
+});
+
+test('automatic OS changes retain raw maker focus and selection, while manual toggles keep switch focus', () => {
+  const env=landingEnv();
+  const first=env.input();first.value='Nova Riot, Dublin';first.focus({preventScroll:true});first.setSelectionRange(5,9,'backward');
+  env.system(true);env.render();
+  assert.notEqual(env.input(),first);
+  assert.equal(env.document.activeElement,env.input());
+  assert.equal(env.input().value,'Nova Riot, Dublin');
+  assert.deepEqual([env.input().selectionStart,env.input().selectionEnd,env.input().selectionDirection],[5,9,'backward']);
+  // Continued typing targets the replacement input, then the reverse OS transition restores its new caret.
+  env.document.activeElement.value+=' encore';const caret=env.document.activeElement.value.length;env.document.activeElement.setSelectionRange(caret,caret,'none');
+  env.system(false);env.render();
+  assert.equal(env.document.activeElement,env.input());assert.equal(env.input().value,'Nova Riot, Dublin encore');
+  assert.deepEqual([env.input().selectionStart,env.input().selectionEnd,env.input().selectionDirection],[caret,caret,'none']);
+  env.click();env.render();assert.equal(env.document.activeElement,env.toggle);
+  assert.ok(env.focus.every(options=>options.preventScroll));env.cleanup();
+});
+test('automatic OS changes leave an embedded React input focused without a stale maker focus target', () => {
+  const env=landingEnv();env.input().focus({preventScroll:true});env.system(true);env.render();
+  const embedded={value:'Kept embedded draft',selectionStart:4,selectionEnd:8,selectionDirection:'backward'};
+  env.document.activeElement=embedded;
+  for (const reduced of [false,true]) {
+    env.system(reduced);env.render();
+    assert.equal(env.document.activeElement,embedded);
+    assert.deepEqual([embedded.value,embedded.selectionStart,embedded.selectionEnd,embedded.selectionDirection],['Kept embedded draft',4,8,'backward']);
+  }
+  env.cleanup();
+});
+
+for (const kind of ['nav','cta']) test(`automatic OS changes retain a focused raw ${kind} link across host reconstruction`,()=>{
+  const env=landingEnv();const first=env[kind]();first.focus({preventScroll:true});
+  for (const reduced of [true,false]) {
+    env.system(reduced);env.render();
+    assert.equal(env.document.activeElement,env[kind]());assert.notEqual(env[kind](),first);
+    assert.equal(env[kind]().getAttribute('href'),kind==='nav'?'#studio':'#make');
+  }
+  assert.ok(env.focus.every(options=>options.preventScroll));env.cleanup();
 });
