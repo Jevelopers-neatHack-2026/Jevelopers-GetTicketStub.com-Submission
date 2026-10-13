@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { summarizeCheckResult } from "./lib/check-result.mjs";
+import { summarizeCheckResult, summarizeNetworkProbe } from "./lib/check-result.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const guard = join(root, "scripts/lib/fixture-network-guard.mjs");
@@ -29,10 +29,15 @@ const SUITES = {
   // GT-06B: the artwork approval and its verifier (two accounts, stale, revoke, 404 parity, Origin, fixtures), against the production build.
   approval: { server: true, needs: [".next/BUILD_ID", "scripts/check-approval.mjs", "fixtures/approval/index.json", "fixtures/approval/verify.mjs"], run: (ctx) => script("scripts/check-approval.mjs", [ctx.base]) },
   // GT-07: the order authorization (issuer, verifier, atomic claim, lookup, dispatch-time revalidate), against the production build.
-  // The server and the script share a random per-run CONTEXT_SECRET (to mint an expired row) and ORDER_AUTH_CONSUMER_KEY (to sign consumer requests); neither is the published fixture key.
+  // The server and the script share a random per-run ORDER_AUTH_SIGNING_KEYS (to mint an expired row), CONTEXT_SECRET (to show it never verifies
+  // an authorization) and ORDER_AUTH_CONSUMER_KEY (to sign consumer requests); none is a published fixture key.
   "order-auth": {
     server: true,
-    env: () => ({ CONTEXT_SECRET: randomBytes(24).toString("hex"), ORDER_AUTH_CONSUMER_KEY: randomBytes(24).toString("hex") }),
+    env: () => ({
+      CONTEXT_SECRET: randomBytes(24).toString("hex"),
+      ORDER_AUTH_CONSUMER_KEY: randomBytes(24).toString("hex"),
+      ORDER_AUTH_SIGNING_KEYS: JSON.stringify({ v: 1, keys: [{ kid: `order-auth-g${randomBytes(2).readUInt16BE()}`, state: "active", activatedAt: new Date(Date.now() - 60_000).toISOString(), key: randomBytes(32).toString("base64url") }] }),
+    }),
     needs: [".next/BUILD_ID", "scripts/check-order-auth.mjs", "fixtures/order-authorization/index.json", "fixtures/order-authorization/verify.mjs"],
     run: (ctx) => script("scripts/check-order-auth.mjs", [ctx.base], ctx.env),
   },
@@ -115,7 +120,7 @@ const gitDirty = git("status", "--porcelain") === null ? null : git("status", "-
 /** The child environment: no provider keys, no mail key, a throwaway database. */
 function childEnv(extra = {}) {
   const env = { ...process.env };
-  for (const k of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "TICKETMASTER_API_KEY", "RESEND_API_KEY", "TICKETSTUB_RUNTIME_MODE", "APP_URL"]) delete env[k];
+  for (const k of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "TICKETMASTER_API_KEY", "RESEND_API_KEY", "TICKETSTUB_RUNTIME_MODE", "APP_URL", "APPROVAL_SIGNING_KEYS", "ORDER_AUTH_SIGNING_KEYS"]) delete env[k];
   return {
     ...env,
     NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import ${guardUrl}`.trim(),
@@ -131,10 +136,10 @@ function childEnv(extra = {}) {
 function runNode(nodeArgs, env) {
   return new Promise((done) => {
     const child = spawn(process.execPath, nodeArgs, { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
-    let out = "";
-    child.stdout.on("data", (d) => (out += d));
-    child.stderr.on("data", (d) => (out += d));
-    child.on("close", (code) => done({ code: code ?? 1, out }));
+    let out = "", stdout = "", stderr = "";
+    child.stdout.on("data", (d) => { stdout += d; out += d; });
+    child.stderr.on("data", (d) => { stderr += d; out += d; });
+    child.on("close", (code) => done({ code: code ?? 1, out, stdout, stderr }));
   });
 }
 
@@ -688,7 +693,10 @@ try {
   } else {
     // the guard has to work before anything is trusted to it
     const probe = await runNode(["--import", guardUrl, "--input-type=module", "-e", "try { await fetch('https://example.com/'); console.log('REACHED'); } catch (e) { console.log(e.code); }"], { ...process.env, VERIFY_NET_LOG: join(tmp, "selftest.log") });
-    record("fixture mode refuses outbound network", probe.out.trim() === "ETICKETSTUB_FIXTURE_NETWORK", probe.out.trim());
+    const probeResult = summarizeNetworkProbe(probe.code, probe.stdout, probe.stderr);
+    process.stderr.write(probe.stderr);
+    record("fixture mode refuses outbound network", probeResult.ok, `exit ${probe.code}: ${probe.stdout.trim()}`);
+    Object.assign(steps.at(-1), probeResult);
     const ctx = {};
     if (suite.server) {
       let extra = { ...(suite.serverEnv ?? {}) };
