@@ -41,6 +41,12 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: getticketstub.com/.nvmrc
+      - name: Install the exact canonical interpreter independently of uv's download catalog
+        id: canonical-python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13.16'
+          architecture: x64
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
         with:
           version: 0.10.4
@@ -49,8 +55,12 @@ jobs:
         working-directory: integration-evals
         env:
           UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/release-validator
+          UV_PYTHON_DOWNLOADS: never
+          CANONICAL_PYTHON: ${{ steps.canonical-python.outputs.python-path }}
           PYTHONDONTWRITEBYTECODE: '1'
-        run: uv sync --frozen --no-dev --no-install-project --python 3.13.16
+        run: |
+          "$CANONICAL_PYTHON" -I -B -c 'import sys; assert sys.version_info[:3] == (3, 13, 16), "unexpected_python_version"; print(sys.version)'
+          uv sync --frozen --no-dev --no-install-project --python "$CANONICAL_PYTHON"
       - name: Run actual CLI and canonical schema/history controls (constructed mock records)
         working-directory: getticketstub.com
         shell: bash
