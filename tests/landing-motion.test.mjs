@@ -86,13 +86,14 @@ for (const hints of [{ connection: { saveData: true } }, { connection: { effecti
 }
 
 // Render the real component with deterministic hooks; its effect, click handler and cleanup run unchanged.
-function landingEnv() {
+function landingEnv({ delayBoard = false } = {}) {
   let effect, cleanup, refIndex = 0, stateIndex = 0, stopped = 0;
   const states = [0, false];
   const refs = [], listeners = new Map(), changes = new Set(), modes = [], focus = [], drafts = [];
-  const emptyInput = () => ({ tagName:"INPUT", getAttribute(name) { return name === "id" ? "ev" : null; }, value: "", selectionStart: 0, selectionEnd: 0, selectionDirection: "none", focus(o) { documentNode.activeElement=this; focus.push(o); this.selectionStart=this.selectionEnd=this.value.length; this.selectionDirection="none"; }, setSelectionRange(start,end,direction) { this.selectionStart=start; this.selectionEnd=end; this.selectionDirection=direction; } });
+  const boardCallbacks=[];
+  const emptyInput = () => ({ tagName:"INPUT", closest:()=>({id:'boardUI'}), getAttribute(name) { return name === "id" ? "ev" : null; }, value: "", selectionStart: 0, selectionEnd: 0, selectionDirection: "none", focus(o) { documentNode.activeElement=this; focus.push(o); this.selectionStart=this.selectionEnd=this.value.length; this.selectionDirection="none"; }, setSelectionRange(start,end,direction) { this.selectionStart=start; this.selectionEnd=end; this.selectionDirection=direction; } });
   let rawInput = emptyInput();
-  const link = (href) => ({ tagName:"A", getAttribute(name) { return name === "href" ? href : null; }, focus(options) { documentNode.activeElement=this;focus.push(options); } });
+  const link = (href) => ({ tagName:"A", closest:()=>null, getAttribute(name) { return name === "href" ? href : null; }, focus(options) { documentNode.activeElement=this;focus.push(options); } });
   let navLink=link('#studio'), ctaLink=link('#make');
   const hosts = Array.from({length:4}, (_,i) => ({
     querySelectorAll() { return i === 0 ? [toggle,rawInput,navLink,ctaLink] : []; },
@@ -100,7 +101,7 @@ function landingEnv() {
     set innerHTML(_) { if (i===0) { if ([rawInput,navLink,ctaLink].includes(documentNode.activeElement)) documentNode.activeElement=documentNode.body; rawInput=emptyInput();navLink=link('#studio');ctaLink=link('#make'); } },
   }));
   let pref = 'auto', reduced = false;
-  const toggle = { tagName:"BUTTON", getAttribute(name) { return name === "aria-label" ? "Reduce motion" : null; }, setAttribute(k, v) { this[k] = v; }, focus(o) { documentNode.activeElement=this; focus.push(o); }, addEventListener(k, v) { listeners.set(k, v); }, removeEventListener(k) { listeners.delete(k); } };
+  const toggle = { tagName:"BUTTON", closest:()=>null, getAttribute(name) { return name === "aria-label" ? "Reduce motion" : null; }, setAttribute(k, v) { this[k] = v; }, focus(o) { documentNode.activeElement=this; focus.push(o); }, addEventListener(k, v) { listeners.set(k, v); }, removeEventListener(k) { listeners.delete(k); } };
   const documentNode = { activeElement: toggle, body: { nodeName:"BODY" } };
   const el = { dataset: {}, classList: { remove() {} }, querySelector: sel => sel === '#maker #ev' ? rawInput : toggle, querySelectorAll: () => hosts };
   const exports = {};
@@ -113,14 +114,44 @@ function landingEnv() {
     if (id === 'next/navigation') return { useRouter: () => ({ push() {} }) };
     if (id === './MotionContext') return { MotionOffContext: { Provider: 'motion-provider' } };
     if (id === './motion') return { readMotionPref: () => pref, writeMotionPref: v => { pref = v; }, landingMode: () => ({ still: pref === 'off' || (pref === 'auto' && reduced), no3d: pref !== 'on', reason: pref === 'on' ? '' : 'motion off' }) };
-    if (id === './landing.script') return { mountLanding: ctx => { modes.push(ctx.mode); drafts.push(rawInput.value); return () => { stopped++; }; } };
+    if (id === './landing.script') return { mountLanding: ctx => { modes.push(ctx.mode); drafts.push(rawInput.value); if(delayBoard)boardCallbacks.push(ctx.onBoardReady);else ctx.onBoardReady?.(); return () => { stopped++; }; } };
     if (id === './markup') return { CHROME_HTML: '', HERO_HTML: '', REST_HTML: '', FOOT_HTML: '' };
     return {};
   } });
   const render = () => { cleanup?.(); refIndex = 0; stateIndex = 0; exports.Landing({ children: null }); cleanup = effect(); };
   render();
-  return { render, el, toggle, modes, focus, changes, drafts, document:documentNode, input:()=>rawInput, nav:()=>navLink, cta:()=>ctaLink, click: () => listeners.get('click')(), system(v) { reduced = v; for (const cb of changes) cb(); }, run: () => states[0], motionOff: () => states[1], stopped: () => stopped, cleanup: () => cleanup() };
+  return { render, el, toggle, modes, focus, changes, drafts, boardCallbacks, document:documentNode, input:()=>rawInput, nav:()=>navLink, cta:()=>ctaLink, click: () => listeners.get('click')(), system(v) { reduced = v; for (const cb of changes) cb(); }, run: () => states[0], motionOff: () => states[1], stopped: () => stopped, cleanup: () => cleanup() };
 }
+
+test('automatic maker focus waits for settled board layout and restores its exact selection',()=>{
+  const env=landingEnv({delayBoard:true});env.input().value='Delayed gallery fixture';env.input().focus({preventScroll:true});env.input().setSelectionRange(4,9,'backward');
+  env.system(true);env.render();
+  assert.equal(env.document.activeElement,env.document.body,'no premature attempt on a hidden/inert board');
+  env.boardCallbacks.at(-1)();
+  assert.equal(env.document.activeElement,env.input());
+  assert.deepEqual([env.input().selectionStart,env.input().selectionEnd,env.input().selectionDirection],[4,9,'backward']);
+  env.cleanup();
+});
+for(const alternative of ['embedded','nav'])test(`delayed board readiness does not steal new ${alternative} focus`,()=>{
+  const env=landingEnv({delayBoard:true});env.input().focus({preventScroll:true});env.system(true);env.render();
+  const next=alternative==='embedded'?{value:'Kept React draft'}:env.nav();env.document.activeElement=next;
+  const before=env.focus.length;env.boardCallbacks.at(-1)();assert.equal(env.document.activeElement,next);assert.equal(env.focus.length,before);env.cleanup();
+});
+test('delayed board readiness preserves new typing and caret in the replacement maker field',()=>{
+  const env=landingEnv({delayBoard:true});env.input().value='Original draft';env.input().focus({preventScroll:true});env.input().setSelectionRange(2,5,'backward');env.system(true);env.render();
+  env.input().focus({preventScroll:true});env.input().value+=' new edit';const end=env.input().value.length;env.input().setSelectionRange(end,end,'none');
+  const before=env.focus.length;env.boardCallbacks.at(-1)();assert.equal(env.document.activeElement,env.input());assert.equal(env.input().value,'Original draft new edit');
+  assert.deepEqual([env.input().selectionStart,env.input().selectionEnd,env.input().selectionDirection],[end,end,'none']);assert.equal(env.focus.length,before);env.cleanup();
+});
+test('delayed board readiness is inert after unmount or a subsequent remount',()=>{
+  const env=landingEnv({delayBoard:true});env.input().focus({preventScroll:true});env.system(true);env.render();
+  const late=env.boardCallbacks.at(-1);env.cleanup();const before=env.focus.length;late();assert.equal(env.focus.length,before);
+  env.render();late();assert.equal(env.focus.length,before);env.cleanup();
+});
+test('manual toggle and raw navigation focus remain immediate while board readiness is pending',()=>{
+  const env=landingEnv({delayBoard:true});env.nav().focus({preventScroll:true});env.system(true);env.render();assert.equal(env.document.activeElement,env.nav());
+  env.click();env.render();assert.equal(env.document.activeElement,env.toggle);env.boardCallbacks.at(-1)();assert.equal(env.document.activeElement,env.toggle);env.cleanup();
+});
 test('Landing effect follows system changes only in auto, reflects aria-pressed and restores switch focus', () => {
   const env = landingEnv();
   assert.equal(env.toggle['aria-pressed'], 'false');

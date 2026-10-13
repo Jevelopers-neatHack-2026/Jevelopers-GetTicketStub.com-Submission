@@ -659,6 +659,14 @@ export function mountLanding(ctx) {
                sec: String(100 + (k*37)%180), row: String.fromCharCode(65 + k%20), seat: String(1 + (k*7)%30), seed: 5000 + k*91 };
     });
 
+    // Establish board accessibility before fonts or 3D can suspend initialization.
+    const root = lpRoot;
+    const boardEl = byId('wall'), boardUI = byId('boardUI'), finale = byId('finale'), bh1 = byId('bh1');
+    const WALL = { heroesEnd: .40, swarmEnd: .76, finaleAt: .78 };   // progress through the 560vh wall: heroes land, the swarm fills it, then "Make yours!"
+    let bhState = -1;
+    // Reconcile before focus restoration: a visible maker must not wait for the first static/3D frame.
+    boardState(boardEl.getBoundingClientRect(), innerHeight);
+
     /* =============================== static art (works with or without WebGL) =============================== */
     const fontsReady = document.fonts ? Promise.race([
       Promise.all(['900 40px Archivo','italic 800 40px Archivo','italic 500 30px Archivo','500 16px "IBM Plex Mono"','600 16px "IBM Plex Mono"','900 40px "Big Shoulders Display"','40px "Abril Fatface"'].map(f => document.fonts.load(f))),
@@ -724,6 +732,10 @@ export function mountLanding(ctx) {
       fontsReady.then(refreshArt);
       if (document.fonts) listen(document.fonts, 'loadingdone', refreshArt);
     }
+
+    // Gallery art changes the wall's position. Re-read after that layout, before restoring board focus.
+    boardState(boardEl.getBoundingClientRect(), innerHeight);
+    if (!disposed) ctx.onBoardReady?.();
 
 
     /* =============================== the loop: past the footer, stubs fly up and the page wraps back to the hero =============================== */
@@ -811,17 +823,13 @@ export function mountLanding(ctx) {
     }
 
     /* =============================== board state (shared by the 3D and static versions) =============================== */
-    const root = lpRoot;
-    const boardEl = byId('wall'), boardUI = byId('boardUI'), finale = byId('finale'), bh1 = byId('bh1');
-    const WALL = { heroesEnd: .40, swarmEnd: .76, finaleAt: .78 };   // progress through the 560vh wall: heroes land, the swarm fills it, then "Make yours!"
-    let bhState = -1;
-    finale.inert = true;   // never focusable while it can't be seen
     function boardState(br, Hh){
       const show = br.top < Hh * .2 && br.bottom > Hh * .98;
       if (boardUI.hidden === show) boardUI.hidden = !show;
       const P = Math.max(0, Math.min(1, -br.top / (br.height - Hh)));
       const on = show && P > WALL.finaleAt;
-      if (finale.classList.contains('on') !== on){ finale.classList.toggle('on', on); finale.inert = !on; }
+      if (finale.classList.contains('on') !== on) finale.classList.toggle('on', on);
+      finale.inert = !on;
       boardUI.classList.toggle('fin', P > WALL.finaleAt - .04);
       if (!root.classList.contains('no3d')){
         boardUI.classList.toggle('swarm', P > WALL.heroesEnd);

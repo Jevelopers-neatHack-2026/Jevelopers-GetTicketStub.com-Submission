@@ -253,7 +253,7 @@ try {
   await capability.close(); pages.delete(capability);
   if (actualGL.available) {
     result.limitations.push('Positive 3D exercise simulates only the hardware detector probe. The real Three.js renderer executes using the browser WebGL implementation: ' + actualGL.renderer + '. This does not establish physical GPU support.');
-    const three = await open('simulated-detector-real-three-software-webgl', {pref:'on', hints:{hardwareProbeSimulation:true,deviceMemory:8,hardwareConcurrency:8,connection:{saveData:false,effectiveType:'4g'}}});
+    const three = await open('simulated-detector-real-three-software-webgl', {hints:{hardwareProbeSimulation:true,deviceMemory:8,hardwareConcurrency:8,connection:{saveData:false,effectiveType:'4g'}}});
     check('positive 3D: hardware probe simulation selects 3D', (await state(three)).mode === '3d', await state(three));
     check('positive 3D: actual emitted Three chunk requested', three.entry.requestedChunks.some(c=>result.threeChunks.includes(c)), three.entry.requestedChunks);
     check('positive 3D: real WebGL renderer makes draw calls', await three.waitFor(`window.__landingEvidence.draws > 0 && !document.querySelector('.lp').classList.contains('no3d')`,20000), await state(three));
@@ -261,7 +261,23 @@ try {
     check('positive 3D: hero text intro settles', await three.waitFor(`(() => {const chars=[...document.querySelectorAll('.hero h1 .ch')];return chars.length>0 && chars.every(e=>e.getAnimations().every(a=>a.playState!=='running'));})()`,5000));
     await sleep(800); // Allow the ticket's spring to settle after the text intro, while real draw calls continue.
     await snapshot(three,'simulated-detector-real-three');
-    await pointer(three); await expected(three,'off','positive 3D: disable via real toggle');
+    await pointer(three,'.cta-foot[href="#make"]');
+    check('positive 3D: maker CTA establishes raw input focus',await three.waitFor(`document.activeElement?.id==='ev' && !document.querySelector('#finale').inert`,5000));
+    await three.type('Actual Three focus fixture night');
+    await three.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+    await expected(three,'off','positive 3D: automatic OS reduction');
+    const reducedFocus=await three.eval(`(() => {const e=document.querySelector('#ev');return {value:e.value,focused:document.activeElement===e};})()`);
+    check('positive 3D: automatic reduction retains editable raw draft',reducedFocus.focused && reducedFocus.value==='Actual Three focus fixture night',reducedFocus);
+    const beforeRestart=await three.eval('window.__landingEvidence.draws');
+    await three.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+    await expected(three,'3d','positive 3D: automatic OS permission returns');
+    check('positive 3D: real renderer restarts after asynchronous initialization',await three.waitFor(`window.__landingEvidence.actualContexts>=2 && window.__landingEvidence.draws>${beforeRestart} && !document.querySelector('.lp').classList.contains('no3d')`,20000),await state(three));
+    const initializedFocus=await three.eval(`(() => {const e=document.querySelector('#ev');return {value:e.value,focused:document.activeElement===e};})()`);
+    check('positive 3D: completed async initialization retains raw input focus',initializedFocus.focused && initializedFocus.value==='Actual Three focus fixture night',initializedFocus);
+    await three.type(' continued');
+    const continuedFocus=await three.eval(`(() => {const e=document.querySelector('#ev');return {value:e.value,start:e.selectionStart,end:e.selectionEnd,focused:document.activeElement===e};})()`);
+    check('positive 3D: trusted typing continues after actual renderer restart',continuedFocus.focused && continuedFocus.value==='Actual Three focus fixture night continued' && continuedFocus.start===continuedFocus.value.length && continuedFocus.end===continuedFocus.value.length,continuedFocus);
+    await activate(three,'Enter'); await expected(three,'off','positive 3D: disable via real toggle');
     check('positive 3D: renderer context released after remount', await three.waitFor(`window.__landingActualGL?.isContextLost()`,5000), await state(three));
     const drawCount = await three.eval('window.__landingEvidence.draws'); await sleep(400);
     check('positive 3D: disposed renderer stops drawing', await three.eval('window.__landingEvidence.draws') === drawCount, await state(three));

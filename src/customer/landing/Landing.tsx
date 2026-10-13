@@ -50,19 +50,32 @@ export function Landing({ children }: { children: ReactNode }) {
     el.dataset.motion = mode.still ? "off" : mode.no3d ? "2d" : "3d";
     if (mode.reason) el.dataset.lite = mode.reason;
     else delete el.dataset.lite;
-    const stop = mountLanding({ root: el, hosts, mode, submit: (text: string) => router.push(newStubHref(text)) });
-    const toggle = el.querySelector<HTMLButtonElement>(".motion-toggle");
-    toggle?.setAttribute("aria-pressed", String(mode.still));
     const pendingFocus = refocus.current;
     refocus.current = null;
-    if (pendingFocus) {
-      const target = pendingFocus === "toggle" ? toggle : matchingControls(hosts[pendingFocus.host], pendingFocus)[pendingFocus.occurrence];
+    const focusTarget = pendingFocus === "toggle" ? el.querySelector<HTMLButtonElement>(".motion-toggle")
+      : pendingFocus ? matchingControls(hosts[pendingFocus.host], pendingFocus)[pendingFocus.occurrence] : null;
+    const needsBoard = !!focusTarget?.closest("#boardUI");
+    let mounted = false, boardReady = false, live = true, focusRestored = false;
+    const restoreFocus = () => {
+      if (!live || !pendingFocus || focusRestored) return;
+      // Font loading may delay the board. Respect any control the visitor focused meanwhile.
+      if (needsBoard && document.activeElement !== document.body) return;
+      focusRestored = true;
+      const target = focusTarget;
       target?.focus({ preventScroll: true });
       if (pendingFocus !== "toggle" && pendingFocus.selection && target) {
         const { start, end, direction } = pendingFocus.selection;
         if (start !== null && end !== null) (target as HTMLInputElement).setSelectionRange(start, end, direction ?? "none");
       }
-    }
+    };
+    const stop = mountLanding({ root: el, hosts, mode, submit: (text: string) => router.push(newStubHref(text)), onBoardReady: () => {
+      boardReady = true;
+      if (mounted && needsBoard) restoreFocus();
+    } });
+    mounted = true;
+    if (!needsBoard || boardReady) restoreFocus();
+    const toggle = el.querySelector<HTMLButtonElement>(".motion-toggle");
+    toggle?.setAttribute("aria-pressed", String(mode.still));
     const flip = () => {
       writeMotionPref(mode.still ? "on" : "off");
       refocus.current = "toggle";
@@ -89,6 +102,7 @@ export function Landing({ children }: { children: ReactNode }) {
     };
     reducedMotion.addEventListener("change", followSystem);
     return () => {
+      live = false;
       toggle?.removeEventListener("click", flip);
       reducedMotion.removeEventListener("change", followSystem);
       stop();
