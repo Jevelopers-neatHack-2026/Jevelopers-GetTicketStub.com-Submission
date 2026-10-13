@@ -155,20 +155,20 @@
       "path": "repositories/event-intelligence",
       "url": "https://github.com/Jevelopers-neatHack-2026/event-intelligence",
       "branch": "main",
-      "commit": "70ccb25f9343ac2758d1f50d1fa9b4f56745d31e",
-      "tree": "34e4ef57ab4145009911d3241681ee207ec7cd03",
-      "committed_at": "2026-10-12T18:53:19-04:00",
+      "commit": "fbc1457974313ba8851d0b74add0e03041f6e5dc",
+      "tree": "38c63e9d033066217384e00e84ed5006ccde43bc",
+      "committed_at": "2026-10-12T22:52:08-04:00",
       "description": "Sourced event facts and research cache: bounded retrieval, evidence provenance and privacy boundaries",
-      "tracked_files": 341,
+      "tracked_files": 383,
       "statistics": {
-        "commits": 256,
-        "text_files": 322,
-        "text_lines": 144380,
-        "source_files": 203,
-        "source_file_lines": 89898,
+        "commits": 294,
+        "text_files": 364,
+        "text_lines": 153163,
+        "source_files": 238,
+        "source_file_lines": 97944,
         "binary_or_non_utf8_files": 19,
         "symlinks": 0,
-        "file_bytes": 7396240
+        "file_bytes": 7932950
       }
     },
     {
@@ -197,20 +197,20 @@
       "path": "repositories/getticketstub.com",
       "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com",
       "branch": "main",
-      "commit": "b16a3187a6402611a4f7c87c255dae30503e4db0",
-      "tree": "32d77c461b963ab6041ea1fb6cf7bbe0835fc0f9",
-      "committed_at": "2026-10-12T19:31:33-04:00",
+      "commit": "d1cb44c182fe69416471eb43b40cd05efae57423",
+      "tree": "3fc452fdd997e33d9d3d446dd16126f61831af78",
+      "committed_at": "2026-10-12T22:54:44-04:00",
       "description": "Customer ticket-stub studio app (Next.js): event intake, design, approval and print or digital handoff",
-      "tracked_files": 773,
+      "tracked_files": 927,
       "statistics": {
-        "commits": 301,
-        "text_files": 719,
-        "text_lines": 108170,
-        "source_files": 440,
-        "source_file_lines": 83182,
-        "binary_or_non_utf8_files": 54,
+        "commits": 380,
+        "text_files": 869,
+        "text_lines": 155702,
+        "source_files": 568,
+        "source_file_lines": 128534,
+        "binary_or_non_utf8_files": 58,
         "symlinks": 0,
-        "file_bytes": 16073295
+        "file_bytes": 22460536
       }
     },
     {
