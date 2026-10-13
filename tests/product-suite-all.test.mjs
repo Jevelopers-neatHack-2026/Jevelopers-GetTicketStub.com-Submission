@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { runAllProductSuites } from "../scripts/lib/product-suite-all.mjs";
 
@@ -137,4 +139,32 @@ test("the real launcher passes fixture arguments to a new process and retains it
   assert.equal(report.results[0].exitCode, 7);
   assert.equal(report.results[0].counts.passed, 3);
   assert.ok(report.results[0].receipt.sha256);
+});
+
+test("the actual CLI dispatches all required leaves and retains missing-fixture failures", (t) => {
+  const config = workspace(t);
+  const repo = fileURLToPath(new URL("..", import.meta.url));
+  for (const path of ["scripts/verify-product.mjs", "scripts/lib/product-suite-all.mjs", "scripts/lib/check-result.mjs", "scripts/lib/fixture-network-guard.mjs"]) {
+    mkdirSync(dirname(join(config.root, path)), { recursive: true });
+    copyFileSync(join(repo, path), join(config.root, path));
+  }
+  const run = spawnSync(process.execPath, [join(config.root, "scripts/verify-product.mjs"), "--suite", "all", "--mode", "fixture", "--evidence-dir", config.evidenceDir], {
+    cwd: config.root, encoding: "utf8", timeout: 20000,
+  });
+  assert.ifError(run.error);
+  assert.equal(run.status, 1, run.stdout + run.stderr);
+  assert.doesNotMatch(run.stderr, /unknown suite "all"/);
+  const directories = readdirSync(config.evidenceDir);
+  assert.equal(directories.length, 1);
+  const report = JSON.parse(readFileSync(join(config.evidenceDir, directories[0], "all.json")));
+  for (const required of ["foundation", "access", "approval", "order-auth", "finance-context", "research", "creative", "review", "capabilities", "messages", "a11y", "pay-signin", "agent", "download", "production", "degraded", "mail-off", "backup-drill"]) {
+    assert.ok(report.requiredSuites.includes(required), required);
+    const result = report.results.find((item) => item.suite === required);
+    assert.equal(result.exitCode, 1, JSON.stringify(result));
+    assert.ok(result.counts.failed > 0);
+    assert.ok(result.receipt.sha256);
+  }
+  assert.equal(report.results.length, report.requiredSuites.length);
+  assert.equal(report.exitCode, 1);
+  assert.equal(report.counts.passed, 0);
 });

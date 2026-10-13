@@ -1,6 +1,8 @@
 // One entry point for the product checks, with evidence.
 //   npm run verify:product -- --suite <foundation|access|approval|order-auth|finance-context|research|creative|review|capabilities|messages|a11y|pay-signin|agent|download|production|degraded|mail-off|backup-drill> --mode fixture --evidence-dir <dir>
 // (`accessibility` is an alias of `a11y`: GT-11 names the suite that way.)
+// `all` runs every declared leaf suite serially and retains each fresh result.
+// It does not replace the correlated integration journey or verify:release.
 // Every suite runs offline: in fixture mode a preload (scripts/lib/fixture-network-guard.mjs) refuses any host but
 // loopback, and the server started here has no provider keys. A missing build or fixture, an unknown suite and
 // any failed/skipped check or missing positive result exit nonzero, even if a child exits 0.
@@ -73,7 +75,7 @@ function parseArgs(argv) {
 
 function fail(msg) {
   console.error(`verify:product: ${msg}`);
-  console.error(`usage: npm run verify:product -- --suite <${Object.keys(SUITES).join("|")}> --mode fixture --evidence-dir <dir>`);
+  console.error(`usage: npm run verify:product -- --suite <all|${Object.keys(SUITES).join("|")}> --mode fixture --evidence-dir <dir>`);
   process.exit(2);
 }
 
@@ -81,10 +83,16 @@ const args = parseArgs(process.argv.slice(2));
 if (!args.suite) fail("--suite is required");
 if (args.suite === "accessibility") args.suite = "a11y";
 const suite = Object.hasOwn(SUITES, args.suite) ? SUITES[args.suite] : null;
-if (!suite) fail(`unknown suite "${args.suite}"`);
+if (!suite && args.suite !== "all") fail(`unknown suite "${args.suite}"`);
 if (args.mode !== "fixture") fail(`unsupported --mode "${args.mode ?? ""}": only "fixture" runs without live services`);
 if (!args["evidence-dir"]) fail("--evidence-dir is required");
 const evidenceDir = resolve(args["evidence-dir"]);
+
+if (args.suite === "all") {
+  const { runAllProductSuites } = await import("./lib/product-suite-all.mjs");
+  const result = await runAllProductSuites({ root, dispatcher: fileURLToPath(import.meta.url), suites: Object.keys(SUITES), evidenceDir });
+  process.exit(result.exitCode);
+}
 
 // ---- bookkeeping ----
 const steps = [];
