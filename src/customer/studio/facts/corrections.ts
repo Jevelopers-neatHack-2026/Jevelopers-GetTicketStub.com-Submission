@@ -187,7 +187,7 @@ export function applyCorrection(stub: Stub, input: CorrectionInput): Stub {
   const existing = stub.event.facts.find((f) => f.id === input.factId);
   // Older drafts can carry a printed date or venue without a fact row. Preserve that
   // current value for undo without inventing a source or marking it verified.
-  const originalValue = input.factId === "date" ? (stub.event.dateISO ?? "") : input.factId === "venue" ? stub.event.venue : "";
+  const originalValue = input.factId === "date" ? (stub.event.dateISO ?? "") : input.factId === "venue" ? (stub.event.venue ?? "") : "";
   const base: Fact =
     existing ??
     (input.factId === "title"
