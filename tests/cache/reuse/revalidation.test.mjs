@@ -12,6 +12,37 @@ import { BODY, IDENTITY, PINS, gate, hash, request, revalidationFixture } from '
 
 const runFile = promisify(execFile);
 const reopenChild = fileURLToPath(new URL('./revalidation-reopen-child.mjs', import.meta.url));
+const preflightChild = fileURLToPath(new URL('./revalidation-preflight-child.mjs', import.meta.url));
+
+for (const mode of ['normal', 'abort-deny', 'abort-throw', 'deadline-deny', 'deadline-throw']) {
+  test(`strict native child observes the actual authorization Promise on ${mode} preflight`, async () => {
+    const { stdout } = await runFile(process.execPath, ['--unhandled-rejections=strict', preflightChild, mode], {
+      timeout: 15_000, maxBuffer: 1024 * 1024,
+    });
+    const result = JSON.parse(stdout);
+    assert.equal(result.mode, mode);
+    assert.equal(result.nativeTurnsCompleted, true);
+    assert.ok(result.callbackEntries >= 1);
+    assert.equal(result.financeCalls, 0);
+    if (mode === 'normal') {
+      assert.equal(result.status, 'completed');
+      assert.equal(result.httpStatus, 304);
+    } else {
+      assert.equal(result.errorCode, mode.startsWith('abort-') ? 'REVALIDATION_CANCELLED' : 'REVALIDATION_DEADLINE');
+      assert.equal(result.beforeDispatchUnchanged, true);
+      assert.equal(result.reopenedStateUnchanged, true);
+      assert.equal(result.recoveryStatus, 'completed');
+      assert.equal(result.recoveryHttpStatus, 304);
+    }
+  });
+}
+
+test('stopped preflight observes native Promises without reading a caller then property or adopting arbitrary thenables', async () => {
+  const { stdout } = await runFile(process.execPath, ['--unhandled-rejections=strict', preflightChild, 'native-only'], {
+    timeout: 15_000, maxBuffer: 1024 * 1024,
+  });
+  assert.deepEqual(JSON.parse(stdout), { mode: 'native-only', nativeTurnsCompleted: true, thenReads: 0 });
+});
 
 test('genuine conditional304 joins retained original evidence to one durable cache observation without Finance completion', async (t) => {
   const env = await revalidationFixture(t);
