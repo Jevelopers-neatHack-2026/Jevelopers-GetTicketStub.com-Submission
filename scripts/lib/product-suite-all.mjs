@@ -31,7 +31,10 @@ function inspectReceipt({ suite, directory, source, processResult }) {
   const result = { suite, ...processResult, receipt: null, counts: null, faults: [] };
   if (processResult.exitCode !== 0 || processResult.signal || processResult.errorCode) result.faults.push("child_did_not_exit_successfully");
   try {
-    const files = readdirSync(directory).filter((name) => name.startsWith(`${suite}-`) && name.endsWith(".json"));
+    // Match the dispatcher's timestamped wrapper, keeping each suite's auxiliary
+    // JSON (a11y-detail, pay-signin-checks, agent-journey) as separate evidence.
+    const receiptName = new RegExp(`^${suite}-\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z\\.json$`);
+    const files = readdirSync(directory).filter((name) => receiptName.test(name));
     if (files.length !== 1) {
       result.faults.push("exactly_one_fresh_leaf_receipt_required");
       return result;

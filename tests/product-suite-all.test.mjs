@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { runAllProductSuites } from "../scripts/lib/product-suite-all.mjs";
 
 const source = { gitSha: "a".repeat(40), gitDirty: false, node: process.version };
+const receiptName = (suite, milliseconds = "000") => `${suite}-2026-10-13T00-00-00-${milliseconds}Z.json`;
 function fixtureReceipt(suite) {
   return {
     suite, mode: "fixture", ...source, exitCode: 0, blockedNetwork: [],
@@ -35,7 +36,7 @@ async function control(t, mutation, options = {}) {
       const receipt = fixtureReceipt(call.suite);
       const state = { receipt, process: { exitCode: 0, signal: null }, write: true };
       if (call.suite === "middle") await mutation?.(state, call);
-      if (state.write) writeFileSync(join(call.directory, `${call.suite}-control.json`), JSON.stringify(state.receipt));
+      if (state.write) writeFileSync(join(call.directory, receiptName(call.suite)), JSON.stringify(state.receipt));
       return state.process;
     },
   });
@@ -62,8 +63,8 @@ for (const [name, mutation, fault] of [
   ["a failed child with a successful-looking receipt", (s) => { s.process.exitCode = 7; }, "child_did_not_exit_successfully"],
   ["a signaled child with a zero exit code", (s) => { s.process.signal = "SIGTERM"; }, "child_did_not_exit_successfully"],
   ["a missing child receipt", (s) => { s.write = false; }, "exactly_one_fresh_leaf_receipt_required"],
-  ["duplicate leaf receipts", (s, call) => { writeFileSync(join(call.directory, "middle-second.json"), JSON.stringify(s.receipt)); }, "exactly_one_fresh_leaf_receipt_required"],
-  ["malformed leaf JSON", (s, call) => { s.write = false; writeFileSync(join(call.directory, "middle-bad.json"), "{"); }, "malformed_leaf_receipt"],
+  ["duplicate timestamped leaf receipts", (s, call) => { writeFileSync(join(call.directory, receiptName("middle", "001")), JSON.stringify(s.receipt)); }, "exactly_one_fresh_leaf_receipt_required"],
+  ["malformed leaf JSON", (s, call) => { s.write = false; writeFileSync(join(call.directory, receiptName("middle")), "{"); }, "malformed_leaf_receipt"],
   ["wrong suite provenance", (s) => { s.receipt.suite = "first"; }, "receipt_suite_or_mode_mismatch"],
   ["a live-mode receipt", (s) => { s.receipt.mode = "live"; }, "receipt_suite_or_mode_mismatch"],
   ["a different revision", (s) => { s.receipt.gitSha = "b".repeat(40); }, "receipt_source_or_runtime_mismatch"],
@@ -104,10 +105,46 @@ test("all preserves failed and skipped totals rather than replacing them with an
   assert.equal(run.report.exitCode, 1);
 });
 
+for (const [suite, auxiliary] of [["a11y", "a11y-detail.json"], ["pay-signin", "pay-signin-checks.json"], ["agent", "agent-journey.json"]]) {
+  test(`all retains ${auxiliary} without confusing it with the required wrapper`, async (t) => {
+    const config = workspace(t);
+    let auxiliaryFile;
+    const report = await runAllProductSuites({
+      ...config, suites: [suite],
+      runChild: async (call) => {
+        auxiliaryFile = join(call.directory, auxiliary);
+        writeFileSync(auxiliaryFile, JSON.stringify({ fixture: "synthetic auxiliary control" }));
+        writeFileSync(join(call.directory, receiptName(suite)), JSON.stringify(fixtureReceipt(suite)));
+        return { exitCode: 0, signal: null };
+      },
+    });
+    assert.equal(report.exitCode, 0);
+    assert.equal(report.results[0].counts.passed, 3);
+    assert.match(report.results[0].receipt.file, /2026-10-13T00-00-00-000Z\.json$/);
+    assert.deepEqual(JSON.parse(readFileSync(auxiliaryFile)), { fixture: "synthetic auxiliary control" });
+  });
+}
+
+test("auxiliary and malformed-name files cannot replace a missing timestamped wrapper", async (t) => {
+  const config = workspace(t);
+  const report = await runAllProductSuites({
+    ...config, suites: ["agent"],
+    runChild: async (call) => {
+      for (const name of ["agent-journey.json", "agent-2026-10-13.json", "agent-2026-10-13T00-00-00-000Z.json.extra"]) {
+        writeFileSync(join(call.directory, name), JSON.stringify(fixtureReceipt("agent")));
+      }
+      return { exitCode: 0, signal: null };
+    },
+  });
+  assert.equal(report.exitCode, 1);
+  assert.deepEqual(report.unreportedSuites, ["agent"]);
+  assert.ok(report.results[0].faults.includes("exactly_one_fresh_leaf_receipt_required"));
+});
+
 test("a missing result is explicitly unreported, even if a prior output directory has a passing receipt", async (t) => {
   const config = workspace(t);
   mkdirSync(config.evidenceDir);
-  writeFileSync(join(config.evidenceDir, "middle-old.json"), JSON.stringify(fixtureReceipt("middle")));
+  writeFileSync(join(config.evidenceDir, receiptName("middle")), JSON.stringify(fixtureReceipt("middle")));
   const report = await runAllProductSuites({ ...config, suites: ["middle"], runChild: async () => ({ exitCode: 0, signal: null }) });
   assert.equal(report.exitCode, 1);
   assert.deepEqual(report.unreportedSuites, ["middle"]);
@@ -133,7 +170,7 @@ test("all refuses source changes and an unpinned or dirty source", async (t) => 
 
 test("the real launcher passes fixture arguments to a new process and retains its actual exit", async (t) => {
   const config = workspace(t);
-  writeFileSync(config.dispatcher, `import { writeFileSync } from 'node:fs';\nimport { join } from 'node:path';\nconst args=process.argv.slice(2);\nconst suite=args[args.indexOf('--suite')+1];\nconst directory=args[args.indexOf('--evidence-dir')+1];\nif(args[args.indexOf('--mode')+1]!=='fixture')process.exit(9);\nwriteFileSync(join(directory,suite+'-actual-child.json'),JSON.stringify({...${JSON.stringify(fixtureReceipt("synthetic"))},suite}));\nprocess.exitCode=7;\n`);
+  writeFileSync(config.dispatcher, `import { writeFileSync } from 'node:fs';\nimport { join } from 'node:path';\nconst args=process.argv.slice(2);\nconst suite=args[args.indexOf('--suite')+1];\nconst directory=args[args.indexOf('--evidence-dir')+1];\nif(args[args.indexOf('--mode')+1]!=='fixture')process.exit(9);\nwriteFileSync(join(directory,suite+'-2026-10-13T00-00-00-000Z.json'),JSON.stringify({...${JSON.stringify(fixtureReceipt("synthetic"))},suite}));\nprocess.exitCode=7;\n`);
   const report = await runAllProductSuites({ ...config, suites: ["synthetic"] });
   assert.equal(report.exitCode, 1);
   assert.equal(report.results[0].exitCode, 7);
