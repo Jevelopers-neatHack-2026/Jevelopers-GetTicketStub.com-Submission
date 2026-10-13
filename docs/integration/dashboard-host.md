@@ -1,6 +1,6 @@
 # App-owned Dashboard host boundary
 
-Refs [GT-03 #9](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/9),
+Refs [GT-08 #9](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/9),
 [setup #27](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/27),
 [TD-07 #11](https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/11).
 This slice establishes app-owned current authority and display boundaries. It does
