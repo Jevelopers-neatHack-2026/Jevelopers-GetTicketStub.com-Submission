@@ -140,3 +140,13 @@ test("a non-calendar date answer replaces a stale date projection and undo resto
   assert.equal(undone.event.dateISO, original.event.dateISO);
   assert.equal(undone.event.facts[0].value, original.event.facts[0].value);
 });
+
+test("a venue without a fact row also retains its actual original value on undo", () => {
+  const original = stub();
+  const corrected = applyCorrection(original, { factId: "venue", value: "Another hall", now: NOW });
+  assert.equal(corrected.corrections[0].original.value, original.event.venue);
+  const undone = undoCorrection(corrected, "venue", new Date("2026-10-11T12:01:00Z"));
+  assert.equal(undone.event.venue, original.event.venue);
+  assert.equal(undone.event.dateISO, original.event.dateISO);
+  assert.deepEqual(undone.event.facts[0], original.event.facts[0]);
+});
