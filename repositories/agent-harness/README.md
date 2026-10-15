@@ -153,4 +153,6 @@ Read [AGENTS.md](AGENTS.md) and follow the organization [contributor guidance](h
 
 ## License
 
-No license file is present in this repository; no license terms are asserted here.
+Original project code and associated documentation are available under the [MIT License](LICENSE).
+See [copyright and team attribution](COPYRIGHT.md) for Jevelopers credits, the licensing decision,
+and the scope of separately owned material and brand rights.

@@ -5,9 +5,9 @@
 ![Illustration of a cream ticket stub with rainy-night art, resting on paper and dark velvet.](docs/assets/submission/banner.jpg)
 *AI illustration of the idea, not a product photo or proof of printing.*
 
-**[Demo placeholder & status](docs/judges/DEMO.md) · [Open the product](https://getticketstub.com/) · [See the evidence](docs/judges/EVIDENCE.md) · [Browse the code](REPOSITORIES.md)**
+**[Watch the video · 2:56](https://x.com/CompleteTechLLC/status/2109758479720231135) · [Open the product](https://getticketstub.com/) · [See the evidence](docs/judges/EVIDENCE.md) · [Browse the code](REPOSITORIES.md)**
 
-> **Before judging:** Our [submission quote-post](https://x.com/CompleteTechLLC/status/2109758479720231135) of the official neatlogs launch is public, with the 2:56 demo video attached. The form confirmation is not yet in this evidence pack, and a full live journey still needs proof. [Submission checklist →](docs/judges/RULES-CHECKLIST.md)
+> **Before judging:** The video and launch quote-post are linked. Video coverage, deadline eligibility, form confirmation, and a full live journey still need verification. [Submission checklist →](docs/judges/RULES-CHECKLIST.md)
 
 ## A ticket should hold more than a barcode
 
@@ -81,28 +81,13 @@ TICKETSTUB_RUNTIME_MODE=demo npm run dev
 
 Open the local address printed in the terminal. Choose **The Pale Hours**, confirm its date, and select **Download PNG**. No provider key is needed. [Tested setup →](docs/judges/DEMO.md#replay-the-sample)
 
-## Built in public on X
-
-Every post below is public on [@CompleteTechLLC](https://x.com/CompleteTechLLC). Times are Eastern; counts were read in Chrome on October 12 at 5:45 PM and will change.
-
-| When | Post | What it shows | Engagement |
-| --- | --- | --- | --- |
-| Oct 10, 9:02 AM | [Team kickoff](https://x.com/CompleteTechLLC/status/2108906067060990141) | Team Jevelopers starts #neatHack2026 and invites people to build alongside us. | 2 likes, 1 repost, 66 views |
-| Oct 10, 9:11 PM | [Day 1 build post](https://x.com/CompleteTechLLC/status/2109089580159004778) | Introduces TicketStub with a preview link. | 6 likes, 1 repost, 163 views |
-| Oct 11, 6:17 PM | [Day 2 build post](https://x.com/CompleteTechLLC/status/2109407964784382285) | The site goes live, with the stream link and Timothy's usage figures. It quotes Ajay Yadav's October 10 neatlogs post and attaches a video. | 1 like, 170 views |
-| Oct 12, 5:08 PM | [Demo video post](https://x.com/CompleteTechLLC/status/2109753079604166718) | The demo video as a standalone post. | 14 views |
-| Oct 12, 5:29 PM | [**Submission quote-post**](https://x.com/CompleteTechLLC/status/2109758479720231135) | Quotes the [official launch post](https://x.com/bettersayAJ/status/2109639214723932495) with the demo video and tags @neatlogs, @EntireHQ and @arithecfo. | 1 like, 16 views |
-
-Each post names the hosts or the three required tools. A [text-only Day 2 copy](https://x.com/CompleteTechLLC/status/2109407386289189284) and a [second kickoff copy](https://x.com/CompleteTechLLC/status/2108920181380805025) are also public. Usage and cost figures in the posts are owner reports, not audited metrics. A search of X on October 12 found no event posts from the other team members' accounts. [Building-in-public evidence →](docs/judges/EVIDENCE.md#building-in-public)
-
-**Streamed live.** Timothy streamed the build on Twitch at [twitch.tv/completedottech](https://www.twitch.tv/completedottech). Seven public VODs titled *neatHack 2026 · Team Jevelopers Builds AI-Powered Ticket Keepsakes* run almost back to back, from October 9 at 11:05 PM to October 12 at 5:20 PM Eastern, about 65 hours in all. The first starts before the official October 10 start. The longest are [32 hours](https://www.twitch.tv/videos/2897690589), [13.5 hours](https://www.twitch.tv/videos/2896851391), [7.5 hours](https://www.twitch.tv/videos/2896644167), [7 hours](https://www.twitch.tv/videos/2898815773) and [5.4 hours](https://www.twitch.tv/videos/2897466664). Twitch may expire VODs. The team also reports streaming in the [TypeSafe Discord](https://discord.gg/typesafe), which the kickoff post invites people to join; Discord keeps no public recording, so that stream is team-reported only.
-
-**Built with Jev.** The team built with TypeSafe's Jev. In code, [agent-harness](https://github.com/Jevelopers-neatHack-2026/agent-harness/tree/main/src/adapters/jev) implements a Jev decision adapter and a public DecisionPort, both covered by offline contract tests. The studio and creative engine do not call it yet, and no live Jev call is recorded.
-
 ## Built by Jevelopers
 
-[Timothy Wayne Gregg](https://github.com/CompleteDotTech) · [Lars van der Zande](https://github.com/lmvdz) · [Zachary Wright](https://github.com/zwright8) · [@lajefahemp-collab](https://github.com/lajefahemp-collab). Brand and studio design: Lars.
+A four-person team building agents that can be trusted, measured, and improved.
 
+[Timothy Wayne Gregg](https://github.com/CompleteDotTech) · [Lars van der Zande](https://github.com/lmvdz) · [Zachary D. Wright](https://github.com/zwright8) · [Crystal Aguilar](https://github.com/lajefahemp-collab). Brand and studio design: Lars. [Team and socials →](docs/judges/TEAM.md)
+
+[Build posts, submission videos, and organizer updates →](docs/judges/PUBLIC-POSTS.md) · [Watched live on Twitch](https://www.twitch.tv/completedottech): about 65 hours of [neatHack VODs](docs/judges/PUBLIC-POSTS.md#live-streams)
 
 [Judge scorecard](docs/judges/EVIDENCE.md#follow-the-scorecard) · [Repo, line, and commit counts](REPOSITORIES.md#collection-at-a-glance) · [Code versions and dates](docs/judges/EVIDENCE.md#code-history) · [Refresh the collection](docs/judges/SYNC.md)
 

@@ -1,8 +1,14 @@
-# Demo: recording still needed
+# Demo video and review status
 
 [Back to TicketStub](../../README.md) · [Evidence](EVIDENCE.md) · [Submission steps](RULES-CHECKLIST.md)
 
-**Final public demo: Missing. Placeholder available below.** The team supplied this video kit on October 12. It contains a **silent concept animatic**—a timed storyboard, not real product footage. Its measured length is **2:50.04** (170.04 seconds), with no audio track. It does not establish that the video requirement is complete.
+**[Watch the posted TicketStub video on X](https://x.com/CompleteTechLLC/status/2109758479720231135).** Checked October 12, 2026: X displayed an attached video lasting **2:56**. The post quotes the required launch and tags all three sponsors. [Post checks and timing caveat](PUBLIC-POSTS.md).
+
+The earlier [merged review](https://github.com/Jevelopers-neatHack-2026/Jevelopers-GetTicketStub.com-Submission/commit/9cf0c9da) reports that the video shows neatlogs traces, the Entire code graph, and the cfo.ai plan, using the sample flow. This follow-up verified the post and displayed duration, but did not independently replay the full video and audio. Accurate claims, captions, and signed-out playback still need checking. We have no verified timestamps for this posted video. A posted video does not prove form completion.
+
+## Earlier planning placeholder
+
+The team supplied this video kit on October 12. It contains a **silent concept animatic**—a timed storyboard, not real product footage. Its measured length is **2:50.04** (170.04 seconds), with no audio track. It does not establish that the video requirement is complete.
 
 **[Open/download the placeholder MP4](../assets/submission/ticketstub_judges_cut_animatic.mp4)** · **[Download the original video kit ZIP](../assets/submission/ticketstub_judges_cut_video_kit.zip)**
 
@@ -25,14 +31,14 @@ The times below match the supplied storyboard. They are **not timestamps of veri
 | 2:31–2:43 | Public work | Public repos and genuine posts, if available. Draft posts do not count. |
 | 2:43–2:50 | The keepsake | Actual downloaded result and evidence links. No physical delivery claim. |
 
-## Recording assets still needed
+## Review and evidence still needed
 
-- One final video with clear audio and captions, no longer than three minutes.
-- A public playback URL or attached X video, tested while signed out.
+- Review the posted video end to end for clear audio, captions, and all three tools. X shows 2:56; verify playback and record actual timestamps.
+- Test the posted X video while signed out.
 - A retained complete live run if claiming live completion: input, source commit, trace identifiers, tool choices, checks, result, and any recovery.
 - A neatlogs view tied to that same run; mask credentials and personal data.
 - Tool footage for all three sponsors. Existing screenshots and graph files can support it; they do not create a live-demo claim.
-- The official form confirmation. The [final quote-post](https://x.com/CompleteTechLLC/status/2109758479720231135) is public.
+- Confirm deadline eligibility and retain the official form confirmation. The quote-post URL is now recorded.
 
 ## Replay the sample
 

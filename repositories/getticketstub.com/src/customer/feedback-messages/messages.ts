@@ -30,12 +30,15 @@ const PROVIDER_SETUP = "This preview isn't set up for that helper yet. Your stub
 export const MESSAGES = {
   // Request and access
   bad_origin: { message: "That request didn't come from TicketStub, so we stopped it. Open TicketStub directly and try again.", action: RELOAD },
+  origin_unavailable: { message: "We can't finish that action right now. Open your wall and try again later.", action: WALL },
   unauthorized: { message: "Sign in with an emailed link to do that. It takes a minute and needs no password.", action: SIGN_IN },
   forbidden: { message: "This stub isn't yours to change. Open one from your own wall.", action: WALL },
+  permission_denied: { message: "This account can't do that here. Open your wall to continue with work you can access.", action: WALL },
   not_found: { message: "We couldn't find that. The link may have been stopped, or it may have a typo.", action: START },
   too_large: { message: "That's more than we can take in one go. Send fewer stubs or smaller photos and try again.", action: RETRY, retryable: true },
   rate_limited: { message: "You've tried that a few times in a row. Wait a few minutes, then try again.", action: RETRY, retryable: true },
   bad_request: { message: "Something in that wasn't quite right. Check what you entered and try again.", action: RETRY, retryable: true },
+  invalid_request: { message: "Something in that wasn't quite right. Reload the page and check what you entered.", action: RELOAD },
   bad_json: { message: "That didn't send properly. Reload the page and try again.", action: RELOAD },
   bad_image: { message: "We couldn't read that picture. Try a PNG or JPG.", action: RETRY, retryable: true },
   message_too_long: { message: "That message is a little long for a gift. Trim it and send again.", action: RETRY, retryable: true },
@@ -55,10 +58,11 @@ export const MESSAGES = {
   payments_off: { message: "Payments aren't switched on here yet. Nothing was charged.", action: WALL },
   bad_signature: { message: "We couldn't verify that request, so it was ignored. Nothing was changed.", action: RETRY, retryable: true },
   unreadable_link: { message: "We couldn't read that link. Paste the event page address, or search for the event by name.", action: RETRY, retryable: true },
-  unsupported_url: { message: "That link can't be read. Paste a public event page address that starts with http or https, with no username or password.", action: RETRY, retryable: true },
+  unsupported_url: { message: "That link can't be read. Paste the full address of a public event webpage, with no username or password.", action: RETRY, retryable: true },
   unsupported_input: { message: "Uploads and extra sources aren't supported yet. Paste one event page link instead.", action: RETRY, retryable: true },
   demo_only: { message: "This preview only knows its demo events. Try neatHack, The Pale Hours or Harbour FC.", action: RETRY, retryable: true },
   context_unavailable: { message: "Signed context isn't set up on this server yet, so nothing can use it. Your stubs are unaffected.", action: RETRY, retryable: true },
+  signing_unavailable: { message: "Signing isn't set up on this server yet, so this can't be approved right now. Your stub is unaffected.", action: RETRY, retryable: true },
   approval_conflict: { message: "This stub changed while you were approving it. Look it over once more, then approve it again.", action: RELOAD },
   approval_unavailable: { message: "We can't read this stub's art right now, so it can't be approved yet. Try again in a moment.", action: RETRY, retryable: true },
   approval_invalid: { message: "That approval doesn't cover this use. Approve the stub again from your wall.", action: WALL },
@@ -78,6 +82,7 @@ export const MESSAGES = {
 
   // Providers (research, art and the agent). Their detail never reaches a person.
   provider_unavailable: { message: PROVIDER_DOWN, action: RETRY, retryable: true },
+  creative_unavailable: { message: "We couldn't confirm that change. Open your wall and check your work before trying again.", action: WALL },
   provider_rate_limited: { message: "Our art and research helpers are busy right now. Try again in a minute.", action: RETRY, retryable: true },
   provider_request_cancelled: { message: "That took too long, so we stopped it. Try again.", action: RETRY, retryable: true },
   provider_authentication_failed: { message: PROVIDER_SETUP },
@@ -90,6 +95,12 @@ export const MESSAGES = {
   invalid_provider_response: { message: "A helper sent back something we couldn't use, so we ignored it. Try again.", action: RETRY, retryable: true },
   unsupported_provider_response: { message: "A helper sent back something we couldn't use, so we ignored it. Try again.", action: RETRY, retryable: true },
   invalid_image_response: { message: "The art that came back wasn't usable, so we threw it out. Try again.", action: RETRY, retryable: true },
+
+  // Supplier callbacks (POST /api/fulfillment/prodigi/callbacks/{token}). The reader is Prodigi's sender, not a person.
+  callback_invalid: { message: "That callback wasn't in the shape we accept, so nothing changed. Send it again as documented.", action: RETRY, retryable: true },
+  callback_oversized: { message: "That callback was more than we take in one go, so nothing changed. Send a smaller one.", action: RETRY, retryable: true },
+  callback_source_mismatch: { message: "That callback came from a source we don't expect, so nothing changed. Try again shortly.", action: RETRY, retryable: true },
+  callbacks_unavailable: { message: "We can't take callbacks right now, and nothing changed. Try again shortly.", action: RETRY, retryable: true },
 
   // Browser side
   network: { message: "You look offline. Check your connection, then try again.", action: RETRY, retryable: true },
